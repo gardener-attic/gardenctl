@@ -1,0 +1,9 @@
+*._Store
+.DS_Store
+TODO.txt
+gardenctl
+main.tf
+terraform.tfstate
+terraform.tfvars
+variables.tf
+gardenctl_completion.sh

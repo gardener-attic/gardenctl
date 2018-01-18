@@ -1,0 +1,9 @@
+[[constraint]]
+  name = "github.com/spf13/cobra"
+
+[[constraint]]
+  name = "k8s.io/apimachinery"
+
+[[constraint]]
+  name = "k8s.io/client-go"
+  version = "5.0.0"
