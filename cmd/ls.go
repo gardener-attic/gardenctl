@@ -15,6 +15,8 @@
 package cmd
 
 import (
+	"bytes"
+	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -22,6 +24,7 @@ import (
 
 	clientset "github.com/gardener/gardenctl/pkg/client/garden/clientset/versioned"
 	"github.com/gardener/gardenctl/pkg/client/kubernetes"
+	yaml2 "github.com/ghodss/yaml"
 	"github.com/spf13/cobra"
 	yaml "gopkg.in/yaml.v2"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -49,10 +52,21 @@ var lsCmd = &cobra.Command{
 		case "seeds":
 			Client, err = clientToTarget("garden")
 			checkError(err)
-			fmt.Printf("seeds:\n")
+			output := ""
+			output += fmt.Sprintf("seeds:\n")
 			for _, seed := range getSeeds() {
-				fmt.Printf("- seed: %s\n", seed)
+				output += fmt.Sprintf("- seed: %s\n", seed)
 			}
+			if outputFormat == "yaml" {
+				fmt.Println(output)
+			} else if outputFormat == "json" {
+				y, err := yaml2.YAMLToJSON([]byte(output))
+				checkError(err)
+				var out bytes.Buffer
+				json.Indent(&out, y, "", "  ")
+				out.WriteTo(os.Stdout)
+			}
+
 		case "shoots":
 			var target Target
 			targetFile, err := ioutil.ReadFile(pathTarget)
@@ -86,18 +100,6 @@ var lsCmd = &cobra.Command{
 func init() {
 }
 
-//getProjects lists the name of existing projects
-func getProjects() {
-	projectLabel := "garden.sapcloud.io/role=project"
-	projectList, err := Client.CoreV1().Namespaces().List(metav1.ListOptions{
-		LabelSelector: fmt.Sprintf("%s", projectLabel),
-	})
-	checkError(err)
-	for _, project := range projectList.Items {
-		fmt.Printf("%s\n", project.Name)
-	}
-}
-
 // getProjectsWithShoots lists list of projects with shoots
 func getProjectsWithShoots() {
 	projectLabel := "garden.sapcloud.io/role=project"
@@ -111,16 +113,26 @@ func getProjectsWithShoots() {
 	checkError(err)
 	k8sGardenClient.SetGardenClientset(gardenClientset)
 	shootList, err := k8sGardenClient.GetGardenClientset().GardenV1().Shoots("").List(metav1.ListOptions{})
-	fmt.Printf("projects:\n")
+	output := ""
+	output += fmt.Sprintf("projects:\n")
 	checkError(err)
 	for _, project := range projectList.Items {
-		fmt.Printf("- project: %s\n", project.Name)
-		fmt.Printf("  shoots:\n")
+		output += fmt.Sprintf("- project: %s\n", project.Name)
+		output += fmt.Sprintf("  shoots:\n")
 		for _, item := range shootList.Items {
 			if item.Namespace == project.Name {
-				fmt.Printf("  - %s\n", item.Name)
+				output += fmt.Sprintf("  - %s\n", item.Name)
 			}
 		}
+	}
+	if outputFormat == "yaml" {
+		fmt.Println(output)
+	} else if outputFormat == "json" {
+		y, err := yaml2.YAMLToJSON([]byte(output))
+		checkError(err)
+		var out bytes.Buffer
+		json.Indent(&out, y, "", "  ")
+		out.WriteTo(os.Stdout)
 	}
 }
 
@@ -131,9 +143,19 @@ func getGardens() {
 	checkError(err)
 	err = yaml.Unmarshal(yamlGardenConfig, &gardenClusters)
 	checkError(err)
-	fmt.Printf("gardens:\n")
+	output := ""
+	output += fmt.Sprintf("gardens:\n")
 	for _, garden := range gardenClusters.GardenClusters {
-		fmt.Printf("- garden: %s\n", garden.Name)
+		output += fmt.Sprintf("- garden: %s\n", garden.Name)
+	}
+	if outputFormat == "yaml" {
+		fmt.Println(output)
+	} else if outputFormat == "json" {
+		y, err := yaml2.YAMLToJSON([]byte(output))
+		checkError(err)
+		var out bytes.Buffer
+		json.Indent(&out, y, "", "  ")
+		out.WriteTo(os.Stdout)
 	}
 }
 
@@ -157,6 +179,7 @@ func getShoots() {
 	checkError(err)
 	err = yaml.Unmarshal(targetFile, &target)
 	checkError(err)
+	output := ""
 	if len(target.Target) == 2 && target.Target[1].Kind == "seed" {
 		Client, err = clientToTarget("garden")
 		k8sGardenClient, err := kubernetes.NewClientFromFile(*kubeconfig)
@@ -165,12 +188,12 @@ func getShoots() {
 		checkError(err)
 		k8sGardenClient.SetGardenClientset(gardenClientset)
 		shootList, err := k8sGardenClient.GetGardenClientset().GardenV1().Shoots("").List(metav1.ListOptions{})
-		fmt.Printf("seeds:\n")
-		fmt.Printf("- seed: %s\n", target.Target[1].Name)
-		fmt.Printf("  shoots:\n")
+		output += fmt.Sprintf("seeds:\n")
+		output += fmt.Sprintf("- seed: %s\n", target.Target[1].Name)
+		output += fmt.Sprintf("  shoots:\n")
 		for _, item := range shootList.Items {
 			if item.Spec.SeedName == target.Target[1].Name {
-				fmt.Printf("  - %s\n", item.Name)
+				output += fmt.Sprintf("  - %s\n", item.Name)
 			}
 		}
 	} else if len(target.Target) == 2 && target.Target[1].Kind == "project" {
@@ -181,12 +204,21 @@ func getShoots() {
 		k8sGardenClient.SetGardenClientset(gardenClientset)
 		shootList, err := k8sGardenClient.GetGardenClientset().GardenV1().Shoots(target.Target[1].Name).List(metav1.ListOptions{})
 		checkError(err)
-		fmt.Printf("projects:\n")
-		fmt.Printf("- project: %s\n", target.Target[1].Name)
-		fmt.Printf("  shoots:\n")
+		output += fmt.Sprintf("projects:\n")
+		output += fmt.Sprintf("- project: %s\n", target.Target[1].Name)
+		output += fmt.Sprintf("  shoots:\n")
 		for _, item := range shootList.Items {
-			fmt.Printf("  - %s\n", item.Name)
+			output += fmt.Sprintf("  - %s\n", item.Name)
 		}
+	}
+	if outputFormat == "yaml" {
+		fmt.Println(output)
+	} else if outputFormat == "json" {
+		y, err := yaml2.YAMLToJSON([]byte(output))
+		checkError(err)
+		var out bytes.Buffer
+		json.Indent(&out, y, "", "  ")
+		out.WriteTo(os.Stdout)
 	}
 }
 
@@ -198,7 +230,8 @@ func getIssues() {
 	checkError(err)
 	k8sGardenClient.SetGardenClientset(gardenClientset)
 	shootList, err := k8sGardenClient.GetGardenClientset().GardenV1().Shoots("").List(metav1.ListOptions{})
-	fmt.Printf("issues:\n")
+	output := ""
+	output += fmt.Sprintf("issues:\n")
 	for _, item := range shootList.Items {
 		state := ""
 		healthy := true
@@ -230,26 +263,35 @@ func getIssues() {
 				hasIssue = true
 			}
 			if hasIssue {
-				fmt.Printf("- project: %s\n", item.Namespace)
-				fmt.Printf("  seed: %s\n", item.Spec.SeedName)
-				fmt.Printf("  shoot: %s\n", item.Name)
-				fmt.Printf("  health: %s\n", state)
-				fmt.Printf("  status: \n")
-				fmt.Printf("    lastError: %s\n", item.Status.LastError)
-				fmt.Printf("    lastOperation:\n")
-				fmt.Printf("      description: %s\n", item.Status.LastOperation.Description)
-				fmt.Printf("      lastUpdateTime: %s\n", item.Status.LastOperation.LastUpdateTime)
-				fmt.Printf("      progress: %d\n", item.Status.LastOperation.Progress)
-				fmt.Printf("      state: %s\n", item.Status.LastOperation.State)
-				fmt.Printf("      type: %s\n", item.Status.LastOperation.Type)
+				output += fmt.Sprintf("- project: %s\n", item.Namespace)
+				output += fmt.Sprintf("  seed: %s\n", item.Spec.SeedName)
+				output += fmt.Sprintf("  shoot: %s\n", item.Name)
+				output += fmt.Sprintf("  health: %s\n", state)
+				output += fmt.Sprintf("  status: \n")
+				output += fmt.Sprintf("    lastError: \"%s\"\n", strings.Replace(strings.Replace(strings.Replace(item.Status.LastError, ":", " ", -1), "\n", " ", -1), "\"", " ", -1))
+				output += fmt.Sprintf("    lastOperation: \n")
+				output += fmt.Sprintf("      description: \"%s\"\n", strings.Replace(strings.Replace(strings.Replace(item.Status.LastOperation.Description, ":", " ", -1), "\n", " ", -1), "\"", " ", -1))
+				output += fmt.Sprintf("      lastUpdateTime: \"%s\"\n", item.Status.LastOperation.LastUpdateTime)
+				output += fmt.Sprintf("      progress: %d\n", item.Status.LastOperation.Progress)
+				output += fmt.Sprintf("      state: %s\n", item.Status.LastOperation.State)
+				output += fmt.Sprintf("      type: %s\n", item.Status.LastOperation.Type)
 			}
 		} else {
-			fmt.Printf("- project: %s\n", item.Namespace)
-			fmt.Printf("  seed: %s\n", item.Spec.SeedName)
-			fmt.Printf("  shoot: %s\n", item.Name)
-			fmt.Printf("  health: None\n")
-			fmt.Printf("  status: \n")
-			fmt.Printf("    lastOperation: Not processed (!)\n")
+			output += fmt.Sprintf("- project: %s\n", item.Namespace)
+			output += fmt.Sprintf("  seed: %s\n", item.Spec.SeedName)
+			output += fmt.Sprintf("  shoot: %s\n", item.Name)
+			output += fmt.Sprintf("  health: None\n")
+			output += fmt.Sprintf("  status: \n")
+			output += fmt.Sprintf("    lastOperation: Not processed (!)\n")
 		}
+	}
+	if outputFormat == "yaml" {
+		fmt.Println(output)
+	} else if outputFormat == "json" {
+		y, err := yaml2.YAMLToJSON([]byte(output))
+		checkError(err)
+		var out bytes.Buffer
+		json.Indent(&out, y, "", "  ")
+		out.WriteTo(os.Stdout)
 	}
 }
