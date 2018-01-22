@@ -50,4 +50,3 @@ gardenClusters:
 ## Adding bash-completion
 - `g completion` will generate a bash-completion file ("gardenctl_completion.sh")  <br />
 - To enable completion add for example `source ~/go/src/github.com/gardener/gardenctl/gardenctl_completion.sh` to `~/.bashrc`
-
