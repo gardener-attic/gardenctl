@@ -42,6 +42,10 @@ var targetCmd = &cobra.Command{
 		}
 		switch args[0] {
 		case "garden":
+			if len(args) != 2 {
+				fmt.Println("Command must be in the format: target" + `	<project|garden|seed|shoot> + NAME`)
+				os.Exit(2)
+			}
 			gardens := resolveNameGarden(args[1])
 			if len(gardens) == 0 {
 				fmt.Println("No match for " + args[1])
@@ -56,6 +60,10 @@ var targetCmd = &cobra.Command{
 				os.Exit(2)
 			}
 		case "project":
+			if len(args) != 2 {
+				fmt.Println("Command must be in the format: target" + `	<project|garden|seed|shoot> + NAME`)
+				os.Exit(2)
+			}
 			projects := resolveNameProject(args[1])
 			if len(projects) == 0 {
 				fmt.Println("No match for " + args[1])
@@ -70,6 +78,10 @@ var targetCmd = &cobra.Command{
 				os.Exit(2)
 			}
 		case "seed":
+			if len(args) != 2 {
+				fmt.Println("Command must be in the format: target" + `	<project|garden|seed|shoot> + NAME`)
+				os.Exit(2)
+			}
 			seeds := resolveNameSeed(args[1])
 			if len(seeds) == 0 {
 				fmt.Println("No match for " + args[1])
@@ -84,6 +96,10 @@ var targetCmd = &cobra.Command{
 				os.Exit(2)
 			}
 		case "shoot":
+			if len(args) != 2 {
+				fmt.Println("Command must be in the format: target" + `	<project|garden|seed|shoot> + NAME`)
+				os.Exit(2)
+			}
 			targetShoot(args[1])
 		default:
 			if strings.Contains(args[0], "seed-") || seed {
@@ -397,7 +413,7 @@ func targetSeed(name string, cache bool) {
 	fmt.Println("KUBECONFIG=" + getKubeConfigOfCurrentTarget())
 }
 
-// targetShoot
+// targetShoot targets shoot cluster with project as default value in stack
 func targetShoot(name string) {
 	Client, err = clientToTarget("garden")
 	k8sGardenClient, err := kubernetes.NewClientFromFile(*kubeconfig)

@@ -23,6 +23,7 @@ import (
 )
 
 var cachevar bool
+var outputFormat string
 var gardenConfig string
 var pathGardenHome string
 
@@ -64,6 +65,7 @@ func Execute() {
 func init() {
 	cobra.OnInitialize(initConfig)
 	RootCmd.PersistentFlags().BoolVarP(&cachevar, "no-cache", "n", false, "no caching")
+	RootCmd.PersistentFlags().StringVarP(&outputFormat, "output", "o", "yaml", "output format yaml or json")
 	cobra.EnableCommandSorting = false
 	cobra.EnablePrefixMatching = prefixMatching
 	RootCmd.AddCommand(lsCmd, targetCmd, dropCmd, getCmd)
