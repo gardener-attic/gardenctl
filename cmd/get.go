@@ -15,6 +15,8 @@
 package cmd
 
 import (
+	"bytes"
+	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -24,6 +26,7 @@ import (
 	"github.com/gardener/gardenctl/pkg/apis/garden/v1"
 	clientset "github.com/gardener/gardenctl/pkg/client/garden/clientset/versioned"
 	"github.com/gardener/gardenctl/pkg/client/kubernetes"
+	yaml2 "github.com/ghodss/yaml"
 	"github.com/spf13/cobra"
 	yaml "gopkg.in/yaml.v2"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -103,29 +106,40 @@ func getProject(name string) {
 	checkError(err)
 	namespace, err := Client.CoreV1().Namespaces().Get(name, metav1.GetOptions{})
 	checkError(err)
-	fmt.Printf("apiVersion: %s\n", namespace.APIVersion)
-	fmt.Printf("kind: Namespace\n")
-	fmt.Printf("metadata:\n")
-	fmt.Printf("  annotations:\n")
+	output := ""
+	output += fmt.Sprintf("apiVersion: %s\n", namespace.APIVersion)
+	output += fmt.Sprintf("kind: Namespace\n")
+	output += fmt.Sprintf("metadata:\n")
+	output += fmt.Sprintf("  annotations:\n")
 	for index, value := range namespace.Annotations {
-		fmt.Printf("    %s: %s\n", index, value)
+		output += fmt.Sprintf("    %s: %s\n", index, value)
 	}
-	fmt.Printf("  creationTimestamp: %s\n", namespace.CreationTimestamp)
-	fmt.Printf("  labels:\n")
+	output += fmt.Sprintf("  creationTimestamp: %s\n", namespace.CreationTimestamp)
+	output += fmt.Sprintf("  labels:\n")
 	for index, value := range namespace.Labels {
-		fmt.Printf("    %s: %s\n", index, value)
+		output += fmt.Sprintf("    %s: %s\n", index, value)
 	}
-	fmt.Printf("  name: %s\n", namespace.Name)
-	fmt.Printf("  resourceVersion: \"%s\"\n", namespace.ResourceVersion)
-	fmt.Printf("  selfLink: %s\n", namespace.GetSelfLink())
-	fmt.Printf("  uid: %s\n", namespace.UID)
-	fmt.Printf("spec:\n")
-	fmt.Printf("  finalizers:\n")
+	output += fmt.Sprintf("  name: %s\n", namespace.Name)
+	output += fmt.Sprintf("  resourceVersion: \"%s\"\n", namespace.ResourceVersion)
+	output += fmt.Sprintf("  selfLink: %s\n", namespace.GetSelfLink())
+	output += fmt.Sprintf("  uid: %s\n", namespace.UID)
+	output += fmt.Sprintf("spec:\n")
+	output += fmt.Sprintf("  finalizers:\n")
 	for _, value := range namespace.Spec.Finalizers {
-		fmt.Printf("  - %s\n", value)
+		output += fmt.Sprintf("  - %s\n", value)
 	}
-	fmt.Printf("status:\n")
-	fmt.Printf("  phase: %s\n", namespace.Status.Phase)
+	output += fmt.Sprintf("status:\n")
+	output += fmt.Sprintf("  phase: %s\n", namespace.Status.Phase)
+
+	if outputFormat == "yaml" {
+		fmt.Println(output)
+	} else if outputFormat == "json" {
+		y, err := yaml2.YAMLToJSON([]byte(output))
+		checkError(err)
+		var out bytes.Buffer
+		json.Indent(&out, y, "", "  ")
+		out.WriteTo(os.Stdout)
+	}
 }
 
 // getGarden lists kubeconfig of garden cluster
@@ -157,7 +171,15 @@ func getGarden(name string) {
 			}
 			kubeconfig, err := ioutil.ReadFile(pathToKubeconfig)
 			checkError(err)
-			fmt.Printf("%s", kubeconfig)
+			if outputFormat == "yaml" {
+				fmt.Printf("%s", kubeconfig)
+			} else if outputFormat == "json" {
+				y, err := yaml2.YAMLToJSON([]byte(kubeconfig))
+				checkError(err)
+				var out bytes.Buffer
+				json.Indent(&out, y, "", "  ")
+				out.WriteTo(os.Stdout)
+			}
 			match = true
 		}
 	}
@@ -189,7 +211,16 @@ func getSeed(name string) {
 		fmt.Println("Seed not found")
 		os.Exit(2)
 	}
-	fmt.Printf("%s\n", kubeSecret.Data["kubeconfig"])
+	if outputFormat == "yaml" {
+		fmt.Printf("%s\n", kubeSecret.Data["kubeconfig"])
+	} else if outputFormat == "json" {
+		y, err := yaml2.YAMLToJSON([]byte(kubeSecret.Data["kubeconfig"]))
+		checkError(err)
+		var out bytes.Buffer
+		json.Indent(&out, y, "", "  ")
+		out.WriteTo(os.Stdout)
+	}
+
 }
 
 // getShoot lists kubeconfig of shoot
@@ -239,7 +270,15 @@ func getShoot(name string) {
 		checkError(err)
 		kubeSecret, err = client.CoreV1().Secrets(namespace).Get("kubecfg", metav1.GetOptions{})
 		checkError(err)
-		fmt.Printf("%s\n", kubeSecret.Data["kubeconfig"])
+		if outputFormat == "yaml" {
+			fmt.Printf("%s\n", kubeSecret.Data["kubeconfig"])
+		} else if outputFormat == "json" {
+			y, err := yaml2.YAMLToJSON([]byte(kubeSecret.Data["kubeconfig"]))
+			checkError(err)
+			var out bytes.Buffer
+			json.Indent(&out, y, "", "  ")
+			out.WriteTo(os.Stdout)
+		}
 	} else if len(matchedShoots) > 1 {
 		fmt.Println("Multiple matches, target a seed or project first")
 	}
@@ -249,5 +288,14 @@ func getShoot(name string) {
 func getTarget() {
 	targetFile, err := ioutil.ReadFile(pathTarget)
 	checkError(err)
-	fmt.Printf("%s", targetFile)
+	if outputFormat == "yaml" {
+		fmt.Printf("%s", targetFile)
+	} else if outputFormat == "json" {
+		y, err := yaml2.YAMLToJSON([]byte(targetFile))
+		checkError(err)
+		var out bytes.Buffer
+		json.Indent(&out, y, "", "  ")
+		out.WriteTo(os.Stdout)
+	}
+
 }
