@@ -106,38 +106,17 @@ func getProject(name string) {
 	checkError(err)
 	namespace, err := Client.CoreV1().Namespaces().Get(name, metav1.GetOptions{})
 	checkError(err)
-	output := ""
-	output += fmt.Sprintf("apiVersion: %s\n", namespace.APIVersion)
-	output += fmt.Sprintf("kind: Namespace\n")
-	output += fmt.Sprintf("metadata:\n")
-	output += fmt.Sprintf("  annotations:\n")
-	for index, value := range namespace.Annotations {
-		output += fmt.Sprintf("    %s: %s\n", index, value)
-	}
-	output += fmt.Sprintf("  creationTimestamp: %s\n", namespace.CreationTimestamp)
-	output += fmt.Sprintf("  labels:\n")
-	for index, value := range namespace.Labels {
-		output += fmt.Sprintf("    %s: %s\n", index, value)
-	}
-	output += fmt.Sprintf("  name: %s\n", namespace.Name)
-	output += fmt.Sprintf("  resourceVersion: \"%s\"\n", namespace.ResourceVersion)
-	output += fmt.Sprintf("  selfLink: %s\n", namespace.GetSelfLink())
-	output += fmt.Sprintf("  uid: %s\n", namespace.UID)
-	output += fmt.Sprintf("spec:\n")
-	output += fmt.Sprintf("  finalizers:\n")
-	for _, value := range namespace.Spec.Finalizers {
-		output += fmt.Sprintf("  - %s\n", value)
-	}
-	output += fmt.Sprintf("status:\n")
-	output += fmt.Sprintf("  phase: %s\n", namespace.Status.Phase)
-
 	if outputFormat == "yaml" {
-		fmt.Println(output)
+		j, err := json.Marshal(namespace)
+		checkError(err)
+		y, err := yaml2.JSONToYAML(j)
+		checkError(err)
+		os.Stdout.Write(y)
 	} else if outputFormat == "json" {
-		y, err := yaml2.YAMLToJSON([]byte(output))
+		j, err := json.Marshal(namespace)
 		checkError(err)
 		var out bytes.Buffer
-		json.Indent(&out, y, "", "  ")
+		json.Indent(&out, j, "", "  ")
 		out.WriteTo(os.Stdout)
 	}
 }
@@ -198,10 +177,10 @@ func getSeed(name string) {
 		checkError(err)
 		if len(target.Target) > 1 && target.Target[1].Kind == "seed" {
 			name = target.Target[1].Name
-		} else if len(target.Target) > 1 && target.Target[1].Kind == "project" {
+		} else if len(target.Target) > 1 && target.Target[1].Kind == "project" && len(target.Target) == 3 {
 			name = getSeedForProject(target.Target[2].Name)
 		} else {
-			fmt.Println("No seed targeted")
+			fmt.Println("No seed targeted or shoot targeted")
 			os.Exit(2)
 		}
 	}
@@ -288,14 +267,17 @@ func getShoot(name string) {
 func getTarget() {
 	targetFile, err := ioutil.ReadFile(pathTarget)
 	checkError(err)
+	var t Target
+	yaml.Unmarshal(targetFile, &t)
 	if outputFormat == "yaml" {
-		fmt.Printf("%s", targetFile)
+		y, err := yaml.Marshal(t)
+		checkError(err)
+		os.Stdout.Write(y)
 	} else if outputFormat == "json" {
-		y, err := yaml2.YAMLToJSON([]byte(targetFile))
+		j, err := json.Marshal(t)
 		checkError(err)
 		var out bytes.Buffer
-		json.Indent(&out, y, "", "  ")
+		json.Indent(&out, j, "", "  ")
 		out.WriteTo(os.Stdout)
 	}
-
 }
