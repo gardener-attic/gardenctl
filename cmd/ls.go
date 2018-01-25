@@ -22,8 +22,8 @@ import (
 	"os"
 	"strings"
 
-	clientset "github.com/gardener/gardenctl/pkg/client/garden/clientset/versioned"
-	"github.com/gardener/gardenctl/pkg/client/kubernetes"
+	clientset "github.com/gardener/gardener/pkg/client/garden/clientset/versioned"
+	"github.com/gardener/gardener/pkg/client/kubernetes"
 	"github.com/spf13/cobra"
 	yaml "gopkg.in/yaml.v2"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -114,7 +114,7 @@ func getProjectsWithShoots() {
 	gardenClientset, err := clientset.NewForConfig(k8sGardenClient.GetConfig())
 	checkError(err)
 	k8sGardenClient.SetGardenClientset(gardenClientset)
-	shootList, err := k8sGardenClient.GetGardenClientset().GardenV1().Shoots("").List(metav1.ListOptions{})
+	shootList, err := k8sGardenClient.GetGardenClientset().GardenV1beta1().Shoots("").List(metav1.ListOptions{})
 	var projects Projects
 	for _, project := range projectList.Items {
 		var pm ProjectMeta
@@ -194,11 +194,11 @@ func getShoots() {
 		gardenClientset, err := clientset.NewForConfig(k8sGardenClient.GetConfig())
 		checkError(err)
 		k8sGardenClient.SetGardenClientset(gardenClientset)
-		shootList, err := k8sGardenClient.GetGardenClientset().GardenV1().Shoots("").List(metav1.ListOptions{})
+		shootList, err := k8sGardenClient.GetGardenClientset().GardenV1beta1().Shoots("").List(metav1.ListOptions{})
 		var sm SeedMeta
 		sm.Seed = target.Target[1].Name
 		for _, item := range shootList.Items {
-			if item.Spec.SeedName == target.Target[1].Name {
+			if *item.Spec.Cloud.Seed == target.Target[1].Name {
 				sm.Shoots = append(sm.Shoots, item.Name)
 			}
 		}
@@ -220,7 +220,7 @@ func getShoots() {
 		gardenClientset, err := clientset.NewForConfig(k8sGardenClient.GetConfig())
 		checkError(err)
 		k8sGardenClient.SetGardenClientset(gardenClientset)
-		shootList, err := k8sGardenClient.GetGardenClientset().GardenV1().Shoots(target.Target[1].Name).List(metav1.ListOptions{})
+		shootList, err := k8sGardenClient.GetGardenClientset().GardenV1beta1().Shoots(target.Target[1].Name).List(metav1.ListOptions{})
 		checkError(err)
 		var pm ProjectMeta
 		pm.Project = target.Target[1].Name
@@ -251,7 +251,7 @@ func getIssues() {
 	gardenClientset, err := clientset.NewForConfig(k8sGardenClient.GetConfig())
 	checkError(err)
 	k8sGardenClient.SetGardenClientset(gardenClientset)
-	shootList, err := k8sGardenClient.GetGardenClientset().GardenV1().Shoots("").List(metav1.ListOptions{})
+	shootList, err := k8sGardenClient.GetGardenClientset().GardenV1beta1().Shoots("").List(metav1.ListOptions{})
 	var issues Issues
 	for _, item := range shootList.Items {
 		var im IssuesMeta
@@ -292,11 +292,11 @@ func getIssues() {
 				lastOperationMeta.Progress = item.Status.LastOperation.Progress
 				lastOperationMeta.State = string(item.Status.LastOperation.State)
 				lastOperationMeta.Type = string(item.Status.LastOperation.Type)
-				statusMeta.LastError = item.Status.LastError
+				statusMeta.LastError = item.Status.LastError.Description
 				statusMeta.LastOperation = lastOperationMeta
 				im.Health = state
 				im.Project = item.Namespace
-				im.Seed = item.Spec.SeedName
+				im.Seed = *item.Spec.Cloud.Seed
 				im.Shoot = item.Name
 				im.Status = statusMeta
 				issues.Issues = append(issues.Issues, im)
@@ -306,7 +306,7 @@ func getIssues() {
 			statusMeta.LastOperation = lastOperationMeta
 			im.Status = statusMeta
 			im.Project = item.Namespace
-			im.Seed = item.Spec.SeedName
+			im.Seed = *item.Spec.Cloud.Seed
 			im.Shoot = item.Name
 			im.Health = "None"
 			issues.Issues = append(issues.Issues, im)
