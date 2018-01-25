@@ -21,10 +21,9 @@ import (
 	"path/filepath"
 	"strings"
 
-	clientset "github.com/gardener/gardenctl/pkg/client/garden/clientset/versioned"
-	sapcloud "github.com/gardener/gardenctl/pkg/client/kubernetes"
+	clientset "github.com/gardener/gardener/pkg/client/garden/clientset/versioned"
+	sapcloud "github.com/gardener/gardener/pkg/client/kubernetes"
 	"github.com/jmoiron/jsonq"
-
 	yaml "gopkg.in/yaml.v2"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -60,11 +59,11 @@ func operate(provider, arguments string) {
 	gardenClientset, err := clientset.NewForConfig(k8sGardenClient.GetConfig())
 	checkError(err)
 	k8sGardenClient.SetGardenClientset(gardenClientset)
-	shootList, err := k8sGardenClient.GetGardenClientset().GardenV1().Shoots("").List(metav1.ListOptions{})
+	shootList, err := k8sGardenClient.GetGardenClientset().GardenV1beta1().Shoots("").List(metav1.ListOptions{})
 	for _, shoot := range shootList.Items {
 		if shoot.Name == target.Target[2].Name {
-			secretName = shoot.Spec.Infrastructure.Secret
-			region = shoot.Spec.Infrastructure.Region
+			secretName = shoot.Spec.Cloud.SecretBindingRef.Name
+			region = shoot.Spec.Cloud.Region
 			namespaceSecret = shoot.Namespace
 		}
 	}

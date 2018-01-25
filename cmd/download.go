@@ -19,10 +19,10 @@ import (
 	"io/ioutil"
 	"os"
 
-	"github.com/gardener/gardenctl/pkg/client/kubernetes"
+	"github.com/gardener/gardener/pkg/client/kubernetes"
 	yaml "gopkg.in/yaml.v2"
 
-	clientset "github.com/gardener/gardenctl/pkg/client/garden/clientset/versioned"
+	clientset "github.com/gardener/gardener/pkg/client/garden/clientset/versioned"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/spf13/cobra"
@@ -75,9 +75,9 @@ func downloadTerraformFiles(option string) {
 		gardenClientset, err := clientset.NewForConfig(k8sGardenClient.GetConfig())
 		checkError(err)
 		k8sGardenClient.SetGardenClientset(gardenClientset)
-		shootList, err := k8sGardenClient.GetGardenClientset().GardenV1().Shoots("").List(metav1.ListOptions{})
+		shootList, err := k8sGardenClient.GetGardenClientset().GardenV1beta1().Shoots("").List(metav1.ListOptions{})
 		for _, shoot := range shootList.Items {
-			if shoot.Name == target.Target[2].Name && shoot.Spec.SeedName == target.Target[1].Name {
+			if shoot.Name == target.Target[2].Name && *shoot.Spec.Cloud.Seed == target.Target[1].Name {
 				namespace = shoot.Namespace
 			}
 		}

@@ -23,11 +23,11 @@ import (
 	"path/filepath"
 	"strings"
 
-	clientset "github.com/gardener/gardenctl/pkg/client/garden/clientset/versioned"
+	clientset "github.com/gardener/gardener/pkg/client/garden/clientset/versioned"
 
 	yaml "gopkg.in/yaml.v2"
 
-	sapcloud "github.com/gardener/gardenctl/pkg/client/kubernetes"
+	sapcloud "github.com/gardener/gardener/pkg/client/kubernetes"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/clientcmd"
@@ -159,7 +159,7 @@ func getSeedNamespaceNameForShoot(shootName string) (namespaceSeed string) {
 	gardenClientset, err := clientset.NewForConfig(k8sGardenClient.GetConfig())
 	checkError(err)
 	k8sGardenClient.SetGardenClientset(gardenClientset)
-	shootList, err := k8sGardenClient.GetGardenClientset().GardenV1().Shoots("").List(metav1.ListOptions{})
+	shootList, err := k8sGardenClient.GetGardenClientset().GardenV1beta1().Shoots("").List(metav1.ListOptions{})
 	for _, shoot := range shootList.Items {
 		if shoot.Name == shootName {
 			namespaceSeed = "shoot-" + shoot.Namespace + "-" + shoot.Name

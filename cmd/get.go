@@ -23,9 +23,9 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/gardener/gardenctl/pkg/apis/garden/v1"
-	clientset "github.com/gardener/gardenctl/pkg/client/garden/clientset/versioned"
-	"github.com/gardener/gardenctl/pkg/client/kubernetes"
+	"github.com/gardener/gardener/pkg/apis/garden/v1beta1"
+	clientset "github.com/gardener/gardener/pkg/client/garden/clientset/versioned"
+	"github.com/gardener/gardener/pkg/client/kubernetes"
 	yaml2 "github.com/ghodss/yaml"
 	"github.com/spf13/cobra"
 	yaml "gopkg.in/yaml.v2"
@@ -223,9 +223,9 @@ func getShoot(name string) {
 	gardenClientset, err := clientset.NewForConfig(k8sGardenClient.GetConfig())
 	checkError(err)
 	k8sGardenClient.SetGardenClientset(gardenClientset)
-	shootList, err := k8sGardenClient.GetGardenClientset().GardenV1().Shoots("").List(metav1.ListOptions{})
+	shootList, err := k8sGardenClient.GetGardenClientset().GardenV1beta1().Shoots("").List(metav1.ListOptions{})
 	checkError(err)
-	var matchedShoots []v1.Shoot
+	var matchedShoots []v1beta1.Shoot
 	for _, item := range shootList.Items {
 		if item.Name == name {
 			matchedShoots = append(matchedShoots, item)
@@ -234,15 +234,15 @@ func getShoot(name string) {
 	if len(matchedShoots) < 1 {
 		fmt.Println("Shoot not found")
 	} else if len(matchedShoots) == 1 {
-		kubeSecret, err := Client.CoreV1().Secrets("garden").Get(matchedShoots[0].Spec.SeedName, metav1.GetOptions{})
+		kubeSecret, err := Client.CoreV1().Secrets("garden").Get(*matchedShoots[0].Spec.Cloud.Seed, metav1.GetOptions{})
 		checkError(err)
-		pathSeed := pathSeedCache + "/" + matchedShoots[0].Spec.SeedName
+		pathSeed := pathSeedCache + "/" + *matchedShoots[0].Spec.Cloud.Seed
 		os.MkdirAll(pathSeed, os.ModePerm)
 		err = ioutil.WriteFile(pathSeed+"/kubeconfig.yaml", kubeSecret.Data["kubeconfig"], 0644)
 		checkError(err)
 		KUBECONFIG = pathSeed + "/kubeconfig.yaml"
 		namespace := "shoot-" + matchedShoots[0].Namespace + "-" + matchedShoots[0].Name
-		pathToKubeconfig := pathGardenHome + "/cache/seeds" + "/" + matchedShoots[0].Spec.SeedName + "/" + "kubeconfig.yaml"
+		pathToKubeconfig := pathGardenHome + "/cache/seeds" + "/" + *matchedShoots[0].Spec.Cloud.Seed + "/" + "kubeconfig.yaml"
 		config, err := clientcmd.BuildConfigFromFlags("", pathToKubeconfig)
 		checkError(err)
 		client, err := k8s.NewForConfig(config)
