@@ -14,7 +14,11 @@ or adapt go import path in `gardenctl.go`
 - An example configuration is shown below
 - Cache can be set via `GARDENCTL_HOME` environment variable and if it is not set, it uses `~/.garden` as default
 - To use gardenctl aws, az, gcloud, openstack or kubectl integration, the corresponding tools needs to be installed
-
+  - [aws](https://aws.amazon.com/cli/)
+  - [az](https://docs.microsoft.com/en-us/cli/azure/install-azure-cli?view=azure-cli-latest)
+  - [gcloud](https://cloud.google.com/sdk/downloads)
+  - [openstack](https://pypi.python.org/pypi/python-openstackclient)
+  - [kubectl](https://kubernetes.io/docs/tasks/tools/install-kubectl/)
 
 ## Example Config:
 ``` yaml
