@@ -44,7 +44,7 @@ ln -s "${SRC_DIR}" "${src_symlink}"
 cd "${src_symlink}"
 
 set -x
-go build -o ${OUT_DIR} gardenctl.go
+go build -o ${OUT_DIR}/gardenctl gardenctl.go
 
 
 
