@@ -2,6 +2,7 @@
 
 set -e
 
+# Env variables passed from pipeline task 
 # SOURCE_PATH
 # VERSION_PATH
 # BINARY_PATH
@@ -14,11 +15,7 @@ else
 fi
 export SRC_DIR="$(readlink -f "${SRC_DIR}")"
 
-if [ ! -z "$VERSION_PATH" ]; then
-  export VERSION_FILE="${VERSION_PATH}/number"
-else
-  export VERSION_FILE="$(readlink -f "${SRC_DIR}/VERSION")"
-fi
+export VERSION_FILE="$(readlink -f "${SRC_DIR}/VERSION")"
 export VERSION="$(cat "${VERSION_FILE}")"
 
 if [ ! -z "$BINARY_PATH" ]; then
@@ -44,7 +41,7 @@ ln -s "${SRC_DIR}" "${src_symlink}"
 cd "${src_symlink}"
 
 set -x
-go build gardenctl.go
+go build -o ${OUT_DIR}/gardenctl gardenctl.go
 
 
 
