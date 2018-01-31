@@ -15,7 +15,11 @@ else
 fi
 export SRC_DIR="$(readlink -f "${SRC_DIR}")"
 
-export VERSION_FILE="$(readlink -f "${SRC_DIR}/VERSION")"
+if [ ! -z "$VERSION_PATH" ]; then
+  export VERSION_FILE="${VERSION_PATH}/number"
+else
+  export VERSION_FILE="$(readlink -f "${SRC_DIR}/VERSION")"
+fi
 export VERSION="$(cat "${VERSION_FILE}")"
 
 if [ ! -z "$BINARY_PATH" ]; then
