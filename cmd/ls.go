@@ -39,6 +39,15 @@ var lsCmd = &cobra.Command{
 			fmt.Println("Command must be in the format: ls [gardens|projects|seeds|shoots|issues]")
 			os.Exit(2)
 		}
+		var t Target
+		targetFile, err := ioutil.ReadFile(pathTarget)
+		checkError(err)
+		err = yaml.Unmarshal(targetFile, &t)
+		checkError(err)
+		if (len(t.Target) == 0) && args[0] != "gardens" {
+			fmt.Println("Target stack is empty")
+			os.Exit(2)
+		}
 		switch args[0] {
 		case "projects":
 			tmp := KUBECONFIG
@@ -68,7 +77,6 @@ var lsCmd = &cobra.Command{
 				json.Indent(&out, j, "", "  ")
 				out.WriteTo(os.Stdout)
 			}
-
 		case "shoots":
 			var target Target
 			targetFile, err := ioutil.ReadFile(pathTarget)

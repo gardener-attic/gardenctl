@@ -42,6 +42,18 @@ var logsCmd = &cobra.Command{
 			fmt.Println("Command must be in the format: logs (operator|ui|api|scheduler|controller-manager|etcd-operator|etcd-main|etcd-events|addon-manager|vpn-seed|vpn-shoot|auto-node-repair|dashboard|prometheus|grafana|alertmanager|tf (infra|dns|ingress)")
 			os.Exit(2)
 		}
+		var t Target
+		targetFile, err := ioutil.ReadFile(pathTarget)
+		checkError(err)
+		err = yaml.Unmarshal(targetFile, &t)
+		checkError(err)
+		if len(t.Target) < 3 && (args[0] != "operator") && (args[0] != "tf") && (args[0] != "dashboard") {
+			fmt.Println("No shoot targeted")
+			os.Exit(2)
+		} else if len(t.Target) == 0 {
+			fmt.Println("Target stack is empty")
+			os.Exit(2)
+		}
 		switch args[0] {
 		case "operator":
 			logsOperator()
