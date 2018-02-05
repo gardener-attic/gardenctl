@@ -59,7 +59,7 @@ func createDir(dirname string, permission os.FileMode) {
 	}
 }
 
-// createFile creates an empty file if it does no exist
+// createFile creates an empty file if it does not exist
 func createFile(filename string, permission os.FileMode) {
 	exists, err := fileExists(filename)
 	checkError(err)

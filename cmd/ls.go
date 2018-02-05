@@ -31,12 +31,12 @@ import (
 
 // getCmd represents the get command
 var lsCmd = &cobra.Command{
-	Use:   "ls [issues|projects|gardens|seeds|shoots]",
-	Short: "List all resource instances, e.g. list of shoots",
+	Use:   "ls [gardens|projects|seeds|shoots|issues]",
+	Short: "List all resource instances, e.g. list of shoots|issues",
 	Long:  ``,
 	Run: func(cmd *cobra.Command, args []string) {
 		if len(args) < 1 || len(args) > 2 {
-			fmt.Println("Command must be in the format: ls [issues|projects|gardens|seeds|shoots]")
+			fmt.Println("Command must be in the format: ls [gardens|projects|seeds|shoots|issues]")
 			os.Exit(2)
 		}
 		switch args[0] {
@@ -93,7 +93,7 @@ var lsCmd = &cobra.Command{
 			checkError(err)
 			getIssues()
 		default:
-			fmt.Println("Command must be in the format: ls [issues|projects|gardens|seeds|shoots]")
+			fmt.Println("Command must be in the format: ls [gardens|projects|seeds|shoots|issues]")
 		}
 	},
 	ValidArgs: []string{"issues", "projects", "gardens", "seeds", "shoots"},
