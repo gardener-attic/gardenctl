@@ -269,7 +269,10 @@ func getTarget() {
 	checkError(err)
 	var t Target
 	yaml.Unmarshal(targetFile, &t)
-	if outputFormat == "yaml" {
+	if len(t.Target) == 0 {
+		fmt.Println("Target stack is empty")
+		os.Exit(2)
+	} else if outputFormat == "yaml" {
 		y, err := yaml.Marshal(t)
 		checkError(err)
 		os.Stdout.Write(y)
