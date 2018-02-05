@@ -49,9 +49,13 @@ func Execute() {
 	pathGardenConfig = filepath.Join(pathGardenHome, "config")
 	pathTarget = filepath.Join(pathGardenHome, "target")
 	createDir(pathGardenHome, 0751)
+	if _, err := os.Stat("/path/to/whatever"); err != nil {
+		createFile(pathGardenHome+"/config", 0644)
+	}
 	createDir(pathGardenHome+"/cache", 0751)
 	createDir(pathGardenHome+"/cache/seeds", 0751)
 	createDir(pathGardenHome+"/cache/projects", 0751)
+
 	gardenConfig = os.Getenv("GARDENCONFIG")
 	if gardenConfig != "" {
 		pathGardenConfig = gardenConfig
@@ -73,6 +77,37 @@ func init() {
 	RootCmd.AddCommand(completionCmd)
 	RootCmd.AddCommand(kubectlCmd, kaCmd, ksCmd, awsCmd, azCmd, gcloudCmd, openstackCmd)
 	RootCmd.SuggestionsMinimumDistance = suggestionsMinimumDistance
+	RootCmd.SetUsageTemplate(`Usage:{{if .Runnable}}
+  {{if .HasAvailableFlags}}{{appendIfNotPresent .UseLine "[flags]"}}{{else}}{{.UseLine}}{{end}}{{end}}{{if .HasAvailableSubCommands}}
+  {{ .CommandPath}} [command]{{end}}{{if gt .Aliases 0}}
+	  
+Aliases:
+  {{.NameAndAliases}}
+{{end}}{{if .HasExample}}
+	  
+Examples:
+{{ .Example }}{{end}}{{ if .HasAvailableSubCommands}}
+	  
+Available Commands:{{range .Commands}}{{if .IsAvailableCommand}}
+  {{rpad .Name .NamePadding }} {{.Short}}{{end}}{{end}}{{end}}{{ if .HasAvailableLocalFlags}}
+	  
+Flags:
+{{.LocalFlags.FlagUsages | trimRightSpace}}{{end}}{{ if .HasAvailableInheritedFlags}}
+	  
+Global Flags:
+{{.InheritedFlags.FlagUsages | trimRightSpace}}{{end}}{{if .HasHelpSubCommands}}
+	  
+Additional help topics:{{range .Commands}}{{if .IsHelpCommand}}
+  {{rpad .CommandPath .CommandPathPadding}} {{.Short}}{{end}}{{end}}{{end}}{{ if .HasAvailableSubCommands }}
+	  
+Use "{{.CommandPath}} [command] --help" for more information about a command.
+
+Configuration and KUBECONFIG file cache located $GARDENCTL_HOME or ~/.garden (default).
+Gardenctl configuration file must be provided in $GARDENCONFIG or ~/.garden.config (default).
+
+Find more information and an example configuration at https://github.com/gardener/gardenctl
+{{end}}
+`)
 }
 
 // initConfig reads in config file and ENV variables if set.
