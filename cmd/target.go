@@ -40,6 +40,11 @@ var targetCmd = &cobra.Command{
 			fmt.Println("Command must be in the format: target" + `	<project|garden|seed|shoot> + NAME`)
 			os.Exit(2)
 		}
+		var t Target
+		targetFile, err := ioutil.ReadFile(pathTarget)
+		checkError(err)
+		err = yaml.Unmarshal(targetFile, &t)
+		checkError(err)
 		switch args[0] {
 		case "garden":
 			if len(args) != 2 {
@@ -64,6 +69,10 @@ var targetCmd = &cobra.Command{
 				fmt.Println("Command must be in the format: target" + `	<project|garden|seed|shoot> + NAME`)
 				os.Exit(2)
 			}
+			if len(t.Target) < 1 {
+				fmt.Println("No garden cluster targeted")
+				os.Exit(2)
+			}
 			projects := resolveNameProject(args[1])
 			if len(projects) == 0 {
 				fmt.Println("No match for " + args[1])
@@ -80,6 +89,10 @@ var targetCmd = &cobra.Command{
 		case "seed":
 			if len(args) != 2 {
 				fmt.Println("Command must be in the format: target" + `	<project|garden|seed|shoot> + NAME`)
+				os.Exit(2)
+			}
+			if len(t.Target) < 1 {
+				fmt.Println("No garden cluster targeted")
 				os.Exit(2)
 			}
 			seeds := resolveNameSeed(args[1])
@@ -100,8 +113,16 @@ var targetCmd = &cobra.Command{
 				fmt.Println("Command must be in the format: target" + `	<project|garden|seed|shoot> + NAME`)
 				os.Exit(2)
 			}
+			if len(t.Target) < 1 {
+				fmt.Println("No garden cluster targeted")
+				os.Exit(2)
+			}
 			targetShoot(args[1])
 		default:
+			if len(t.Target) < 1 {
+				fmt.Println("No garden cluster targeted")
+				os.Exit(2)
+			}
 			if strings.Contains(args[0], "seed-") || seed {
 				seeds := resolveNameSeed(args[0])
 				if len(seeds) == 0 {

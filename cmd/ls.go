@@ -83,19 +83,16 @@ var lsCmd = &cobra.Command{
 			checkError(err)
 			err = yaml.Unmarshal(targetFile, &target)
 			checkError(err)
+			tmp := KUBECONFIG
+			Client, err = clientToTarget("garden")
 			if len(target.Target) == 1 {
-				tmp := KUBECONFIG
-				Client, err = clientToTarget("garden")
 				getProjectsWithShoots()
-				KUBECONFIG = tmp
 			} else if len(target.Target) == 2 && target.Target[1].Kind == "seed" {
-				getShoots()
+				getProjectsWithShootsForSeed()
 			} else if len(target.Target) == 2 && target.Target[1].Kind == "project" {
-				tmp := KUBECONFIG
-				Client, err = clientToTarget("garden")
-				getShoots()
-				KUBECONFIG = tmp
+				getSeedsWithShootsForProject()
 			}
+			KUBECONFIG = tmp
 		case "issues":
 			Client, err = clientToTarget("garden")
 			checkError(err)
@@ -186,69 +183,51 @@ func getSeeds() (s []string) {
 	return seeds
 }
 
-// getShoots lists all available shoots
-func getShoots() {
+// getProjectsWithShootsForSeed
+func getProjectsWithShootsForSeed() {
 	var target Target
 	targetFile, err := ioutil.ReadFile(pathTarget)
 	checkError(err)
 	err = yaml.Unmarshal(targetFile, &target)
 	checkError(err)
-	var seeds Seeds
 	var projects Projects
-	if len(target.Target) == 2 && target.Target[1].Kind == "seed" {
-		Client, err = clientToTarget("garden")
-		k8sGardenClient, err := kubernetes.NewClientFromFile(*kubeconfig)
-		checkError(err)
-		gardenClientset, err := clientset.NewForConfig(k8sGardenClient.GetConfig())
-		checkError(err)
-		k8sGardenClient.SetGardenClientset(gardenClientset)
-		shootList, err := k8sGardenClient.GetGardenClientset().GardenV1().Shoots("").List(metav1.ListOptions{})
-		var sm SeedMeta
-		sm.Seed = target.Target[1].Name
-		for _, item := range shootList.Items {
-			if item.Spec.SeedName == target.Target[1].Name {
-				sm.Shoots = append(sm.Shoots, item.Name)
-			}
-		}
-		seeds.Seeds = append(seeds.Seeds, sm)
-		if outputFormat == "yaml" {
-			y, err := yaml.Marshal(seeds)
-			checkError(err)
-			os.Stdout.Write(y)
-		} else if outputFormat == "json" {
-			j, err := json.Marshal(seeds)
-			checkError(err)
-			var out bytes.Buffer
-			json.Indent(&out, j, "", "  ")
-			out.WriteTo(os.Stdout)
-		}
-	} else if len(target.Target) == 2 && target.Target[1].Kind == "project" {
-		k8sGardenClient, err := kubernetes.NewClientFromFile(*kubeconfig)
-		checkError(err)
-		gardenClientset, err := clientset.NewForConfig(k8sGardenClient.GetConfig())
-		checkError(err)
-		k8sGardenClient.SetGardenClientset(gardenClientset)
-		shootList, err := k8sGardenClient.GetGardenClientset().GardenV1().Shoots(target.Target[1].Name).List(metav1.ListOptions{})
-		checkError(err)
+	k8sGardenClient, err := kubernetes.NewClientFromFile(*kubeconfig)
+	checkError(err)
+	gardenClientset, err := clientset.NewForConfig(k8sGardenClient.GetConfig())
+	checkError(err)
+	k8sGardenClient.SetGardenClientset(gardenClientset)
+	projectLabel := "garden.sapcloud.io/role=project"
+	projectList, err := Client.CoreV1().Namespaces().List(metav1.ListOptions{
+		LabelSelector: fmt.Sprintf("%s", projectLabel),
+	})
+	shootList, err := k8sGardenClient.GetGardenClientset().GardenV1().Shoots("").List(metav1.ListOptions{})
+	checkError(err)
+	for _, project := range projectList.Items {
 		var pm ProjectMeta
-		pm.Project = target.Target[1].Name
 		for _, item := range shootList.Items {
-			if item.Namespace == target.Target[1].Name {
+			if item.Namespace == project.Name && target.Target[1].Name == item.Spec.SeedName {
 				pm.Shoots = append(pm.Shoots, item.Name)
 			}
 		}
-		projects.Projects = append(projects.Projects, pm)
-		if outputFormat == "yaml" {
-			y, err := yaml.Marshal(projects)
-			checkError(err)
-			os.Stdout.Write(y)
-		} else if outputFormat == "json" {
-			j, err := json.Marshal(projects)
-			checkError(err)
-			var out bytes.Buffer
-			json.Indent(&out, j, "", "  ")
-			out.WriteTo(os.Stdout)
+		if len(pm.Shoots) > 0 {
+			pm.Project = project.Name
+			projects.Projects = append(projects.Projects, pm)
 		}
+	}
+	if len(projects.Projects) == 0 {
+		fmt.Printf("Seed %s is empty\n", target.Target[1].Name)
+		os.Exit(2)
+	}
+	if outputFormat == "yaml" {
+		y, err := yaml.Marshal(projects)
+		checkError(err)
+		os.Stdout.Write(y)
+	} else if outputFormat == "json" {
+		j, err := json.Marshal(projects)
+		checkError(err)
+		var out bytes.Buffer
+		json.Indent(&out, j, "", "  ")
+		out.WriteTo(os.Stdout)
 	}
 }
 
@@ -332,4 +311,52 @@ func getIssues() {
 		out.WriteTo(os.Stdout)
 	}
 
+}
+
+// getSeedsWithShootsForProject
+func getSeedsWithShootsForProject() {
+	var target Target
+	targetFile, err := ioutil.ReadFile(pathTarget)
+	checkError(err)
+	err = yaml.Unmarshal(targetFile, &target)
+	checkError(err)
+	k8sGardenClient, err := kubernetes.NewClientFromFile(*kubeconfig)
+	checkError(err)
+	gardenClientset, err := clientset.NewForConfig(k8sGardenClient.GetConfig())
+	checkError(err)
+	k8sGardenClient.SetGardenClientset(gardenClientset)
+	shootList, err := k8sGardenClient.GetGardenClientset().GardenV1().Shoots(target.Target[1].Name).List(metav1.ListOptions{})
+	var seeds, seedsFiltered Seeds
+	for _, seed := range getSeeds() {
+		var sm SeedMeta
+		sm.Seed = seed
+		seeds.Seeds = append(seeds.Seeds, sm)
+	}
+	for _, shoot := range shootList.Items {
+		for index, seed := range seeds.Seeds {
+			if seed.Seed == shoot.Spec.SeedName {
+				seeds.Seeds[index].Shoots = append(seeds.Seeds[index].Shoots, shoot.Name)
+			}
+		}
+	}
+	for _, seed := range seeds.Seeds {
+		if len(seed.Shoots) > 0 {
+			seedsFiltered.Seeds = append(seedsFiltered.Seeds, seed)
+		}
+	}
+	if len(seedsFiltered.Seeds) == 0 {
+		fmt.Printf("Project %s is empty\n", target.Target[1].Name)
+		os.Exit(2)
+	}
+	if outputFormat == "yaml" {
+		y, err := yaml.Marshal(seedsFiltered)
+		checkError(err)
+		os.Stdout.Write(y)
+	} else if outputFormat == "json" {
+		j, err := json.Marshal(seedsFiltered)
+		checkError(err)
+		var out bytes.Buffer
+		json.Indent(&out, j, "", "  ")
+		out.WriteTo(os.Stdout)
+	}
 }
