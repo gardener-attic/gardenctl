@@ -102,7 +102,7 @@ Additional help topics:{{range .Commands}}{{if .IsHelpCommand}}
 Use "{{.CommandPath}} [command] --help" for more information about a command.
 
 Configuration and KUBECONFIG file cache located $GARDENCTL_HOME or ~/.garden (default).
-Gardenctl configuration file must be provided in $GARDENCONFIG or ~/.garden.config (default).
+Gardenctl configuration file must be provided in $GARDENCONFIG or ~/.garden/config (default).
 
 Find more information and an example configuration at https://github.com/gardener/gardenctl
 {{end}}
