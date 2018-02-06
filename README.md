@@ -8,7 +8,7 @@ Currently, there are no binary builds available, so you need to build it from so
 
 ## Prerequisites
 
-To build `gardenctl` from sources you need to have a running Golang environment with `dep` as dependency management system. Moreover, since `gardenctl` allows to execute `kubectl` as well a running `kubectl` installation is recommended, but not required. Please check this [description](https://github.com/gardener/gardener/blob/master/docs/development/local_setup.md) for further details.
+To build `gardenctl` from sources you need to have a running Golang environment with `dep` as dependency management system. Moreover, since `gardenctl` allows to execute `kubectl` as well as a running `kubectl` installation is recommended, but not required. Please check this [description](https://github.com/gardener/gardener/blob/master/docs/development/local_setup.md) for further details.
 
 ## Build `gardenctl` from source
 
@@ -47,7 +47,7 @@ gardenClusters:
 - name: prod
   kubeConfig: /Users/d123456/clusters/garden-prod/kubeconfig.yaml
 ```
-Tha path to the kubeconfig file of a garden cluster can be relative by using the ~ (tilde) expansion or absolute.
+The path to the kubeconfig file of a garden cluster can be relative by using the ~ (tilde) expansion or absolute.
 
 The default location and name is of the `gardenctl` configuration file is  `~/.garden/config`. This default path and name can be overwritten with the environment variable `GARDENCONFIG`. `gardenctl` caches some information, e.g. the garden project names. The location of this cache is per default `$GARDENCTL_HOME/cache`. If `GARDENCTL_HOME` is not set, `~/.garden` is used.
 
@@ -115,9 +115,9 @@ Below a list of examples.
 ```bash
 g ls issues -o json | jq '.issues[] | { project: .project, state: .status.lastOperation.state }'
 ```
-- Print all issues of a single project
+- Print all issues of a single project e.g. `garden-myproject`
 ```bash
-g ls issues -o json | jq '.issues[] | if (.project=="garden-ad050337") then . else empty end' 
+g ls issues -o json | jq '.issues[] | if (.project=="garden-myproject") then . else empty end' 
 ```
 - Print all issues with error state "Error"
 ```bash
