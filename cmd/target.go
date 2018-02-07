@@ -218,7 +218,6 @@ var targetCmd = &cobra.Command{
 				break
 			}
 			shoots := resolveNameShoot(args[0])
-			fmt.Println(shoots)
 			if len(shoots) == 0 {
 				fmt.Println("No match for " + args[0])
 				os.Exit(2)
