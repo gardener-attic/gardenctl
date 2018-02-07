@@ -117,7 +117,20 @@ var targetCmd = &cobra.Command{
 				fmt.Println("No garden cluster targeted")
 				os.Exit(2)
 			}
-			targetShoot(args[1])
+			shoots := resolveNameShoot(args[1])
+			fmt.Println(shoots)
+			if len(shoots) == 0 {
+				fmt.Println("No match for " + args[1])
+				os.Exit(2)
+			} else if len(shoots) == 1 {
+				targetShoot(shoots[0])
+			} else if len(shoots) > 1 {
+				fmt.Println("shoots:")
+				for _, val := range shoots {
+					fmt.Println("- shoot: " + val)
+				}
+				os.Exit(2)
+			}
 		default:
 			if len(t.Target) < 1 {
 				fmt.Println("No garden cluster targeted")
@@ -204,7 +217,20 @@ var targetCmd = &cobra.Command{
 			if match {
 				break
 			}
-			targetShoot(args[0])
+			shoots := resolveNameShoot(args[0])
+			fmt.Println(shoots)
+			if len(shoots) == 0 {
+				fmt.Println("No match for " + args[0])
+				os.Exit(2)
+			} else if len(shoots) == 1 {
+				targetShoot(shoots[0])
+			} else if len(shoots) > 1 {
+				fmt.Println("shoots:")
+				for _, val := range shoots {
+					fmt.Println("- shoot: " + val)
+				}
+				os.Exit(2)
+			}
 		}
 	},
 	ValidArgs: []string{"project", "garden", "seed", "shoot"},
@@ -437,6 +463,67 @@ func targetSeed(name string, cache bool) {
 	fmt.Println("KUBECONFIG=" + getKubeConfigOfCurrentTarget())
 }
 
+// resolveNameShoot resolves name to shoot
+func resolveNameShoot(name string) (matches []string) {
+	tmp := KUBECONFIG
+	Client, err = clientToTarget("garden")
+	checkError(err)
+	matcher := ""
+	var target Target
+	targetFile, err := ioutil.ReadFile(pathTarget)
+	checkError(err)
+	err = yaml.Unmarshal(targetFile, &target)
+	checkError(err)
+	k8sGardenClient, err := kubernetes.NewClientFromFile(*kubeconfig)
+	checkError(err)
+	gardenClientset, err := clientset.NewForConfig(k8sGardenClient.GetConfig())
+	checkError(err)
+	k8sGardenClient.SetGardenClientset(gardenClientset)
+	var shootList *v1.ShootList
+	if len(target.Target) > 1 && target.Target[1].Kind == "project" {
+		shootList, err = k8sGardenClient.GetGardenClientset().GardenV1().Shoots(target.Target[1].Name).List(metav1.ListOptions{})
+		checkError(err)
+	} else if len(target.Target) > 1 && target.Target[1].Kind == "seed" {
+		shootList, err = k8sGardenClient.GetGardenClientset().GardenV1().Shoots("").List(metav1.ListOptions{})
+		checkError(err)
+		var filteredShoots []v1.Shoot
+		for _, shoot := range shootList.Items {
+			if shoot.Spec.SeedName == target.Target[1].Name {
+				filteredShoots = append(filteredShoots, shoot)
+			}
+		}
+		shootList.Items = filteredShoots
+	} else {
+		shootList, err = k8sGardenClient.GetGardenClientset().GardenV1().Shoots("").List(metav1.ListOptions{})
+		checkError(err)
+	}
+	for _, shoot := range shootList.Items {
+		shootName := shoot.Name
+		if strings.HasPrefix(name, "*") && strings.HasSuffix(name, "*") {
+			matcher = strings.Replace(name, "*", "", 2)
+			if strings.Contains(shootName, matcher) {
+				matches = append(matches, shootName)
+			}
+		} else if strings.HasSuffix(name, "*") {
+			matcher = strings.Replace(name, "*", "", 1)
+			if strings.HasPrefix(shootName, matcher) {
+				matches = append(matches, shootName)
+			}
+		} else if strings.HasPrefix(name, "*") {
+			matcher = strings.Replace(name, "*", "", 1)
+			if strings.HasSuffix(shootName, matcher) {
+				matches = append(matches, shootName)
+			}
+		} else {
+			if shootName == name {
+				matches = append(matches, shootName)
+			}
+		}
+	}
+	KUBECONFIG = tmp
+	return matches
+}
+
 // targetShoot targets shoot cluster with project as default value in stack
 func targetShoot(name string) {
 	Client, err = clientToTarget("garden")
@@ -461,6 +548,8 @@ func targetShoot(name string) {
 			matchedShoots = append(matchedShoots, item)
 		} else if len(target.Target) == 3 && item.Name == name && item.Spec.SeedName == target.Target[1].Name {
 			matchedShoots = append(matchedShoots, item)
+		} else if len(target.Target) == 3 && item.Name == name && item.Namespace == target.Target[1].Name {
+			matchedShoots = append(matchedShoots, item)
 		}
 	}
 	if len(matchedShoots) == 0 {
@@ -482,11 +571,12 @@ func targetShoot(name string) {
 		} else if len(target.Target) == 3 {
 			drop()
 			drop()
-			target.Target = target.Target[:len(target.Target)-2]
 			if len(target.Target) > 2 && target.Target[1].Kind == "seed" {
+				target.Target = target.Target[:len(target.Target)-2]
 				target.Target = append(target.Target, TargetMeta{"seed", matchedShoots[0].Spec.SeedName})
 				target.Target = append(target.Target, TargetMeta{"shoot", matchedShoots[0].Name})
 			} else if len(target.Target) > 2 && target.Target[1].Kind == "project" {
+				target.Target = target.Target[:len(target.Target)-2]
 				target.Target = append(target.Target, TargetMeta{"project", matchedShoots[0].Namespace})
 				target.Target = append(target.Target, TargetMeta{"shoot", matchedShoots[0].Name})
 			}
