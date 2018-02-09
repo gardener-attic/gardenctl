@@ -212,6 +212,11 @@ var targetCmd = &cobra.Command{
 					match = true
 					break
 				}
+				if ("garden-" + args[0]) == project.Name {
+					targetProject("garden-" + args[0])
+					match = true
+					break
+				}
 			}
 			KUBECONFIG = tmp
 			if match {

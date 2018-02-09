@@ -215,7 +215,7 @@ func getProjectsWithShootsForSeed() {
 		}
 	}
 	if len(projects.Projects) == 0 {
-		fmt.Printf("Seed %s is empty\n", target.Target[1].Name)
+		fmt.Printf("No shoots for %s\n", target.Target[1].Name)
 		os.Exit(2)
 	}
 	if outputFormat == "yaml" {
