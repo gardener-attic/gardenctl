@@ -15,6 +15,7 @@
 package cmd
 
 import (
+	"encoding/json"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -22,6 +23,7 @@ import (
 
 	clientset "github.com/gardener/gardenctl/pkg/client/garden/clientset/versioned"
 	sapcloud "github.com/gardener/gardenctl/pkg/client/kubernetes"
+	"github.com/jmoiron/jsonq"
 
 	yaml "gopkg.in/yaml.v2"
 
@@ -106,6 +108,8 @@ func operate(provider, arguments string) {
 		}
 	case "gcp":
 		serviceaccount := []byte(secret.Data["serviceaccount.json"])
+		data := map[string]interface{}{}
+		var tmpAccount string
 		if !cachevar {
 			gcpPathCredentials := ""
 			if target.Target[1].Kind == "project" {
@@ -121,15 +125,39 @@ func operate(provider, arguments string) {
 			_, err = originalCredentials.WriteString(string(serviceaccount))
 			originalCredentials.Close()
 			checkError(err)
+			tmpAccount = execCmdReturnOutput("gcloud config list account --format json")
+			dec := json.NewDecoder(strings.NewReader(tmpAccount))
+			dec.Decode(&data)
+			jq := jsonq.NewQuery(data)
+			tmpAccount, err = jq.String("core", "account")
+			if err != nil {
+				os.Exit(2)
+			}
 			err = execCmd("gcloud auth activate-service-account --key-file="+pathGardenHome+"/"+gcpPathCredentials, false)
 			if err != nil {
 				os.Exit(2)
 			}
 		}
-		err := execCmd(arguments, false)
+		dec := json.NewDecoder(strings.NewReader(string([]byte(secret.Data["serviceaccount.json"]))))
+		dec.Decode(&data)
+		jq := jsonq.NewQuery(data)
+		account, err := jq.String("client_email")
 		if err != nil {
 			os.Exit(2)
 		}
+		project, err := jq.String("project_id")
+		if err != nil {
+			os.Exit(2)
+		}
+		err = execCmd(arguments+" --account="+account+" --project="+project, false)
+		if err != nil {
+			os.Exit(2)
+		}
+		err = execCmd("gcloud config set account "+tmpAccount, false)
+		if err != nil {
+			os.Exit(2)
+		}
+
 	case "az":
 		clientID := []byte(secret.Data["clientID"])
 		clientSecret := []byte(secret.Data["clientSecret"])
