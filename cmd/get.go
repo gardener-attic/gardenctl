@@ -37,7 +37,7 @@ import (
 // getCmd represents the get command
 var getCmd = &cobra.Command{
 	Use:   "get [(garden|project|seed|shoot|target) <name>]",
-	Short: "Get single resource instance, e.g. CRD of a shoot (default: current target)\n",
+	Short: "Get single resource instance or target stack, e.g. CRD of a shoot (default: current target)\n",
 	Long:  ``,
 	Run: func(cmd *cobra.Command, args []string) {
 		if len(args) < 1 || len(args) > 2 {
