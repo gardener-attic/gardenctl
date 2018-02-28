@@ -17,6 +17,7 @@ package cmd
 import (
 	"bufio"
 	"flag"
+	"fmt"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -39,11 +40,19 @@ func getGardenClusterKubeConfigFromConfig() {
 	yamlGardenConfig, err := ioutil.ReadFile(pathGardenConfig)
 	checkError(err)
 	err = yaml.Unmarshal(yamlGardenConfig, &gardenClusters)
-	checkError(err)
+	if err != nil {
+		fmt.Println("Invalid gardenctl configuration")
+		os.Exit(2)
+	}
 	exists, err := fileExists(pathTarget)
 	checkError(err)
 	if !exists {
 		// if no garden cluster is selected take the first as default cluster
+		i, err := os.Stat(pathGardenConfig)
+		if i.Size() == 0 {
+			fmt.Println("Please provide a gardenctl configuration before usage")
+			os.Exit(2)
+		}
 		target.Target = []TargetMeta{{"garden", gardenClusters.GardenClusters[0].Name}}
 		file, err := os.OpenFile(pathTarget, os.O_WRONLY|os.O_CREATE, 0644)
 		checkError(err)
