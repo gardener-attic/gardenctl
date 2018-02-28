@@ -17,5 +17,5 @@ terraform.tfvars
 variables.tf
 gardenctl_completion.sh
 
-./gardenctl
+gardenctl
 TODO*

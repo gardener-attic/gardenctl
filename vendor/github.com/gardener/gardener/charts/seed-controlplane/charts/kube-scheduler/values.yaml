@@ -1,0 +1,7 @@
+kubernetesVersion: 1.9.1
+podAnnotations: {}
+featureGates: {}
+  # CustomResourceValidation: true
+  # RotateKubeletServerCertificate: false
+images:
+  hyperkube: image-repository
