@@ -1,4 +1,8 @@
-# What is `gardenctl`?
+# Gardenctl
+
+![](https://github.com/gardener/gardenctl/blob/master/logo/logo_gardener_cli_large.png)
+
+# What is gardenctl?
 `gardenctl` is a command-line client for administrative purposes for the [Gardener](https://github.com/gardener/gardener). It facilitates the administration of even a big amount of Garden, Seed and Shoot clusters e.g. to check for any issue which occured in one of these systems. Details about the concept behind the Gardener are described in this [Gardener wiki](https://github.com/gardener/documentation/wiki/Architecture).
 
 
@@ -10,7 +14,7 @@ Currently, there are no binary builds available, so you need to build it from so
 
 To build `gardenctl` from sources you need to have a running Golang environment with `dep` as dependency management system. Moreover, since `gardenctl` allows to execute `kubectl` as well as a running `kubectl` installation is recommended, but not required. Please check this [description](https://github.com/gardener/gardener/blob/master/docs/development/local_setup.md) for further details.
 
-## Build `gardenctl` from source
+## Build gardenctl from source
 
 First, you need to create a target folder structure before cloning and building `gardenctl`.
 
@@ -37,7 +41,7 @@ echo "alias g=gardenctl" >> ~/.bashrc
 source ~/.bashrc
 ```
 
-## Configure `gardenctl`
+## Configure gardenctl
 
 `gardenctl` requires a configuration file, e.g. 
 ``` yaml
@@ -70,7 +74,7 @@ source gardenctl_completion.sh
 ```
 Please keep in mind that the auto completion is bound to the alias `g`. Therefore make sure that you add the alias definition into your shell startup file, e.g. for bash add `alias gardenctl=g` to `~/.bashrc`. 
 
-## Use `gardenctl`
+## Use gardenctl
 
 `gardenctl` requires the definition of a target, e.g. garden, project, seed or shoot. The following commands, e.g. `gardenctl ls shoots` use the target definition as a context for getting the information. 
 
