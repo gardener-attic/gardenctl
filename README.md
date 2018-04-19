@@ -115,9 +115,9 @@ The following examples are based on [jq](https://stedolan.github.io/jq/). The [J
 
 Below a list of examples. 
 
-- From the project name and its state for all projects with issues
+- List the project name, shoot name and the state for all projects with issues
 ```bash
-g ls issues -o json | jq '.issues[] | { project: .project, state: .status.lastOperation.state }'
+g ls issues -o json | jq '.issues[] | { project: .project, shoot: .shoot, state: .status.lastOperation.state }'
 ```
 - Print all issues of a single project e.g. `garden-myproject`
 ```bash
