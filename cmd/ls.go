@@ -20,8 +20,8 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
-	"strings"
 
+	"github.com/gardener/gardener/pkg/apis/garden/v1beta1"
 	clientset "github.com/gardener/gardener/pkg/client/garden/clientset/versioned"
 	"github.com/gardener/gardener/pkg/client/kubernetes"
 	"github.com/spf13/cobra"
@@ -61,9 +61,10 @@ var lsCmd = &cobra.Command{
 			Client, err = clientToTarget("garden")
 			checkError(err)
 			var seeds Seeds
-			for _, seed := range getSeeds() {
+			seedList := getSeeds()
+			for _, seed := range seedList.Items {
 				var sm SeedMeta
-				sm.Seed = seed
+				sm.Seed = seed.Name
 				seeds.Seeds = append(seeds.Seeds, sm)
 			}
 			if outputFormat == "yaml" {
@@ -170,17 +171,15 @@ func getGardens() {
 	}
 }
 
-// getSeeds returns the name of existing seeds
-func getSeeds() (s []string) {
-	var seeds []string
-	secrets, err := Client.CoreV1().Secrets("garden").List(metav1.ListOptions{})
+// getSeeds returns list of seeds
+func getSeeds() *v1beta1.SeedList {
+	k8sGardenClient, err := kubernetes.NewClientFromFile(*kubeconfig)
 	checkError(err)
-	for _, secret := range secrets.Items {
-		if strings.HasPrefix(secret.Name, "seed-") {
-			seeds = append(seeds, secret.Name)
-		}
-	}
-	return seeds
+	gardenClientset, err := clientset.NewForConfig(k8sGardenClient.GetConfig())
+	checkError(err)
+	k8sGardenClient.SetGardenClientset(gardenClientset)
+	seedList, err := k8sGardenClient.GetGardenClientset().GardenV1beta1().Seeds().List(metav1.ListOptions{})
+	return seedList
 }
 
 // getProjectsWithShootsForSeed
@@ -327,9 +326,10 @@ func getSeedsWithShootsForProject() {
 	k8sGardenClient.SetGardenClientset(gardenClientset)
 	shootList, err := k8sGardenClient.GetGardenClientset().GardenV1beta1().Shoots(target.Target[1].Name).List(metav1.ListOptions{})
 	var seeds, seedsFiltered Seeds
-	for _, seed := range getSeeds() {
+	seedList := getSeeds()
+	for _, seed := range seedList.Items {
 		var sm SeedMeta
-		sm.Seed = seed
+		sm.Seed = seed.Name
 		seeds.Seeds = append(seeds.Seeds, sm)
 	}
 	for _, shoot := range shootList.Items {

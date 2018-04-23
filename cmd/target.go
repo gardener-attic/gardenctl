@@ -117,7 +117,6 @@ var targetCmd = &cobra.Command{
 				os.Exit(2)
 			}
 			shoots := resolveNameShoot(args[1])
-			fmt.Println(shoots)
 			if len(shoots) == 0 {
 				fmt.Println("No match for " + args[1])
 				os.Exit(2)
@@ -394,26 +393,26 @@ func resolveNameSeed(name string) (matches []string) {
 	Client, err = clientToTarget("garden")
 	checkError(err)
 	matcher := ""
-	seeds := getSeeds()
-	for _, seed := range seeds {
+	seedList := getSeeds()
+	for _, seed := range seedList.Items {
 		if strings.HasPrefix(name, "*") && strings.HasSuffix(name, "*") {
 			matcher = strings.Replace(name, "*", "", 2)
-			if strings.Contains(seed, matcher) {
-				matches = append(matches, seed)
+			if strings.Contains(seed.Name, matcher) {
+				matches = append(matches, seed.Name)
 			}
 		} else if strings.HasSuffix(name, "*") {
 			matcher = strings.Replace(name, "*", "", 1)
-			if strings.HasPrefix(seed, matcher) {
-				matches = append(matches, seed)
+			if strings.HasPrefix(seed.Name, matcher) {
+				matches = append(matches, seed.Name)
 			}
 		} else if strings.HasPrefix(name, "*") {
 			matcher = strings.Replace(name, "*", "", 1)
-			if strings.HasSuffix(seed, matcher) {
-				matches = append(matches, seed)
+			if strings.HasSuffix(seed.Name, matcher) {
+				matches = append(matches, seed.Name)
 			}
 		} else {
-			if seed == name {
-				matches = append(matches, seed)
+			if seed.Name == name {
+				matches = append(matches, seed.Name)
 			}
 		}
 	}
@@ -424,7 +423,15 @@ func resolveNameSeed(name string) (matches []string) {
 // targetSeed targets kubeconfig file of seed cluster and updates target
 func targetSeed(name string, cache bool) {
 	Client, err = clientToTarget("garden")
-	kubeSecret, err := Client.CoreV1().Secrets("garden").Get(name, metav1.GetOptions{})
+	checkError(err)
+	k8sGardenClient, err := kubernetes.NewClientFromFile(*kubeconfig)
+	checkError(err)
+	gardenClientset, err := clientset.NewForConfig(k8sGardenClient.GetConfig())
+	checkError(err)
+	k8sGardenClient.SetGardenClientset(gardenClientset)
+	seed, err := k8sGardenClient.GetGardenClientset().GardenV1beta1().Seeds().Get(name, metav1.GetOptions{})
+	kubeSecret, err := Client.CoreV1().Secrets(seed.Spec.SecretRef.Namespace).Get(seed.Spec.SecretRef.Name, metav1.GetOptions{})
+	checkError(err)
 	if err != nil {
 		fmt.Println("Seed not found")
 		os.Exit(2)
@@ -542,17 +549,23 @@ func targetShoot(name string) {
 	err = yaml.Unmarshal(targetFile, &target)
 	checkError(err)
 	var matchedShoots []v1beta1.Shoot
+	seedName := ""
 	for _, item := range shootList.Items {
 		if len(target.Target) == 1 && item.Name == name {
 			matchedShoots = append(matchedShoots, item)
+			seedName = *item.Spec.Cloud.Seed
 		} else if len(target.Target) == 2 && item.Name == name && *item.Spec.Cloud.Seed == target.Target[1].Name {
+			seedName = target.Target[1].Name
 			matchedShoots = append(matchedShoots, item)
 		} else if len(target.Target) == 2 && item.Name == name && item.Namespace == target.Target[1].Name {
+			seedName = *item.Spec.Cloud.Seed
 			matchedShoots = append(matchedShoots, item)
 		} else if len(target.Target) == 3 && item.Name == name && *item.Spec.Cloud.Seed == target.Target[1].Name {
 			matchedShoots = append(matchedShoots, item)
+			seedName = *item.Spec.Cloud.Seed
 		} else if len(target.Target) == 3 && item.Name == name && item.Namespace == target.Target[1].Name {
 			matchedShoots = append(matchedShoots, item)
+			seedName = *item.Spec.Cloud.Seed
 		}
 	}
 	if len(matchedShoots) == 0 {
@@ -591,14 +604,17 @@ func targetShoot(name string) {
 		file.Write(content)
 		file.Close()
 		Client, err = clientToTarget("garden")
-		kubeSecret, err := Client.CoreV1().Secrets("garden").Get(*matchedShoots[0].Spec.Cloud.Seed, metav1.GetOptions{})
+		checkError(err)
+		seed, err := k8sGardenClient.GetGardenClientset().GardenV1beta1().Seeds().Get(seedName, metav1.GetOptions{})
+		checkError(err)
+		kubeSecret, err := Client.CoreV1().Secrets(seed.Spec.SecretRef.Namespace).Get(seed.Spec.SecretRef.Name, metav1.GetOptions{})
 		checkError(err)
 		pathSeed := pathSeedCache + "/" + *matchedShoots[0].Spec.Cloud.Seed
 		os.MkdirAll(pathSeed, os.ModePerm)
 		err = ioutil.WriteFile(pathSeed+"/kubeconfig.yaml", kubeSecret.Data["kubeconfig"], 0644)
 		checkError(err)
 		KUBECONFIG = pathSeed + "/kubeconfig.yaml"
-		namespace := "shoot-" + matchedShoots[0].Namespace + "-" + matchedShoots[0].Name
+		namespace := strings.Replace("shoot-"+matchedShoots[0].Namespace+"-"+matchedShoots[0].Name, "-garden", "", 1)
 		Client, err = clientToTarget("seed")
 		checkError(err)
 		kubeSecret, err = Client.CoreV1().Secrets(namespace).Get("kubecfg", metav1.GetOptions{})
