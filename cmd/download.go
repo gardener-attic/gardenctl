@@ -18,24 +18,27 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
+	"strings"
 
 	"github.com/gardener/gardener/pkg/client/kubernetes"
 	yaml "gopkg.in/yaml.v2"
 
 	clientset "github.com/gardener/gardener/pkg/client/garden/clientset/versioned"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	k8s "k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/tools/clientcmd"
 
 	"github.com/spf13/cobra"
 )
 
 // downloadCmd represents the download command
 var downloadCmd = &cobra.Command{
-	Use:   "download tf (infra|dns|ingress)",
+	Use:   "download tf (infra|internal-dns|external-dns|ingress|backup)",
 	Short: "Download terraform configuration/state for local execution for the targeted shoot",
 	Long:  ``,
 	Run: func(cmd *cobra.Command, args []string) {
-		if len(args) != 2 || !(args[1] == "infra" || args[1] == "dns" || args[1] == "ingress") {
-			fmt.Println("Command must be in the format: download tf + (infra|dns|ingress)")
+		if len(args) != 2 || !(args[1] == "infra" || args[1] == "internal-dns" || args[1] == "external-dns" || args[1] == "ingress" || args[1] == "backup") {
+			fmt.Println("Command must be in the format: download tf + (infra|internal-dns|external-dns|ingress|backup)")
 			os.Exit(2)
 		}
 		switch args[0] {
@@ -43,7 +46,7 @@ var downloadCmd = &cobra.Command{
 			downloadTerraformFiles(args[1])
 			checkError(err)
 		default:
-			fmt.Println("Command must be in the format: download tf + (infra|dns|ingress)")
+			fmt.Println("Command must be in the format: download tf + (infra|internal-dns|external-dns|ingress|backup)")
 		}
 	},
 	ValidArgs: []string{"tf"},
@@ -61,26 +64,44 @@ func downloadTerraformFiles(option string) {
 	err = yaml.Unmarshal(targetFile, &target)
 	checkError(err)
 	Client, err = clientToTarget("garden")
-	if len(target.Target) < 3 && (option == "infra" || option == "dns" || option == "ingress") {
+	if len(target.Target) < 3 && (option == "infra" || option == "internal-dns" || option == "external-dns" || option == "ingress" || option == "backup") {
 		fmt.Println("No Shoot targeted")
 		os.Exit(2)
 	} else if len(target.Target) < 3 {
-		fmt.Println("Command must be in the format: download tf + (infra|dns|ingress)")
+		fmt.Println("Command must be in the format: download tf + (infra|internal-dns|external-dns|ingress|backup)")
 		os.Exit(2)
-	} else if target.Target[1].Kind == "project" {
-		namespace = target.Target[1].Name
 	} else {
+		Client, err = clientToTarget("garden")
+		checkError(err)
 		k8sGardenClient, err := kubernetes.NewClientFromFile(*kubeconfig)
 		checkError(err)
 		gardenClientset, err := clientset.NewForConfig(k8sGardenClient.GetConfig())
 		checkError(err)
 		k8sGardenClient.SetGardenClientset(gardenClientset)
 		shootList, err := k8sGardenClient.GetGardenClientset().GardenV1beta1().Shoots("").List(metav1.ListOptions{})
-		for _, shoot := range shootList.Items {
-			if shoot.Name == target.Target[2].Name && *shoot.Spec.Cloud.Seed == target.Target[1].Name {
-				namespace = shoot.Namespace
+		var ind int
+		for index, shoot := range shootList.Items {
+			if shoot.Name == target.Target[2].Name && (shoot.Namespace == target.Target[1].Name || *shoot.Spec.Cloud.Seed == target.Target[1].Name) {
+				ind = index
+				break
 			}
 		}
+		namespace = strings.Replace("shoot-"+shootList.Items[ind].Namespace+"-"+target.Target[2].Name, "-garden", "", 1)
+		fmt.Println(namespace)
+		seed, err := k8sGardenClient.GetGardenClientset().GardenV1beta1().Seeds().Get(*shootList.Items[ind].Spec.Cloud.Seed, metav1.GetOptions{})
+		checkError(err)
+		kubeSecret, err := Client.CoreV1().Secrets(seed.Spec.SecretRef.Namespace).Get(seed.Spec.SecretRef.Name, metav1.GetOptions{})
+		checkError(err)
+		pathSeed := pathSeedCache + "/" + seed.Spec.SecretRef.Name
+		os.MkdirAll(pathSeed, os.ModePerm)
+		err = ioutil.WriteFile(pathSeed+"/kubeconfig.yaml", kubeSecret.Data["kubeconfig"], 0644)
+		checkError(err)
+		KUBECONFIG = pathSeed + "/kubeconfig.yaml"
+		pathToKubeconfig := pathGardenHome + "/cache/seeds" + "/" + seed.Spec.SecretRef.Name + "/" + "kubeconfig.yaml"
+		config, err := clientcmd.BuildConfigFromFlags("", pathToKubeconfig)
+		checkError(err)
+		Client, err = k8s.NewForConfig(config)
+		checkError(err)
 	}
 	cmTfConfig, err := Client.CoreV1().ConfigMaps(namespace).Get((target.Target[2].Name + "." + option + ".tf-config"), metav1.GetOptions{})
 	checkError(err)
