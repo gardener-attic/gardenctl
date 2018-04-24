@@ -273,12 +273,16 @@ func getIssues() {
 				hasIssue = true
 			}
 			if hasIssue {
-				lastOperationMeta.Description = item.Status.LastOperation.Description
-				lastOperationMeta.LastUpdateTime = fmt.Sprintf("%s", item.Status.LastOperation.LastUpdateTime)
-				lastOperationMeta.Progress = item.Status.LastOperation.Progress
-				lastOperationMeta.State = string(item.Status.LastOperation.State)
-				lastOperationMeta.Type = string(item.Status.LastOperation.Type)
-				statusMeta.LastError = item.Status.LastError.Description
+				if item.Status.LastOperation != nil {
+					lastOperationMeta.Description = item.Status.LastOperation.Description
+					lastOperationMeta.LastUpdateTime = fmt.Sprintf("%s", item.Status.LastOperation.LastUpdateTime)
+					lastOperationMeta.Progress = item.Status.LastOperation.Progress
+					lastOperationMeta.State = string(item.Status.LastOperation.State)
+					lastOperationMeta.Type = string(item.Status.LastOperation.Type)
+				}
+				if item.Status.LastError != nil {
+					statusMeta.LastError = item.Status.LastError.Description
+				}
 				statusMeta.LastOperation = lastOperationMeta
 				im.Health = state
 				im.Project = item.Namespace
@@ -309,7 +313,6 @@ func getIssues() {
 		json.Indent(&out, j, "", "  ")
 		out.WriteTo(os.Stdout)
 	}
-
 }
 
 // getSeedsWithShootsForProject

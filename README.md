@@ -34,10 +34,9 @@ After the successful build you get the executable `gardenctl` in the the directo
 sudo mv gardenctl /usr/local/bin
 ```
 
-`gardenctl` allows like `kubectl` command completion. This recommended feature is bound to the alias `g`. To configure it you could e.g. run
+`gardenctl` allows like `kubectl` command completion. This recommended feature is bound to `gardenctl` or the alias `g`. To configure it you could e.g. run
 ```bash
-echo "gardenctl completion && source gardenctl_completion.sh && rm gardenctl_completion.sh" >> ~/.bashrc
-echo "alias g=gardenctl" >> ~/.bashrc
+echo "gardenctl completion && source gardenctl_completion.sh && rm gardenctl_completion.sh" >> ~/.bashrc >> ~/.bashrc
 source ~/.bashrc
 ```
 
@@ -46,10 +45,14 @@ source ~/.bashrc
 `gardenctl` requires a configuration file, e.g. 
 ``` yaml
 gardenClusters:
-- name: dev
+- name: dev-garden
   kubeConfig: ~/clusters/garden-dev/kubeconfig.yaml
-- name: prod
-  kubeConfig: /Users/d123456/clusters/garden-prod/kubeconfig.yaml
+- name: staging-garden
+  kubeConfig: ~/clusters/staging-garden/kubeconfig.yaml
+- name: canary-garden
+  kubeConfig: /Users/d123456/clusters/canary-garden/kubeconfig.yaml
+- name: prod-garden
+  kubeConfig: /Users/d123456/clusters/prod-garden/kubeconfig.yaml
 ```
 The path to the kubeconfig file of a garden cluster can be relative by using the ~ (tilde) expansion or absolute.
 
@@ -66,48 +69,48 @@ Please check the IaaS provider documentation for more details about their clis.
 
 Moreover, `gardenctl` offers auto completion. To use it, the command
 ```bash
-g completion
+gardenctl completion
 ``` 
 creates the file `gardenctl_completion.sh` which could then be sourced later on via 
 ```bash
 source gardenctl_completion.sh
 ```
-Please keep in mind that the auto completion is bound to the alias `g`. Therefore make sure that you add the alias definition into your shell startup file, e.g. for bash add `alias gardenctl=g` to `~/.bashrc`. 
+Please keep in mind that the auto completion is bound to `gardenctl` or the alias `g`.
 
 ## Use gardenctl
 
 `gardenctl` requires the definition of a target, e.g. garden, project, seed or shoot. The following commands, e.g. `gardenctl ls shoots` use the target definition as a context for getting the information. 
 
-Targets represents a hierarchical structure of the resources. On top, there is/are the garden/s. E.g. in case you setup a development and a production garden, you would have two entries in your `~/.garden/config`. Via `g ls gardens` you get a list of the available gardens. 
+Targets represents a hierarchical structure of the resources. On top, there is/are the garden/s. E.g. in case you setup a development and a production garden, you would have two entries in your `~/.garden/config`. Via `gardenctl ls gardens` you get a list of the available gardens. 
 
-- `g get target`   
+- `gardenctl get target`   
   Displays the current target
-- `g target [garden|project|seed|shoot]`   
+- `gardenctl target [garden|project|seed|shoot]`   
   Set the target e.g. to a garden. It is as well possible to set the target directly to a element deeper in the hierarchy, e.g. to a shoot.
-- `g drop target`   
+- `gardenctl drop target`   
   Drop the deepest target. 
 
 ## Examples of basic usage:
 - List all seed cluster <br />
-`g ls seeds`
+`gardenctl ls seeds`
 - List all projects with shoot cluster <br />
-`g ls projects`
+`gardenctl ls projects`
 - Target a seed cluster <br />
-`g target seed-gce-dev`
+`gardenctl target seed-gce-dev`
 - Target a project <br />
-`g target garden-vora`
+`gardenctl target garden-vora`
 - Open prometheus ui for a targeted shoot-cluster <br />
-`g show prometheus`
+`gardenctl show prometheus`
 - Execute an aws command on a targeted aws shoot cluster <br />
-`g aws ec2 describe-instances` or <br />
-`g aws ec2 describe-instances --no-cache` without locally caching credentials
+`gardenctl aws ec2 describe-instances` or <br />
+`gardenctl aws ec2 describe-instances --no-cache` without locally caching credentials
 - Target a shoot directly and get all kube-dns pods in kube-system namespace <br />
-`g target myshoot`<br />
-`g kubectl get pods -- -n kube-system | grep kube-dns`<br />
+`gardenctl target myshoot`<br />
+`gardenctl kubectl get pods -- -n kube-system | grep kube-dns`<br />
 - List all cluster with an issue <br />
-`g ls issues`
+`gardenctl ls issues`
 - Drop an element from target stack <br />
-`g drop`
+`gardenctl drop`
 
 ## Advanced usage based on JsonQuery
 
@@ -117,34 +120,34 @@ Below a list of examples.
 
 - List the project name, shoot name and the state for all projects with issues
 ```bash
-g ls issues -o json | jq '.issues[] | { project: .project, shoot: .shoot, state: .status.lastOperation.state }'
+gardenctl ls issues -o json | jq '.issues[] | { project: .project, shoot: .shoot, state: .status.lastOperation.state }'
 ```
 - Print all issues of a single project e.g. `garden-myproject`
 ```bash
-g ls issues -o json | jq '.issues[] | if (.project=="garden-myproject") then . else empty end' 
+gardenctl ls issues -o json | jq '.issues[] | if (.project=="garden-myproject") then . else empty end' 
 ```
 - Print all issues with error state "Error"
 ```bash
-g ls issues -o json | jq '.issues[] | if (.status.lastOperation.state=="Error") then . else empty end'
+gardenctl ls issues -o json | jq '.issues[] | if (.status.lastOperation.state=="Error") then . else empty end'
 ```
 - Print all issues with error state not equal "Succeded"
 ```bash
-g ls issues -o json | jq '.issues[] | if (.status.lastOperation.state!="Succeeded") then . else empty end'
+gardenctl ls issues -o json | jq '.issues[] | if (.status.lastOperation.state!="Succeeded") then . else empty end'
 ```
 - Print `createdBy` information (typically email addresses) of all shoots
 ```bash
-g k get shoots -- -n garden-core -o json | jq -r ".items[].metadata | {email: .annotations.\"garden.sapcloud.io/createdBy\", name: .name, namespace: .namespace}"
+gardenctl k get shoots -- -n garden-core -o json | jq -r ".items[].metadata | {email: .annotations.\"garden.sapcloud.io/createdBy\", name: .name, namespace: .namespace}"
 ```
 
 Cluster analysis
 
 - Which states are there and how many clusters are in this state?
 ```bash 
- g ls issues -o json | jq '.issues | group_by( .status.lastOperation.state ) | .[] | {state:.[0].status.lastOperation.state, count:length}'
+gardenctl ls issues -o json | jq '.issues | group_by( .status.lastOperation.state ) | .[] | {state:.[0].status.lastOperation.state, count:length}'
  ```
 
 - Get all clusters in state `Failed`
 ```bash
- g ls issues -o json | jq '.issues[] | if (.status.lastOperation.state=="Failed") then . else empty end'
+gardenctl ls issues -o json | jq '.issues[] | if (.status.lastOperation.state=="Failed") then . else empty end'
 ```
 

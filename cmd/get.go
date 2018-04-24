@@ -23,7 +23,6 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/gardener/gardener/pkg/apis/garden/v1beta1"
 	clientset "github.com/gardener/gardener/pkg/client/garden/clientset/versioned"
 	"github.com/gardener/gardener/pkg/client/kubernetes"
 	yaml2 "github.com/ghodss/yaml"
@@ -185,7 +184,16 @@ func getSeed(name string) {
 		}
 	}
 	Client, err = clientToTarget("garden")
-	kubeSecret, err := Client.CoreV1().Secrets("garden").Get(name, metav1.GetOptions{})
+	checkError(err)
+	k8sGardenClient, err := kubernetes.NewClientFromFile(*kubeconfig)
+	checkError(err)
+	gardenClientset, err := clientset.NewForConfig(k8sGardenClient.GetConfig())
+	checkError(err)
+	k8sGardenClient.SetGardenClientset(gardenClientset)
+	seed, err := k8sGardenClient.GetGardenClientset().GardenV1beta1().Seeds().Get(name, metav1.GetOptions{})
+	checkError(err)
+	kubeSecret, err := Client.CoreV1().Secrets(seed.Spec.SecretRef.Namespace).Get(seed.Spec.SecretRef.Name, metav1.GetOptions{})
+	checkError(err)
 	if err != nil {
 		fmt.Println("Seed not found")
 		os.Exit(2)
@@ -199,7 +207,6 @@ func getSeed(name string) {
 		json.Indent(&out, y, "", "  ")
 		out.WriteTo(os.Stdout)
 	}
-
 }
 
 // getShoot lists kubeconfig of shoot
@@ -218,48 +225,45 @@ func getShoot(name string) {
 		}
 	}
 	Client, err = clientToTarget("garden")
+	checkError(err)
 	k8sGardenClient, err := kubernetes.NewClientFromFile(*kubeconfig)
 	checkError(err)
 	gardenClientset, err := clientset.NewForConfig(k8sGardenClient.GetConfig())
 	checkError(err)
 	k8sGardenClient.SetGardenClientset(gardenClientset)
 	shootList, err := k8sGardenClient.GetGardenClientset().GardenV1beta1().Shoots("").List(metav1.ListOptions{})
-	checkError(err)
-	var matchedShoots []v1beta1.Shoot
-	for _, item := range shootList.Items {
-		if item.Name == name {
-			matchedShoots = append(matchedShoots, item)
+	var ind int
+	for index, shoot := range shootList.Items {
+		if shoot.Name == target.Target[2].Name && (shoot.Namespace == target.Target[1].Name || *shoot.Spec.Cloud.Seed == target.Target[1].Name) {
+			ind = index
+			break
 		}
 	}
-	if len(matchedShoots) < 1 {
-		fmt.Println("Shoot not found")
-	} else if len(matchedShoots) == 1 {
-		kubeSecret, err := Client.CoreV1().Secrets("garden").Get(*matchedShoots[0].Spec.Cloud.Seed, metav1.GetOptions{})
+	namespace := strings.Replace("shoot-"+shootList.Items[ind].Namespace+"-"+target.Target[2].Name, "-garden", "", 1)
+	seed, err := k8sGardenClient.GetGardenClientset().GardenV1beta1().Seeds().Get(*shootList.Items[ind].Spec.Cloud.Seed, metav1.GetOptions{})
+	checkError(err)
+	kubeSecret, err := Client.CoreV1().Secrets(seed.Spec.SecretRef.Namespace).Get(seed.Spec.SecretRef.Name, metav1.GetOptions{})
+	checkError(err)
+	pathSeed := pathSeedCache + "/" + seed.Spec.SecretRef.Name
+	os.MkdirAll(pathSeed, os.ModePerm)
+	err = ioutil.WriteFile(pathSeed+"/kubeconfig.yaml", kubeSecret.Data["kubeconfig"], 0644)
+	checkError(err)
+	KUBECONFIG = pathSeed + "/kubeconfig.yaml"
+	pathToKubeconfig := pathGardenHome + "/cache/seeds" + "/" + seed.Spec.SecretRef.Name + "/" + "kubeconfig.yaml"
+	config, err := clientcmd.BuildConfigFromFlags("", pathToKubeconfig)
+	checkError(err)
+	Client, err := k8s.NewForConfig(config)
+	checkError(err)
+	kubeSecret, err = Client.CoreV1().Secrets(namespace).Get("kubecfg", metav1.GetOptions{})
+	checkError(err)
+	if outputFormat == "yaml" {
+		fmt.Printf("%s\n", kubeSecret.Data["kubeconfig"])
+	} else if outputFormat == "json" {
+		y, err := yaml2.YAMLToJSON([]byte(kubeSecret.Data["kubeconfig"]))
 		checkError(err)
-		pathSeed := pathSeedCache + "/" + *matchedShoots[0].Spec.Cloud.Seed
-		os.MkdirAll(pathSeed, os.ModePerm)
-		err = ioutil.WriteFile(pathSeed+"/kubeconfig.yaml", kubeSecret.Data["kubeconfig"], 0644)
-		checkError(err)
-		KUBECONFIG = pathSeed + "/kubeconfig.yaml"
-		namespace := "shoot-" + matchedShoots[0].Namespace + "-" + matchedShoots[0].Name
-		pathToKubeconfig := pathGardenHome + "/cache/seeds" + "/" + *matchedShoots[0].Spec.Cloud.Seed + "/" + "kubeconfig.yaml"
-		config, err := clientcmd.BuildConfigFromFlags("", pathToKubeconfig)
-		checkError(err)
-		client, err := k8s.NewForConfig(config)
-		checkError(err)
-		kubeSecret, err = client.CoreV1().Secrets(namespace).Get("kubecfg", metav1.GetOptions{})
-		checkError(err)
-		if outputFormat == "yaml" {
-			fmt.Printf("%s\n", kubeSecret.Data["kubeconfig"])
-		} else if outputFormat == "json" {
-			y, err := yaml2.YAMLToJSON([]byte(kubeSecret.Data["kubeconfig"]))
-			checkError(err)
-			var out bytes.Buffer
-			json.Indent(&out, y, "", "  ")
-			out.WriteTo(os.Stdout)
-		}
-	} else if len(matchedShoots) > 1 {
-		fmt.Println("Multiple matches, target a seed or project first")
+		var out bytes.Buffer
+		json.Indent(&out, y, "", "  ")
+		out.WriteTo(os.Stdout)
 	}
 }
 

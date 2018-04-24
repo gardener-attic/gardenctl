@@ -133,22 +133,6 @@ var targetCmd = &cobra.Command{
 			if len(t.Target) < 1 {
 				fmt.Println("No garden cluster targeted")
 				os.Exit(2)
-			}
-			if strings.Contains(args[0], "seed-") || seed {
-				seeds := resolveNameSeed(args[0])
-				if len(seeds) == 0 {
-					fmt.Println("No match for " + args[0])
-					os.Exit(2)
-				} else if len(seeds) == 1 {
-					targetSeed(seeds[0], true)
-				} else if len(seeds) > 1 {
-					fmt.Println("seeds:")
-					for _, val := range seeds {
-						fmt.Println("- seed: " + val)
-					}
-					os.Exit(2)
-				}
-				break
 			} else if garden && !seed && !project {
 				gardens := resolveNameGarden(args[0])
 				if len(gardens) == 0 {
@@ -198,6 +182,13 @@ var targetCmd = &cobra.Command{
 			tmp := KUBECONFIG
 			Client, err = clientToTarget("garden")
 			checkError(err)
+			seedList := getSeeds()
+			for _, seed := range seedList.Items {
+				if args[0] == seed.Name {
+					targetSeed(args[0], true)
+					os.Exit(0)
+				}
+			}
 			projectLabel := "garden.sapcloud.io/role=project"
 			projectList, err := Client.CoreV1().Namespaces().List(metav1.ListOptions{
 				LabelSelector: fmt.Sprintf("%s", projectLabel),
@@ -430,12 +421,12 @@ func targetSeed(name string, cache bool) {
 	checkError(err)
 	k8sGardenClient.SetGardenClientset(gardenClientset)
 	seed, err := k8sGardenClient.GetGardenClientset().GardenV1beta1().Seeds().Get(name, metav1.GetOptions{})
-	kubeSecret, err := Client.CoreV1().Secrets(seed.Spec.SecretRef.Namespace).Get(seed.Spec.SecretRef.Name, metav1.GetOptions{})
-	checkError(err)
 	if err != nil {
 		fmt.Println("Seed not found")
 		os.Exit(2)
 	}
+	kubeSecret, err := Client.CoreV1().Secrets(seed.Spec.SecretRef.Namespace).Get(seed.Spec.SecretRef.Name, metav1.GetOptions{})
+	checkError(err)
 	pathSeed := pathSeedCache + "/" + name
 	os.MkdirAll(pathSeed, os.ModePerm)
 	err = ioutil.WriteFile(pathSeed+"/kubeconfig.yaml", kubeSecret.Data["kubeconfig"], 0644)
