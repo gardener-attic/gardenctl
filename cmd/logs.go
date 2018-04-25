@@ -50,7 +50,7 @@ var logsCmd = &cobra.Command{
 		if len(t.Target) < 3 && (args[0] != "gardener-apiserver") && (args[0] != "gardener-controller-manager") && (args[0] != "tf") && (args[0] != "dashboard") {
 			fmt.Println("No shoot targeted")
 			os.Exit(2)
-		} else if len(t.Target) < 3 && (args[0] == "tf") && (t.Target[1].Kind != "seed") {
+		} else if (len(t.Target) < 2 && (args[0] == "tf")) || len(t.Target) < 3 && (args[0] == "tf") && (t.Target[1].Kind != "seed") {
 			fmt.Println("No seed or shoot targeted")
 			os.Exit(2)
 		} else if len(t.Target) == 0 {
