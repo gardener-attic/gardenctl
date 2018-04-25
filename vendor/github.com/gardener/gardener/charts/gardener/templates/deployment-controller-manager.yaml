@@ -2,7 +2,8 @@
 apiVersion: {{ include "deploymentversion" . }}
 kind: Deployment
 metadata:
-  name: garden-controller-manager
+  name: gardener-controller-manager
+  namespace: garden
   labels:
     app: gardener
     role: controller-manager
@@ -10,13 +11,18 @@ metadata:
     release: "{{ .Release.Name }}"
     heritage: "{{ .Release.Service }}"
 spec:
-  replicas: {{ .Values.controller.replicaCount }}
+  replicas: {{ required ".Values.controller.replicaCount is required" .Values.controller.replicaCount }}
   selector:
     matchLabels:
       app: gardener
       role: controller-manager
   template:
     metadata:
+      annotations:
+        checksum/configmap-gardener-controller-manager-config: {{ include (print $.Template.BasePath "/configmap-controller-manager.yaml") . | sha256sum }}
+        checksum/secret-default-domain: {{ include (print $.Template.BasePath "/secret-default-domain.yaml") . | sha256sum }}
+        checksum/secret-internal-domain: {{ include (print $.Template.BasePath "/secret-internal-domain.yaml") . | sha256sum }}
+        checksum/secret-alerting-smtp: {{ include (print $.Template.BasePath "/secret-alerting-smtp.yaml") . | sha256sum }}
       labels:
         app: gardener
         role: controller-manager
@@ -24,18 +30,18 @@ spec:
         release: "{{ .Release.Name }}"
         heritage: "{{ .Release.Service }}"
     spec:
-      serviceAccountName: {{ .Values.controller.serviceAccountName }}
+      serviceAccountName: {{ required ".Values.controller.serviceAccountName is required" .Values.controller.serviceAccountName }}
       containers:
-      - name: garden-controller-manager
-        image: {{ .Values.controller.image.repository }}:{{ .Values.controller.image.tag }}
+      - name: gardener-controller-manager
+        image: {{ required ".Values.controller.image.repository is required" .Values.controller.image.repository }}:{{ required ".Values.controller.image.tag is required" .Values.controller.image.tag }}
         imagePullPolicy: IfNotPresent
         command:
-        - /garden-controller-manager
-        - --config=/etc/garden-controller-manager/config.yaml
+        - /gardener-controller-manager
+        - --config=/etc/gardener-controller-manager/config.yaml
         livenessProbe:
           httpGet:
             path: /healthz
-            port: {{ .Values.controller.config.server.port }}
+            port: {{ required ".Values.controller.config.server.port is required" .Values.controller.config.server.port }}
             scheme: HTTP
           initialDelaySeconds: 30
           timeoutSeconds: 5
@@ -47,11 +53,11 @@ spec:
         terminationMessagePath: /dev/termination-log
         terminationMessagePolicy: File
         volumeMounts:
-        - name: garden-controller-manager-config
-          mountPath: /etc/garden-controller-manager
+        - name: gardener-controller-manager-config
+          mountPath: /etc/gardener-controller-manager
       terminationGracePeriodSeconds: 3600
       volumes:
-      - name: garden-controller-manager-config
+      - name: gardener-controller-manager-config
         configMap:
-          name: garden-controller-manager-configmap
+          name: gardener-controller-manager-configmap
 {{- end}}

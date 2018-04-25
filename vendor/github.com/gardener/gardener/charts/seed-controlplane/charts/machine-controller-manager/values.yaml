@@ -1,0 +1,8 @@
+podAnnotations: {}
+replicas: 1
+
+images:
+  machine-controller-manager: image-repository:image-tag
+
+namespace:
+  uid: uuid-of-namespace

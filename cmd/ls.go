@@ -120,7 +120,7 @@ func getProjectsWithShoots() {
 	gardenClientset, err := clientset.NewForConfig(k8sGardenClient.GetConfig())
 	checkError(err)
 	k8sGardenClient.SetGardenClientset(gardenClientset)
-	shootList, err := k8sGardenClient.GetGardenClientset().GardenV1beta1().Shoots("").List(metav1.ListOptions{})
+	shootList, err := k8sGardenClient.GardenClientset().GardenV1beta1().Shoots("").List(metav1.ListOptions{})
 	var projects Projects
 	for _, project := range projectList.Items {
 		var pm ProjectMeta
@@ -178,7 +178,7 @@ func getSeeds() *v1beta1.SeedList {
 	gardenClientset, err := clientset.NewForConfig(k8sGardenClient.GetConfig())
 	checkError(err)
 	k8sGardenClient.SetGardenClientset(gardenClientset)
-	seedList, err := k8sGardenClient.GetGardenClientset().GardenV1beta1().Seeds().List(metav1.ListOptions{})
+	seedList, err := k8sGardenClient.GardenClientset().GardenV1beta1().Seeds().List(metav1.ListOptions{})
 	return seedList
 }
 
@@ -199,7 +199,7 @@ func getProjectsWithShootsForSeed() {
 	projectList, err := Client.CoreV1().Namespaces().List(metav1.ListOptions{
 		LabelSelector: fmt.Sprintf("%s", projectLabel),
 	})
-	shootList, err := k8sGardenClient.GetGardenClientset().GardenV1beta1().Shoots("").List(metav1.ListOptions{})
+	shootList, err := k8sGardenClient.GardenClientset().GardenV1beta1().Shoots("").List(metav1.ListOptions{})
 	checkError(err)
 	for _, project := range projectList.Items {
 		var pm ProjectMeta
@@ -237,7 +237,7 @@ func getIssues() {
 	gardenClientset, err := clientset.NewForConfig(k8sGardenClient.GetConfig())
 	checkError(err)
 	k8sGardenClient.SetGardenClientset(gardenClientset)
-	shootList, err := k8sGardenClient.GetGardenClientset().GardenV1beta1().Shoots("").List(metav1.ListOptions{})
+	shootList, err := k8sGardenClient.GardenClientset().GardenV1beta1().Shoots("").List(metav1.ListOptions{})
 	var issues Issues
 	for _, item := range shootList.Items {
 		var im IssuesMeta
@@ -327,7 +327,7 @@ func getSeedsWithShootsForProject() {
 	gardenClientset, err := clientset.NewForConfig(k8sGardenClient.GetConfig())
 	checkError(err)
 	k8sGardenClient.SetGardenClientset(gardenClientset)
-	shootList, err := k8sGardenClient.GetGardenClientset().GardenV1beta1().Shoots(target.Target[1].Name).List(metav1.ListOptions{})
+	shootList, err := k8sGardenClient.GardenClientset().GardenV1beta1().Shoots(target.Target[1].Name).List(metav1.ListOptions{})
 	var seeds, seedsFiltered Seeds
 	seedList := getSeeds()
 	for _, seed := range seedList.Items {

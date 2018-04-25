@@ -1,50 +1,99 @@
-# Default values for gardener.
+# Gardener API server configuration values
 apiserver:
   enabled: true
-  useEtcdSidecar: false # only meant for development purposes
   replicaCount: 1
-  etcdServers: http://etcd:2379
+  serviceAccountName: gardener-apiserver
+  image:
+    repository: eu.gcr.io/gardener-project/gardener/apiserver
+    tag: latest
+  etcd:
+    useSidecar: false # only meant for development purposes. if this is set to true, other etcd config values are ignored
+    servers: https://etcd:2379
+    # caBundle: |
+    #   -----BEGIN CERTIFICATE-----
+    #   ...
+    #   -----END CERTIFICATE-----
+    # tls:
+    #   crt: |
+    #     -----BEGIN CERTIFICATE-----
+    #     ...
+    #     -----END CERTIFICATE-----
+    #   key: |
+    #     -----BEGIN RSA PRIVATE KEY-----
+    #     ...
+    #     -----END RSA PRIVATE KEY-----
+  insecureSkipTLSVerify: false
   groupPriorityMinimum: 10000
   versionPriority: 20
-  serviceAccountName: garden-apiserver
-  image:
-    repository: rfranzke/garden-apiserver
-    tag: latest
   caBundle: |
-    ---
+    -----BEGIN CERTIFICATE-----
+    ...
+    -----END CERTIFICATE-----
   tls:
     crt: |
-      ---
+      -----BEGIN CERTIFICATE-----
+      ...
+      -----END CERTIFICATE-----
     key: |
-      ---
+      -----BEGIN RSA PRIVATE KEY-----
+      ...
+      -----END RSA PRIVATE KEY-----
 
+# Gardener controller manager configuration values
 controller:
   enabled: true
   replicaCount: 1
-  serviceAccountName: garden-controller-manager
+  serviceAccountName: gardener-controller-manager
   image:
-    repository: rfranzke/garden-controller-manager
+    repository: eu.gcr.io/gardener-project/gardener/controller-manager
     tag: latest
   internalDomain:
-    provider: aws-route53 # currently, only aws-route53 is supported
+    provider: aws-route53 # aws-route53 or google-clouddns
     hostedZoneID: Z3ABCDE1FGHIJK
     domain: example.com
     credentials:
+      # for aws-route53 we need 'accessKeyID' and 'secretAccessKey'
       accessKeyID: access-key-id-with-route53-privileges
       secretAccessKey: secret-access-key-with-route53-privileges
+      # for google-clouddns we need 'serviceaccount.json' field' (service account needs 'DNS administrator' role)
+      # serviceaccount.json: '{"type": "service_account", "project_id": "...", ...}'
+  defaultDomains: []
+  # - domain: example.com
+  #   provider: aws-route53 # aws-route53 or google-clouddns
+  #   hostedZoneID: Z3ABCDE1FGHIJK
+  #   credentials:
+  #     # for aws-route53 we need 'accessKeyID' and 'secretAccessKey'
+  #     accessKeyID: access-key-id-with-route53-privileges
+  #     secretAccessKey: secret-access-key-with-route53-privileges
+  #     # for google-clouddns we need 'serviceaccount.json' field' (service account needs 'DNS administrator' role)
+  #     serviceaccount.json: '{"type": "service_account", "project_id": "...", ...}'
+  alertingSMTP: []
+  # - to: email-address-to-send-alerts-to
+  #   from: email-address-to-send-alerts-from
+  #   smarthost: smtp-host-used-for-sending
+  #   auth_username: smtp-authentication-username
+  #   auth_identity: smtp-authentication-username
+  #   auth_password: smtp-authentication-password
   config:
     clientConnection:
       acceptContentTypes: application/json
       contentType: application/json
       qps: 100
       burst: 130
-    controller:
-      healthCheckPeriod: 30s
-      reconciliation:
+    controllers:
+      shoot:
         concurrentSyncs: 20
-        resyncPeriod: 10m
+        syncPeriod: 10m
         retryDuration: 1440m
-    gardenNamespace: garden
+      shootCare:
+        concurrentSyncs: 5
+        syncPeriod: 30s
+      shootMaintenance:
+        concurrentSyncs: 5
+        syncPeriod: 15m
+      shootQuota:
+        concurrentSyncs: 5
+        syncPeriod: 60m
     leaderElection:
       leaderElect: true
       leaseDuration: 15s

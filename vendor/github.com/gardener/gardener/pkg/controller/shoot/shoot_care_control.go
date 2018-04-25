@@ -1,4 +1,4 @@
-// Copyright 2018 The Gardener Authors.
+// Copyright (c) 2018 SAP SE or an SAP affiliate company. All rights reserved. This file is licensed under the Apache Software License, v. 2 except as noted otherwise in the LICENSE file
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -39,7 +39,7 @@ func (c *Controller) shootCareAdd(obj interface{}) {
 	if err != nil {
 		return
 	}
-	c.shootCareQueue.AddAfter(key, c.config.Controller.HealthCheckPeriod.Duration)
+	c.shootCareQueue.AddAfter(key, c.config.Controllers.ShootCare.SyncPeriod.Duration)
 }
 
 func (c *Controller) shootCareDelete(obj interface{}) {
@@ -157,23 +157,41 @@ func (c *defaultCareControl) Care(shootObj *gardenv1beta1.Shoot, key string) err
 	conditionControlPlaneHealthy, conditionEveryNodeReady, conditionSystemComponentsHealthy = healthCheck(botanist, cloudBotanist, conditionControlPlaneHealthy, conditionEveryNodeReady, conditionSystemComponentsHealthy)
 
 	// Update Shoot status
-	c.updateShootStatus(shoot, *conditionControlPlaneHealthy, *conditionEveryNodeReady, *conditionSystemComponentsHealthy)
+	if newShoot, _ := c.updateShootStatus(shoot, *conditionControlPlaneHealthy, *conditionEveryNodeReady, *conditionSystemComponentsHealthy); newShoot != nil {
+		shoot = newShoot
+	}
+
+	// Mark Shoot as healthy/unhealthy
+	var (
+		lastOperation = shoot.Status.LastOperation
+		lastError     = shoot.Status.LastError
+		healthy       = lastOperation == nil || (lastOperation.State == gardenv1beta1.ShootLastOperationStateSucceeded && lastError == nil && conditionControlPlaneHealthy.Status == corev1.ConditionTrue && conditionEveryNodeReady.Status == corev1.ConditionTrue && conditionSystemComponentsHealthy.Status == corev1.ConditionTrue)
+	)
+	c.labelShoot(shoot, healthy)
 
 	return nil
 }
 
-func (c *defaultCareControl) updateShootStatus(shoot *gardenv1beta1.Shoot, conditions ...gardenv1beta1.Condition) error {
+func (c *defaultCareControl) updateShootStatus(shoot *gardenv1beta1.Shoot, conditions ...gardenv1beta1.Condition) (*gardenv1beta1.Shoot, error) {
 	if !helper.ConditionsNeedUpdate(shoot.Status.Conditions, conditions) {
-		return nil
+		return shoot, nil
 	}
 
 	shoot.Status.Conditions = conditions
 
-	_, err := c.updater.UpdateShootStatusIfNoOperation(shoot)
+	newShoot, err := c.updater.UpdateShootStatusIfNoOperation(shoot)
 	if err != nil {
-		logger.Logger.Errorf("Could not update the Seed status: %+v", err)
+		logger.Logger.Errorf("Could not update the Shoot status: %+v", err)
 	}
 
+	return newShoot, err
+}
+
+func (c *defaultCareControl) labelShoot(shoot *gardenv1beta1.Shoot, healthy bool) error {
+	_, err := c.updater.UpdateShootLabels(shoot, computeLabelsWithShootHealthiness(healthy))
+	if err != nil {
+		logger.Logger.Errorf("Could not update the Shoot metadata: %s", err.Error())
+	}
 	return err
 }
 
@@ -201,15 +219,7 @@ func garbageCollection(botanist *botanistpkg.Botanist) {
 // The current Health check verifies that the control plane running in the Seed cluster is healthy, every
 // node is ready and that all system components (pods running kube-system) are healthy.
 func healthCheck(botanist *botanistpkg.Botanist, cloudBotanist cloudbotanist.CloudBotanist, conditionControlPlaneHealthy, conditionEveryNodeReady, conditionSystemComponentsHealthy *gardenv1beta1.Condition) (*gardenv1beta1.Condition, *gardenv1beta1.Condition, *gardenv1beta1.Condition) {
-	var (
-		currentlyScaling = false
-		healthyInstances = 0
-		wg               sync.WaitGroup
-	)
-
-	// We ask the Cloud Botanist whether the Shoot cluster is currently scaled or not to avoid problems of potentially
-	// non-existing infrastructure resources like autoscaling groups.
-	currentlyScaling, healthyInstances, _ = cloudBotanist.CheckIfClusterGetsScaled()
+	var wg sync.WaitGroup
 
 	wg.Add(3)
 	go func() {
@@ -218,7 +228,7 @@ func healthCheck(botanist *botanistpkg.Botanist, cloudBotanist cloudbotanist.Clo
 	}()
 	go func() {
 		defer wg.Done()
-		conditionEveryNodeReady = botanist.CheckConditionEveryNodeReady(conditionEveryNodeReady, currentlyScaling, healthyInstances)
+		conditionEveryNodeReady = botanist.CheckConditionEveryNodeReady(conditionEveryNodeReady)
 	}()
 	go func() {
 		defer wg.Done()

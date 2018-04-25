@@ -1,4 +1,4 @@
-// Copyright 2018 The Gardener Authors.
+// Copyright (c) 2018 SAP SE or an SAP affiliate company. All rights reserved. This file is licensed under the Apache Software License, v. 2 except as noted otherwise in the LICENSE file
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -15,9 +15,11 @@
 package openstackbotanist
 
 import (
-	gardenv1beta1 "github.com/gardener/gardener/pkg/apis/garden/v1beta1"
+	"fmt"
+
 	"github.com/gardener/gardener/pkg/operation/common"
 	"github.com/gardener/gardener/pkg/operation/terraformer"
+	"github.com/gardener/gardener/pkg/utils"
 )
 
 // DeployInfrastructure kicks off a Terraform job which deploys the infrastructure.
@@ -26,6 +28,7 @@ func (b *OpenStackBotanist) DeployInfrastructure() error {
 		routerID     = "${openstack_networking_router_v2.router.id}"
 		createRouter = true
 	)
+
 	// check if we should use an existing Router or create a new one
 	if b.Shoot.Info.Spec.Cloud.OpenStack.Networks.Router != nil {
 		routerID = b.Shoot.Info.Spec.Cloud.OpenStack.Networks.Router.ID
@@ -60,23 +63,6 @@ func (b *OpenStackBotanist) generateTerraformInfraVariablesEnvironment() []map[s
 // generateTerraformInfraConfig creates the Terraform variables and the Terraform config (for the infrastructure)
 // and returns them (these values will be stored as a ConfigMap and a Secret in the Garden cluster.
 func (b *OpenStackBotanist) generateTerraformInfraConfig(createRouter bool, routerID string) map[string]interface{} {
-	var (
-		sshSecret                   = b.Secrets["ssh-keypair"]
-		cloudConfigDownloaderSecret = b.Secrets["cloud-config-downloader"]
-		workers                     = distributeWorkersOverZones(b.Shoot.Info.Spec.Cloud.OpenStack.Workers, b.Shoot.Info.Spec.Cloud.OpenStack.Zones)
-		zones                       = []map[string]interface{}{}
-	)
-
-	for _, zone := range b.Shoot.Info.Spec.Cloud.OpenStack.Zones {
-		zones = append(zones, map[string]interface{}{
-			"name": zone,
-		})
-	}
-
-	networks := map[string]interface{}{
-		"worker": b.Shoot.Info.Spec.Cloud.OpenStack.Networks.Workers[0],
-	}
-
 	return map[string]interface{}{
 		"openstack": map[string]interface{}{
 			"authURL":              b.Shoot.CloudProfile.Spec.OpenStack.KeyStoneURL,
@@ -89,55 +75,62 @@ func (b *OpenStackBotanist) generateTerraformInfraConfig(createRouter bool, rout
 		"create": map[string]interface{}{
 			"router": createRouter,
 		},
-		"sshPublicKey": string(sshSecret.Data["id_rsa.pub"]),
+		"dnsServers":   b.Shoot.CloudProfile.Spec.OpenStack.DNSServers,
+		"sshPublicKey": string(b.Secrets["ssh-keypair"].Data["id_rsa.pub"]),
 		"router": map[string]interface{}{
 			"id": routerID,
 		},
 		"clusterName": b.Shoot.SeedNamespace,
-		"coreOSImage": b.Shoot.CloudProfile.Spec.OpenStack.MachineImage.Name,
-		"cloudConfig": map[string]interface{}{
-			"kubeconfig": string(cloudConfigDownloaderSecret.Data["kubeconfig"]),
+		"networks": map[string]interface{}{
+			"worker": b.Shoot.Info.Spec.Cloud.OpenStack.Networks.Workers[0],
 		},
-		"networks": networks,
-		"workers":  workers,
-		"zones":    zones,
 	}
 }
 
 // DeployBackupInfrastructure kicks off a Terraform job which creates the infrastructure resources for backup.
 func (b *OpenStackBotanist) DeployBackupInfrastructure() error {
-	return nil
+	return terraformer.
+		New(b.Operation, common.TerraformerPurposeBackup).
+		SetVariablesEnvironment(b.generateTerraformBackupVariablesEnvironment()).
+		DefineConfig("openstack-backup", b.generateTerraformBackupConfig()).
+		Apply()
 }
 
 // DestroyBackupInfrastructure kicks off a Terraform job which destroys the infrastructure for backup.
 func (b *OpenStackBotanist) DestroyBackupInfrastructure() error {
 	return nil
+	//TODO: Remove this comment when backup is to be pushed on to swift container i.e.
+	// when we have next(v1.4.0) realease of https://github.com/terraform-providers/terraform-provider-openstack/releases
+	/* return terraformer.
+	New(b.Operation, common.TerraformerPurposeBackup).
+	SetVariablesEnvironment(b.generateTerraformBackupVariablesEnvironment()).
+	Destroy()
+	*/
 }
 
-// distributeWorkersOverZones distributes the worker groups over the zones equally and returns a map
-// which can be injected into a Helm chart.
-func distributeWorkersOverZones(workerList []gardenv1beta1.OpenStackWorker, zoneList []string) []map[string]interface{} {
-	var (
-		workers = []map[string]interface{}{}
-		zoneLen = len(zoneList)
-	)
+// generateTerraformBackupVariablesEnvironment generates the environment containing the credentials which
+// are required to validate/apply/destroy the Terraform configuration. These environment must contain
+// Terraform variables which are prefixed with TF_VAR_.
+func (b *OpenStackBotanist) generateTerraformBackupVariablesEnvironment() []map[string]interface{} {
+	return common.GenerateTerraformVariablesEnvironment(b.Seed.Secret, map[string]string{
+		"USER_NAME": UserName,
+		"PASSWORD":  Password,
+	})
+}
 
-	for _, worker := range workerList {
-		var workerZones = []map[string]interface{}{}
-		for zoneIndex, zone := range zoneList {
-			workerZones = append(workerZones, map[string]interface{}{
-				"name":          zone,
-				"autoScalerMin": common.DistributeOverZones(zoneIndex, worker.AutoScalerMin, zoneLen),
-				"autoScalerMax": common.DistributeOverZones(zoneIndex, worker.AutoScalerMax, zoneLen),
-			})
-		}
-
-		workers = append(workers, map[string]interface{}{
-			"name":        worker.Name,
-			"machineType": worker.MachineType,
-			"zones":       workerZones,
-		})
+// generateTerraformBackupConfig creates the Terraform variables and the Terraform config (for the backup)
+// and returns them.
+func (b *OpenStackBotanist) generateTerraformBackupConfig() map[string]interface{} {
+	return map[string]interface{}{
+		"openstack": map[string]interface{}{
+			"authURL":    b.Seed.CloudProfile.Spec.OpenStack.KeyStoneURL,
+			"domainName": string(b.Seed.Secret.Data[DomainName]),
+			"tenantName": string(b.Seed.Secret.Data[TenantName]),
+			"region":     b.Seed.Info.Spec.Cloud.Region,
+		},
+		"container": map[string]interface{}{
+			"name": fmt.Sprintf("%s-%s", b.Shoot.SeedNamespace, utils.ComputeSHA1Hex([]byte(b.Shoot.Info.Status.UID))[:5]),
+		},
+		"clusterName": b.Shoot.SeedNamespace,
 	}
-
-	return workers
 }

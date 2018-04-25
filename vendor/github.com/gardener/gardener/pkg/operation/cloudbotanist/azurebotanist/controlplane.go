@@ -1,4 +1,4 @@
-// Copyright 2018 The Gardener Authors.
+// Copyright (c) 2018 SAP SE or an SAP affiliate company. All rights reserved. This file is licensed under the Apache Software License, v. 2 except as noted otherwise in the LICENSE file
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -23,13 +23,18 @@ import (
 )
 
 // GenerateCloudProviderConfig returns a cloud provider config for the Azure cloud provider
-// as defined here: https://github.com/kubernetes/kubernetes/blob/release-1.7/pkg/cloudprovider/providers/azure/azure.go#L58.
+// See this for more details:
+// https://github.com/kubernetes/kubernetes/blob/master/pkg/cloudprovider/providers/azure/azure.go
 func (b *AzureBotanist) GenerateCloudProviderConfig() (string, error) {
 	var (
-		resourceGroupName = "resourceGroupName"
-		vnetName          = "vnetName"
+		resourceGroupName   = "resourceGroupName"
+		vnetName            = "vnetName"
+		availabilitySetName = "availabilitySetName"
+		subnetName          = "subnetName"
+		routeTableName      = "routeTableName"
+		securityGroupName   = "securityGroupName"
 	)
-	stateVariables, err := terraformer.New(b.Operation, common.TerraformerPurposeInfra).GetStateOutputVariables(resourceGroupName, vnetName)
+	stateVariables, err := terraformer.New(b.Operation, common.TerraformerPurposeInfra).GetStateOutputVariables(resourceGroupName, vnetName, subnetName, routeTableName, availabilitySetName, securityGroupName)
 	if err != nil {
 		return "", err
 	}
@@ -40,19 +45,19 @@ subscriptionId: ` + string(b.Shoot.Secret.Data[SubscriptionID]) + `
 resourceGroup: ` + stateVariables[resourceGroupName] + `
 location: ` + b.Shoot.Info.Spec.Cloud.Region + `
 vnetName: ` + stateVariables[vnetName] + `
-subnetName: workers
-securityGroupName: nodes
-routeTableName: worker_route_table
-primaryAvailabilitySetName: workers-avset
+subnetName: ` + stateVariables[subnetName] + `
+securityGroupName: ` + stateVariables[securityGroupName] + `
+routeTableName: ` + stateVariables[routeTableName] + `
+primaryAvailabilitySetName: ` + stateVariables[availabilitySetName] + `
 aadClientId: ` + string(b.Shoot.Secret.Data[ClientID]) + `
 aadClientSecret: ` + string(b.Shoot.Secret.Data[ClientSecret]) + `
 cloudProviderBackoff: true
 cloudProviderBackoffRetries: 6
 cloudProviderBackoffExponent: 1.5
-cloudProviderBackoffDuration: 120
+cloudProviderBackoffDuration: 5
 cloudProviderBackoffJitter: 1.0
 cloudProviderRateLimit: true
-cloudProviderRateLimitQPS: 0.5
+cloudProviderRateLimitQPS: 1.0
 cloudProviderRateLimitBucket: 5`, nil
 }
 
@@ -82,12 +87,6 @@ func (b *AzureBotanist) GenerateKubeSchedulerConfig() (map[string]interface{}, e
 	return nil, nil
 }
 
-// DeployAutoNodeRepair deploys the auto-node-repair into the Seed cluster. It primary job is to repair
-// unHealthy Nodes by replacing them by newer ones - Not needed on Azure yet. To be implemented later
-func (b *AzureBotanist) DeployAutoNodeRepair() error {
-	return nil
-}
-
 // GenerateEtcdBackupConfig returns the etcd backup configuration for the etcd Helm chart.
 func (b *AzureBotanist) GenerateEtcdBackupConfig() (map[string][]byte, map[string]interface{}, error) {
 	var (
@@ -106,13 +105,32 @@ func (b *AzureBotanist) GenerateEtcdBackupConfig() (map[string][]byte, map[strin
 	}
 
 	backupConfigData := map[string]interface{}{
-		"backupIntervalInSecond": b.Shoot.Info.Spec.Backup.IntervalInSecond,
-		"maxBackups":             b.Shoot.Info.Spec.Backup.Maximum,
-		"storageType":            "ABS",
-		"abs": map[string]interface{}{
-			"absContainer": stateVariables[containerName],
-			"absSecret":    common.BackupSecretName,
+		"schedule":         b.Shoot.Info.Spec.Backup.Schedule,
+		"maxBackups":       b.Shoot.Info.Spec.Backup.Maximum,
+		"storageProvider":  "ABS",
+		"backupSecret":     common.BackupSecretName,
+		"storageContainer": stateVariables[containerName],
+		"env": []map[string]interface{}{
+			{
+				"name": "STORAGE_ACCOUNT",
+				"valueFrom": map[string]interface{}{
+					"secretKeyRef": map[string]interface{}{
+						"name": common.BackupSecretName,
+						"key":  "storage-account",
+					},
+				},
+			},
+			{
+				"name": "STORAGE_KEY",
+				"valueFrom": map[string]interface{}{
+					"secretKeyRef": map[string]interface{}{
+						"name": common.BackupSecretName,
+						"key":  "storage-key",
+					},
+				},
+			},
 		},
+		"volumeMount": []map[string]interface{}{},
 	}
 
 	return secretData, backupConfigData, nil

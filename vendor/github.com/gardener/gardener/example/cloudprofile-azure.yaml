@@ -1,8 +1,13 @@
+---
 apiVersion: garden.sapcloud.io/v1beta1
 kind: CloudProfile
 metadata:
   name: azure
 spec:
+# caBundle: |
+#   -----BEGIN CERTIFICATE-----
+#   ...
+#   -----END CERTIFICATE-----
   azure:
     constraints:
       dnsProviders:
@@ -10,44 +15,47 @@ spec:
       - name: unmanaged
       kubernetes:
         versions:
-        - 1.9.1
-        - 1.8.6
+        - 1.10.1
+        - 1.9.7
+        - 1.8.11
+      machineImages:
+      - name: CoreOS
+        publisher: CoreOS
+        offer: CoreOS
+        sku: Stable
+        version: 1632.3.0
       machineTypes:
       - name: Standard_DS2_v2
-        cpus: 2
-        gpus: 0
+        cpu: "2"
+        gpu: "0"
         memory: 7Gi
       - name: Standard_DS3_v2
-        cpus: 4
-        gpus: 0
+        cpu: "4"
+        gpu: "0"
         memory: 14Gi
       - name: Standard_DS4_v2
-        cpus: 8
-        gpus: 0
+        cpu: "8"
+        gpu: "0"
         memory: 28Gi
       - name: Standard_DS5_v2
-        cpus: 16
-        gpus: 0
+        cpu: "16"
+        gpu: "0"
         memory: 56Gi
-      - name: Standard_F1s
-        cpus: 1
-        gpus: 0
-        memory: 2Gi
       - name: Standard_F2s
-        cpus: 2
-        gpus: 0
+        cpu: "2"
+        gpu: "0"
         memory: 4Gi
       - name: Standard_F4s
-        cpus: 4
-        gpus: 0
+        cpu: "4"
+        gpu: "0"
         memory: 8Gi
       - name: Standard_F8s
-        cpus: 8
-        gpus: 0
+        cpu: "8"
+        gpu: "0"
         memory: 16Gi
       - name: Standard_F16s
-        cpus: 16
-        gpus: 0
+        cpu: "16"
+        gpu: "0"
         memory: 32Gi
       volumeTypes:
       - name: standard
@@ -64,6 +72,3 @@ spec:
       count: 2
     - region: eastus
       count: 2
-    machineImage:
-      channel: Stable
-      version: 1576.5.0

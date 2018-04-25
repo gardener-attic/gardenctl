@@ -1,4 +1,4 @@
-// Copyright 2018 The Gardener Authors.
+// Copyright (c) 2018 SAP SE or an SAP affiliate company. All rights reserved. This file is licensed under the Apache Software License, v. 2 except as noted otherwise in the LICENSE file
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -16,8 +16,11 @@ package helper
 
 import (
 	"errors"
+	"fmt"
+	"sort"
 
 	gardenv1beta1 "github.com/gardener/gardener/pkg/apis/garden/v1beta1"
+	"github.com/gardener/gardener/pkg/utils"
 	corev1 "k8s.io/api/core/v1"
 	apiequality "k8s.io/apimachinery/pkg/api/equality"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -26,39 +29,71 @@ import (
 // DetermineCloudProviderInProfile takes a CloudProfile specification and returns the cloud provider this profile is used for.
 // If it is not able to determine it, an error will be returned.
 func DetermineCloudProviderInProfile(spec gardenv1beta1.CloudProfileSpec) (gardenv1beta1.CloudProvider, error) {
-	if spec.AWS != nil && spec.Azure == nil && spec.GCP == nil && spec.OpenStack == nil {
-		return gardenv1beta1.CloudProviderAWS, nil
+	var (
+		cloud     gardenv1beta1.CloudProvider
+		numClouds = 0
+	)
+
+	if spec.AWS != nil {
+		numClouds++
+		cloud = gardenv1beta1.CloudProviderAWS
 	}
-	if spec.Azure != nil && spec.GCP == nil && spec.OpenStack == nil && spec.AWS == nil {
-		return gardenv1beta1.CloudProviderAzure, nil
+	if spec.Azure != nil {
+		numClouds++
+		cloud = gardenv1beta1.CloudProviderAzure
 	}
-	if spec.GCP != nil && spec.OpenStack == nil && spec.AWS == nil && spec.Azure == nil {
-		return gardenv1beta1.CloudProviderGCP, nil
+	if spec.GCP != nil {
+		numClouds++
+		cloud = gardenv1beta1.CloudProviderGCP
 	}
-	if spec.OpenStack != nil && spec.AWS == nil && spec.Azure == nil && spec.GCP == nil {
-		return gardenv1beta1.CloudProviderOpenStack, nil
+	if spec.OpenStack != nil {
+		numClouds++
+		cloud = gardenv1beta1.CloudProviderOpenStack
+	}
+	if spec.Local != nil {
+		numClouds++
+		cloud = gardenv1beta1.CloudProviderLocal
 	}
 
-	return "", errors.New("cloud profile must only contain exactly one field of aws/azure/gcp/openstack")
+	if numClouds != 1 {
+		return "", errors.New("cloud profile must only contain exactly one field of aws/azure/gcp/openstack/local")
+	}
+	return cloud, nil
 }
 
 // DetermineCloudProviderInShoot takes a Shoot cloud object and returns the cloud provider this profile is used for.
 // If it is not able to determine it, an error will be returned.
-func DetermineCloudProviderInShoot(cloud gardenv1beta1.Cloud) (gardenv1beta1.CloudProvider, error) {
-	if cloud.AWS != nil && cloud.Azure == nil && cloud.GCP == nil && cloud.OpenStack == nil {
-		return gardenv1beta1.CloudProviderAWS, nil
+func DetermineCloudProviderInShoot(cloudObj gardenv1beta1.Cloud) (gardenv1beta1.CloudProvider, error) {
+	var (
+		cloud     gardenv1beta1.CloudProvider
+		numClouds = 0
+	)
+
+	if cloudObj.AWS != nil {
+		numClouds++
+		cloud = gardenv1beta1.CloudProviderAWS
 	}
-	if cloud.Azure != nil && cloud.GCP == nil && cloud.OpenStack == nil && cloud.AWS == nil {
-		return gardenv1beta1.CloudProviderAzure, nil
+	if cloudObj.Azure != nil {
+		numClouds++
+		cloud = gardenv1beta1.CloudProviderAzure
 	}
-	if cloud.GCP != nil && cloud.OpenStack == nil && cloud.AWS == nil && cloud.Azure == nil {
-		return gardenv1beta1.CloudProviderGCP, nil
+	if cloudObj.GCP != nil {
+		numClouds++
+		cloud = gardenv1beta1.CloudProviderGCP
 	}
-	if cloud.OpenStack != nil && cloud.AWS == nil && cloud.Azure == nil && cloud.GCP == nil {
-		return gardenv1beta1.CloudProviderOpenStack, nil
+	if cloudObj.OpenStack != nil {
+		numClouds++
+		cloud = gardenv1beta1.CloudProviderOpenStack
+	}
+	if cloudObj.Local != nil {
+		numClouds++
+		cloud = gardenv1beta1.CloudProviderLocal
 	}
 
-	return "", errors.New("cloud object must only contain exactly one field of aws/azure/gcp/openstack")
+	if numClouds != 1 {
+		return "", errors.New("cloud object must only contain exactly one field of aws/azure/gcp/openstack/local")
+	}
+	return cloud, nil
 }
 
 // InitCondition initializes a new Condition with an Unknown status.
@@ -131,4 +166,108 @@ func GetCondition(conditions []gardenv1beta1.Condition, conditionType gardenv1be
 // ConditionsNeedUpdate returns true if the <existingConditions> must be updated based on <newConditions>.
 func ConditionsNeedUpdate(existingConditions, newConditions []gardenv1beta1.Condition) bool {
 	return existingConditions == nil || !apiequality.Semantic.DeepEqual(newConditions, existingConditions)
+}
+
+// DetermineMachineImage finds the cloud specific machine image in the <cloudProfile> for the given <name> and
+// region. In case it does not find a machine image with the <name>, it returns false. Otherwise, true and the
+// cloud-specific machine image object will be returned.
+func DetermineMachineImage(cloudProfile gardenv1beta1.CloudProfile, name gardenv1beta1.MachineImageName, region string) (bool, interface{}, error) {
+	cloudProvider, err := DetermineCloudProviderInProfile(cloudProfile.Spec)
+	if err != nil {
+		return false, nil, err
+	}
+
+	switch cloudProvider {
+	case gardenv1beta1.CloudProviderAWS:
+		for _, image := range cloudProfile.Spec.AWS.Constraints.MachineImages {
+			if image.Name == name {
+				for _, regionMapping := range image.Regions {
+					if regionMapping.Name == region {
+						return true, &gardenv1beta1.AWSMachineImage{
+							Name: name,
+							AMI:  regionMapping.AMI,
+						}, nil
+					}
+				}
+			}
+		}
+	case gardenv1beta1.CloudProviderAzure:
+		for _, image := range cloudProfile.Spec.Azure.Constraints.MachineImages {
+			if image.Name == name {
+				ptr := image
+				return true, &ptr, nil
+			}
+		}
+	case gardenv1beta1.CloudProviderGCP:
+		for _, image := range cloudProfile.Spec.GCP.Constraints.MachineImages {
+			if image.Name == name {
+				ptr := image
+				return true, &ptr, nil
+			}
+		}
+	case gardenv1beta1.CloudProviderOpenStack:
+		for _, image := range cloudProfile.Spec.OpenStack.Constraints.MachineImages {
+			if image.Name == name {
+				ptr := image
+				return true, &ptr, nil
+			}
+		}
+	default:
+		return false, nil, fmt.Errorf("unknown cloud provider %s", cloudProvider)
+	}
+
+	return false, nil, nil
+}
+
+// DetermineLatestKubernetesVersion finds the latest Kubernetes patch version in the <cloudProfile> compared
+// to the given <currentVersion>. In case it does not find a newer patch version, it returns false. Otherwise,
+// true and the found version will be returned.
+func DetermineLatestKubernetesVersion(cloudProfile gardenv1beta1.CloudProfile, currentVersion string) (bool, string, error) {
+	cloudProvider, err := DetermineCloudProviderInProfile(cloudProfile.Spec)
+	if err != nil {
+		return false, "", err
+	}
+
+	var (
+		versions      = []string{}
+		newerVersions = []string{}
+	)
+
+	switch cloudProvider {
+	case gardenv1beta1.CloudProviderAWS:
+		for _, version := range cloudProfile.Spec.AWS.Constraints.Kubernetes.Versions {
+			versions = append(versions, version)
+		}
+	case gardenv1beta1.CloudProviderAzure:
+		for _, version := range cloudProfile.Spec.Azure.Constraints.Kubernetes.Versions {
+			versions = append(versions, version)
+		}
+	case gardenv1beta1.CloudProviderGCP:
+		for _, version := range cloudProfile.Spec.GCP.Constraints.Kubernetes.Versions {
+			versions = append(versions, version)
+		}
+	case gardenv1beta1.CloudProviderOpenStack:
+		for _, version := range cloudProfile.Spec.OpenStack.Constraints.Kubernetes.Versions {
+			versions = append(versions, version)
+		}
+	default:
+		return false, "", fmt.Errorf("unknown cloud provider %s", cloudProvider)
+	}
+
+	for _, version := range versions {
+		ok, err := utils.CompareVersions(version, "~", currentVersion)
+		if err != nil {
+			return false, "", err
+		}
+		if version != currentVersion && ok {
+			newerVersions = append(newerVersions, version)
+		}
+	}
+
+	if len(newerVersions) > 0 {
+		sort.Strings(newerVersions)
+		return true, newerVersions[len(newerVersions)-1], nil
+	}
+
+	return false, "", nil
 }

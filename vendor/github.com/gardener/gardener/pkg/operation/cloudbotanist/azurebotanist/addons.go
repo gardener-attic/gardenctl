@@ -1,4 +1,4 @@
-// Copyright 2018 The Gardener Authors.
+// Copyright (c) 2018 SAP SE or an SAP affiliate company. All rights reserved. This file is licensed under the Apache Software License, v. 2 except as noted otherwise in the LICENSE file
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -28,11 +28,6 @@ func (b *AzureBotanist) DestroyKube2IAMResources() error {
 
 // GenerateKube2IAMConfig - Not needed on Azure.
 func (b *AzureBotanist) GenerateKube2IAMConfig() (map[string]interface{}, error) {
-	return common.GenerateAddonConfig(nil, false), nil
-}
-
-// GenerateClusterAutoscalerConfig - Not needed on Azure.
-func (b *AzureBotanist) GenerateClusterAutoscalerConfig() (map[string]interface{}, error) {
 	return common.GenerateAddonConfig(nil, false), nil
 }
 
@@ -71,15 +66,7 @@ func (b *AzureBotanist) GenerateAdmissionControlConfig() (map[string]interface{}
 	}, nil
 }
 
-// GenerateCalicoConfig generates values which are required to render the chart calico properly.
-func (b *AzureBotanist) GenerateCalicoConfig() (map[string]interface{}, error) {
-	return map[string]interface{}{
-		"cloudProvider": b.Shoot.CloudProvider,
-		"enabled":       true,
-	}, nil
-}
-
 // GenerateNginxIngressConfig generates values which are required to render the chart nginx-ingress properly.
 func (b *AzureBotanist) GenerateNginxIngressConfig() (map[string]interface{}, error) {
-	return common.GenerateAddonConfig(nil, b.Shoot.Info.Spec.Addons.NginxIngress.Enabled), nil
+	return common.GenerateAddonConfig(nil, b.Shoot.NginxIngressEnabled()), nil
 }

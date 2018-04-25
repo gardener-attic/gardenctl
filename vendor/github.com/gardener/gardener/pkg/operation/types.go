@@ -1,4 +1,4 @@
-// Copyright 2018 The Gardener Authors.
+// Copyright (c) 2018 SAP SE or an SAP affiliate company. All rights reserved. This file is licensed under the Apache Software License, v. 2 except as noted otherwise in the LICENSE file
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -46,4 +46,13 @@ type Operation struct {
 	ChartShootRenderer  chartrenderer.ChartRenderer
 	APIServerIngresses  []corev1.LoadBalancerIngress
 	APIServerAddress    string
+	SeedNamespaceObject *corev1.Namespace
+}
+
+// MachineDeployment holds insformation about the name, class, replicas of a MachineDeployment
+// managed by the machine-controller-manager.
+type MachineDeployment struct {
+	Name      string
+	ClassName string
+	Replicas  int
 }

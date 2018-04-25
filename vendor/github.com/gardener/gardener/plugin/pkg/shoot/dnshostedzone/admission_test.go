@@ -1,4 +1,4 @@
-// Copyright 2018 The Gardener Authors.
+// Copyright (c) 2018 SAP SE or an SAP affiliate company. All rights reserved. This file is licensed under the Apache Software License, v. 2 except as noted otherwise in the LICENSE file
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -18,6 +18,7 @@ import (
 	"github.com/gardener/gardener/pkg/apis/garden"
 	gardeninformers "github.com/gardener/gardener/pkg/client/garden/informers/internalversion"
 	"github.com/gardener/gardener/pkg/operation/cloudbotanist/awsbotanist"
+	"github.com/gardener/gardener/pkg/operation/cloudbotanist/gcpbotanist"
 	"github.com/gardener/gardener/pkg/operation/common"
 	. "github.com/gardener/gardener/plugin/pkg/shoot/dnshostedzone"
 	corev1 "k8s.io/api/core/v1"
@@ -39,6 +40,7 @@ var _ = Describe("quotavalidator", func() {
 			shoot                 garden.Shoot
 
 			cloudProviderSecretName = "my-secret"
+			referencedSecretName    = "my-dns-secret"
 			secretBindingName       = "my-secret-binding"
 			namespace               = "my-namespace"
 
@@ -49,14 +51,22 @@ var _ = Describe("quotavalidator", func() {
 				},
 				Data: map[string][]byte{},
 			}
-			privateSecretBinding = garden.PrivateSecretBinding{
+			secretBinding = garden.SecretBinding{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      secretBindingName,
 					Namespace: namespace,
 				},
-				SecretRef: garden.LocalReference{
-					Name: cloudProviderSecretName,
+				SecretRef: corev1.SecretReference{
+					Name:      cloudProviderSecretName,
+					Namespace: namespace,
 				},
+			}
+			referencedSecret = corev1.Secret{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      referencedSecretName,
+					Namespace: namespace,
+				},
+				Data: map[string][]byte{},
 			}
 
 			shootBase = garden.Shoot{
@@ -66,8 +76,7 @@ var _ = Describe("quotavalidator", func() {
 				},
 				Spec: garden.ShootSpec{
 					Cloud: garden.Cloud{
-						SecretBindingRef: corev1.ObjectReference{
-							Kind: "PrivateSecretBinding",
+						SecretBindingRef: corev1.LocalObjectReference{
 							Name: secretBindingName,
 						},
 					},
@@ -147,14 +156,14 @@ var _ = Describe("quotavalidator", func() {
 			})
 
 			Context("domain is not a default domain", func() {
-				It("should reject because the cloud provider secret does not contain valid dns provider credentials", func() {
+				It("should reject because the cloud provider secret does not contain valid dns provider credentials (AWS)", func() {
 					shoot.Spec.DNS.HostedZoneID = makeStringPointer("abcd")
 					shoot.Spec.DNS.Provider = garden.DNSAWSRoute53
 					shoot.Spec.DNS.Domain = makeStringPointer("my-shoot.my-domain.com")
 
 					kubeInformerFactory.Core().V1().Secrets().Informer().GetStore().Add(&defaultDomainSecret)
 					kubeInformerFactory.Core().V1().Secrets().Informer().GetStore().Add(&cloudProviderSecret)
-					gardenInformerFactory.Garden().InternalVersion().PrivateSecretBindings().Informer().GetStore().Add(&privateSecretBinding)
+					gardenInformerFactory.Garden().InternalVersion().SecretBindings().Informer().GetStore().Add(&secretBinding)
 					attrs := admission.NewAttributesRecord(&shoot, nil, garden.Kind("Shoot").WithVersion("version"), shoot.Namespace, shoot.Name, garden.Resource("shoots").WithVersion("version"), "", admission.Create, nil)
 
 					err := admissionHandler.Admit(attrs)
@@ -163,7 +172,23 @@ var _ = Describe("quotavalidator", func() {
 					Expect(apierrors.IsForbidden(err)).To(BeTrue())
 				})
 
-				It("should pass because the cloud provider secret does contain valid dns provider credentials", func() {
+				It("should reject because the cloud provider secret does not contain valid dns provider credentials (GCP)", func() {
+					shoot.Spec.DNS.HostedZoneID = makeStringPointer("abcd")
+					shoot.Spec.DNS.Provider = garden.DNSGoogleCloudDNS
+					shoot.Spec.DNS.Domain = makeStringPointer("my-shoot.my-domain.com")
+
+					kubeInformerFactory.Core().V1().Secrets().Informer().GetStore().Add(&defaultDomainSecret)
+					kubeInformerFactory.Core().V1().Secrets().Informer().GetStore().Add(&cloudProviderSecret)
+					gardenInformerFactory.Garden().InternalVersion().SecretBindings().Informer().GetStore().Add(&secretBinding)
+					attrs := admission.NewAttributesRecord(&shoot, nil, garden.Kind("Shoot").WithVersion("version"), shoot.Namespace, shoot.Name, garden.Resource("shoots").WithVersion("version"), "", admission.Create, nil)
+
+					err := admissionHandler.Admit(attrs)
+
+					Expect(err).To(HaveOccurred())
+					Expect(apierrors.IsForbidden(err)).To(BeTrue())
+				})
+
+				It("should pass because the cloud provider secret does contain valid dns provider credentials (AWS)", func() {
 					shoot.Spec.DNS.HostedZoneID = makeStringPointer("abcd")
 					shoot.Spec.DNS.Provider = garden.DNSAWSRoute53
 					shoot.Spec.DNS.Domain = makeStringPointer("my-shoot.my-domain.com")
@@ -174,7 +199,58 @@ var _ = Describe("quotavalidator", func() {
 
 					kubeInformerFactory.Core().V1().Secrets().Informer().GetStore().Add(&defaultDomainSecret)
 					kubeInformerFactory.Core().V1().Secrets().Informer().GetStore().Add(&cloudProviderSecret)
-					gardenInformerFactory.Garden().InternalVersion().PrivateSecretBindings().Informer().GetStore().Add(&privateSecretBinding)
+					gardenInformerFactory.Garden().InternalVersion().SecretBindings().Informer().GetStore().Add(&secretBinding)
+					attrs := admission.NewAttributesRecord(&shoot, nil, garden.Kind("Shoot").WithVersion("version"), shoot.Namespace, shoot.Name, garden.Resource("shoots").WithVersion("version"), "", admission.Create, nil)
+
+					err := admissionHandler.Admit(attrs)
+
+					Expect(err).NotTo(HaveOccurred())
+				})
+
+				It("should pass because the cloud provider secret does contain valid dns provider credentials (GCP)", func() {
+					shoot.Spec.DNS.HostedZoneID = makeStringPointer("abcd")
+					shoot.Spec.DNS.Provider = garden.DNSGoogleCloudDNS
+					shoot.Spec.DNS.Domain = makeStringPointer("my-shoot.my-domain.com")
+					cloudProviderSecret.Data = map[string][]byte{
+						gcpbotanist.ServiceAccountJSON: nil,
+					}
+
+					kubeInformerFactory.Core().V1().Secrets().Informer().GetStore().Add(&defaultDomainSecret)
+					kubeInformerFactory.Core().V1().Secrets().Informer().GetStore().Add(&cloudProviderSecret)
+					gardenInformerFactory.Garden().InternalVersion().SecretBindings().Informer().GetStore().Add(&secretBinding)
+					attrs := admission.NewAttributesRecord(&shoot, nil, garden.Kind("Shoot").WithVersion("version"), shoot.Namespace, shoot.Name, garden.Resource("shoots").WithVersion("version"), "", admission.Create, nil)
+
+					err := admissionHandler.Admit(attrs)
+
+					Expect(err).NotTo(HaveOccurred())
+				})
+
+				It("should reject because the referenced secret does not contain valid dns provider credentials", func() {
+					shoot.Spec.DNS.HostedZoneID = makeStringPointer("abcd")
+					shoot.Spec.DNS.Provider = garden.DNSAWSRoute53
+					shoot.Spec.DNS.Domain = makeStringPointer("my-shoot.my-domain.com")
+					shoot.Spec.DNS.SecretName = makeStringPointer(referencedSecretName)
+
+					kubeInformerFactory.Core().V1().Secrets().Informer().GetStore().Add(&referencedSecret)
+					attrs := admission.NewAttributesRecord(&shoot, nil, garden.Kind("Shoot").WithVersion("version"), shoot.Namespace, shoot.Name, garden.Resource("shoots").WithVersion("version"), "", admission.Create, nil)
+
+					err := admissionHandler.Admit(attrs)
+
+					Expect(err).To(HaveOccurred())
+					Expect(apierrors.IsForbidden(err)).To(BeTrue())
+				})
+
+				It("should pass because the referenced secret does contain valid dns provider credentials", func() {
+					shoot.Spec.DNS.HostedZoneID = makeStringPointer("abcd")
+					shoot.Spec.DNS.Provider = garden.DNSAWSRoute53
+					shoot.Spec.DNS.Domain = makeStringPointer("my-shoot.my-domain.com")
+					shoot.Spec.DNS.SecretName = makeStringPointer(referencedSecretName)
+					referencedSecret.Data = map[string][]byte{
+						awsbotanist.AccessKeyID:     nil,
+						awsbotanist.SecretAccessKey: nil,
+					}
+
+					kubeInformerFactory.Core().V1().Secrets().Informer().GetStore().Add(&referencedSecret)
 					attrs := admission.NewAttributesRecord(&shoot, nil, garden.Kind("Shoot").WithVersion("version"), shoot.Namespace, shoot.Name, garden.Resource("shoots").WithVersion("version"), "", admission.Create, nil)
 
 					err := admissionHandler.Admit(attrs)

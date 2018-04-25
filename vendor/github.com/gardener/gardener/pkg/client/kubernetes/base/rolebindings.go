@@ -1,4 +1,4 @@
-// Copyright 2018 The Gardener Authors.
+// Copyright (c) 2018 SAP SE or an SAP affiliate company. All rights reserved. This file is licensed under the Apache Software License, v. 2 except as noted otherwise in the LICENSE file
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -15,24 +15,12 @@
 package kubernetesbase
 
 import (
-	"github.com/gardener/gardener/pkg/client/kubernetes/mapping"
+	rbacv1 "k8s.io/api/rbac/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 // ListRoleBindings returns a list of rolebindings in a given <namespace>.
 // The selection can be restricted by passsing an <selector>.
-func (c *Client) ListRoleBindings(namespace string, selector metav1.ListOptions) ([]*mapping.RoleBinding, error) {
-	roleBindings, err := c.
-		Clientset.
-		RbacV1beta1().
-		RoleBindings(namespace).
-		List(selector)
-	if err != nil {
-		return nil, err
-	}
-	roleBindingList := make([]*mapping.RoleBinding, len(roleBindings.Items))
-	for i, rb := range roleBindings.Items {
-		roleBindingList[i] = mapping.RbacV1Beta1RoleBinding(rb)
-	}
-	return roleBindingList, nil
+func (c *Client) ListRoleBindings(namespace string, selector metav1.ListOptions) (*rbacv1.RoleBindingList, error) {
+	return c.clientset.RbacV1().RoleBindings(namespace).List(selector)
 }

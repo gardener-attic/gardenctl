@@ -1,12 +1,13 @@
-apiVersion: {{include "deploymentversion" .}}
+apiVersion: {{ include "deploymentversion" . }}
 kind: Deployment
 metadata:
   name: {{ template "fullname" . }}-ui
+  namespace: kube-system
   labels:
     chart: "{{ .Chart.Name }}-{{ .Chart.Version }}"
-    # TODO: use label values and contribute it back
     addonmanager.kubernetes.io/mode: Reconcile
 spec:
+  revisionHistoryLimit: 0
   replicas: {{ .Values.ui.replicaCount }}
   selector:
     matchLabels:
@@ -14,6 +15,7 @@ spec:
   template:
     metadata:
       labels:
+        origin: gardener
         app: {{ template "fullname" . }}-ui
       annotations:
         checksum/config: {{ include (print $.Template.BasePath "/ui-config.yaml") . | sha256sum }}

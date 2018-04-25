@@ -1,4 +1,4 @@
-// Copyright 2018 The Gardener Authors.
+// Copyright (c) 2018 SAP SE or an SAP affiliate company. All rights reserved. This file is licensed under the Apache Software License, v. 2 except as noted otherwise in the LICENSE file
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -37,22 +37,26 @@ type Controller struct {
 	k8sGardenClient    kubernetes.Client
 	k8sGardenInformers gardeninformers.SharedInformerFactory
 
-	config      *componentconfig.ControllerManagerConfiguration
-	control     ControlInterface
-	careControl CareControlInterface
-	recorder    record.EventRecorder
-	secrets     map[string]*corev1.Secret
-	imageVector imagevector.ImageVector
+	config             *componentconfig.ControllerManagerConfiguration
+	control            ControlInterface
+	careControl        CareControlInterface
+	maintenanceControl MaintenanceControlInterface
+	quotaControl       QuotaControlInterface
+	recorder           record.EventRecorder
+	secrets            map[string]*corev1.Secret
+	imageVector        imagevector.ImageVector
 
-	shootLister    gardenlisters.ShootLister
-	shootQueue     workqueue.RateLimitingInterface
-	shootCareQueue workqueue.RateLimitingInterface
+	shootLister           gardenlisters.ShootLister
+	shootQueue            workqueue.RateLimitingInterface
+	shootCareQueue        workqueue.RateLimitingInterface
+	shootMaintenanceQueue workqueue.RateLimitingInterface
+	shootQuotaQueue       workqueue.RateLimitingInterface
 
-	shootSynced                cache.InformerSynced
-	seedSynced                 cache.InformerSynced
-	cloudProfileSynced         cache.InformerSynced
-	privateSecretBindingSynced cache.InformerSynced
-	crossSecretBindingSynced   cache.InformerSynced
+	shootSynced         cache.InformerSynced
+	seedSynced          cache.InformerSynced
+	cloudProfileSynced  cache.InformerSynced
+	secretBindingSynced cache.InformerSynced
+	quotaSynced         cache.InformerSynced
 
 	numberOfRunningWorkers int
 	workerCh               chan int
@@ -60,7 +64,7 @@ type Controller struct {
 
 // NewShootController takes a Kubernetes client for the Garden clusters <k8sGardenClient>, a struct
 // holding information about the acting Gardener, a <shootInformer>, and a <recorder> for
-// event recording. It creates a new Garden controller.
+// event recording. It creates a new Gardener controller.
 func NewShootController(k8sGardenClient kubernetes.Client, k8sGardenInformers gardeninformers.SharedInformerFactory, config *componentconfig.ControllerManagerConfiguration, identity *gardenv1beta1.Gardener, gardenNamespace string, secrets map[string]*corev1.Secret, imageVector imagevector.ImageVector, recorder record.EventRecorder) *Controller {
 	var (
 		gardenv1beta1Informer = k8sGardenInformers.Garden().V1beta1()
@@ -70,18 +74,22 @@ func NewShootController(k8sGardenClient kubernetes.Client, k8sGardenInformers ga
 	)
 
 	shootController := &Controller{
-		k8sGardenClient:    k8sGardenClient,
-		k8sGardenInformers: k8sGardenInformers,
-		config:             config,
-		control:            NewDefaultControl(k8sGardenClient, gardenv1beta1Informer, secrets, imageVector, identity, config, gardenNamespace, recorder, shootUpdater),
-		careControl:        NewDefaultCareControl(k8sGardenClient, gardenv1beta1Informer, secrets, imageVector, identity, config, shootUpdater),
-		recorder:           recorder,
-		secrets:            secrets,
-		imageVector:        imageVector,
-		shootLister:        shootLister,
-		shootQueue:         workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "shoot"),
-		shootCareQueue:     workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "shoot-care"),
-		workerCh:           make(chan int),
+		k8sGardenClient:       k8sGardenClient,
+		k8sGardenInformers:    k8sGardenInformers,
+		config:                config,
+		control:               NewDefaultControl(k8sGardenClient, gardenv1beta1Informer, secrets, imageVector, identity, config, gardenNamespace, recorder, shootUpdater),
+		careControl:           NewDefaultCareControl(k8sGardenClient, gardenv1beta1Informer, secrets, imageVector, identity, config, shootUpdater),
+		maintenanceControl:    NewDefaultMaintenanceControl(k8sGardenClient, gardenv1beta1Informer, secrets, imageVector, identity, recorder, shootUpdater),
+		quotaControl:          NewDefaultQuotaControl(k8sGardenClient, gardenv1beta1Informer),
+		recorder:              recorder,
+		secrets:               secrets,
+		imageVector:           imageVector,
+		shootLister:           shootLister,
+		shootQueue:            workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "shoot"),
+		shootCareQueue:        workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "shoot-care"),
+		shootMaintenanceQueue: workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "shoot-maintenance"),
+		shootQuotaQueue:       workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "shoot-quota"),
+		workerCh:              make(chan int),
 	}
 
 	shootInformer.Informer().AddEventHandler(cache.FilteringResourceEventHandler{
@@ -101,23 +109,39 @@ func NewShootController(k8sGardenClient kubernetes.Client, k8sGardenInformers ga
 		},
 	})
 
+	shootInformer.Informer().AddEventHandler(cache.FilteringResourceEventHandler{
+		FilterFunc: shootController.shootNamespaceFilter,
+		Handler: cache.ResourceEventHandlerFuncs{
+			AddFunc:    shootController.shootMaintenanceAdd,
+			DeleteFunc: shootController.shootMaintenanceDelete,
+		},
+	})
+
+	shootInformer.Informer().AddEventHandler(cache.FilteringResourceEventHandler{
+		FilterFunc: shootController.shootNamespaceFilter,
+		Handler: cache.ResourceEventHandlerFuncs{
+			AddFunc:    shootController.shootQuotaAdd,
+			DeleteFunc: shootController.shootQuotaDelete,
+		},
+	})
+
 	shootController.shootSynced = shootInformer.Informer().HasSynced
 	shootController.seedSynced = gardenv1beta1Informer.Seeds().Informer().HasSynced
 	shootController.cloudProfileSynced = gardenv1beta1Informer.CloudProfiles().Informer().HasSynced
-	shootController.privateSecretBindingSynced = gardenv1beta1Informer.PrivateSecretBindings().Informer().HasSynced
-	shootController.crossSecretBindingSynced = gardenv1beta1Informer.CrossSecretBindings().Informer().HasSynced
+	shootController.secretBindingSynced = gardenv1beta1Informer.SecretBindings().Informer().HasSynced
+	shootController.quotaSynced = gardenv1beta1Informer.Quotas().Informer().HasSynced
 
 	return shootController
 }
 
 // Run runs the Controller until the given stop channel can be read from.
-func (c *Controller) Run(workers int, stopCh <-chan struct{}) {
+func (c *Controller) Run(shootWorkers, shootCareWorkers, shootMaintenanceWorkers, shootQuotaWorkers int, stopCh <-chan struct{}) {
 	var (
-		watchNamespace = c.config.Controller.WatchNamespace
+		watchNamespace = c.config.Controllers.Shoot.WatchNamespace
 		waitGroup      sync.WaitGroup
 	)
 
-	if !cache.WaitForCacheSync(stopCh, c.shootSynced, c.seedSynced, c.cloudProfileSynced, c.privateSecretBindingSynced, c.crossSecretBindingSynced) {
+	if !cache.WaitForCacheSync(stopCh, c.shootSynced, c.seedSynced, c.cloudProfileSynced, c.secretBindingSynced, c.quotaSynced) {
 		logger.Logger.Error("Timed out waiting for caches to sync")
 		return
 	}
@@ -140,27 +164,39 @@ func (c *Controller) Run(workers int, stopCh <-chan struct{}) {
 	}
 	logger.Logger.Info("Shoot controller initialized.")
 
-	for i := 0; i < workers; i++ {
+	for i := 0; i < shootWorkers; i++ {
 		controllerutils.CreateWorker(c.shootQueue, "Shoot", c.reconcileShootKey, stopCh, &waitGroup, c.workerCh)
+	}
+	for i := 0; i < shootCareWorkers; i++ {
 		controllerutils.CreateWorker(c.shootCareQueue, "Shoot Care", c.reconcileShootCareKey, stopCh, &waitGroup, c.workerCh)
+	}
+	for i := 0; i < shootMaintenanceWorkers; i++ {
+		controllerutils.CreateWorker(c.shootMaintenanceQueue, "Shoot Maintenance", c.reconcileShootMaintenanceKey, stopCh, &waitGroup, c.workerCh)
+	}
+	for i := 0; i < shootQuotaWorkers; i++ {
+		controllerutils.CreateWorker(c.shootQuotaQueue, "Shoot Quota", c.reconcileShootQuotaKey, stopCh, &waitGroup, c.workerCh)
 	}
 
 	// Shutdown handling
 	<-stopCh
 	c.shootQueue.ShutDown()
 	c.shootCareQueue.ShutDown()
+	c.shootMaintenanceQueue.ShutDown()
+	c.shootQuotaQueue.ShutDown()
 
 	for {
 		var (
-			shootQueueLength     = c.shootQueue.Len()
-			shootCareQueueLength = c.shootCareQueue.Len()
-			queueLengths         = shootQueueLength + shootCareQueueLength
+			shootQueueLength            = c.shootQueue.Len()
+			shootCareQueueLength        = c.shootCareQueue.Len()
+			shootMaintenanceQueueLength = c.shootMaintenanceQueue.Len()
+			shootQuotaQueueLength       = c.shootQuotaQueue.Len()
+			queueLengths                = shootQueueLength + shootCareQueueLength + shootMaintenanceQueueLength + shootQuotaQueueLength
 		)
 		if queueLengths == 0 && c.numberOfRunningWorkers == 0 {
-			logger.Logger.Info("No running Shoot worker and no items left in the queues. Terminating Shoot controller...")
+			logger.Logger.Debug("No running Shoot worker and no items left in the queues. Terminated Shoot controller...")
 			break
 		}
-		logger.Logger.Infof("Waiting for %d Shoot worker(s) to finish (%d item(s) left in the queues)...", c.numberOfRunningWorkers, queueLengths)
+		logger.Logger.Debugf("Waiting for %d Shoot worker(s) to finish (%d item(s) left in the queues)...", c.numberOfRunningWorkers, queueLengths)
 		time.Sleep(5 * time.Second)
 	}
 
@@ -176,7 +212,7 @@ func (c *Controller) RunningWorkers() int {
 func (c *Controller) shootNamespaceFilter(obj interface{}) bool {
 	var (
 		shoot          = obj.(*gardenv1beta1.Shoot)
-		watchNamespace = c.config.Controller.WatchNamespace
+		watchNamespace = c.config.Controllers.Shoot.WatchNamespace
 	)
 	return watchNamespace == nil || shoot.Namespace == *watchNamespace
 }

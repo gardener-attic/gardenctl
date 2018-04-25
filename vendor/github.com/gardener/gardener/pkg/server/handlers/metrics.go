@@ -1,4 +1,4 @@
-// Copyright 2018 The Gardener Authors.
+// Copyright (c) 2018 SAP SE or an SAP affiliate company. All rights reserved. This file is licensed under the Apache Software License, v. 2 except as noted otherwise in the LICENSE file
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -68,7 +68,7 @@ func (m metrics) initShootMetrics() {
 
 	m.collect(func() {
 		var state float64
-		shoots, err := m.k8sGardenClient.ListShoots(metav1.NamespaceAll)
+		shoots, err := m.k8sGardenClient.GardenClientset().GardenV1beta1().Shoots(metav1.NamespaceAll).List(metav1.ListOptions{})
 		if err != nil {
 			logger.Logger.Info("Unable to fetch shoots. skip shoot metric set...")
 			return
@@ -150,11 +150,11 @@ func (m metrics) initUserCountMetric() {
 			LabelSelector: usersLabel,
 		})
 		if err != nil {
-			logger.Logger.Info("Unable to fetch user rolebindings. skip metric...")
+			logger.Logger.Info("Unable to fetch user RoleBindings. skip metric...")
 			return
 		}
 		var userCount float64
-		for _, rb := range roleBindings {
+		for _, rb := range roleBindings.Items {
 			for _, subject := range rb.Subjects {
 				if subject.Kind == "User" {
 					userCount++

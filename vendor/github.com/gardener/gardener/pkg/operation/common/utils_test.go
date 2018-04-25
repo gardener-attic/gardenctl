@@ -1,4 +1,4 @@
-// Copyright 2018 The Gardener Authors.
+// Copyright (c) 2018 SAP SE or an SAP affiliate company. All rights reserved. This file is licensed under the Apache Software License, v. 2 except as noted otherwise in the LICENSE file
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -15,8 +15,6 @@
 package common_test
 
 import (
-	"net"
-
 	. "github.com/gardener/gardener/pkg/operation/common"
 
 	. "github.com/onsi/ginkgo"
@@ -62,110 +60,101 @@ var _ = Describe("common", func() {
 
 		Describe("#DiskSize", func() {
 			It("should return a string", func() {
-				size := "10"
+				var (
+					size    = "10"
+					sizeInt = 10
+				)
 
 				result := DiskSize(size + "Gi")
 
-				Expect(result).To(Equal(size))
-			})
-		})
-
-		Describe("#ComputeNonMasqueradeCIDR", func() {
-			It("should return a CIDR with network mask 10", func() {
-				ip := "100.64.0.0"
-
-				result := ComputeNonMasqueradeCIDR(gardenv1beta1.CIDR(ip + "/13"))
-				_, _, err := net.ParseCIDR(result)
-
-				Expect(err).NotTo(HaveOccurred())
-				Expect(result).To(Equal(ip + "/10"))
+				Expect(result).To(Equal(sizeInt))
 			})
 		})
 
 		Describe("#GenerateAddonConfig", func() {
-			Context("values=nil and isEnabled=nil", func() {
+			Context("values=nil and enabled=false", func() {
 				It("should return a map with key enabled=false", func() {
 					var (
-						values    map[string]interface{}
-						isEnabled interface{}
+						values  map[string]interface{}
+						enabled = false
 					)
 
-					result := GenerateAddonConfig(values, isEnabled)
+					result := GenerateAddonConfig(values, enabled)
 
 					Expect(result).To(SatisfyAll(
-						HaveKeyWithValue("enabled", false),
+						HaveKeyWithValue("enabled", enabled),
 						HaveLen(1),
 					))
 				})
 			})
 
-			Context("values=nil and isEnabled=true", func() {
+			Context("values=nil and enabled=true", func() {
 				It("should return a map with key enabled=true", func() {
 					var (
-						values    map[string]interface{}
-						isEnabled = true
+						values  map[string]interface{}
+						enabled = true
 					)
 
-					result := GenerateAddonConfig(values, isEnabled)
+					result := GenerateAddonConfig(values, enabled)
 
 					Expect(result).To(SatisfyAll(
-						HaveKeyWithValue("enabled", isEnabled),
+						HaveKeyWithValue("enabled", enabled),
 						HaveLen(1),
 					))
 				})
 			})
 
-			Context("values=<empty map> and isEnabled=true", func() {
+			Context("values=<empty map> and enabled=true", func() {
 				It("should return a map with key enabled=true", func() {
 					var (
-						values    = map[string]interface{}{}
-						isEnabled = true
+						values  = map[string]interface{}{}
+						enabled = true
 					)
 
-					result := GenerateAddonConfig(values, isEnabled)
+					result := GenerateAddonConfig(values, enabled)
 
 					Expect(result).To(SatisfyAll(
-						HaveKeyWithValue("enabled", isEnabled),
+						HaveKeyWithValue("enabled", enabled),
 						HaveLen(1),
 					))
 				})
 			})
 
-			Context("values=<non-empty map> and isEnabled=true", func() {
+			Context("values=<non-empty map> and enabled=true", func() {
 				It("should return a map with the values and key enabled=true", func() {
 					var (
 						values = map[string]interface{}{
 							"foo": "bar",
 						}
-						isEnabled = true
+						enabled = true
 					)
 
-					result := GenerateAddonConfig(values, isEnabled)
+					result := GenerateAddonConfig(values, enabled)
 
 					for key := range values {
 						_, ok := result[key]
 						Expect(ok).To(BeTrue())
 					}
 					Expect(result).To(SatisfyAll(
-						HaveKeyWithValue("enabled", isEnabled),
+						HaveKeyWithValue("enabled", enabled),
 						HaveLen(1+len(values)),
 					))
 				})
 			})
 
-			Context("values=<non-empty map> and isEnabled=false", func() {
+			Context("values=<non-empty map> and enabled=false", func() {
 				It("should return a map with key enabled=false", func() {
 					var (
 						values = map[string]interface{}{
 							"foo": "bar",
 						}
-						isEnabled = false
+						enabled = false
 					)
 
-					result := GenerateAddonConfig(values, isEnabled)
+					result := GenerateAddonConfig(values, enabled)
 
 					Expect(result).To(SatisfyAll(
-						HaveKeyWithValue("enabled", isEnabled),
+						HaveKeyWithValue("enabled", enabled),
 						HaveLen(1),
 					))
 				})

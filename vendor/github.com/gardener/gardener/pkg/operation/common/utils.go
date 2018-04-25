@@ -1,4 +1,4 @@
-// Copyright 2018 The Gardener Authors.
+// Copyright (c) 2018 SAP SE or an SAP affiliate company. All rights reserved. This file is licensed under the Apache Software License, v. 2 except as noted otherwise in the LICENSE file
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -15,7 +15,6 @@
 package common
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"net"
@@ -27,12 +26,9 @@ import (
 	gardenv1beta1 "github.com/gardener/gardener/pkg/apis/garden/v1beta1"
 	"github.com/gardener/gardener/pkg/chartrenderer"
 	"github.com/gardener/gardener/pkg/client/kubernetes"
-	"github.com/gardener/gardener/pkg/logger"
 	"github.com/gardener/gardener/pkg/utils"
-	"github.com/sirupsen/logrus"
 	corev1 "k8s.io/api/core/v1"
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/apimachinery/pkg/util/wait"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 // ApplyChart takes a Kubernetes client <k8sClient>, chartRender <renderer>, path to a chart <chartPath>, name of the release <name>,
@@ -65,13 +61,13 @@ func GetSecretKeysWithPrefix(kind string, m map[string]*corev1.Secret) []string 
 // of index <zoneIndex>.
 // The distribution happens equally. In case of an uneven number <size>, the last zone will have
 // one more node than the others.
-func DistributeOverZones(zoneIndex, size, zoneSize int) string {
+func DistributeOverZones(zoneIndex, size, zoneSize int) int {
 	first := size / zoneSize
 	second := 0
 	if zoneIndex < (size % zoneSize) {
 		second = 1
 	}
-	return strconv.Itoa(first + second)
+	return first + second
 }
 
 // IdentifyAddressType takes a string containing an address (hostname or IP) and tries to parse it
@@ -97,34 +93,34 @@ func ComputeClusterIP(cidr gardenv1beta1.CIDR, lastByte byte) string {
 }
 
 // DiskSize extracts the numerical component of DiskSize strings, i.e. strings like "10Gi" and
-// returns it as string, i.e. "10" will be returned.
-func DiskSize(size string) string {
+// returns it as string, i.e. "10" will be returned. If the conversion to integer fails or if
+// the pattern does not match, it will return 0.
+func DiskSize(size string) int {
 	regex, _ := regexp.Compile("^(\\d+)")
-	return regex.FindString(size)
-}
-
-// ComputeNonMasqueradeCIDR computes the CIDR range which should be non-masqueraded (this is passed as
-// command-line flag to kubelet during its start). This range is the whole service/pod network range.
-func ComputeNonMasqueradeCIDR(cidr gardenv1beta1.CIDR) string {
-	cidrSplit := strings.Split(string(cidr), "/")
-	cidrSplit[1] = "10"
-	return strings.Join(cidrSplit, "/")
-}
-
-// GenerateAddonConfig returns the provided <values> in case <isEnabled> is a boolean value which
-// is true. Otherwise, nil is returned.
-func GenerateAddonConfig(values map[string]interface{}, isEnabled interface{}) map[string]interface{} {
-	enabled, ok := isEnabled.(bool)
-	if !ok {
-		enabled = false
+	i, err := strconv.Atoi(regex.FindString(size))
+	if err != nil {
+		return 0
 	}
-	v := make(map[string]interface{})
+	return i
+}
+
+// MachineClassHash returns the SHA256-hash value of the <val> struct's representation concatenated with the
+// provided <version>.
+func MachineClassHash(machineClassSpec map[string]interface{}, version string) string {
+	return utils.ComputeSHA256Hex([]byte(fmt.Sprintf("%s-%s", utils.HashForMap(machineClassSpec), version)))[:5]
+}
+
+// GenerateAddonConfig returns the provided <values> in case <enabled> is true. Otherwise, nil is
+// being returned.
+func GenerateAddonConfig(values map[string]interface{}, enabled bool) map[string]interface{} {
+	v := map[string]interface{}{
+		"enabled": enabled,
+	}
 	if enabled {
 		for key, value := range values {
 			v[key] = value
 		}
 	}
-	v["enabled"] = enabled
 	return v
 }
 
@@ -145,7 +141,7 @@ func GetLoadBalancerIngress(client kubernetes.Client, namespace, name string) (s
 	serviceStatusIngress = service.Status.LoadBalancer.Ingress
 	length := len(serviceStatusIngress)
 	if length == 0 {
-		return "", nil, errors.New("`.status.loadBalancer.ingress[]` has no elements yet, i.e. external load balancer has not been created")
+		return "", nil, errors.New("`.status.loadBalancer.ingress[]` has no elements yet, i.e. external load balancer has not been created (is your quota limit exceeded/reached?)")
 	}
 
 	if serviceStatusIngress[length-1].IP != "" {
@@ -172,59 +168,18 @@ func GenerateTerraformVariablesEnvironment(secret *corev1.Secret, keyValueMap ma
 	return m
 }
 
-// EnsureImagePullSecrets takes a Kubernetes client <k8sClient> and a <namespace> and creates the
-// image pull secrets stored in the Garden namespace and having the respective role label. After
-// that it patches the default service account in that namespace by appending the names of the just
-// created secrets to its .imagePullSecrets[] list.
-func EnsureImagePullSecrets(k8sClient kubernetes.Client, namespace string, secrets map[string]*corev1.Secret, createSecrets bool, log *logrus.Entry) error {
-	var (
-		imagePullKeys       = GetSecretKeysWithPrefix(GardenRoleImagePull, secrets)
-		serviceAccountName  = "default"
-		serviceAccountPatch = corev1.ServiceAccount{
-			ImagePullSecrets: []corev1.LocalObjectReference{},
-		}
-	)
-	if len(imagePullKeys) == 0 {
-		return nil
+// CheckConfirmationDeletionTimestampValid checks whether an annotation with the key of the constant <ConfirmationDeletionTimestamp>
+// variable exists on the provided <shoot> object and if yes, whether its value is equal to the Shoot's
+// '.metadata.deletionTimestamp' value. In that case, it returns true, otherwise false.
+func CheckConfirmationDeletionTimestampValid(objectMeta metav1.ObjectMeta) bool {
+	deletionTimestamp := objectMeta.DeletionTimestamp
+	if !metav1.HasAnnotation(objectMeta, ConfirmationDeletionTimestamp) || deletionTimestamp == nil {
+		return false
 	}
-
-	err := wait.PollImmediate(5*time.Second, 60*time.Second, func() (bool, error) {
-		_, err := k8sClient.GetServiceAccount(namespace, serviceAccountName)
-		if err != nil {
-			if apierrors.IsNotFound(err) {
-				msg := fmt.Sprintf("Waiting for ServiceAccount '%s' to be created in namespace '%s'...", serviceAccountName, namespace)
-				if log != nil {
-					log.Info(msg)
-				} else {
-					logger.Logger.Info(msg)
-				}
-				return false, nil
-			}
-			return false, err
-		}
-		return true, nil
-	})
+	timestamp, err := time.Parse(time.RFC3339, objectMeta.Annotations[ConfirmationDeletionTimestamp])
 	if err != nil {
-		return err
+		return false
 	}
-
-	for _, key := range imagePullKeys {
-		secret := secrets[key]
-		if createSecrets {
-			_, err := k8sClient.CreateSecret(namespace, secret.Name, corev1.SecretTypeDockercfg, secret.Data, true)
-			if err != nil {
-				return err
-			}
-		}
-		serviceAccountPatch.ImagePullSecrets = append(serviceAccountPatch.ImagePullSecrets, corev1.LocalObjectReference{
-			Name: secret.Name,
-		})
-	}
-
-	patch, err := json.Marshal(serviceAccountPatch)
-	if err != nil {
-		return err
-	}
-	_, err = k8sClient.PatchServiceAccount(namespace, serviceAccountName, patch)
-	return err
+	confirmationDeletionTimestamp := metav1.NewTime(timestamp)
+	return confirmationDeletionTimestamp.Equal(deletionTimestamp)
 }

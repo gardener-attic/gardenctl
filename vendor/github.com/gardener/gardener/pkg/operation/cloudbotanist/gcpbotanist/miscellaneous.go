@@ -1,4 +1,4 @@
-// Copyright 2018 The Gardener Authors.
+// Copyright (c) 2018 SAP SE or an SAP affiliate company. All rights reserved. This file is licensed under the Apache Software License, v. 2 except as noted otherwise in the LICENSE file
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,14 +17,4 @@ package gcpbotanist
 // ApplyCreateHook does currently nothing for GCP.
 func (b *GCPBotanist) ApplyCreateHook() error {
 	return nil
-}
-
-// ApplyDeleteHook does currently nothing for GCP.
-func (b *GCPBotanist) ApplyDeleteHook() error {
-	return nil
-}
-
-// CheckIfClusterGetsScaled does currently nothing for GCP.
-func (b *GCPBotanist) CheckIfClusterGetsScaled() (bool, int, error) {
-	return false, 0, nil
 }

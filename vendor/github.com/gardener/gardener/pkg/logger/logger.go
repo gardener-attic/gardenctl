@@ -1,4 +1,4 @@
-// Copyright 2018 The Gardener Authors.
+// Copyright (c) 2018 SAP SE or an SAP affiliate company. All rights reserved. This file is licensed under the Apache Software License, v. 2 except as noted otherwise in the LICENSE file
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -59,20 +59,21 @@ func NewLogger(logLevel string) *logrus.Logger {
 // log message.
 // Example output: time="2017-06-08T13:00:49+02:00" level=info msg="Creating namespace in seed cluster" shoot=core/crazy-botany.
 func NewShootLogger(logger *logrus.Logger, shoot, project, operationID string) *logrus.Entry {
-	fields := logrus.Fields{
-		"shoot": fmt.Sprintf("%s/%s", project, shoot),
-	}
+	fields := constructFields("shoot", fmt.Sprintf("%s/%s", project, shoot))
 	if operationID != "" {
 		fields["opid"] = operationID
 	}
 	return logger.WithFields(fields)
 }
 
-// NewSeedLogger extends an existing logrus logger and adds an additional field containing the Seed name.
-// Example output: time="2017-06-08T13:00:49+02:00" level=info msg="Creating namespace in seed cluster" seed=crazy-botany.
-func NewSeedLogger(logger *logrus.Logger, seed string) *logrus.Entry {
-	fields := logrus.Fields{
-		"seed": seed,
+// NewFieldLogger extends an existing logrus logger and adds the provided additional field.
+// Example output: time="2017-06-08T13:00:49+02:00" level=info msg="something" <fieldKey>=<fieldValue>.
+func NewFieldLogger(logger *logrus.Logger, fieldKey, fieldValue string) *logrus.Entry {
+	return logger.WithFields(constructFields(fieldKey, fieldValue))
+}
+
+func constructFields(key, value string) logrus.Fields {
+	return logrus.Fields{
+		key: value,
 	}
-	return logger.WithFields(fields)
 }

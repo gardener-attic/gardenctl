@@ -1,0 +1,25 @@
+# cloudProvider:
+#   name: aws
+#   config: |
+#     Kubernetes cloud provider config
+# caBundle: |
+#   root certificates
+# images:
+#   hyperkube: image-repository
+# kubernetes:
+#   caCert: abcd
+#   clusterDNS: 100.64.0.10
+#   domain: cluster.local
+#   kubelet:
+#     bootstrapToken: hugo
+#     hostnameOverride: false
+#     parameters: []
+#     featureGates: {}
+#       #  CustomResourceValidation: true
+#       #  RotateKubeletServerCertificate: false
+#   version: 1.8.4
+# workers:
+# - name: cpu-worker
+#   secretName: cloud-config-cpu-worker-ab234
+# - name: cpu-worker2
+#   secretName: cloud-config-cpu-worker2-4av4a

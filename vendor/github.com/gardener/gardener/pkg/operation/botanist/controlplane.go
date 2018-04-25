@@ -1,4 +1,4 @@
-// Copyright 2018 The Gardener Authors.
+// Copyright (c) 2018 SAP SE or an SAP affiliate company. All rights reserved. This file is licensed under the Apache Software License, v. 2 except as noted otherwise in the LICENSE file
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -20,15 +20,28 @@ import (
 
 	"github.com/gardener/gardener/pkg/operation/common"
 	"github.com/gardener/gardener/pkg/utils"
+	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 // DeployNamespace creates a namespace in the Seed cluster which is used to deploy all the control plane
 // components for the Shoot cluster. Moreover, the cloud provider configuration and all the secrets will be
 // stored as ConfigMaps/Secrets.
 func (b *Botanist) DeployNamespace() error {
-	_, err := b.K8sSeedClient.CreateNamespace(b.Operation.Shoot.SeedNamespace, true)
-	return err
+	namespace, err := b.K8sSeedClient.CreateNamespace(&corev1.Namespace{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: b.Operation.Shoot.SeedNamespace,
+			Labels: map[string]string{
+				common.GardenRole: "shoot",
+			},
+		},
+	}, true)
+	if err != nil {
+		return err
+	}
+	b.SeedNamespaceObject = namespace
+	return nil
 }
 
 // DeleteNamespace deletes the namespace in the Seed cluster which holds the control plane components. The built-in
@@ -42,31 +55,6 @@ func (b *Botanist) DeleteNamespace() error {
 	return err
 }
 
-// DeployETCDOperator deploys the etcd-operator which is used to spin up etcd clusters by leveraging the CRD concept.
-func (b *Botanist) DeployETCDOperator() error {
-	namespace, err := b.K8sSeedClient.GetNamespace(b.Operation.Shoot.SeedNamespace)
-	if err != nil {
-		return err
-	}
-
-	var (
-		imagePullSecrets = b.GetImagePullSecretsMap()
-		defaultValues    = map[string]interface{}{
-			"imagePullSecrets": imagePullSecrets,
-			"namespace": map[string]interface{}{
-				"uid": namespace.ObjectMeta.UID,
-			},
-		}
-	)
-
-	values, err := b.InjectImages(defaultValues, b.K8sSeedClient.Version(), map[string]string{"etcd-operator": "etcd-operator"})
-	if err != nil {
-		return err
-	}
-
-	return b.ApplyChartSeed(filepath.Join(common.ChartPath, "seed-controlplane", "charts", "etcd-operator"), "etcd-operator", b.Operation.Shoot.SeedNamespace, nil, values)
-}
-
 // DeployKubeAPIServerService creates a Service of type 'LoadBalancer' in the Seed cluster which is used to expose the
 // kube-apiserver deployment (of the Shoot cluster). It waits until the load balancer is available and stores the address
 // on the Botanist's APIServerAddress attribute.
@@ -74,6 +62,15 @@ func (b *Botanist) DeployKubeAPIServerService() error {
 	return b.ApplyChartSeed(filepath.Join(common.ChartPath, "seed-controlplane", "charts", "kube-apiserver-service"), "kube-apiserver-service", b.Operation.Shoot.SeedNamespace, nil, map[string]interface{}{
 		"cloudProvider": b.Seed.CloudProvider,
 	})
+}
+
+// DeleteKubeAPIServer deletes the kube-apiserver deployment in the Seed cluster which holds the Shoot's control plane.
+func (b *Botanist) DeleteKubeAPIServer() error {
+	err := b.K8sSeedClient.DeleteDeployment(b.Operation.Shoot.SeedNamespace, common.KubeAPIServerDeploymentName)
+	if apierrors.IsNotFound(err) {
+		return nil
+	}
+	return err
 }
 
 // DeleteKubeAddonManager deletes the kube-addon-manager deployment in the Seed cluster which holds the Shoot's control plane. It
@@ -87,46 +84,65 @@ func (b *Botanist) DeleteKubeAddonManager() error {
 	return err
 }
 
+// DeployMachineControllerManager deploys the machine-controller-manager into the Shoot namespace in the Seed cluster. It is responsible
+// for managing the worker nodes of the Shoot.
+func (b *Botanist) DeployMachineControllerManager() error {
+	var (
+		name          = "machine-controller-manager"
+		defaultValues = map[string]interface{}{
+			"podAnnotations": map[string]interface{}{
+				"checksum/secret-machine-controller-manager": b.CheckSums[name],
+			},
+			"namespace": map[string]interface{}{
+				"uid": b.SeedNamespaceObject.UID,
+			},
+		}
+	)
+
+	values, err := b.InjectImages(defaultValues, b.K8sSeedClient.Version(), map[string]string{name: name})
+	if err != nil {
+		return err
+	}
+
+	if err := b.ApplyChartShoot(filepath.Join(common.ChartPath, "shoot-machines"), name, metav1.NamespaceSystem, nil, nil); err != nil {
+		return err
+	}
+
+	return b.ApplyChartSeed(filepath.Join(common.ChartPath, "seed-controlplane", "charts", name), name, b.Operation.Shoot.SeedNamespace, nil, values)
+}
+
 // DeploySeedMonitoring will install the Helm release "seed-monitoring" in the Seed clusters. It comprises components
 // to monitor the Shoot cluster whose control plane runs in the Seed cluster.
 func (b *Botanist) DeploySeedMonitoring() error {
-	namespace, err := b.K8sSeedClient.GetNamespace(b.Operation.Shoot.SeedNamespace)
-	if err != nil {
-		return err
-	}
-
-	alertManagerHost, err := b.Seed.GetIngressFQDN("a", b.Shoot.Info.Name, b.Garden.ProjectName)
-	if err != nil {
-		return err
-	}
-	grafanaHost, err := b.Seed.GetIngressFQDN("g", b.Shoot.Info.Name, b.Garden.ProjectName)
-	if err != nil {
-		return err
-	}
-	prometheusHost, err := b.Seed.GetIngressFQDN("p", b.Shoot.Info.Name, b.Garden.ProjectName)
-	if err != nil {
-		return err
-	}
-
 	var (
 		kubecfgSecret    = b.Secrets["kubecfg"]
 		basicAuth        = utils.CreateSHA1Secret(kubecfgSecret.Data["username"], kubecfgSecret.Data["password"])
-		imagePullSecrets = b.GetImagePullSecretsMap()
+		alertManagerHost = b.Seed.GetIngressFQDN("a", b.Shoot.Info.Name, b.Garden.ProjectName)
+		grafanaHost      = b.Seed.GetIngressFQDN("g", b.Shoot.Info.Name, b.Garden.ProjectName)
+		prometheusHost   = b.Seed.GetIngressFQDN("p", b.Shoot.Info.Name, b.Garden.ProjectName)
+		replicas         = 1
+	)
 
+	if b.Shoot.Hibernated {
+		replicas = 0
+	}
+
+	var (
 		alertManagerConfig = map[string]interface{}{
 			"ingress": map[string]interface{}{
 				"basicAuthSecret": basicAuth,
 				"host":            alertManagerHost,
 			},
+			"replicas": replicas,
 		}
 		grafanaConfig = map[string]interface{}{
 			"ingress": map[string]interface{}{
 				"basicAuthSecret": basicAuth,
 				"host":            grafanaHost,
 			},
+			"replicas": replicas,
 		}
 		prometheusConfig = map[string]interface{}{
-			"replicaCount": 1,
 			"networks": map[string]interface{}{
 				"pods":     b.Shoot.GetPodNetwork(),
 				"services": b.Shoot.GetServiceNetwork(),
@@ -136,18 +152,23 @@ func (b *Botanist) DeploySeedMonitoring() error {
 				"basicAuthSecret": basicAuth,
 				"host":            prometheusHost,
 			},
-			"imagePullSecrets": imagePullSecrets,
 			"namespace": map[string]interface{}{
-				"uid": namespace.ObjectMeta.UID,
+				"uid": b.SeedNamespaceObject.UID,
 			},
 			"podAnnotations": map[string]interface{}{
 				"checksum/secret-prometheus":                b.CheckSums["prometheus"],
 				"checksum/secret-kube-apiserver-basic-auth": b.CheckSums["kube-apiserver-basic-auth"],
 				"checksum/secret-vpn-ssh-keypair":           b.CheckSums["vpn-ssh-keypair"],
 			},
+			"replicas":           replicas,
+			"apiserverServiceIP": common.ComputeClusterIP(b.Shoot.GetServiceNetwork(), 1),
 		}
-		kubeStateMetricsSeedConfig  = map[string]interface{}{}
-		kubeStateMetricsShootConfig = map[string]interface{}{}
+		kubeStateMetricsSeedConfig = map[string]interface{}{
+			"replicas": replicas,
+		}
+		kubeStateMetricsShootConfig = map[string]interface{}{
+			"replicas": replicas,
+		}
 	)
 
 	alertManager, err := b.InjectImages(alertManagerConfig, b.K8sSeedClient.Version(), map[string]string{"alertmanager": "alertmanager", "configmap-reloader": "configmap-reloader"})
@@ -158,7 +179,12 @@ func (b *Botanist) DeploySeedMonitoring() error {
 	if err != nil {
 		return err
 	}
-	prometheus, err := b.InjectImages(prometheusConfig, b.K8sSeedClient.Version(), map[string]string{"prometheus": "prometheus", "configmap-reloader": "configmap-reloader", "vpn-seed": "vpn-seed"})
+	prometheus, err := b.InjectImages(prometheusConfig, b.K8sSeedClient.Version(), map[string]string{
+		"prometheus":         "prometheus",
+		"configmap-reloader": "configmap-reloader",
+		"vpn-seed":           "vpn-seed",
+		"blackbox-exporter":  "blackbox-exporter",
+	})
 	if err != nil {
 		return err
 	}
@@ -207,13 +233,7 @@ func (b *Botanist) DeploySeedMonitoring() error {
 		values["alertmanager"].(map[string]interface{})["email_configs"] = emailConfigs
 	}
 
-	return b.ApplyChartSeed(
-		filepath.Join(common.ChartPath, "seed-monitoring"),
-		fmt.Sprintf("%s-monitoring", b.Operation.Shoot.SeedNamespace),
-		b.Operation.Shoot.SeedNamespace,
-		nil,
-		values,
-	)
+	return b.ApplyChartSeed(filepath.Join(common.ChartPath, "seed-monitoring"), fmt.Sprintf("%s-monitoring", b.Operation.Shoot.SeedNamespace), b.Operation.Shoot.SeedNamespace, nil, values)
 }
 
 // DeleteSeedMonitoring will delete the monitoring stack from the Seed cluster to avoid phantom alerts

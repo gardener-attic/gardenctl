@@ -2,7 +2,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: kube-scheduler
-  namespace: {{.Release.Namespace}}
+  namespace: {{ .Release.Namespace }}
   labels:
     app: kubernetes
     role: scheduler
@@ -21,16 +21,17 @@ spec:
     app: kubernetes
     role: scheduler
 ---
-apiVersion: {{include "deploymentversion" .}}
+apiVersion: {{ include "deploymentversion" . }}
 kind: Deployment
 metadata:
   name: kube-scheduler
-  namespace: {{.Release.Namespace}}
+  namespace: {{ .Release.Namespace }}
   labels:
     app: kubernetes
     role: scheduler
 spec:
-  replicas: 1
+  revisionHistoryLimit: 0
+  replicas: {{ .Values.replicas }}
   selector:
     matchLabels:
       app: kubernetes
@@ -51,7 +52,7 @@ spec:
         operator: Exists
       containers:
       - name: kube-scheduler
-        image: {{ index .Values.images "hyperkube" }}:v{{.Values.kubernetesVersion}}
+        image: {{ index .Values.images "hyperkube" }}:v{{ .Values.kubernetesVersion }}
         imagePullPolicy: IfNotPresent
         command:
         - /hyperkube

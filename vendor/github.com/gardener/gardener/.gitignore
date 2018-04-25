@@ -1,15 +1,24 @@
-args
-bin
-.vscode
-.idea
-.kube-secrets
-tmp/*
-dev/*
+/args
+/bin
+/.kube-secrets
+/tmp/*
+/dev
 
 *.coverprofile
 *.html
+.vscode
+.idea
 .DS_Store
 
-./garden-apiserver
-./garden-controller-manager
+./gardener-apiserver
+./gardener-controller-manager
 TODO
+.vagrant
+config.ign.merged
+config.img
+config.vmdk
+
+# Virtual go & fuse
+.virtualgo
+.fuse_hidden*
+

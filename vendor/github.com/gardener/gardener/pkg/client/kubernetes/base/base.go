@@ -1,4 +1,4 @@
-// Copyright 2018 The Gardener Authors.
+// Copyright (c) 2018 SAP SE or an SAP affiliate company. All rights reserved. This file is licensed under the Apache Software License, v. 2 except as noted otherwise in the LICENSE file
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -23,11 +23,26 @@ import (
 // New returns a new Kubernetes base client.
 func New(config *rest.Config, clientset *kubernetes.Clientset, clientConfig clientcmd.ClientConfig) (*Client, error) {
 	baseClient := &Client{
-		Config:          config,
-		ClientConfig:    clientConfig,
-		Clientset:       clientset,
-		GardenClientset: nil,
-		RESTClient:      clientset.Discovery().RESTClient(),
+		config:          config,
+		clientConfig:    clientConfig,
+		clientset:       clientset,
+		gardenClientset: nil,
+		restClient:      clientset.Discovery().RESTClient(),
+		resourceAPIGroups: map[string][]string{
+			CronJobs:                  []string{"apis", "batch", "v1beta1"},
+			CustomResourceDefinitions: []string{"apis", "apiextensions.k8s.io", "v1beta1"},
+			DaemonSets:                []string{"apis", "apps", "v1beta2"},
+			Deployments:               []string{"apis", "apps", "v1beta2"},
+			Ingresses:                 []string{"apis", "extensions", "v1beta1"},
+			Jobs:                      []string{"apis", "batch", "v1"},
+			Namespaces:                []string{"api", "v1"},
+			PersistentVolumeClaims:    []string{"api", "v1"},
+			Pods:                   []string{"api", "v1"},
+			ReplicaSets:            []string{"apis", "apps", "v1beta2"},
+			ReplicationControllers: []string{"api", "v1"},
+			Services:               []string{"api", "v1"},
+			StatefulSets:           []string{"apis", "apps", "v1beta2"},
+		},
 	}
 
 	gitVersion, err := baseClient.QueryVersion()

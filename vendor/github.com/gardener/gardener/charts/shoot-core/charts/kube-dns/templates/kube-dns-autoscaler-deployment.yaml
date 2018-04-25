@@ -1,5 +1,5 @@
 ---
-apiVersion: {{include "deploymentversion" .}}
+apiVersion: {{ include "deploymentversion" . }}
 kind: Deployment
 metadata:
   name: kube-dns-autoscaler
@@ -10,16 +10,22 @@ metadata:
     k8s-app: kube-dns-autoscaler
     kubernetes.io/cluster-service: "true"
 spec:
+  revisionHistoryLimit: 0
   selector:
     matchLabels:
       k8s-app: kube-dns-autoscaler
   template:
     metadata:
       labels:
+        origin: gardener
         k8s-app: kube-dns-autoscaler
       annotations:
         scheduler.alpha.kubernetes.io/critical-pod: ''
     spec:
+      tolerations:
+      # Mark the pod as a critical add-on for rescheduling.
+      - key: CriticalAddonsOnly
+        operator: Exists
       serviceAccountName: kube-dns-autoscaler
       containers:
       - name: autoscaler

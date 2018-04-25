@@ -1,4 +1,4 @@
-// Copyright 2018 The Gardener Authors.
+// Copyright (c) 2018 SAP SE or an SAP affiliate company. All rights reserved. This file is licensed under the Apache Software License, v. 2 except as noted otherwise in the LICENSE file
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -46,7 +46,7 @@ func New(o *operation.Operation, purpose string) *Terraformer {
 		ConfigName:    prefix + common.TerraformerConfigSuffix,
 		VariablesName: prefix + common.TerraformerVariablesSuffix,
 		StateName:     prefix + common.TerraformerStateSuffix,
-		PodName:       prefix + common.TerraformerPodSuffix,
+		PodName:       prefix + common.TerraformerPodSuffix + "-" + utils.ComputeSHA256Hex([]byte(time.Now().String()))[:5],
 		JobName:       prefix + common.TerraformerJobSuffix,
 	}
 }
@@ -158,11 +158,12 @@ func (t *Terraformer) execute(scriptName string) error {
 		// Create Terraform Job which executes the provided scriptName
 		err := t.deployTerraformer(values)
 		if err != nil {
-			return err
+			return fmt.Errorf("Failed to deploy the Terraformer: %s", err.Error())
 		}
 
 		// Wait for the Terraform Job to be completed
 		succeeded = t.waitForJob()
+		t.Logger.Infof("Terraform '%s' finished.", t.JobName)
 	}
 
 	// Retrieve the logs of the Pods belonging to the completed Job
@@ -172,6 +173,7 @@ func (t *Terraformer) execute(scriptName string) error {
 		jobPodList = &corev1.PodList{}
 	}
 
+	t.Logger.Infof("Fetching the logs for all pods belonging to the Terraform job '%s'...", t.JobName)
 	logList, err := t.retrievePodLogs(jobPodList)
 	if err != nil {
 		t.Logger.Errorf("Could not retrieve the logs of the pods belonging to Terraform job '%s': %s", t.JobName, err.Error())
@@ -182,14 +184,16 @@ func (t *Terraformer) execute(scriptName string) error {
 	}
 
 	// Delete the Terraform Job and all its belonging Pods
+	t.Logger.Infof("Cleaning up pods created by Terraform job '%s'...", t.JobName)
 	err = t.cleanupJob(jobPodList)
 	if err != nil {
 		return err
 	}
 
 	// Evaluate whether the execution was successful or not
+	t.Logger.Infof("Terraformer execution for job '%s' has been completed.", t.JobName)
 	if !succeeded {
-		errorMessage := "Terraform execution job could not be completed."
+		errorMessage := fmt.Sprintf("Terraform execution job '%s' could not be completed.", t.JobName)
 		terraformErrors := retrieveTerraformErrors(logList)
 		if terraformErrors != nil {
 			errorMessage += fmt.Sprintf(" The following issues have been found in the logs:\n\n%s", strings.Join(terraformErrors, "\n\n"))
@@ -213,20 +217,27 @@ func (t *Terraformer) listJobPods() (*corev1.PodList, error) {
 // retrievePodLogs fetches the logs of the created Pods by the Terraform Job and returns them as a map whose
 // keys are pod names and whose values are the corresponding logs.
 func (t *Terraformer) retrievePodLogs(jobPodList *corev1.PodList) (map[string]string, error) {
-	var logList = map[string]string{}
-	for _, jobPod := range jobPodList.Items {
-		name := jobPod.ObjectMeta.Name
-		namespace := jobPod.ObjectMeta.Namespace
-
-		logsBuffer, err := t.K8sSeedClient.GetPodLogs(namespace, name, &corev1.PodLogOptions{})
-		if err != nil {
-			t.Logger.Warnf("Could not retrieve the logs of Terraform job pod %s: '%v'", name, err)
-			continue
+	logChan := make(chan map[string]string, 1)
+	go func() {
+		var logList = map[string]string{}
+		for _, jobPod := range jobPodList.Items {
+			name := jobPod.Name
+			logsBuffer, err := t.K8sSeedClient.GetPodLogs(jobPod.Namespace, name, &corev1.PodLogOptions{})
+			if err != nil {
+				t.Logger.Warnf("Could not retrieve the logs of Terraform job pod %s: '%v'", name, err)
+				continue
+			}
+			logList[name] = logsBuffer.String()
 		}
+		logChan <- logList
+	}()
 
-		logList[name] = logsBuffer.String()
+	select {
+	case result := <-logChan:
+		return result, nil
+	case <-time.After(2 * time.Minute):
+		return nil, fmt.Errorf("Timeout when reading the logs of all pds created by Terraform job '%s'", t.JobName)
 	}
-	return logList, nil
 }
 
 // cleanupJob deletes the Terraform Job and all belonging Pods from the Garden cluster.

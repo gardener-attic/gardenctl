@@ -1,4 +1,4 @@
-// Copyright 2018 The Gardener Authors.
+// Copyright (c) 2018 SAP SE or an SAP affiliate company. All rights reserved. This file is licensed under the Apache Software License, v. 2 except as noted otherwise in the LICENSE file
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -15,29 +15,27 @@
 package awsbotanist
 
 import (
-	"fmt"
 	"path/filepath"
 
-	awssdk "github.com/aws/aws-sdk-go/aws"
 	"github.com/gardener/gardener/pkg/operation/common"
 )
 
-// ApplyCreateHook updates the AWS ELB health check to SSL and deploys the readvertiser.
+// ApplyCreateHook updates the AWS ELB health check to SSL and deploys the aws-lb-readvertiser.
 // https://github.com/gardener/aws-lb-readvertiser
 func (b *AWSBotanist) ApplyCreateHook() error {
-	imagePullSecrets := b.GetImagePullSecretsMap()
+	var (
+		name          = "aws-lb-readvertiser"
+		defaultValues = map[string]interface{}{
+			"domain": b.APIServerAddress,
+		}
+	)
 
-	defaultValues := map[string]interface{}{
-		"domain":           b.APIServerAddress,
-		"imagePullSecrets": imagePullSecrets,
-	}
-
-	values, err := b.InjectImages(defaultValues, b.K8sSeedClient.Version(), map[string]string{"readvertiser": "aws-lb-readvertiser"})
+	values, err := b.InjectImages(defaultValues, b.K8sSeedClient.Version(), map[string]string{name: name})
 	if err != nil {
 		return err
 	}
 
-	if err := b.ApplyChartSeed(filepath.Join(common.ChartPath, "seed-controlplane", "charts", "readvertiser"), "readvertiser", b.Shoot.SeedNamespace, nil, values); err != nil {
+	if err := b.ApplyChartSeed(filepath.Join(common.ChartPath, "seed-controlplane", "charts", name), name, b.Shoot.SeedNamespace, nil, values); err != nil {
 		return err
 	}
 
@@ -49,67 +47,4 @@ func (b *AWSBotanist) ApplyCreateHook() error {
 	}
 	targetPort := (*elb.LoadBalancerDescriptions[0].HealthCheck.Target)[4:]
 	return b.AWSClient.UpdateELBHealthCheck(loadBalancerName, targetPort)
-}
-
-// ApplyDeleteHook does currently nothing for AWS.
-func (b *AWSBotanist) ApplyDeleteHook() error {
-	return nil
-}
-
-// CheckIfClusterGetsScaled checks whether the Shoot cluster gets currently scaled.
-// It returns a boolean value and the number of instances which are healthy from the perspective
-// of AWS (those which have the InService state).
-func (b *AWSBotanist) CheckIfClusterGetsScaled() (bool, int, error) {
-	var (
-		currentlyScaling = false
-		healthyInstances = 0
-	)
-
-	groupList := []*string{}
-	for i := range b.Shoot.Info.Spec.Cloud.AWS.Zones {
-		for _, worker := range b.Shoot.Info.Spec.Cloud.AWS.Workers {
-			groupList = append(groupList, awssdk.String(fmt.Sprintf("%s-nodes-%s-z%d", b.Shoot.SeedNamespace, worker.Name, i)))
-		}
-	}
-	groups, err := b.AWSClient.GetAutoScalingGroups(groupList)
-	if err != nil {
-		return false, 0, err
-	}
-
-	for _, group := range groups.AutoScalingGroups {
-		desired := group.DesiredCapacity
-		instances := group.Instances
-		if *desired != int64(len(instances)) {
-			return true, 0, nil
-		}
-		for _, instance := range instances {
-			if *instance.LifecycleState != "InService" {
-				currentlyScaling = true
-			} else {
-				healthyInstances++
-			}
-		}
-	}
-	return currentlyScaling, healthyInstances, nil
-}
-
-// GetASGs returns the set of AutoScalingGroups used for a Shoot cluster.
-func (b *AWSBotanist) GetASGs() []map[string]interface{} {
-	var (
-		autoscalingGroups = []map[string]interface{}{}
-		zones             = b.Shoot.Info.Spec.Cloud.AWS.Zones
-		zoneCount         = len(zones)
-	)
-
-	for i := range zones {
-		for _, worker := range b.Shoot.Info.Spec.Cloud.AWS.Workers {
-			autoscalingGroups = append(autoscalingGroups, map[string]interface{}{
-				"name":    fmt.Sprintf("%s-nodes-%s-z%d", b.Shoot.SeedNamespace, worker.Name, i),
-				"minSize": common.DistributeOverZones(i, worker.AutoScalerMin, zoneCount),
-				"maxSize": common.DistributeOverZones(i, worker.AutoScalerMax, zoneCount),
-			})
-		}
-	}
-
-	return autoscalingGroups
 }

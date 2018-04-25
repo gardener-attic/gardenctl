@@ -1,4 +1,4 @@
-// Copyright 2018 The Gardener Authors.
+// Copyright (c) 2018 SAP SE or an SAP affiliate company. All rights reserved. This file is licensed under the Apache Software License, v. 2 except as noted otherwise in the LICENSE file
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -19,35 +19,12 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-var jobPath = []string{"apis", "batch", "v1", "jobs"}
-
 // GetJob returns a Job object.
 func (c *Client) GetJob(namespace, name string) (*batch_v1.Job, error) {
-	return c.
-		Clientset.
-		BatchV1().
-		Jobs(namespace).
-		Get(name, metav1.GetOptions{})
+	return c.clientset.BatchV1().Jobs(namespace).Get(name, metav1.GetOptions{})
 }
 
 // DeleteJob deletes a Job object.
 func (c *Client) DeleteJob(namespace, name string) error {
-	return c.
-		Clientset.
-		BatchV1().
-		Jobs(namespace).
-		Delete(name, &defaultDeleteOptions)
-}
-
-// CleanupJobs deletes all the Jobs in the cluster other than those stored in the
-// exceptions map <exceptions>.
-func (c *Client) CleanupJobs(exceptions map[string]bool) error {
-	return c.CleanupResource(exceptions, true, jobPath...)
-}
-
-// CheckJobCleanup will check whether all the Jobs in the cluster other than those
-// stored in the exceptions map <exceptions> have been deleted. It will return an error
-// in case it has not finished yet, and nil if all resources are gone.
-func (c *Client) CheckJobCleanup(exceptions map[string]bool) (bool, error) {
-	return c.CheckResourceCleanup(exceptions, true, jobPath...)
+	return c.clientset.BatchV1().Jobs(namespace).Delete(name, &defaultDeleteOptions)
 }

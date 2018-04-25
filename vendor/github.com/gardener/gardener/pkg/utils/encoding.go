@@ -1,4 +1,4 @@
-// Copyright 2018 The Gardener Authors.
+// Copyright (c) 2018 SAP SE or an SAP affiliate company. All rights reserved. This file is licensed under the Apache Software License, v. 2 except as noted otherwise in the LICENSE file
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -23,6 +23,8 @@ import (
 	"encoding/hex"
 	"encoding/pem"
 	"errors"
+	"sort"
+	"strconv"
 )
 
 // EncodeBase64 takes a byte slice and returns the Base64-encoded string.
@@ -55,11 +57,7 @@ func DecodePrivateKey(bytes []byte) (*rsa.PrivateKey, error) {
 	if block == nil || block.Type != "RSA PRIVATE KEY" {
 		return nil, errors.New("could not decode the PEM-encoded RSA private key")
 	}
-	privateKey, err := x509.ParsePKCS1PrivateKey(block.Bytes)
-	if err != nil {
-		return nil, err
-	}
-	return privateKey, nil
+	return x509.ParsePKCS1PrivateKey(block.Bytes)
 }
 
 // EncodeCertificate takes a certificate as a byte slice, encodes it to the PEM format, and returns
@@ -78,11 +76,7 @@ func DecodeCertificate(bytes []byte) (*x509.Certificate, error) {
 	if block == nil || block.Type != "CERTIFICATE" {
 		return nil, errors.New("could not decode the PEM-encoded certificate")
 	}
-	certificate, err := x509.ParseCertificate(block.Bytes)
-	if err != nil {
-		return nil, err
-	}
-	return certificate, nil
+	return x509.ParseCertificate(block.Bytes)
 }
 
 // SHA1 takes a byte slice and returns the sha1-hashed byte slice.
@@ -120,4 +114,40 @@ func ComputeSHA1Hex(in []byte) string {
 // slice <in>, converts it to a string and returns it.
 func ComputeSHA256Hex(in []byte) string {
 	return hex.EncodeToString(SHA256(in))
+}
+
+// HashForMap creates a hash value for a map of type map[string]interface{} and returns it.
+func HashForMap(m map[string]interface{}) string {
+	var (
+		hash string
+		keys []string
+	)
+
+	for k := range m {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+
+	for _, k := range keys {
+		switch v := m[k].(type) {
+		case string:
+			hash += ComputeSHA256Hex([]byte(v))
+		case int:
+			hash += ComputeSHA256Hex([]byte(strconv.Itoa(v)))
+		case bool:
+			hash += ComputeSHA256Hex([]byte(strconv.FormatBool(v)))
+		case []string:
+			for _, val := range v {
+				hash += ComputeSHA256Hex([]byte(val))
+			}
+		case map[string]interface{}:
+			hash += HashForMap(v)
+		case []map[string]interface{}:
+			for _, val := range v {
+				hash += HashForMap(val)
+			}
+		}
+	}
+
+	return ComputeSHA256Hex([]byte(hash))
 }

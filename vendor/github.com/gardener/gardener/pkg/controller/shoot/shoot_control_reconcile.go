@@ -1,4 +1,4 @@
-// Copyright 2018 The Gardener Authors.
+// Copyright (c) 2018 SAP SE or an SAP affiliate company. All rights reserved. This file is licensed under the Apache Software License, v. 2 except as noted otherwise in the LICENSE file
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -24,7 +24,7 @@ import (
 	botanistpkg "github.com/gardener/gardener/pkg/operation/botanist"
 	cloudbotanistpkg "github.com/gardener/gardener/pkg/operation/cloudbotanist"
 	"github.com/gardener/gardener/pkg/operation/common"
-	helperbotanistpkg "github.com/gardener/gardener/pkg/operation/helperbotanist"
+	hybridbotanistpkg "github.com/gardener/gardener/pkg/operation/hybridbotanist"
 	"github.com/gardener/gardener/pkg/utils"
 	"github.com/gardener/gardener/pkg/utils/flow"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -32,7 +32,7 @@ import (
 
 // reconcileShoot reconciles the Shoot cluster's state.
 // It receives a Garden object <garden> which stores the Shoot object and the operation type.
-func (c *defaultControl) reconcileShoot(o *operation.Operation, operationType gardenv1beta1.ShootLastOperationType, updater UpdaterInterface) *gardenv1beta1.LastError {
+func (c *defaultControl) reconcileShoot(o *operation.Operation, operationType gardenv1beta1.ShootLastOperationType) *gardenv1beta1.LastError {
 	// We create the botanists (which will do the actual work).
 	botanist, err := botanistpkg.New(o)
 	if err != nil {
@@ -46,69 +46,64 @@ func (c *defaultControl) reconcileShoot(o *operation.Operation, operationType ga
 	if err != nil {
 		return formatError("Failed to create a Shoot CloudBotanist", err)
 	}
-
-	helperBotanist := &helperbotanistpkg.HelperBotanist{
-		Operation:          o,
-		Botanist:           botanist,
-		SeedCloudBotanist:  seedCloudBotanist,
-		ShootCloudBotanist: shootCloudBotanist,
+	hybridBotanist, err := hybridbotanistpkg.New(o, botanist, seedCloudBotanist, shootCloudBotanist)
+	if err != nil {
+		return formatError("Failed to create a HybridBotanist", err)
 	}
 
 	var (
-		defaultRetry = 5 * time.Minute
-		addons       = o.Shoot.Info.Spec.Addons
+		defaultRetry = 30 * time.Second
 		managedDNS   = o.Shoot.Info.Spec.DNS.Provider != gardenv1beta1.DNSUnmanaged
+		isCloud      = o.Shoot.Info.Spec.Cloud.Local == nil
 
 		f                                    = flow.New("Shoot cluster creation").SetProgressReporter(o.ReportShootProgress).SetLogger(o.Logger)
 		deployNamespace                      = f.AddTask(botanist.DeployNamespace, defaultRetry)
-		ensureImagePullSecretsGarden         = f.AddTask(botanist.EnsureImagePullSecretsGarden, defaultRetry)
-		ensureImagePullSecretsSeed           = f.AddTask(botanist.EnsureImagePullSecretsSeed, defaultRetry, deployNamespace)
 		deployKubeAPIServerService           = f.AddTask(botanist.DeployKubeAPIServerService, defaultRetry, deployNamespace)
-		waitUntilKubeAPIServerServiceIsReady = f.AddTask(botanist.WaitUntilKubeAPIServerServiceIsReady, 0, deployKubeAPIServerService)
+		waitUntilKubeAPIServerServiceIsReady = f.AddTaskConditional(botanist.WaitUntilKubeAPIServerServiceIsReady, 0, isCloud, deployKubeAPIServerService)
 		deploySecrets                        = f.AddTask(botanist.DeploySecrets, 0, waitUntilKubeAPIServerServiceIsReady)
-		deployETCDOperator                   = f.AddTask(botanist.DeployETCDOperator, defaultRetry, deployNamespace, ensureImagePullSecretsSeed)
-		_                                    = f.AddTask(botanist.DeployInternalDomainDNSRecord, 0, waitUntilKubeAPIServerServiceIsReady, ensureImagePullSecretsGarden)
-		_                                    = f.AddTaskConditional(botanist.DeployExternalDomainDNSRecord, 0, managedDNS, ensureImagePullSecretsGarden)
-		deployInfrastructure                 = f.AddTask(shootCloudBotanist.DeployInfrastructure, 0, deploySecrets, ensureImagePullSecretsGarden)
-		deployBackupInfrastructure           = f.AddTask(seedCloudBotanist.DeployBackupInfrastructure, 0, ensureImagePullSecretsGarden)
-		deployETCD                           = f.AddTask(helperBotanist.DeployETCD, defaultRetry, deployETCDOperator, deployBackupInfrastructure)
-		deployCloudProviderConfig            = f.AddTask(helperBotanist.DeployCloudProviderConfig, defaultRetry, deployInfrastructure)
-		deployKubeAPIServer                  = f.AddTask(helperBotanist.DeployKubeAPIServer, defaultRetry, deploySecrets, deployETCD, waitUntilKubeAPIServerServiceIsReady, deployCloudProviderConfig)
-		_                                    = f.AddTask(helperBotanist.DeployKubeControllerManager, defaultRetry, deployCloudProviderConfig, deployKubeAPIServer)
-		_                                    = f.AddTask(helperBotanist.DeployKubeScheduler, defaultRetry, deployKubeAPIServer)
+		_                                    = f.AddTask(botanist.DeployInternalDomainDNSRecord, 0, waitUntilKubeAPIServerServiceIsReady)
+		_                                    = f.AddTaskConditional(botanist.DeployExternalDomainDNSRecord, 0, managedDNS)
+		deployInfrastructure                 = f.AddTask(shootCloudBotanist.DeployInfrastructure, 0, deploySecrets)
+		deployBackupInfrastructure           = f.AddTaskConditional(seedCloudBotanist.DeployBackupInfrastructure, 0, isCloud, deployNamespace)
+		deployETCD                           = f.AddTask(hybridBotanist.DeployETCD, defaultRetry, deployBackupInfrastructure)
+		deployCloudProviderConfig            = f.AddTask(hybridBotanist.DeployCloudProviderConfig, defaultRetry, deployInfrastructure)
+		deployKubeAPIServer                  = f.AddTask(hybridBotanist.DeployKubeAPIServer, defaultRetry, deploySecrets, deployETCD, waitUntilKubeAPIServerServiceIsReady, deployCloudProviderConfig)
+		_                                    = f.AddTask(hybridBotanist.DeployKubeControllerManager, defaultRetry, deployCloudProviderConfig, deployKubeAPIServer)
+		_                                    = f.AddTask(hybridBotanist.DeployKubeScheduler, defaultRetry, deployKubeAPIServer)
 		waitUntilKubeAPIServerIsReady        = f.AddTask(botanist.WaitUntilKubeAPIServerIsReady, 0, deployKubeAPIServer)
-		initializeShootClients               = f.AddTask(botanist.InitializeShootClients, defaultRetry, waitUntilKubeAPIServerIsReady)
-		ensureImagePullSecretsShoot          = f.AddTask(botanist.EnsureImagePullSecretsShoot, defaultRetry, initializeShootClients)
-		deployKubeAddonManager               = f.AddTask(helperBotanist.DeployKubeAddonManager, defaultRetry, ensureImagePullSecretsShoot)
-		_                                    = f.AddTask(shootCloudBotanist.DeployAutoNodeRepair, defaultRetry, waitUntilKubeAPIServerIsReady, deployInfrastructure)
-		_                                    = f.AddTaskConditional(shootCloudBotanist.DeployKube2IAMResources, defaultRetry, addons.Kube2IAM.Enabled, deployInfrastructure)
-		_                                    = f.AddTaskConditional(botanist.DeployNginxIngressResources, 10*time.Minute, addons.NginxIngress.Enabled && managedDNS, deployKubeAddonManager, ensureImagePullSecretsShoot)
-		waitUntilVPNConnectionExists         = f.AddTask(botanist.WaitUntilVPNConnectionExists, 0, deployKubeAddonManager)
+		initializeShootClients               = f.AddTask(botanist.InitializeShootClients, 2*time.Minute, waitUntilKubeAPIServerIsReady)
+		deployMachineControllerManager       = f.AddTaskConditional(botanist.DeployMachineControllerManager, defaultRetry, isCloud, initializeShootClients)
+		deployMachines                       = f.AddTaskConditional(hybridBotanist.DeployMachines, defaultRetry, isCloud, deployMachineControllerManager, deployInfrastructure, initializeShootClients)
+		deployKubeAddonManager               = f.AddTask(hybridBotanist.DeployKubeAddonManager, defaultRetry, initializeShootClients, deployInfrastructure)
+		_                                    = f.AddTask(shootCloudBotanist.DeployKube2IAMResources, defaultRetry, deployInfrastructure)
+		_                                    = f.AddTaskConditional(botanist.DeployNginxIngressResources, 10*time.Minute, managedDNS, deployKubeAddonManager)
+		waitUntilVPNConnectionExists         = f.AddTaskConditional(botanist.WaitUntilVPNConnectionExists, 0, !o.Shoot.Hibernated, deployKubeAddonManager, deployMachines)
 		applyCreateHook                      = f.AddTask(seedCloudBotanist.ApplyCreateHook, defaultRetry, waitUntilVPNConnectionExists)
-		_                                    = f.AddTask(botanist.DeploySeedMonitoring, defaultRetry, waitUntilKubeAPIServerIsReady, initializeShootClients, waitUntilVPNConnectionExists, applyCreateHook)
+		_                                    = f.AddTask(botanist.DeploySeedMonitoring, defaultRetry, waitUntilKubeAPIServerIsReady, initializeShootClients, waitUntilVPNConnectionExists, deployMachines, applyCreateHook)
 	)
 
-	e := f.Execute()
-	if e != nil {
+	if e := f.Execute(); e != nil {
 		e.Description = fmt.Sprintf("Failed to reconcile Shoot cluster state: %s", e.Description)
 		return e
 	}
 
-	// Register the Shoot as Seed cluster if it was annotated properly.
-	registerAsSeed := false
-	if val, ok := o.Shoot.Info.Annotations[common.ShootUseAsSeed]; ok {
-		useAsSeed, err := strconv.ParseBool(val)
-		if err == nil && useAsSeed {
-			registerAsSeed = true
+	// Register the Shoot as Seed cluster if it was annotated properly and in the Gardener namespace
+	if o.Shoot.Info.Namespace == common.GardenNamespace {
+		registerAsSeed := false
+		if val, ok := o.Shoot.Info.Annotations[common.ShootUseAsSeed]; ok {
+			useAsSeed, err := strconv.ParseBool(val)
+			if err == nil && useAsSeed {
+				registerAsSeed = true
+			}
 		}
-	}
-	if registerAsSeed {
-		if err := botanist.RegisterAsSeed(); err != nil {
-			o.Logger.Errorf("Could not register '%s' as Seed: '%s'", o.Shoot.Info.Name, err.Error())
-		}
-	} else {
-		if err := botanist.UnregisterAsSeed(); err != nil {
-			o.Logger.Errorf("Could not unregister '%s' as Seed: '%s'", o.Shoot.Info.Name, err.Error())
+		if registerAsSeed {
+			if err := botanist.RegisterAsSeed(); err != nil {
+				o.Logger.Errorf("Could not register '%s' as Seed: '%s'", o.Shoot.Info.Name, err.Error())
+			}
+		} else {
+			if err := botanist.UnregisterAsSeed(); err != nil {
+				o.Logger.Errorf("Could not unregister '%s' as Seed: '%s'", o.Shoot.Info.Name, err.Error())
+			}
 		}
 	}
 
@@ -125,8 +120,8 @@ func (c *defaultControl) updateShootStatusReconcileStart(o *operation.Operation,
 	if len(status.UID) == 0 {
 		o.Shoot.Info.Status.UID = o.Shoot.Info.UID
 	}
-	if status.OperationStartTime == nil {
-		o.Shoot.Info.Status.OperationStartTime = &now
+	if status.RetryCycleStartTime == nil || o.Shoot.Info.Generation != o.Shoot.Info.Status.ObservedGeneration {
+		o.Shoot.Info.Status.RetryCycleStartTime = &now
 	}
 
 	o.Shoot.Info.Status.Conditions = nil
@@ -148,6 +143,7 @@ func (c *defaultControl) updateShootStatusReconcileStart(o *operation.Operation,
 }
 
 func (c *defaultControl) updateShootStatusReconcileSuccess(o *operation.Operation, operationType gardenv1beta1.ShootLastOperationType) error {
+	o.Shoot.Info.Status.RetryCycleStartTime = nil
 	o.Shoot.Info.Status.LastError = nil
 	o.Shoot.Info.Status.LastOperation = &gardenv1beta1.LastOperation{
 		Type:           operationType,
@@ -164,23 +160,23 @@ func (c *defaultControl) updateShootStatusReconcileSuccess(o *operation.Operatio
 	return err
 }
 
-func (c *defaultControl) updateShootStatusReconcileError(o *operation.Operation, operationType gardenv1beta1.ShootLastOperationType, lastError *gardenv1beta1.LastError) error {
+func (c *defaultControl) updateShootStatusReconcileError(o *operation.Operation, operationType gardenv1beta1.ShootLastOperationType, lastError *gardenv1beta1.LastError) (gardenv1beta1.ShootLastOperationState, error) {
 	var (
 		state         = gardenv1beta1.ShootLastOperationStateFailed
 		description   = lastError.Description
 		lastOperation = o.Shoot.Info.Status.LastOperation
-		progress      int
+		progress      = 1
 	)
 
-	if !utils.TimeElapsed(o.Shoot.Info.Status.OperationStartTime, c.config.Controller.Reconciliation.RetryDuration.Duration) {
+	if !utils.TimeElapsed(o.Shoot.Info.Status.RetryCycleStartTime, c.config.Controllers.Shoot.RetryDuration.Duration) {
 		description += " Operation will be retried."
 		state = gardenv1beta1.ShootLastOperationStateError
+	} else {
+		o.Shoot.Info.Status.RetryCycleStartTime = nil
 	}
 
 	if lastOperation != nil {
 		progress = lastOperation.Progress
-	} else {
-		progress = 1
 	}
 
 	o.Shoot.Info.Status.LastError = lastError
@@ -195,9 +191,13 @@ func (c *defaultControl) updateShootStatusReconcileError(o *operation.Operation,
 
 	o.Logger.Error(description)
 
-	newShoot, err := c.updater.UpdateShootStatus(o.Shoot.Info)
-	if err == nil {
+	if newShoot, err := c.updater.UpdateShootStatus(o.Shoot.Info); err == nil {
 		o.Shoot.Info = newShoot
 	}
-	return err
+
+	newShootAfterLabel, err := c.updater.UpdateShootLabels(o.Shoot.Info, computeLabelsWithShootHealthiness(false))
+	if err == nil {
+		o.Shoot.Info = newShootAfterLabel
+	}
+	return state, err
 }

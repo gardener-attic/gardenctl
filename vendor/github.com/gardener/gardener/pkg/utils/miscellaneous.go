@@ -1,4 +1,4 @@
-// Copyright 2018 The Gardener Authors.
+// Copyright (c) 2018 SAP SE or an SAP affiliate company. All rights reserved. This file is licensed under the Apache Software License, v. 2 except as noted otherwise in the LICENSE file
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -22,7 +22,10 @@ import (
 	"time"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/rand"
 )
+
+const maintenanceTimeLayout = "150405-0700"
 
 // FuncName takes a function <f> as input and returns its name as a string. If the function is a method
 // of a struct, the struct will be also prefixed, e.g. 'Botanist.CreateNamespace'.
@@ -88,4 +91,21 @@ func FindFreePort() (int, error) {
 func TestEmail(email string) bool {
 	match, _ := regexp.MatchString(`^[^@]+@(?:[a-zA-Z-0-9]+\.)+[a-zA-Z]{2,}$`, email)
 	return match
+}
+
+// ComputeRandomTimeWindow computes a random time window and returns both in the format HHMMSS+ZONE.
+func ComputeRandomTimeWindow() (string, string) {
+	t := time.Date(1970, 1, 1, rand.IntnRange(0, 23), 0, 0, 0, time.UTC)
+	return FormatMaintenanceTime(t), FormatMaintenanceTime(t.Add(time.Hour))
+}
+
+// FormatMaintenanceTime formats a time object to the maintenance time format.
+func FormatMaintenanceTime(t time.Time) string {
+	return t.Format(maintenanceTimeLayout)
+}
+
+// ParseMaintenanceTime parses the maintenance time and returns it as Time object. In case the parse fails, an
+// error is returned.
+func ParseMaintenanceTime(value string) (time.Time, error) {
+	return time.Parse(maintenanceTimeLayout, value)
 }

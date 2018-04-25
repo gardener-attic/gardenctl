@@ -1,4 +1,4 @@
-// Copyright 2018 The Gardener Authors.
+// Copyright (c) 2018 SAP SE or an SAP affiliate company. All rights reserved. This file is licensed under the Apache Software License, v. 2 except as noted otherwise in the LICENSE file
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,9 +17,11 @@ package seed
 import (
 	"github.com/gardener/gardener/pkg/api"
 	"github.com/gardener/gardener/pkg/apis/garden"
+	gardenv1beta1 "github.com/gardener/gardener/pkg/apis/garden/v1beta1"
 	"github.com/gardener/gardener/pkg/apis/garden/validation"
 	apiequality "k8s.io/apimachinery/pkg/api/equality"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/validation/field"
 	genericapirequest "k8s.io/apiserver/pkg/endpoints/request"
 	"k8s.io/apiserver/pkg/storage/names"
@@ -39,8 +41,15 @@ func (seedStrategy) NamespaceScoped() bool {
 
 func (seedStrategy) PrepareForCreate(ctx genericapirequest.Context, obj runtime.Object) {
 	seed := obj.(*garden.Seed)
-	seed.Status = garden.SeedStatus{}
+
 	seed.Generation = 1
+	seed.Status = garden.SeedStatus{}
+
+	finalizers := sets.NewString(seed.Finalizers...)
+	if !finalizers.Has(gardenv1beta1.GardenerName) {
+		finalizers.Insert(gardenv1beta1.GardenerName)
+	}
+	seed.Finalizers = finalizers.UnsortedList()
 }
 
 func (seedStrategy) PrepareForUpdate(ctx genericapirequest.Context, obj, old runtime.Object) {

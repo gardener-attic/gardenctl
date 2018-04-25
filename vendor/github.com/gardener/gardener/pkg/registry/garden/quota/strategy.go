@@ -1,4 +1,4 @@
-// Copyright 2018 The Gardener Authors.
+// Copyright (c) 2018 SAP SE or an SAP affiliate company. All rights reserved. This file is licensed under the Apache Software License, v. 2 except as noted otherwise in the LICENSE file
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,8 +17,10 @@ package quota
 import (
 	"github.com/gardener/gardener/pkg/api"
 	"github.com/gardener/gardener/pkg/apis/garden"
+	gardenv1beta1 "github.com/gardener/gardener/pkg/apis/garden/v1beta1"
 	"github.com/gardener/gardener/pkg/apis/garden/validation"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/validation/field"
 	genericapirequest "k8s.io/apiserver/pkg/endpoints/request"
 	"k8s.io/apiserver/pkg/storage/names"
@@ -37,7 +39,13 @@ func (quotaStrategy) NamespaceScoped() bool {
 }
 
 func (quotaStrategy) PrepareForCreate(ctx genericapirequest.Context, obj runtime.Object) {
-	_ = obj.(*garden.Quota)
+	quota := obj.(*garden.Quota)
+
+	finalizers := sets.NewString(quota.Finalizers...)
+	if !finalizers.Has(gardenv1beta1.GardenerName) {
+		finalizers.Insert(gardenv1beta1.GardenerName)
+	}
+	quota.Finalizers = finalizers.UnsortedList()
 }
 
 func (quotaStrategy) Validate(ctx genericapirequest.Context, obj runtime.Object) field.ErrorList {
@@ -64,21 +72,4 @@ func (quotaStrategy) ValidateUpdate(ctx genericapirequest.Context, newObj, oldOb
 
 func (quotaStrategy) AllowUnconditionalUpdate() bool {
 	return true
-}
-
-type quotaStatusStrategy struct {
-	quotaStrategy
-}
-
-// StatusStrategy defines the storage strategy for the status subresource of Quotas.
-var StatusStrategy = quotaStatusStrategy{Strategy}
-
-func (quotaStatusStrategy) PrepareForUpdate(ctx genericapirequest.Context, obj, old runtime.Object) {
-	newQuota := obj.(*garden.Quota)
-	oldQuota := old.(*garden.Quota)
-	newQuota.Spec = oldQuota.Spec
-}
-
-func (quotaStatusStrategy) ValidateUpdate(ctx genericapirequest.Context, obj, old runtime.Object) field.ErrorList {
-	return validation.ValidateQuotaStatusUpdate(obj.(*garden.Quota), old.(*garden.Quota))
 }

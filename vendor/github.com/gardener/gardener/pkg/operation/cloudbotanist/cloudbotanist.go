@@ -1,4 +1,4 @@
-// Copyright 2018 The Gardener Authors.
+// Copyright (c) 2018 SAP SE or an SAP affiliate company. All rights reserved. This file is licensed under the Apache Software License, v. 2 except as noted otherwise in the LICENSE file
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -22,6 +22,7 @@ import (
 	"github.com/gardener/gardener/pkg/operation/cloudbotanist/awsbotanist"
 	"github.com/gardener/gardener/pkg/operation/cloudbotanist/azurebotanist"
 	"github.com/gardener/gardener/pkg/operation/cloudbotanist/gcpbotanist"
+	"github.com/gardener/gardener/pkg/operation/cloudbotanist/localbotanist"
 	"github.com/gardener/gardener/pkg/operation/cloudbotanist/openstackbotanist"
 	"github.com/gardener/gardener/pkg/operation/common"
 )
@@ -38,7 +39,7 @@ func New(o *operation.Operation, purpose string) (CloudBotanist, error) {
 	case common.CloudPurposeSeed:
 		cloudProvider = o.Seed.CloudProvider
 	default:
-		return nil, errors.New("unspported cloud botanist purpose")
+		return nil, errors.New("unsupported cloud botanist purpose")
 	}
 
 	switch cloudProvider {
@@ -50,6 +51,8 @@ func New(o *operation.Operation, purpose string) (CloudBotanist, error) {
 		return gcpbotanist.New(o, purpose)
 	case gardenv1beta1.CloudProviderOpenStack:
 		return openstackbotanist.New(o, purpose)
+	case gardenv1beta1.CloudProviderLocal:
+		return localbotanist.New(o)
 	default:
 		return nil, errors.New("unsupported cloud provider")
 	}

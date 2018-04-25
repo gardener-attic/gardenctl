@@ -164,7 +164,7 @@ func getSeedNamespaceNameForShoot(shootName string) (namespaceSeed string) {
 	gardenClientset, err := clientset.NewForConfig(k8sGardenClient.GetConfig())
 	checkError(err)
 	k8sGardenClient.SetGardenClientset(gardenClientset)
-	shootList, err := k8sGardenClient.GetGardenClientset().GardenV1beta1().Shoots("").List(metav1.ListOptions{})
+	shootList, err := k8sGardenClient.GardenClientset().GardenV1beta1().Shoots("").List(metav1.ListOptions{})
 	var ind int
 	for index, shoot := range shootList.Items {
 		if shoot.Name == shootName && (shoot.Namespace == target.Target[1].Name || *shoot.Spec.Cloud.Seed == target.Target[1].Name) {
@@ -191,7 +191,7 @@ func getProjectForShoot() (projectName string) {
 		gardenClientset, err := clientset.NewForConfig(k8sGardenClient.GetConfig())
 		checkError(err)
 		k8sGardenClient.SetGardenClientset(gardenClientset)
-		shootList, err := k8sGardenClient.GetGardenClientset().GardenV1beta1().Shoots("").List(metav1.ListOptions{})
+		shootList, err := k8sGardenClient.GardenClientset().GardenV1beta1().Shoots("").List(metav1.ListOptions{})
 		for _, shoot := range shootList.Items {
 			if shoot.Name == target.Target[2].Name && *shoot.Spec.Cloud.Seed == target.Target[1].Name {
 				projectName = shoot.Namespace

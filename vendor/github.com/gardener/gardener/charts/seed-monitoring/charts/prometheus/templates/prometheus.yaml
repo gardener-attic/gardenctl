@@ -22,9 +22,9 @@ metadata:
 spec:
   ports:
   - name: web
-    port: 8080
+    port: 80
     protocol: TCP
-    targetPort: web
+    targetPort: {{ .Values.prometheusPort }}
   selector:
     app: prometheus
     role: monitoring
@@ -42,7 +42,7 @@ metadata:
 spec:
   updateStrategy:
     type: RollingUpdate
-  replicas: {{.Values.replicaCount}}
+  replicas: {{ .Values.replicas }}
   selector:
     matchLabels:
       app: prometheus
@@ -60,10 +60,6 @@ spec:
     spec:
       # used to talk to Seed's API server.
       serviceAccountName: prometheus
-{{- if .Values.imagePullSecrets }}
-      imagePullSecrets:
-{{ toYaml .Values.imagePullSecrets | indent 6 }}
-{{- end }}
       containers:
       - name: prometheus
         image: {{ index .Values.images "prometheus" }}
@@ -75,35 +71,33 @@ spec:
         - --storage.tsdb.retention=180h
         - --web.route-prefix=/
         - --web.enable-lifecycle
-        - --web.external-url=https://{{.Values.ingress.host}}
+        - --web.listen-address=0.0.0.0:{{ .Values.prometheusPort }}
+        - --web.external-url=https://{{ .Values.ingress.host }}
         # Since v2.0.0-beta.3 prometheus runs as nobody user (fsGroup 65534/runAsUser 0)
         # data volume needs to be mounted with the same permissions,
         # otherwise we will have Permission denied problems
         securityContext:
           runAsUser: 0
-        livenessProbe:
-          failureThreshold: 10
-          httpGet:
-            path: /status
-            port: web
-            scheme: HTTP
-          initialDelaySeconds: 300
-          periodSeconds: 5
-          successThreshold: 1
-          timeoutSeconds: 3
-        ports:
-        - containerPort: 9090
-          name: web
-          protocol: TCP
-        readinessProbe:
-          failureThreshold: 6
-          httpGet:
-            path: /status
-            port: web
-            scheme: HTTP
-          periodSeconds: 5
-          successThreshold: 1
-          timeoutSeconds: 3
+        # TODO: enable those checks when v2.2.2 is released
+        # livenessProbe:
+        #   failureThreshold: 10
+        #   httpGet:
+        #     path: /-/healthy
+        #     port: {{ .Values.prometheusPort }}
+        #     scheme: HTTP
+        #   initialDelaySeconds: 300
+        #   periodSeconds: 5
+        #   successThreshold: 1
+        #   timeoutSeconds: 3
+        # readinessProbe:
+        #   failureThreshold: 6
+        #   httpGet:
+        #     path: /-/ready
+        #     port: {{ .Values.prometheusPort }}
+        #     scheme: HTTP
+        #   periodSeconds: 5
+        #   successThreshold: 1
+        #   timeoutSeconds: 3
         resources:
           limits:
             memory: 2400Mi
@@ -139,6 +133,20 @@ spec:
           readOnly: true
         - mountPath: /etc/prometheus/rules
           name: rules
+      - name: blackbox-exporter-config-reloader
+        image: {{ index .Values.images "configmap-reloader" }}
+        imagePullPolicy: IfNotPresent
+        args:
+        - -webhook-url=http://localhost:9115/-/reload
+        - -volume-dir=/vpn
+        resources:
+          limits:
+            cpu: 5m
+            memory: 10Mi
+        volumeMounts:
+        - mountPath: /vpn
+          name: blackbox-exporter-config
+          readOnly: true
       - name: vpn-seed
         image: {{ index .Values.images "vpn-seed" }}
         imagePullPolicy: IfNotPresent
@@ -163,6 +171,18 @@ spec:
           name: vpn-ssh-keypair
         - mountPath: /srv/auth
           name: kube-apiserver-basic-auth
+      - name: blackbox-exporter
+        image: {{ index .Values.images "blackbox-exporter" }}
+        args:
+        - --config.file=/vpn/blackbox.yaml
+        ports:
+        # port name must be max 15 characters long
+        - name: blackbox-export
+          containerPort: 9115
+          protocol: TCP
+        volumeMounts:
+        - name: blackbox-exporter-config
+          mountPath: /vpn
       terminationGracePeriodSeconds: 300
       volumes:
       - name: config
@@ -187,6 +207,9 @@ spec:
       - name: prometheus-kubeconfig
         secret:
           secretName: prometheus
+      - name: blackbox-exporter-config
+        configMap:
+          name: blackbox-exporter-config
   volumeClaimTemplates:
   - metadata:
       name: prometheus-db

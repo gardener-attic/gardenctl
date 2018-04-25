@@ -1,4 +1,4 @@
-// Copyright 2018 The Gardener Authors.
+// Copyright (c) 2018 SAP SE or an SAP affiliate company. All rights reserved. This file is licensed under the Apache Software License, v. 2 except as noted otherwise in the LICENSE file
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -27,8 +27,11 @@ func ApplyEnvironmentToConfig(config *ControllerManagerConfiguration) {
 	if kubeconfig := os.Getenv("KUBECONFIG"); kubeconfig != "" {
 		config.ClientConnection.KubeConfigFile = kubeconfig
 	}
+	if kubeconfig := os.Getenv("GARDENER_KUBECONFIG"); kubeconfig != "" {
+		config.GardenerClientConnection.KubeConfigFile = kubeconfig
+	}
 	if watchNamespace := os.Getenv("WATCH_NAMESPACE"); watchNamespace != "" {
-		config.Controller.WatchNamespace = &watchNamespace
+		config.Controllers.Shoot.WatchNamespace = &watchNamespace
 		config.LeaderElection.LockObjectNamespace = watchNamespace
 	}
 }

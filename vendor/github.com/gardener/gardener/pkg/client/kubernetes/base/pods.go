@@ -1,4 +1,4 @@
-// Copyright 2018 The Gardener Authors.
+// Copyright (c) 2018 SAP SE or an SAP affiliate company. All rights reserved. This file is licensed under the Apache Software License, v. 2 except as noted otherwise in the LICENSE file
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -31,24 +31,14 @@ import (
 	"k8s.io/client-go/transport/spdy"
 )
 
-var podPath = []string{"api", "v1", "pods"}
-
 // GetPod will return the Pod object for the given <name> in the given <namespace>.
 func (c *Client) GetPod(namespace, name string) (*corev1.Pod, error) {
-	return c.
-		Clientset.
-		CoreV1().
-		Pods(namespace).
-		Get(name, metav1.GetOptions{})
+	return c.clientset.CoreV1().Pods(namespace).Get(name, metav1.GetOptions{})
 }
 
 // ListPods will list all the Pods in the given <namespace> for the given <listOptions>.
 func (c *Client) ListPods(namespace string, listOptions metav1.ListOptions) (*corev1.PodList, error) {
-	pods, err := c.
-		Clientset.
-		CoreV1().
-		Pods(namespace).
-		List(listOptions)
+	pods, err := c.clientset.CoreV1().Pods(namespace).List(listOptions)
 	if err != nil {
 		return nil, err
 	}
@@ -61,11 +51,7 @@ func (c *Client) ListPods(namespace string, listOptions metav1.ListOptions) (*co
 // GetPodLogs will get the logs of all containers within the Pod for the given <name> in the given <namespace>
 // for the given <podLogOptions>.
 func (c *Client) GetPodLogs(namespace, name string, podLogOptions *corev1.PodLogOptions) (*bytes.Buffer, error) {
-	request := c.
-		Clientset.
-		CoreV1().
-		Pods(namespace).
-		GetLogs(name, podLogOptions)
+	request := c.clientset.CoreV1().Pods(namespace).GetLogs(name, podLogOptions)
 
 	stream, err := request.Stream()
 	if err != nil {
@@ -119,24 +105,7 @@ func (c *Client) CheckForwardPodPort(namespace, name string, local, remote int) 
 
 // DeletePod will delete a Pod with the given <name> in the given <namespace>.
 func (c *Client) DeletePod(namespace, name string) error {
-	return c.
-		Clientset.
-		CoreV1().
-		Pods(namespace).
-		Delete(name, &defaultDeleteOptions)
-}
-
-// CleanupPods deletes all the Pods in the cluster other than those stored in the
-// exceptions map <exceptions>.
-func (c *Client) CleanupPods(exceptions map[string]bool) error {
-	return c.CleanupResource(exceptions, true, podPath...)
-}
-
-// CheckPodCleanup will check whether all the Pods in the cluster other than those
-// stored in the exceptions map <exceptions> have been deleted. It will return an error
-// in case it has not finished yet, and nil if all resources are gone.
-func (c *Client) CheckPodCleanup(exceptions map[string]bool) (bool, error) {
-	return c.CheckResourceCleanup(exceptions, true, podPath...)
+	return c.clientset.CoreV1().Pods(namespace).Delete(name, &defaultDeleteOptions)
 }
 
 func (c *Client) setupForwardPodPort(namespace, name string, local, remote int) (*portforward.PortForwarder, chan struct{}, error) {
@@ -147,18 +116,9 @@ func (c *Client) setupForwardPodPort(namespace, name string, local, remote int) 
 		localPort int
 	)
 
-	u := c.
-		Clientset.
-		Core().
-		RESTClient().
-		Post().
-		Resource("pods").
-		Namespace(namespace).
-		Name(name).
-		SubResource("portforward").
-		URL()
+	u := c.clientset.Core().RESTClient().Post().Resource("pods").Namespace(namespace).Name(name).SubResource("portforward").URL()
 
-	transport, upgrader, err := spdy.RoundTripperFor(c.Config)
+	transport, upgrader, err := spdy.RoundTripperFor(c.config)
 	if err != nil {
 		return nil, nil, err
 	}

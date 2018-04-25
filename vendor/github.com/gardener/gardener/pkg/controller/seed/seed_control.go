@@ -1,4 +1,4 @@
-// Copyright 2018 The Gardener Authors.
+// Copyright (c) 2018 SAP SE or an SAP affiliate company. All rights reserved. This file is licensed under the Apache Software License, v. 2 except as noted otherwise in the LICENSE file
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -16,19 +16,24 @@ package seed
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"time"
 
 	gardenv1beta1 "github.com/gardener/gardener/pkg/apis/garden/v1beta1"
 	"github.com/gardener/gardener/pkg/apis/garden/v1beta1/helper"
 	gardeninformers "github.com/gardener/gardener/pkg/client/garden/informers/externalversions"
+	gardenlisters "github.com/gardener/gardener/pkg/client/garden/listers/garden/v1beta1"
 	"github.com/gardener/gardener/pkg/client/kubernetes"
+	controllerutils "github.com/gardener/gardener/pkg/controller/utils"
 	"github.com/gardener/gardener/pkg/logger"
 	seedpkg "github.com/gardener/gardener/pkg/operation/seed"
 	"github.com/gardener/gardener/pkg/utils/imagevector"
 	corev1 "k8s.io/api/core/v1"
 	apiequality "k8s.io/apimachinery/pkg/api/equality"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/util/sets"
+	kubecorev1listers "k8s.io/client-go/listers/core/v1"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/tools/record"
 )
@@ -85,7 +90,7 @@ func (c *Controller) reconcileSeedKey(key string) error {
 	if err != nil {
 		c.seedQueue.AddAfter(key, 15*time.Second)
 	}
-	return nil
+	return err
 }
 
 // ControlInterface implements the control logic for updating Seeds. It is implemented as an interface to allow
@@ -102,8 +107,8 @@ type ControlInterface interface {
 // implements the documented semantics for Seeds. updater is the UpdaterInterface used
 // to update the status of Seeds. You should use an instance returned from NewDefaultControl() for any
 // scenario other than testing.
-func NewDefaultControl(k8sGardenClient kubernetes.Client, k8sGardenInformers gardeninformers.SharedInformerFactory, secrets map[string]*corev1.Secret, imageVector imagevector.ImageVector, recorder record.EventRecorder, updater UpdaterInterface) ControlInterface {
-	return &defaultControl{k8sGardenClient, k8sGardenInformers, secrets, imageVector, recorder, updater}
+func NewDefaultControl(k8sGardenClient kubernetes.Client, k8sGardenInformers gardeninformers.SharedInformerFactory, secrets map[string]*corev1.Secret, imageVector imagevector.ImageVector, recorder record.EventRecorder, updater UpdaterInterface, secretLister kubecorev1listers.SecretLister, shootLister gardenlisters.ShootLister) ControlInterface {
+	return &defaultControl{k8sGardenClient, k8sGardenInformers, secrets, imageVector, recorder, updater, secretLister, shootLister}
 }
 
 type defaultControl struct {
@@ -113,6 +118,8 @@ type defaultControl struct {
 	imageVector        imagevector.ImageVector
 	recorder           record.EventRecorder
 	updater            UpdaterInterface
+	secretLister       kubecorev1listers.SecretLister
+	shootLister        gardenlisters.ShootLister
 }
 
 func (c *defaultControl) ReconcileSeed(obj *gardenv1beta1.Seed, key string) error {
@@ -120,14 +127,78 @@ func (c *defaultControl) ReconcileSeed(obj *gardenv1beta1.Seed, key string) erro
 	if err != nil {
 		return err
 	}
+
 	var (
 		seed        = obj.DeepCopy()
 		seedJSON, _ = json.Marshal(seed)
-		seedLogger  = logger.NewSeedLogger(logger.Logger, seed.Name)
+		seedLogger  = logger.NewFieldLogger(logger.Logger, "seed", seed.Name)
 	)
+
+	// The deletionTimestamp labels a Seed as intended to get deleted. Before deletion,
+	// it has to be ensured that no Shoots are depending on the Seed anymore.
+	// When this happens the controller will remove the finalizers from the Seed so that it can be garbage collected.
+	if seed.DeletionTimestamp != nil {
+		if !sets.NewString(seed.Finalizers...).Has(gardenv1beta1.GardenerName) {
+			return nil
+		}
+
+		associatedShoots, err := controllerutils.DetermineShootAssociations(seed, c.shootLister)
+		if err != nil {
+			seedLogger.Error(err.Error())
+			return err
+		}
+
+		if len(associatedShoots) == 0 {
+			seedLogger.Info("No Shoots are referencing the Seed. Deletion accepted.")
+
+			// Remove finalizer from referenced secret
+			secret, err := c.secretLister.Secrets(seed.Spec.SecretRef.Namespace).Get(seed.Spec.SecretRef.Name)
+			if err == nil {
+				secretFinalizers := sets.NewString(secret.Finalizers...)
+				secretFinalizers.Delete(gardenv1beta1.ExternalGardenerName)
+				secret.Finalizers = secretFinalizers.UnsortedList()
+				if _, err := c.k8sGardenClient.UpdateSecretObject(secret); err != nil && !apierrors.IsNotFound(err) {
+					seedLogger.Error(err.Error())
+					return err
+				}
+			} else if !apierrors.IsNotFound(err) {
+				seedLogger.Error(err.Error())
+				return err
+			}
+
+			// Remove finalizer from Seed
+			seedFinalizers := sets.NewString(seed.Finalizers...)
+			seedFinalizers.Delete(gardenv1beta1.GardenerName)
+			seed.Finalizers = seedFinalizers.UnsortedList()
+			if _, err := c.k8sGardenClient.GardenClientset().GardenV1beta1().Seeds().Update(seed); err != nil {
+				seedLogger.Error(err.Error())
+				return err
+			}
+			return nil
+		}
+		seedLogger.Infof("Can't delete Seed, because the following Shoots are still referencing it: %v", associatedShoots)
+		return errors.New("Seed still has references")
+	}
 
 	seedLogger.Infof("[SEED RECONCILE] %s", key)
 	seedLogger.Debugf(string(seedJSON))
+
+	// Add the Gardener finalizer to the referenced Seed secret to protect it from deletion as long as the Seed resource
+	// does exist.
+	secret, err := c.secretLister.Secrets(seed.Spec.SecretRef.Namespace).Get(seed.Spec.SecretRef.Name)
+	if err != nil {
+		seedLogger.Error(err.Error())
+		return err
+	}
+	secretFinalizers := sets.NewString(secret.Finalizers...)
+	if !secretFinalizers.Has(gardenv1beta1.ExternalGardenerName) {
+		secretFinalizers.Insert(gardenv1beta1.ExternalGardenerName)
+	}
+	secret.Finalizers = secretFinalizers.UnsortedList()
+	if _, err := c.k8sGardenClient.UpdateSecretObject(secret); err != nil {
+		seedLogger.Error(err.Error())
+		return err
+	}
 
 	// Initialize conditions based on the current status.
 	newConditions := helper.NewConditions(seed.Status.Conditions, gardenv1beta1.SeedAvailable)
@@ -139,7 +210,7 @@ func (c *defaultControl) ReconcileSeed(obj *gardenv1beta1.Seed, key string) erro
 		conditionSeedAvailable = helper.ModifyCondition(conditionSeedAvailable, corev1.ConditionUnknown, gardenv1beta1.ConditionCheckError, message)
 		seedLogger.Error(message)
 		c.updateSeedStatus(seed, *conditionSeedAvailable)
-		return nil
+		return err
 	}
 
 	// Bootstrap the Seed cluster.
@@ -147,7 +218,7 @@ func (c *defaultControl) ReconcileSeed(obj *gardenv1beta1.Seed, key string) erro
 		conditionSeedAvailable = helper.ModifyCondition(conditionSeedAvailable, corev1.ConditionFalse, "BootstrappingFailed", err.Error())
 		c.updateSeedStatus(seed, *conditionSeedAvailable)
 		seedLogger.Error(err.Error())
-		return nil
+		return err
 	}
 
 	// Check whether the Kubernetes version of the Seed cluster fulfills the minimal requirements.
@@ -155,7 +226,7 @@ func (c *defaultControl) ReconcileSeed(obj *gardenv1beta1.Seed, key string) erro
 		conditionSeedAvailable = helper.ModifyCondition(conditionSeedAvailable, corev1.ConditionFalse, "K8SVersionTooOld", err.Error())
 		c.updateSeedStatus(seed, *conditionSeedAvailable)
 		seedLogger.Error(err.Error())
-		return nil
+		return err
 	}
 	conditionSeedAvailable = helper.ModifyCondition(conditionSeedAvailable, corev1.ConditionTrue, "Passed", "all checks passed")
 	c.updateSeedStatus(seed, *conditionSeedAvailable)

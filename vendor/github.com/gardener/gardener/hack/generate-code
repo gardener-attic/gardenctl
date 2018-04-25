@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# Copyright 2018 The Gardener Authors.
+# Copyright (c) 2018 SAP SE or an SAP affiliate company. All rights reserved. This file is licensed under the Apache Software License, v. 2 except as noted otherwise in the LICENSE file
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -16,7 +16,7 @@
 
 function headers() {
   echo '''/*
-Copyright YEAR The Gardener Authors.
+Copyright YEAR (c) 2018 SAP SE or an SAP affiliate company. All rights reserved. This file is licensed under the Apache Software License, v. 2 except as noted otherwise in the LICENSE file
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -59,3 +59,23 @@ $(dirname $0)/../vendor/k8s.io/code-generator/generate-internal-groups.sh \
   "componentconfig:v1alpha1" \
   --extra-peer-dirs=github.com/gardener/gardener/pkg/apis/componentconfig,github.com/gardener/gardener/pkg/apis/componentconfig/v1alpha1,k8s.io/apimachinery/pkg/apis/meta/v1,k8s.io/apimachinery/pkg/conversion,k8s.io/apimachinery/pkg/runtime \
   -h <(headers)
+
+rm -Rf ./$(dirname "${0}")/../openapi/openapi_generated.go
+go install ./$(dirname "${0}")/../vendor/k8s.io/code-generator/cmd/openapi-gen
+
+echo "Generating openapi definitions"
+${GOPATH}/bin/openapi-gen "$@" \
+  --v 1 \
+  --logtostderr \
+  --input-dirs=github.com/gardener/gardener/pkg/apis/garden/v1beta1 \
+  --input-dirs=k8s.io/api/core/v1 \
+  --input-dirs=k8s.io/apimachinery/pkg/apis/meta/v1 \
+  --input-dirs=k8s.io/apimachinery/pkg/api/resource \
+  --input-dirs=k8s.io/apimachinery/pkg/types \
+  --input-dirs=k8s.io/apimachinery/pkg/version \
+  --input-dirs=k8s.io/apimachinery/pkg/runtime \
+  --output-package=github.com/gardener/gardener/pkg/openapi \
+  -h <(headers)
+
+echo
+echo "NOTE: If you changed the API then consider updating the example manifests by modifying '$(dirname $0)/templates/resources/*.yaml.tpl' and running '$(dirname $0)/generate-examples'".
