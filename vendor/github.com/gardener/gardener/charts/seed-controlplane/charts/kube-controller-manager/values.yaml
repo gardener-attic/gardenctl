@@ -1,0 +1,14 @@
+cloudProvider: aws
+kubernetesVersion: 1.7.5
+serviceNetwork: 10.0.0.0/24
+configureRoutes: false
+podNetwork: 192.168.0.0/16
+clusterName: shoot-foo-bar
+environment: []
+additionalParameters: []
+podAnnotations: {}
+featureGates: {}
+  # CustomResourceValidation: true
+  # RotateKubeletServerCertificate: false
+images:
+  hyperkube: image-repository

@@ -31,12 +31,12 @@ import (
 
 // showCmd represents the show command
 var showCmd = &cobra.Command{
-	Use:   "show (operator|ui|api|scheduler|controller-manager|etcd-operator|etcd-main|etcd-events|addon-manager|vpn-seed|vpn-shoot|auto-node-repair|dashboard|prometheus|grafana|alertmanager|tf (infra|dns|ingress))",
+	Use:   "show (operator|ui|api|scheduler|controller-manager|etcd-operator|etcd-main|etcd-events|addon-manager|vpn-seed|vpn-shoot|machine-controller-manager|dashboard|prometheus|grafana|alertmanager|tf (infra|dns|ingress))",
 	Short: `Show details about endpoint/service and open in default browser if applicable`,
 	Long:  ``,
 	Run: func(cmd *cobra.Command, args []string) {
 		if len(args) < 1 || len(args) > 2 {
-			fmt.Println("Command must be in the format: show (operator|ui|api|scheduler|controller-manager|etcd-operator|etcd-main|etcd-events|addon-manager|vpn-seed|vpn-shoot|auto-node-repair|dashboard|prometheus|grafana|alertmanager|tf (infra|dns|ingress)")
+			fmt.Println("Command must be in the format: show (operator|ui|api|scheduler|controller-manager|etcd-operator|etcd-main|etcd-events|addon-manager|vpn-seed|vpn-shoot|machine-controller-manager|dashboard|prometheus|grafana|alertmanager|tf (infra|dns|ingress)")
 			os.Exit(2)
 		}
 		var t Target
@@ -44,8 +44,11 @@ var showCmd = &cobra.Command{
 		checkError(err)
 		err = yaml.Unmarshal(targetFile, &t)
 		checkError(err)
-		if len(t.Target) < 3 && (args[0] != "operator") && (args[0] != "tf") && (args[0] != "dashboard") {
+		if len(t.Target) < 3 && (args[0] != "operator") && (args[0] != "tf") && (args[0] != "dashboard") && (args[0] != "etcd-operator") {
 			fmt.Println("No shoot targeted")
+			os.Exit(2)
+		} else if len(t.Target) < 3 && (args[0] == "tf") && (t.Target[1].Kind != "seed") {
+			fmt.Println("No seed or shoot targeted")
 			os.Exit(2)
 		} else if len(t.Target) == 0 {
 			fmt.Println("Target stack is empty")
@@ -74,8 +77,8 @@ var showCmd = &cobra.Command{
 			showVpnSeed()
 		case "vpn-shoot":
 			showVpnShoot()
-		case "auto-node-repair":
-			showAutoNodeRepair()
+		case "machine-controller-manager":
+			showMachineControllerManager()
 		case "dashboard":
 			showDashboard()
 		case "prometheus":
@@ -97,50 +100,52 @@ var showCmd = &cobra.Command{
 			case "ingress":
 				showIngress()
 			default:
-				fmt.Println("Command must be in the format: show (operator|ui|api|scheduler|controller-manager|etcd-operator|etcd-main|etcd-events|addon-manager|vpn-seed|vpn-shoot|auto-node-repair|dashboard|prometheus|grafana|alertmanager|tf (infra|dns|ingress)")
+				fmt.Println("Command must be in the format: show (operator|ui|api|scheduler|controller-manager|etcd-operator|etcd-main|etcd-events|addon-manager|vpn-seed|vpn-shoot|machine-controller-manager|dashboard|prometheus|grafana|alertmanager|tf (infra|dns|ingress)")
 			}
 		default:
-			fmt.Println("Command must be in the format: show (operator|ui|api|scheduler|controller-manager|etcd-operator|etcd-main|etcd-events|addon-manager|vpn-seed|vpn-shoot|auto-node-repair|dashboard|prometheus|grafana|alertmanager|tf (infra|dns|ingress)")
+			fmt.Println("Command must be in the format: show (operator|ui|api|scheduler|controller-manager|etcd-operator|etcd-main|etcd-events|addon-manager|vpn-seed|vpn-shoot|machine-controller-manager|dashboard|prometheus|grafana|alertmanager|tf (infra|dns|ingress)")
 		}
 	},
-	ValidArgs: []string{"operator", "ui", "api", "scheduler", "controller-manager", "etcd-operator", "etcd-main", "etcd-events", "addon-manager", "vpn-seed", "vpn-shoot", "auto-node-repair", "dashboard", "prometheus", "grafana", "alertmanager", "tf"},
+	ValidArgs: []string{"operator", "ui", "api", "scheduler", "controller-manager", "etcd-operator", "etcd-main", "etcd-events", "addon-manager", "vpn-seed", "vpn-shoot", "machine-controller-manager", "dashboard", "prometheus", "grafana", "alertmanager", "tf"},
 }
 
 func init() {
 }
 
 // showPodGarden
-func showPodGarden(podName string) {
+func showPodGarden(podName string, namespace string) {
 	Client, err = clientToTarget("garden")
 	checkError(err)
-	pods, err := Client.CoreV1().Pods("garden").List(metav1.ListOptions{})
+	pods, err := Client.CoreV1().Pods(namespace).List(metav1.ListOptions{})
 	checkError(err)
 	for _, pod := range pods.Items {
 		if strings.Contains(pod.Name, podName) {
-			execCmd("kubectl get pods "+pod.Name+" -o wide -n garden", false, "KUBECONFIG="+KUBECONFIG)
+			execCmd("kubectl get pods "+pod.Name+" -o wide -n "+namespace, false, "KUBECONFIG="+KUBECONFIG)
 		}
 	}
 }
 
 // showOperator shows the garden operator pod in the garden cluster
 func showOperator() {
-	showPodGarden("operator")
+	showPodGarden("gardener-apiserver", "garden")
+	showPodGarden("gardener-controller-manager", "garden")
 }
 
 // showUI opens the gardener landing page
 func showUI() {
-	showPodGarden("gardener")
-	output := execCmdReturnOutput("kubectl get ingress gardener-ingress -n garden", "KUBECONFIG="+KUBECONFIG)
+	showPodGarden("gardener-dashboard", "garden")
+	output := execCmdReturnOutput("kubectl get ingress gardener-dashboard-ingress -n garden", "KUBECONFIG="+KUBECONFIG)
 	list := strings.Split(output, " ")
 	url := "-"
 	for _, val := range list {
-		if strings.HasPrefix(val, "gardener.") {
+		if strings.HasPrefix(val, "dashboard.") {
 			url = val
 		}
 	}
 	urls := strings.Split(url, ",")
 	var filteredUrls []string
 	match := false
+	opened := false
 	for index, url := range urls {
 		for _, u := range filteredUrls {
 			if url == u {
@@ -150,7 +155,10 @@ func showUI() {
 		if !match {
 			filteredUrls = append(filteredUrls, url)
 			fmt.Println("URL-" + strconv.Itoa(index+1) + ": " + "https://" + url)
-			execCmd(("open " + "https://" + url), false)
+			if !opened {
+				execCmd(("open " + "https://" + url), false)
+				opened = true
+			}
 		}
 	}
 }
@@ -175,7 +183,6 @@ func showPod(toMatch string, toTarget string) {
 	for _, pod := range pods.Items {
 		if strings.Contains(pod.Name, toMatch) {
 			execCmd("kubectl get pods "+pod.Name+" -o wide -n "+namespace, false, "KUBECONFIG="+KUBECONFIG)
-			//break
 		}
 	}
 }
@@ -195,9 +202,9 @@ func showControllerManager() {
 	showPod("kube-controller-manager", "seed")
 }
 
-// showEtcdOperator shows the pod for the running etcd-operator in the targeted seed cluster
+// showEtcdOperator shows the pod for the running etcd-operator in the targeted garden cluster
 func showEtcdOperator() {
-	showPod("etcd-operator", "seed")
+	showPodGarden("etcd-operator", "kube-system")
 }
 
 // showEtcdMain shows the pod for the running etcd-main in the targeted seed cluster
@@ -260,9 +267,9 @@ func showAltermanager() {
 	execCmd(("open " + url), false)
 }
 
-// showAutoNodeRepair shows the prometheus pods in the targeted seed cluster
-func showAutoNodeRepair() {
-	showPod("auto-node-repair", "seed")
+// showMachineControllerManager shows the prometheus pods in the targeted seed cluster
+func showMachineControllerManager() {
+	showPod("machine-controller-manager", "seed")
 }
 
 // showDashboard shows the dashboard for the targetd cluster
@@ -330,7 +337,7 @@ func showGrafana() {
 
 // showTerraform pods for specified name
 func showTerraform(name string) {
-	Client, err = clientToTarget("garden")
+	Client, err = clientToTarget("seed")
 	checkError(err)
 	pods, err := Client.CoreV1().Pods("").List(metav1.ListOptions{})
 	checkError(err)
