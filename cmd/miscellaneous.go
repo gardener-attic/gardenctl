@@ -23,13 +23,13 @@ import (
 	"path/filepath"
 	"strings"
 
-	clientset "github.com/gardener/gardenctl/pkg/client/garden/clientset/versioned"
+	clientset "github.com/gardener/gardener/pkg/client/garden/clientset/versioned"
 
 	yaml "gopkg.in/yaml.v2"
 
-	sapcloud "github.com/gardener/gardenctl/pkg/client/kubernetes"
+	"github.com/gardener/gardener/pkg/client/kubernetes"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/client-go/kubernetes"
+	k8s "k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/clientcmd"
 )
 
@@ -64,7 +64,7 @@ func getGardenClusterKubeConfigFromConfig() {
 }
 
 // clientToTarget returns the client to target e.g. garden, seed
-func clientToTarget(target string) (*kubernetes.Clientset, error) {
+func clientToTarget(target string) (*k8s.Clientset, error) {
 	switch target {
 	case "garden":
 		KUBECONFIG = getKubeConfigOfClusterType("garden")
@@ -98,7 +98,7 @@ func clientToTarget(target string) (*kubernetes.Clientset, error) {
 	config, err := clientcmd.BuildConfigFromFlags("", *kubeconfig)
 	checkError(err)
 	// create the clientset
-	clientset, err := kubernetes.NewForConfig(config)
+	clientset, err := k8s.NewForConfig(config)
 	checkError(err)
 	return clientset, err
 }
@@ -153,17 +153,51 @@ func getCredentials() (username, password string) {
 
 // getSeedNamespaceNameForShoot returns namespace name
 func getSeedNamespaceNameForShoot(shootName string) (namespaceSeed string) {
+	var target Target
+	targetFile, err := ioutil.ReadFile(pathTarget)
+	checkError(err)
+	err = yaml.Unmarshal(targetFile, &target)
 	Client, err = clientToTarget("garden")
-	k8sGardenClient, err := sapcloud.NewClientFromFile(*kubeconfig)
+	checkError(err)
+	k8sGardenClient, err := kubernetes.NewClientFromFile(*kubeconfig)
 	checkError(err)
 	gardenClientset, err := clientset.NewForConfig(k8sGardenClient.GetConfig())
 	checkError(err)
 	k8sGardenClient.SetGardenClientset(gardenClientset)
-	shootList, err := k8sGardenClient.GetGardenClientset().GardenV1().Shoots("").List(metav1.ListOptions{})
-	for _, shoot := range shootList.Items {
-		if shoot.Name == shootName {
-			namespaceSeed = "shoot-" + shoot.Namespace + "-" + shoot.Name
+	shootList, err := k8sGardenClient.GetGardenClientset().GardenV1beta1().Shoots("").List(metav1.ListOptions{})
+	var ind int
+	for index, shoot := range shootList.Items {
+		if shoot.Name == shootName && (shoot.Namespace == target.Target[1].Name || *shoot.Spec.Cloud.Seed == target.Target[1].Name) {
+			ind = index
+			break
 		}
 	}
-	return namespaceSeed
+	return strings.Replace("shoot-"+shootList.Items[ind].Namespace+"-"+shootName, "-garden", "", 1)
+}
+
+// returns projectName for Shoot
+func getProjectForShoot() (projectName string) {
+	var target Target
+	targetFile, err := ioutil.ReadFile(pathTarget)
+	checkError(err)
+	err = yaml.Unmarshal(targetFile, &target)
+	if target.Target[1].Kind == "project" {
+		projectName = target.Target[1].Name
+	} else {
+		Client, err = clientToTarget("garden")
+		checkError(err)
+		k8sGardenClient, err := kubernetes.NewClientFromFile(*kubeconfig)
+		checkError(err)
+		gardenClientset, err := clientset.NewForConfig(k8sGardenClient.GetConfig())
+		checkError(err)
+		k8sGardenClient.SetGardenClientset(gardenClientset)
+		shootList, err := k8sGardenClient.GetGardenClientset().GardenV1beta1().Shoots("").List(metav1.ListOptions{})
+		for _, shoot := range shootList.Items {
+			if shoot.Name == target.Target[2].Name && *shoot.Spec.Cloud.Seed == target.Target[1].Name {
+				projectName = shoot.Namespace
+				break
+			}
+		}
+	}
+	return projectName
 }

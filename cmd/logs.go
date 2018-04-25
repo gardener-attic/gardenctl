@@ -34,12 +34,12 @@ var numberOfLines = "400"
 
 // logsCmd represents the logs command
 var logsCmd = &cobra.Command{
-	Use:   "logs (operator|ui|api|scheduler|controller-manager|etcd-operator|etcd-main|etcd-main-backup|etcd-events|addon-manager|vpn-seed|vpn-shoot|auto-node-repair|dashboard|prometheus|grafana|alertmanager|tf (infra|dns|ingress)",
+	Use:   "logs (gardener-apiserver|gardener-controller-manager|ui|api|scheduler|controller-manager|etcd-operator|etcd-main[etcd backup-restore]|etcd-main-backup|etcd-events[etcd backup-restore]|addon-manager|vpn-seed|vpn-shoot|machine-controller-manager|dashboard|prometheus|grafana|alertmanager|tf (infra|dns|ingress)",
 	Short: "Show and optionally follow logs of given component\n",
 	Long:  `s`,
 	Run: func(cmd *cobra.Command, args []string) {
 		if len(args) < 1 || len(args) > 2 {
-			fmt.Println("Command must be in the format: logs (operator|ui|api|scheduler|controller-manager|etcd-operator|etcd-main|etcd-events|addon-manager|vpn-seed|vpn-shoot|auto-node-repair|dashboard|prometheus|grafana|alertmanager|tf (infra|dns|ingress)")
+			fmt.Println("Command must be in the format: logs (gardener-apiserver|gardener-controller-manager|ui|api|scheduler|controller-manager|etcd-operator|etcd-main[etcd backup-restore]|etcd-events[etcd backup-restore]|addon-manager|vpn-seed|vpn-shoot|machine-controller-manager|dashboard|prometheus|grafana|alertmanager|tf (infra|dns|ingress)")
 			os.Exit(2)
 		}
 		var t Target
@@ -47,16 +47,21 @@ var logsCmd = &cobra.Command{
 		checkError(err)
 		err = yaml.Unmarshal(targetFile, &t)
 		checkError(err)
-		if len(t.Target) < 3 && (args[0] != "operator") && (args[0] != "tf") && (args[0] != "dashboard") {
+		if len(t.Target) < 3 && (args[0] != "gardener-apiserver") && (args[0] != "gardener-controller-manager") && (args[0] != "tf") && (args[0] != "dashboard") {
 			fmt.Println("No shoot targeted")
+			os.Exit(2)
+		} else if len(t.Target) < 3 && (args[0] == "tf") && (t.Target[1].Kind != "seed") {
+			fmt.Println("No seed or shoot targeted")
 			os.Exit(2)
 		} else if len(t.Target) == 0 {
 			fmt.Println("Target stack is empty")
 			os.Exit(2)
 		}
 		switch args[0] {
-		case "operator":
-			logsOperator()
+		case "gardener-apiserver":
+			logsGardenerApiserver()
+		case "gardener-controller-manager":
+			logsGardenerControllerManager()
 		case "ui":
 			logsUI()
 		case "api":
@@ -68,19 +73,27 @@ var logsCmd = &cobra.Command{
 		case "etcd-operator":
 			logsEtcdOpertor()
 		case "etcd-main":
-			logsEtcdMain()
+			if len(args) == 2 {
+				logsEtcdMain(args[1])
+			} else {
+				logsEtcdMain("")
+			}
 		case "etcd-main-backup":
 			logsEtcdMainBackup()
 		case "etcd-events":
-			logsEtcdEvents()
+			if len(args) == 2 {
+				logsEtcdEvents(args[1])
+			} else {
+				logsEtcdEvents("")
+			}
 		case "addon-manager":
 			logsAddonManager()
 		case "vpn-seed":
 			logsVpnSeed()
 		case "vpn-shoot":
 			logsVpnShoot()
-		case "auto-node-repair":
-			logsAutoNodeRepair()
+		case "machine-controller-manager":
+			logsMachineControllerManager()
 		case "dashboard":
 			logsDashboard()
 		case "prometheus":
@@ -102,13 +115,13 @@ var logsCmd = &cobra.Command{
 			case "ingress":
 				logsIngress()
 			default:
-				fmt.Println("Command must be in the format: logs (operator|ui|api|scheduler|controller-manager|etcd-operator|etcd-main|etcd-events|addon-manager|vpn-seed|vpn-shoot|auto-node-repair|dashboard|prometheus|grafana|alertmanager|tf (infra|dns|ingress)")
+				fmt.Println("Command must be in the format: logs (gardener-apiserver|gardener-controller-manager|ui|api|scheduler|controller-manager|etcd-operator|etcd-main[etcd backup-restore]|etcd-events[etcd backup-restore]|addon-manager|vpn-seed|vpn-shoot|auto-node-repair|dashboard|prometheus|grafana|alertmanager|tf (infra|dns|ingress)")
 			}
 		default:
-			fmt.Println("Command must be in the format: logs (operator|ui|api|scheduler|controller-manager|etcd-operator|etcd-main|etcd-events|addon-manager|vpn-seed|vpn-shoot|auto-node-repair|dashboard|prometheus|grafana|alertmanager|tf (infra|dns|ingress)")
+			fmt.Println("Command must be in the format: logs (gardener-apiserver|gardener-controller-manager|ui|api|scheduler|controller-manager|etcd-operator|etcd-main[etcd backup-restore]|etcd-events[etcd backup-restore]|addon-manager|vpn-seed|vpn-shoot|auto-node-repair|dashboard|prometheus|grafana|alertmanager|tf (infra|dns|ingress)")
 		}
 	},
-	ValidArgs: []string{"operator", "ui", "api", "scheduler", "controller-manager", "etcd-operator", "etcd-main", "etcd-events", "addon-manager", "vpn-seed", "vpn-shoot", "auto-node-repair", "dashboard", "prometheus", "grafana", "alertmanager", "tf"},
+	ValidArgs: []string{"gardener-apiserver", "gardener-controller-manager", "ui", "api", "scheduler", "controller-manager", "etcd-operator", "etcd-main", "etcd-events", "addon-manager", "vpn-seed", "vpn-shoot", "auto-node-repair", "dashboard", "prometheus", "grafana", "alertmanager", "tf"},
 }
 
 func init() {
@@ -116,6 +129,9 @@ func init() {
 
 // showPod is an abstraction to show pods in seed cluster controlplane or kube-system namespace of shoot
 func logPod(toMatch string, toTarget string, container string) {
+	if container != "" {
+		container = " -c " + container
+	}
 	var target Target
 	targetFile, err := ioutil.ReadFile(pathTarget)
 	checkError(err)
@@ -144,37 +160,46 @@ func logPod(toMatch string, toTarget string, container string) {
 }
 
 // logPodGarden print logfiles for garden pods
-func logPodGarden(toMatch string) {
+func logPodGarden(toMatch, namespace string) {
 	Client, err = clientToTarget("garden")
 	checkError(err)
-	pods, err := Client.CoreV1().Pods("garden").List(metav1.ListOptions{})
+	pods, err := Client.CoreV1().Pods(namespace).List(metav1.ListOptions{})
 	checkError(err)
 	for _, pod := range pods.Items {
-		fmt.Println(pod.Name)
 		if strings.Contains(pod.Name, toMatch) {
-			err := execCmd("kubectl logs --tail="+numberOfLines+" "+pod.Name+" -n garden", false, "KUBECONFIG="+KUBECONFIG)
+			err := execCmd("kubectl logs --tail="+numberOfLines+" "+pod.Name+" -n "+namespace, false, "KUBECONFIG="+KUBECONFIG)
 			checkError(err)
 			break
 		}
 	}
 }
 
-// logsOperator prints the logfile of the operator
-func logsOperator() {
+// logsGardenerApiserver prints the logfile of the garndener-api-server
+func logsGardenerApiserver() {
+	var target Target
+	targetFile, err := ioutil.ReadFile(pathTarget)
+	checkError(err)
+	err = yaml.Unmarshal(targetFile, &target)
+	checkError(err)
+	logPodGarden("gardener-apiserver", "garden")
+}
+
+// logsGardenerControllerManager prints the logfile of the gardener-controller-manager
+func logsGardenerControllerManager() {
 	var target Target
 	targetFile, err := ioutil.ReadFile(pathTarget)
 	checkError(err)
 	err = yaml.Unmarshal(targetFile, &target)
 	checkError(err)
 	if len(target.Target) != 3 {
-		logPodGarden("garden-operator")
+		logPodGarden("gardener-controller-manager", "garden")
 	} else {
-		logPodGardenImproved()
+		logPodGardenImproved("gardener-controller-manager")
 	}
 }
 
 // logPodGardenImproved print logfiles for garden pods
-func logPodGardenImproved() {
+func logPodGardenImproved(podName string) {
 	var target Target
 	targetFile, err := ioutil.ReadFile(pathTarget)
 	checkError(err)
@@ -184,12 +209,13 @@ func logPodGardenImproved() {
 	checkError(err)
 	pods, err := Client.CoreV1().Pods("garden").List(metav1.ListOptions{})
 	checkError(err)
+	projectName := getProjectForShoot()
 	for _, pod := range pods.Items {
-		if strings.Contains(pod.Name, "garden-operator") {
+		if strings.Contains(pod.Name, podName) {
 			output := execCmdReturnOutput("kubectl logs "+pod.Name+" -n garden", "KUBECONFIG="+KUBECONFIG)
 			lines := strings.Split("time="+output, `time=`)
 			for _, line := range lines {
-				if strings.Contains(line, ("shoot=" + target.Target[2].Name)) {
+				if strings.Contains(line, ("shoot=" + projectName + "/" + target.Target[2].Name)) {
 					fmt.Printf(line)
 				}
 			}
@@ -199,7 +225,7 @@ func logPodGardenImproved() {
 
 // logsUI
 func logsUI() {
-	logPodGarden("gardener")
+	logPodGarden("gardener", "garden")
 }
 
 // logsAPIServer prints the logfile of the api-server
@@ -220,19 +246,19 @@ func logsControllerManager() {
 // logsVpnSeed prints the logfile of the vpn-seed container
 func logsVpnSeed() {
 	fmt.Println("-----------------------Kube-Apiserver")
-	logPod("kube-apiserver", "seed", " -c vpn-seed")
+	logPod("kube-apiserver", "seed", "vpn-seed")
 	fmt.Println("-----------------------Prometheus")
-	logPod("prometheus", "seed", " -c vpn-seed")
+	logPod("prometheus", "seed", "vpn-seed")
 }
 
 // logsEtcdOpertor prints the logfile of the etcd-operator
 func logsEtcdOpertor() {
-	logPod("etcd-operator", "seed", "")
+	logPodGarden("etcd-operator", "kube-system")
 }
 
 // logsEtcdMain prints the logfile of etcd-main
-func logsEtcdMain() {
-	logPod("etcd-main", "seed", "")
+func logsEtcdMain(containerName string) {
+	logPod("etcd-main", "seed", containerName)
 }
 
 // logsEtcdMainBackup prints logfiles of etcd-main-backup-sidecar pod
@@ -241,8 +267,8 @@ func logsEtcdMainBackup() {
 }
 
 // logsEtcdEvents prints the logfile of etcd-events
-func logsEtcdEvents() {
-	logPod("etcd-events-", "seed", "")
+func logsEtcdEvents(containerName string) {
+	logPod("etcd-events-", "seed", containerName)
 }
 
 // logsAddonManager prints the logfile of addon-manager
@@ -255,9 +281,9 @@ func logsVpnShoot() {
 	logPod("vpn-shoot", "shoot", "")
 }
 
-// logsAutoNodeRepair prints the logfile of auto-node-repair pod
-func logsAutoNodeRepair() {
-	logPod("auto-node-repair", "seed", "")
+// logsMachineControllerManager prints the logfile of machine-controller-manager
+func logsMachineControllerManager() {
+	logPod("machine-controller-manager", "seed", "")
 }
 
 // logsDashboard prints the logfile of the dashboard
@@ -299,43 +325,47 @@ func logsDashboard() {
 
 // logsPrometheus prints the logfiles of prometheus pod
 func logsPrometheus() {
-	logPod("prometheus", "seed", " -c prometheus")
+	logPod("prometheus", "seed", "prometheus")
 }
 
 // logsGrafana prints the logfiles of grafana pod
 func logsGrafana() {
-	logPod("grafana", "seed", " -c grafana")
+	logPod("grafana", "seed", "grafana")
 }
 
 // logsAlertmanager prints the logfiles of alertmanager
 func logsAlertmanager() {
-	logPod("alertmanager", "seed", " -c alertmanager") // TODO: TWO PODS ARE RUNNING
+	logPod("alertmanager", "seed", "alertmanager") // TODO: TWO PODS ARE RUNNING
 }
 
 // logsTerraform prints the logfiles of tf pod
 func logsTerraform(toMatch string) {
 	var latestTime int64
-	var podName string
-	var podNamespace string
-	Client, err = clientToTarget("garden")
+	var podName [100]string
+	var podNamespace [100]string
+	Client, err = clientToTarget("seed")
 	checkError(err)
 	pods, err := Client.CoreV1().Pods("").List(metav1.ListOptions{})
 	checkError(err)
+	count := 0
 	for _, pod := range pods.Items {
 		if strings.Contains(pod.Name, toMatch) && pod.Status.Phase == "Running" {
 			if latestTime < pod.ObjectMeta.CreationTimestamp.Unix() {
 				latestTime = pod.ObjectMeta.CreationTimestamp.Unix()
-				podName = pod.Name
-				podNamespace = pod.Namespace
+				podName[count] = pod.Name
+				podNamespace[count] = pod.Namespace
+				count++
 			}
 		}
 	}
-	if podName == "" || podNamespace == "" {
+	if len(podName) == 0 || len(podNamespace) == 0 {
 		fmt.Println("No running tf " + toMatch)
 	} else {
-		fmt.Println("gardenctl logs " + podName + " namespace=" + podNamespace)
-		err = execCmd("kubectl logs "+podName+" -n "+podNamespace, false, "KUBECONFIG="+KUBECONFIG)
-		checkError(err)
+		for i := 0; i < count; i++ {
+			fmt.Println("gardenctl logs " + podName[i] + " namespace=" + podNamespace[i])
+			err = execCmd("kubectl logs "+podName[i]+" -n "+podNamespace[i], false, "KUBECONFIG="+KUBECONFIG)
+			checkError(err)
+		}
 	}
 }
 
