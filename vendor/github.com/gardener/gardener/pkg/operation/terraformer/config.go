@@ -1,4 +1,4 @@
-// Copyright 2018 The Gardener Authors.
+// Copyright (c) 2018 SAP SE or an SAP affiliate company. All rights reserved. This file is licensed under the Apache Software License, v. 2 except as noted otherwise in the LICENSE file
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -31,7 +31,7 @@ func (t *Terraformer) SetVariablesEnvironment(tfvarsEnvironment []map[string]int
 
 // DefineConfig creates a ConfigMap for the tf state (if it does not exist, otherwise it won't update it),
 // as well as a ConfigMap for the tf configuration (if it does not exist, otherwise it will update it).
-// The tfvars are stored in a Secret as the contain confidental information like credentials.
+// The tfvars are stored in a Secret as the contain confidential information like credentials.
 func (t *Terraformer) DefineConfig(chartName string, values map[string]interface{}) *Terraformer {
 	values["names"] = map[string]interface{}{
 		"configuration": t.ConfigName,
@@ -40,9 +40,9 @@ func (t *Terraformer) DefineConfig(chartName string, values map[string]interface
 	}
 	values["initializeEmptyState"] = t.IsStateEmpty()
 
-	err := utils.Retry(t.Logger, 60*time.Second, func() (bool, error) {
+	err := utils.Retry(t.Logger, 30*time.Second, func() (bool, error) {
 		if err := t.ApplyChartSeed(filepath.Join(chartPath, chartName), chartName, t.Namespace, nil, values); err != nil {
-			t.Logger.Infof("could not create Terraform ConfigMaps/Secrets: %s", err.Error())
+			t.Logger.Errorf("could not create Terraform ConfigMaps/Secrets: %s", err.Error())
 			return false, nil
 		}
 		return true, nil
@@ -106,7 +106,7 @@ func (t *Terraformer) prepare() (int, error) {
 // cleanupConfiguration deletes the two ConfigMaps which store the Terraform configuration and state. It also deletes
 // the Secret which stores the Terraform variables.
 func (t *Terraformer) cleanupConfiguration() error {
-	t.Logger.Infof("Deleting Terraform variables Secret '%s'", t.VariablesName)
+	t.Logger.Debugf("Deleting Terraform variables Secret '%s'", t.VariablesName)
 	err := t.K8sSeedClient.DeleteSecret(t.Namespace, t.VariablesName)
 	if apierrors.IsNotFound(err) {
 		return nil
@@ -115,7 +115,7 @@ func (t *Terraformer) cleanupConfiguration() error {
 		return err
 	}
 
-	t.Logger.Infof("Deleting Terraform configuration ConfigMap '%s'", t.ConfigName)
+	t.Logger.Debugf("Deleting Terraform configuration ConfigMap '%s'", t.ConfigName)
 	err = t.K8sSeedClient.DeleteConfigMap(t.Namespace, t.ConfigName)
 	if apierrors.IsNotFound(err) {
 		return nil
@@ -124,7 +124,7 @@ func (t *Terraformer) cleanupConfiguration() error {
 		return err
 	}
 
-	t.Logger.Infof("Deleting Terraform state ConfigMap '%s'", t.StateName)
+	t.Logger.Debugf("Deleting Terraform state ConfigMap '%s'", t.StateName)
 	err = t.K8sSeedClient.DeleteConfigMap(t.Namespace, t.StateName)
 	if apierrors.IsNotFound(err) {
 		return nil

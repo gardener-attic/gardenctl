@@ -1,4 +1,4 @@
-// Copyright 2018 The Gardener Authors.
+// Copyright (c) 2018 SAP SE or an SAP affiliate company. All rights reserved. This file is licensed under the Apache Software License, v. 2 except as noted otherwise in the LICENSE file
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -24,45 +24,47 @@ import (
 
 // CreateSecret creates a new Secret object.
 func (c *Client) CreateSecret(namespace, name string, secretType corev1.SecretType, data map[string][]byte, updateIfExists bool) (*corev1.Secret, error) {
-	secret, err := c.
-		Clientset.
-		CoreV1().
-		Secrets(namespace).
-		Create(&corev1.Secret{
-			ObjectMeta: metav1.ObjectMeta{
-				Name: name,
-			},
-			Type: secretType,
-			Data: data,
-		})
+	secret, err := c.clientset.CoreV1().Secrets(namespace).Create(&corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: name,
+		},
+		Type: secretType,
+		Data: data,
+	})
 	if err != nil && apierrors.IsAlreadyExists(err) && updateIfExists {
 		return c.UpdateSecret(namespace, name, secretType, data)
 	}
 	return secret, err
 }
 
+// CreateSecretObject creates a new Secret object.
+func (c *Client) CreateSecretObject(secret *corev1.Secret, updateIfExists bool) (*corev1.Secret, error) {
+	updatedSecret, err := c.clientset.CoreV1().Secrets(secret.Namespace).Create(secret)
+	if err != nil && apierrors.IsAlreadyExists(err) && updateIfExists {
+		return c.UpdateSecretObject(secret)
+	}
+	return updatedSecret, err
+}
+
 // UpdateSecret updates an already existing Secret object.
 func (c *Client) UpdateSecret(namespace, name string, secretType corev1.SecretType, data map[string][]byte) (*corev1.Secret, error) {
-	return c.
-		Clientset.
-		CoreV1().
-		Secrets(namespace).
-		Update(&corev1.Secret{
-			ObjectMeta: metav1.ObjectMeta{
-				Name: name,
-			},
-			Type: secretType,
-			Data: data,
-		})
+	return c.clientset.CoreV1().Secrets(namespace).Update(&corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: name,
+		},
+		Type: secretType,
+		Data: data,
+	})
+}
+
+// UpdateSecretObject updates an already existing Secret object.
+func (c *Client) UpdateSecretObject(secret *corev1.Secret) (*corev1.Secret, error) {
+	return c.clientset.CoreV1().Secrets(secret.Namespace).Update(secret)
 }
 
 // ListSecrets lists all Secrets in a given <namespace>.
 func (c *Client) ListSecrets(namespace string, listOptions metav1.ListOptions) (*corev1.SecretList, error) {
-	secrets, err := c.
-		Clientset.
-		CoreV1().
-		Secrets(namespace).
-		List(listOptions)
+	secrets, err := c.clientset.CoreV1().Secrets(namespace).List(listOptions)
 	if err != nil {
 		return nil, err
 	}
@@ -74,18 +76,10 @@ func (c *Client) ListSecrets(namespace string, listOptions metav1.ListOptions) (
 
 // GetSecret returns a Secret object.
 func (c *Client) GetSecret(namespace, name string) (*corev1.Secret, error) {
-	return c.
-		Clientset.
-		CoreV1().
-		Secrets(namespace).
-		Get(name, metav1.GetOptions{})
+	return c.clientset.CoreV1().Secrets(namespace).Get(name, metav1.GetOptions{})
 }
 
 // DeleteSecret deletes an already existing Secret object.
 func (c *Client) DeleteSecret(namespace, name string) error {
-	return c.
-		Clientset.
-		CoreV1().
-		Secrets(namespace).
-		Delete(name, &defaultDeleteOptions)
+	return c.clientset.CoreV1().Secrets(namespace).Delete(name, &defaultDeleteOptions)
 }

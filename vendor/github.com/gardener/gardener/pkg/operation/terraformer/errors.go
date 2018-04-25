@@ -1,4 +1,4 @@
-// Copyright 2018 The Gardener Authors.
+// Copyright (c) 2018 SAP SE or an SAP affiliate company. All rights reserved. This file is licensed under the Apache Software License, v. 2 except as noted otherwise in the LICENSE file
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -28,15 +28,16 @@ import (
 // and it parses the logs for Terraform errors. If none are found, it will return nil, and otherwhise the list of
 // found errors as string slice.
 func retrieveTerraformErrors(logList map[string]string) []string {
-	var foundErrors = map[string]string{}
-	var errorList = []string{}
+	var (
+		foundErrors = map[string]string{}
+		errorList   = []string{}
+	)
 
 	for podName, output := range logList {
 		errorMessage := findTerraformErrors(output)
-		_, ok := foundErrors[errorMessage]
 
 		// Add the errorMessage to the list of found errors (only if it does not already exist).
-		if errorMessage != "" && !ok {
+		if _, ok := foundErrors[errorMessage]; !ok && errorMessage != "" {
 			foundErrors[errorMessage] = podName
 		}
 	}
@@ -56,7 +57,7 @@ func determineErrorCode(message string) error {
 	var code gardenv1beta1.ErrorCode
 
 	switch {
-	case strings.Contains(message, "UnauthorizedOperation") || strings.Contains(message, "SignatureDoesNotMatch"):
+	case strings.Contains(message, "UnauthorizedOperation") || strings.Contains(message, "InvalidClientTokenId") || strings.Contains(message, "SignatureDoesNotMatch"):
 		code = gardenv1beta1.ErrorInfraUnauthorized
 	case strings.Contains(message, "LimitExceeded"):
 		code = gardenv1beta1.ErrorInfraQuotaExceeded
@@ -86,14 +87,12 @@ func findTerraformErrors(output string) string {
 	)
 
 	// Strip optional explaination how Terraform behaves in case of errors.
-	suffixIndex := strings.Index(errorMessage, "\n\nTerraform does not automatically rollback")
-	if suffixIndex != -1 {
+	if suffixIndex := strings.Index(errorMessage, "\n\nTerraform does not automatically rollback"); suffixIndex != -1 {
 		errorMessage = errorMessage[:suffixIndex]
 	}
 
 	// Search for errors in Terraform output.
-	terraformErrorMatch := regexTerraformError.FindStringSubmatch(errorMessage)
-	if len(terraformErrorMatch) > 1 {
+	if terraformErrorMatch := regexTerraformError.FindStringSubmatch(errorMessage); len(terraformErrorMatch) > 1 {
 		// Remove leading and tailing spaces and newlines.
 		errorMessage = strings.TrimSpace(terraformErrorMatch[1])
 

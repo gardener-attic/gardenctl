@@ -1,4 +1,4 @@
-// Copyright 2018 The Gardener Authors.
+// Copyright (c) 2018 SAP SE or an SAP affiliate company. All rights reserved. This file is licensed under the Apache Software License, v. 2 except as noted otherwise in the LICENSE file
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -31,11 +31,6 @@ func (b *GCPBotanist) GenerateKube2IAMConfig() (map[string]interface{}, error) {
 	return common.GenerateAddonConfig(nil, false), nil
 }
 
-// GenerateClusterAutoscalerConfig - Not needed on GCP.
-func (b *GCPBotanist) GenerateClusterAutoscalerConfig() (map[string]interface{}, error) {
-	return common.GenerateAddonConfig(nil, false), nil
-}
-
 // GenerateAdmissionControlConfig generates values which are required to render the chart admissions-controls properly.
 func (b *GCPBotanist) GenerateAdmissionControlConfig() (map[string]interface{}, error) {
 	return map[string]interface{}{
@@ -60,15 +55,7 @@ func (b *GCPBotanist) GenerateAdmissionControlConfig() (map[string]interface{}, 
 	}, nil
 }
 
-// GenerateCalicoConfig - Not needed on GCP
-func (b *GCPBotanist) GenerateCalicoConfig() (map[string]interface{}, error) {
-	return map[string]interface{}{
-		"cloudProvider": b.Shoot.CloudProvider,
-		"enabled":       false,
-	}, nil
-}
-
 // GenerateNginxIngressConfig generates values which are required to render the chart nginx-ingress properly.
 func (b *GCPBotanist) GenerateNginxIngressConfig() (map[string]interface{}, error) {
-	return common.GenerateAddonConfig(nil, b.Shoot.Info.Spec.Addons.NginxIngress.Enabled), nil
+	return common.GenerateAddonConfig(nil, b.Shoot.NginxIngressEnabled()), nil
 }

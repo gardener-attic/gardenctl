@@ -1,4 +1,4 @@
-// Copyright 2018 The Gardener Authors.
+// Copyright (c) 2018 SAP SE or an SAP affiliate company. All rights reserved. This file is licensed under the Apache Software License, v. 2 except as noted otherwise in the LICENSE file
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -23,12 +23,14 @@ type OpenStackBotanist struct {
 }
 
 const (
-	// DomainName is a constant for the key in a cloud provider secret that holds the OpenStack domain name.
+	// DomainName is a constant for the key in a cloud provider secret and backup secret that holds the OpenStack domain name.
 	DomainName = "domainName"
-	// TenantName is a constant for the key in a cloud provider secret that holds the OpenStack tenant name.
+	// TenantName is a constant for the key in a cloud provider secret and backup secret that holds the OpenStack tenant name.
 	TenantName = "tenantName"
-	// UserName is a constant for the key in a cloud provider secret that holds the OpenStack username.
+	// UserName is a constant for the key in a cloud provider secret and backup secret that holds the OpenStack username.
 	UserName = "username"
-	// Password is a constant for the key in a cloud provider secret that holds the OpenStack password.
+	// Password is a constant for the key in a cloud provider secret and backup secret that holds the OpenStack password.
 	Password = "password"
+	// AuthURL is a constant for the key in a backup secret that holds the OpenStack authentication URL.
+	AuthURL = "authURL"
 )

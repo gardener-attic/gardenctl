@@ -1,4 +1,4 @@
-// Copyright 2018 The Gardener Authors.
+// Copyright (c) 2018 SAP SE or an SAP affiliate company. All rights reserved. This file is licensed under the Apache Software License, v. 2 except as noted otherwise in the LICENSE file
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,11 +14,16 @@
 
 package cloudbotanist
 
-import "github.com/gardener/gardener/pkg/operation/common"
+import (
+	"github.com/gardener/gardener/pkg/operation"
+	"github.com/gardener/gardener/pkg/operation/common"
+)
 
 // CloudBotanist is an interface which must be implemented by cloud-specific Botanists. The Cloud Botanist
 // is responsible for all operations which require IaaS specific knowledge.
 type CloudBotanist interface {
+	GetCloudProviderName() string
+
 	// Infrastructure
 	DeployInfrastructure() error
 	DestroyInfrastructure() error
@@ -26,7 +31,6 @@ type CloudBotanist interface {
 	DestroyBackupInfrastructure() error
 
 	// Control Plane
-	DeployAutoNodeRepair() error
 	GenerateCloudProviderConfig() (string, error)
 	GenerateCloudConfigUserDataConfig() *common.CloudConfigUserDataConfig
 	GenerateEtcdBackupConfig() (map[string][]byte, map[string]interface{}, error)
@@ -34,20 +38,17 @@ type CloudBotanist interface {
 	GenerateKubeControllerManagerConfig() (map[string]interface{}, error)
 	GenerateKubeSchedulerConfig() (map[string]interface{}, error)
 
+	// Machines
+	GetMachineClassInfo() (string, string, string)
+	GenerateMachineConfig() ([]map[string]interface{}, []operation.MachineDeployment, error)
+
 	// Addons
 	DeployKube2IAMResources() error
 	DestroyKube2IAMResources() error
 	GenerateKube2IAMConfig() (map[string]interface{}, error)
-	GenerateClusterAutoscalerConfig() (map[string]interface{}, error)
 	GenerateAdmissionControlConfig() (map[string]interface{}, error)
-	GenerateCalicoConfig() (map[string]interface{}, error)
 	GenerateNginxIngressConfig() (map[string]interface{}, error)
 
 	// Hooks
 	ApplyCreateHook() error
-	ApplyDeleteHook() error
-
-	// Miscellaneous (Health check, ...)
-	CheckIfClusterGetsScaled() (bool, int, error)
-	GetCloudProviderName() string
 }

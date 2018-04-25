@@ -1,4 +1,4 @@
-// Copyright 2018 The Gardener Authors.
+// Copyright (c) 2018 SAP SE or an SAP affiliate company. All rights reserved. This file is licensed under the Apache Software License, v. 2 except as noted otherwise in the LICENSE file
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -61,7 +61,7 @@ func (r *DefaultChartRenderer) Render(chartPath, releaseName, namespace string, 
 	return r.renderRelease(chart, releaseName, namespace, values)
 }
 
-// Manifest retrurns the manifest of the rendered chart as byte arrray
+// Manifest returns the manifest of the rendered chart as byte array.
 func (c *RenderedChart) Manifest() []byte {
 	// Aggregate all valid manifests into one big doc.
 	b := bytes.NewBuffer(nil)
@@ -73,12 +73,20 @@ func (c *RenderedChart) Manifest() []byte {
 	return b.Bytes()
 }
 
-// ManifestAsString retrurns the manifest of the rendered chart as string
+// ManifestAsString returns the manifest of the rendered chart as string.
 func (c *RenderedChart) ManifestAsString() string {
 	return string(c.Manifest())
 }
 
-// GetVersionSet retrieves a set of available k8s API versions
+// FileContent returns explicity the content of the provided <filename>.
+func (c *RenderedChart) FileContent(filename string) string {
+	if content, ok := c.Files[fmt.Sprintf("%s/templates/%s", c.ChartName, filename)]; ok {
+		return content
+	}
+	return ""
+}
+
+// GetVersionSet retrieves a set of available k8s API versions.
 func GetVersionSet(client discovery.ServerGroupsInterface) (chartutil.VersionSet, error) {
 	groups, err := client.ServerGroups()
 	if err != nil {
@@ -115,7 +123,7 @@ func (r *DefaultChartRenderer) renderRelease(chart *chartapi.Chart, releaseName,
 		return nil, fmt.Errorf("can't process requirements for import values for chart %s: ,%s", chartName, err)
 	}
 
-	caps, err := capabilities(r.client.GetClientset().Discovery())
+	caps, err := capabilities(r.client.Clientset().Discovery())
 	if err != nil {
 		return nil, err
 	}
@@ -151,7 +159,8 @@ func (r *DefaultChartRenderer) renderResources(ch *chartapi.Chart, values chartu
 	}
 
 	return &RenderedChart{
-		Files: files,
+		ChartName: ch.Metadata.Name,
+		Files:     files,
 	}, nil
 }
 

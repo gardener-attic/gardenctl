@@ -1,25 +1,23 @@
+---
 apiVersion: garden.sapcloud.io/v1beta1
 kind: Shoot
 metadata:
   name: johndoe-aws
-  namespace: garden-core
+  namespace: garden-dev
 spec:
   cloud:
     profile: aws
     region: eu-west-1
     secretBindingRef:
-      kind: CrossSecretBinding
-      name: default-my-aws-secret
+      name: core-aws
     aws:
       networks:
-        vpc:
+        vpc: # specify either 'id' or 'cidr'
+        # id: vpc-123456
           cidr: 10.250.0.0/16
-        internal:
-        - 10.250.112.0/22
-        public:
-        - 10.250.96.0/22
-        workers:
-        - 10.250.0.0/19
+        internal: ['10.250.112.0/22']
+        public: ['10.250.96.0/22']
+        workers: ['10.250.0.0/19']
       workers:
       - name: cpu-worker
         machineType: m4.large
@@ -27,13 +25,21 @@ spec:
         volumeSize: 20Gi
         autoScalerMin: 2
         autoScalerMax: 2
-      zones:
-      - eu-west-1a
+      zones: ['eu-west-1a']
   kubernetes:
-    version: 1.9.1
+    version: 1.10.1
   dns:
     provider: aws-route53
-    domain: johndoe-aws.johndoe.example.com
+    domain: johndoe-aws.garden-dev.example.com
+  maintenance:
+    timeWindow:
+      begin: 220000+0100
+      end: 230000+0100
+    autoUpdate:
+      kubernetesVersion: true
+  backup:
+    schedule: "*/5 * * * *"
+    maximum: 7
   addons:
     kube2iam:
       enabled: true
@@ -69,6 +75,6 @@ spec:
       enabled: true
     kube-lego:
       enabled: true
-      email: "john.doe@example.com"
+      email: john.doe@example.com
     monocular:
-      enabled: true
+      enabled: false

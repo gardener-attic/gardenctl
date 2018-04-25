@@ -1,4 +1,4 @@
-// Copyright 2018 The Gardener Authors.
+// Copyright (c) 2018 SAP SE or an SAP affiliate company. All rights reserved. This file is licensed under the Apache Software License, v. 2 except as noted otherwise in the LICENSE file
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -86,28 +86,30 @@ func (t *Terraformer) waitForPod() int32 {
 // Job status field to identify the state.
 func (t *Terraformer) waitForJob() bool {
 	var succeeded = false
-	wait.PollImmediate(5*time.Second, 3600*time.Second, func() (bool, error) {
+	if err := wait.Poll(5*time.Second, time.Hour, func() (bool, error) {
 		t.Logger.Infof("Waiting for Terraform Job '%s' to be completed...", t.JobName)
 		job, err := t.K8sSeedClient.GetJob(t.Namespace, t.JobName)
 		if err != nil {
 			if apierrors.IsNotFound(err) {
-				t.Logger.Warn("Terraform Job disappeared unexpectedly, somebody must have manually deleted it!")
+				t.Logger.Warnf("Terraform Job %s disappeared unexpectedly, somebody must have manually deleted it!", t.JobName)
 				return true, nil
 			}
 			return false, err
 		}
-		// Check whether the Job has been successful (at least one succeeded Pod)
-		if job.Status.Succeeded >= 1 {
-			succeeded = true
-			return true, nil
-		}
-		// Check whether the Job is still running at all
+		// Check the job conditions to identifiy whether the job has been completed or failed.
 		for _, cond := range job.Status.Conditions {
-			if cond.Type == batchv1.JobComplete || cond.Type == batchv1.JobFailed {
+			if cond.Type == batchv1.JobComplete && cond.Status == corev1.ConditionTrue {
+				succeeded = true
+				return true, nil
+			}
+			if cond.Type == batchv1.JobFailed && cond.Status == corev1.ConditionTrue {
+				t.Logger.Errorf("Terraform Job %s failed for reason '%s': '%s'", t.JobName, cond.Reason, cond.Message)
 				return true, nil
 			}
 		}
 		return false, nil
-	})
+	}); err != nil {
+		t.Logger.Errorf("Error while waiting for Terraform job: '%s'", err.Error())
+	}
 	return succeeded
 }

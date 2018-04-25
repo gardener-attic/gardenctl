@@ -1,4 +1,4 @@
-// Copyright 2018 The Gardener Authors.
+// Copyright (c) 2018 SAP SE or an SAP affiliate company. All rights reserved. This file is licensed under the Apache Software License, v. 2 except as noted otherwise in the LICENSE file
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -21,12 +21,15 @@ import (
 	gardenv1beta1 "github.com/gardener/gardener/pkg/apis/garden/v1beta1"
 	"github.com/gardener/gardener/pkg/operation/common"
 	"github.com/gardener/gardener/pkg/operation/terraformer"
-	"github.com/gardener/gardener/pkg/utils"
 )
 
 // DeployKube2IAMResources creates the respective IAM roles which have been specified in the Shoot manifest
 // addon section. Moreover, some default IAM roles will be created.
 func (b *AWSBotanist) DeployKube2IAMResources() error {
+	if !b.Shoot.Kube2IAMEnabled() {
+		return b.DestroyKube2IAMResources()
+	}
+
 	values, err := b.generateTerraformKube2IAMConfig(b.Shoot.Info.Spec.Addons.Kube2IAM.Roles)
 	if err != nil {
 		return err
@@ -80,54 +83,6 @@ func (b *AWSBotanist) createKube2IAMRoles(customRoles []gardenv1beta1.Kube2IAMRo
 		return nil, err
 	}
 
-	// If the ClusterAutoScaler addon is enabled, then we have to create an appropriate instance profile for it such that
-	// it can scale up/down the cluster nodes.
-	if b.Shoot.Info.Spec.Addons.ClusterAutoscaler.Enabled {
-		stateConfigMap, err := terraformer.New(b.Operation, common.TerraformerPurposeInfra).GetState()
-		if err != nil {
-			return nil, err
-		}
-		state := utils.ConvertJSONToMap(stateConfigMap)
-		var autoScalingARNs []string
-
-		for i := range b.Shoot.Info.Spec.Cloud.AWS.Zones {
-			for j := range b.Shoot.Info.Spec.Cloud.AWS.Workers {
-				value, err := state.String("modules", "0", "outputs", fmt.Sprintf("asg_nodes_pool%d_z%d", j, i), "value")
-				if err != nil {
-					return nil, err
-				}
-
-				autoScalingARNs = append(autoScalingARNs, `"`+value+`"`)
-			}
-		}
-
-		tmpRoles = append(tmpRoles, gardenv1beta1.Kube2IAMRole{
-			Name:        "autoscaling",
-			Description: "Allow access to scale AutoScaling Groups up/down",
-			Policy: fmt.Sprintf(`{
-  "Version": "2012-10-17",
-  "Statement": [
-    {
-      "Action": [
-        "autoscaling:DescribeAutoScalingGroups",
-        "autoscaling:DescribeAutoScalingInstances"
-      ],
-      "Effect": "Allow",
-      "Resource": "*"
-    },
-    {
-      "Action": [
-        "autoscaling:SetDesiredCapacity",
-        "autoscaling:TerminateInstanceInAutoScalingGroup"
-      ],
-      "Effect": "Allow",
-      "Resource": [%s]
-    }
-  ]
-}`, strings.Join(autoScalingARNs, ", ")),
-		})
-	}
-
 	// Add the roles defined in the Shoot manifest (.spec.addons.kube2iam.roles) to the list of roles we will
 	// create for Kube2IAM.
 	for _, customRole := range customRoles {
@@ -146,7 +101,7 @@ func (b *AWSBotanist) createKube2IAMRoles(customRoles []gardenv1beta1.Kube2IAMRo
 // GenerateKube2IAMConfig generates the values which are required to render the chart of kube2iam properly.
 func (b *AWSBotanist) GenerateKube2IAMConfig() (map[string]interface{}, error) {
 	var (
-		enabled = b.Shoot.Info.Spec.Addons.Kube2IAM.Enabled
+		enabled = b.Shoot.Kube2IAMEnabled()
 		values  map[string]interface{}
 	)
 
@@ -159,32 +114,6 @@ func (b *AWSBotanist) GenerateKube2IAMConfig() (map[string]interface{}, error) {
 			"extraArgs": map[string]interface{}{
 				"base-role-arn": fmt.Sprintf("arn:aws:iam::%s:role/", awsAccountID),
 			},
-		}
-	}
-
-	return common.GenerateAddonConfig(values, enabled), nil
-}
-
-// GenerateClusterAutoscalerConfig generates the values which are required to render the chart of
-// aws-cluster-autosclaer properly.
-func (b *AWSBotanist) GenerateClusterAutoscalerConfig() (map[string]interface{}, error) {
-	var (
-		podAnnotations = map[string]interface{}{}
-		enabled        = b.Shoot.Info.Spec.Addons.ClusterAutoscaler.Enabled
-		values         map[string]interface{}
-	)
-
-	if enabled {
-		autoscalingGroups := b.GetASGs()
-
-		if b.Shoot.Info.Spec.Addons.Kube2IAM.Enabled {
-			podAnnotations["iam.amazonaws.com/role"] = fmt.Sprintf("%s-autoscaling", b.Shoot.SeedNamespace)
-		}
-		values = map[string]interface{}{
-			"awsRegion":         b.Shoot.Info.Spec.Cloud.Region,
-			"autoscalingGroups": autoscalingGroups,
-			"podAnnotations":    podAnnotations,
-			"waitForKube2IAM":   b.Shoot.Info.Spec.Addons.Kube2IAM.Enabled,
 		}
 	}
 
@@ -215,22 +144,13 @@ func (b *AWSBotanist) GenerateAdmissionControlConfig() (map[string]interface{}, 
 	}, nil
 }
 
-// GenerateCalicoConfig generates values which are required to render the chart calico properly.
-func (b *AWSBotanist) GenerateCalicoConfig() (map[string]interface{}, error) {
-	return map[string]interface{}{
-		"cloudProvider": b.Shoot.CloudProvider,
-		"enabled":       true,
-	}, nil
-}
-
 // GenerateNginxIngressConfig generates values which are required to render the chart nginx-ingress properly.
 func (b *AWSBotanist) GenerateNginxIngressConfig() (map[string]interface{}, error) {
-	// Use common.GenerateAddonConfig for error-handling.
 	return common.GenerateAddonConfig(map[string]interface{}{
 		"controller": map[string]interface{}{
 			"config": map[string]interface{}{
 				"use-proxy-protocol": "true",
 			},
 		},
-	}, b.Shoot.Info.Spec.Addons.NginxIngress.Enabled), nil
+	}, b.Shoot.NginxIngressEnabled()), nil
 }

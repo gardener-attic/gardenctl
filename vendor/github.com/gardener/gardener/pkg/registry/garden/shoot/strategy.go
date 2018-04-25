@@ -1,4 +1,4 @@
-// Copyright 2018 The Gardener Authors.
+// Copyright (c) 2018 SAP SE or an SAP affiliate company. All rights reserved. This file is licensed under the Apache Software License, v. 2 except as noted otherwise in the LICENSE file
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,6 +17,7 @@ package shoot
 import (
 	apiequality "k8s.io/apimachinery/pkg/api/equality"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/validation/field"
 	"k8s.io/apiserver/pkg/storage/names"
 
@@ -24,6 +25,7 @@ import (
 	"github.com/gardener/gardener/pkg/apis/garden"
 	gardenv1beta1 "github.com/gardener/gardener/pkg/apis/garden/v1beta1"
 	"github.com/gardener/gardener/pkg/apis/garden/validation"
+	"github.com/gardener/gardener/pkg/operation/common"
 	genericapirequest "k8s.io/apiserver/pkg/endpoints/request"
 )
 
@@ -41,9 +43,15 @@ func (shootStrategy) NamespaceScoped() bool {
 
 func (shootStrategy) PrepareForCreate(ctx genericapirequest.Context, obj runtime.Object) {
 	shoot := obj.(*garden.Shoot)
-	shoot.Status = garden.ShootStatus{}
-	shoot.Finalizers = []string{gardenv1beta1.GardenerName}
+
 	shoot.Generation = 1
+	shoot.Status = garden.ShootStatus{}
+
+	finalizers := sets.NewString(shoot.Finalizers...)
+	if !finalizers.Has(gardenv1beta1.GardenerName) {
+		finalizers.Insert(gardenv1beta1.GardenerName)
+	}
+	shoot.Finalizers = finalizers.UnsortedList()
 }
 
 func (shootStrategy) PrepareForUpdate(ctx genericapirequest.Context, obj, old runtime.Object) {
@@ -51,9 +59,35 @@ func (shootStrategy) PrepareForUpdate(ctx genericapirequest.Context, obj, old ru
 	oldShoot := old.(*garden.Shoot)
 	newShoot.Status = oldShoot.Status
 
-	if !apiequality.Semantic.DeepEqual(oldShoot.Spec, newShoot.Spec) {
+	if mustIncreaseGeneration(oldShoot, newShoot) {
 		newShoot.Generation = oldShoot.Generation + 1
 	}
+
+	if newShoot.Annotations != nil {
+		delete(newShoot.Annotations, common.ShootOperation)
+	}
+}
+
+func mustIncreaseGeneration(oldShoot, newShoot *garden.Shoot) bool {
+	// The Shoot specification changes.
+	if !apiequality.Semantic.DeepEqual(oldShoot.Spec, newShoot.Spec) {
+		return true
+	}
+
+	// The deletion timestamp and the special confirmation annotation was set.
+	if !common.CheckConfirmationDeletionTimestampValid(oldShoot.ObjectMeta) && common.CheckConfirmationDeletionTimestampValid(newShoot.ObjectMeta) {
+		return true
+	}
+
+	// The shoot state was failed but the retry annotation was set.
+	lastOperation := newShoot.Status.LastOperation
+	if lastOperation != nil && lastOperation.State == garden.ShootLastOperationStateFailed {
+		if val, ok := newShoot.Annotations[common.ShootOperation]; ok && val == "retry" {
+			return true
+		}
+	}
+
+	return false
 }
 
 func (shootStrategy) Validate(ctx genericapirequest.Context, obj runtime.Object) field.ErrorList {

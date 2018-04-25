@@ -1,4 +1,4 @@
-// Copyright 2018 The Gardener Authors.
+// Copyright (c) 2018 SAP SE or an SAP affiliate company. All rights reserved. This file is licensed under the Apache Software License, v. 2 except as noted otherwise in the LICENSE file
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -21,28 +21,36 @@ import (
 	"github.com/gardener/gardener/pkg/client/aws"
 	"github.com/gardener/gardener/pkg/operation"
 	"github.com/gardener/gardener/pkg/operation/common"
+	corev1 "k8s.io/api/core/v1"
 )
 
 // New takes an operation object <o> and creates a new AWSBotanist object.
 func New(o *operation.Operation, purpose string) (*AWSBotanist, error) {
-	var cloudProvider gardenv1beta1.CloudProvider
+	var (
+		cloudProvider gardenv1beta1.CloudProvider
+		secret        *corev1.Secret
+		region        string
+	)
+
 	switch purpose {
 	case common.CloudPurposeShoot:
 		cloudProvider = o.Shoot.CloudProvider
+		secret = o.Shoot.Secret
+		region = o.Shoot.Info.Spec.Cloud.Region
 	case common.CloudPurposeSeed:
 		cloudProvider = o.Seed.CloudProvider
+		secret = o.Seed.Secret
+		region = o.Seed.Info.Spec.Cloud.Region
 	}
 
 	if cloudProvider != gardenv1beta1.CloudProviderAWS {
 		return nil, errors.New("cannot instantiate an AWS botanist if neither Shoot nor Seed cluster specifies AWS")
 	}
 
-	region := o.Shoot.Info.Spec.Cloud.Region
-
 	return &AWSBotanist{
 		Operation:         o,
 		CloudProviderName: "aws",
-		AWSClient:         aws.NewClient(string(o.Shoot.Secret.Data[AccessKeyID]), string(o.Shoot.Secret.Data[SecretAccessKey]), region),
+		AWSClient:         aws.NewClient(string(secret.Data[AccessKeyID]), string(secret.Data[SecretAccessKey]), region),
 	}, nil
 }
 

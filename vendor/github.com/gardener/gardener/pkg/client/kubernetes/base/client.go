@@ -1,4 +1,4 @@
-// Copyright 2018 The Gardener Authors.
+// Copyright (c) 2018 SAP SE or an SAP affiliate company. All rights reserved. This file is licensed under the Apache Software License, v. 2 except as noted otherwise in the LICENSE file
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -21,13 +21,10 @@ import (
 	"k8s.io/client-go/rest"
 )
 
-// Bootstrap will fetch all Kubernetes server resources, i.e. all registered API groups and the
+// DiscoverAPIGroups will fetch all Kubernetes server resources, i.e. all registered API groups and the
 // associated resources.
-func (c *Client) Bootstrap() error {
-	apiResourceList, err := c.
-		Clientset.
-		Discovery().
-		ServerResources()
+func (c *Client) DiscoverAPIGroups() error {
+	apiResourceList, err := c.clientset.Discovery().ServerResources()
 	c.apiResourceList = apiResourceList
 	return err
 }
@@ -37,42 +34,52 @@ func (c *Client) GetAPIResourceList() []*metav1.APIResourceList {
 	return c.apiResourceList
 }
 
-// GetConfig will return the Config attribute of the Client object.
+// GetConfig will return the config attribute of the Client object.
 func (c *Client) GetConfig() *rest.Config {
-	return c.Config
+	return c.config
 }
 
-// GetClientset will return the Clientset attribute of the Client object.
-func (c *Client) GetClientset() *kubernetes.Clientset {
-	return c.Clientset
+// GetResourceAPIGroups will return the resourceAPIGroups attribute of the Client object.
+func (c *Client) GetResourceAPIGroups() map[string][]string {
+	return c.resourceAPIGroups
 }
 
-// GetGardenClientset will return the GardenClientset attribute of the Client object.
-func (c *Client) GetGardenClientset() *gardenclientset.Clientset {
-	return c.GardenClientset
+// Clientset will return the clientset attribute of the Client object.
+func (c *Client) Clientset() *kubernetes.Clientset {
+	return c.clientset
 }
 
-// GetRESTClient will return the RESTClient attribute of the Client object.
-func (c *Client) GetRESTClient() rest.Interface {
-	return c.RESTClient
+// GardenClientset will return the gardenClientset attribute of the Client object.
+func (c *Client) GardenClientset() *gardenclientset.Clientset {
+	return c.gardenClientset
 }
 
-// SetConfig will set the Config attribute of the Client object.
+// RESTClient will return the restClient attribute of the Client object.
+func (c *Client) RESTClient() rest.Interface {
+	return c.restClient
+}
+
+// SetConfig will set the config attribute of the Client object.
 func (c *Client) SetConfig(config *rest.Config) {
-	c.Config = config
+	c.config = config
 }
 
-// SetClientset will set the Clientset attribute of the Client object.
+// SetClientset will set the clientset attribute of the Client object.
 func (c *Client) SetClientset(clientset *kubernetes.Clientset) {
-	c.Clientset = clientset
+	c.clientset = clientset
 }
 
-// SetGardenClientset will set the GardenClientset attribute of the Client object.
+// SetGardenClientset will set the gardenClientset attribute of the Client object.
 func (c *Client) SetGardenClientset(client *gardenclientset.Clientset) {
-	c.GardenClientset = client
+	c.gardenClientset = client
 }
 
-// SetRESTClient will set the RESTClient attribute of the Client object.
+// SetRESTClient will set the restClient attribute of the Client object.
 func (c *Client) SetRESTClient(client rest.Interface) {
-	c.RESTClient = client
+	c.restClient = client
+}
+
+// SetResourceAPIGroups set the resourceAPIGroups attribute of the Client object.
+func (c *Client) SetResourceAPIGroups(groups map[string][]string) {
+	c.resourceAPIGroups = groups
 }

@@ -2,7 +2,8 @@
 apiVersion: v1
 kind: Service
 metadata:
-  name: garden-apiserver
+  name: gardener-apiserver
+  namespace: garden
   labels:
     app: gardener
     role: apiserver
@@ -18,4 +19,4 @@ spec:
   - port: 443
     protocol: TCP
     targetPort: 443
-{{- end}}
+{{- end }}

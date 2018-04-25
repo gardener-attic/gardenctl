@@ -1,4 +1,4 @@
-// Copyright 2018 The Gardener Authors.
+// Copyright (c) 2018 SAP SE or an SAP affiliate company. All rights reserved. This file is licensed under the Apache Software License, v. 2 except as noted otherwise in the LICENSE file
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -21,11 +21,13 @@ import (
 
 // Shoot is an object containing information about a Shoot cluster.
 type Shoot struct {
-	Info                  *gardenv1beta1.Shoot
-	Secret                *corev1.Secret
-	CloudProfile          *gardenv1beta1.CloudProfile
-	CloudProvider         gardenv1beta1.CloudProvider
-	SeedNamespace         string
-	InternalClusterDomain string
-	ExternalClusterDomain *string
+	Info                        *gardenv1beta1.Shoot
+	Secret                      *corev1.Secret
+	CloudProfile                *gardenv1beta1.CloudProfile
+	CloudProvider               gardenv1beta1.CloudProvider
+	SeedNamespace               string
+	InternalClusterDomain       string
+	ExternalClusterDomain       *string
+	KubernetesMajorMinorVersion string
+	Hibernated                  bool
 }

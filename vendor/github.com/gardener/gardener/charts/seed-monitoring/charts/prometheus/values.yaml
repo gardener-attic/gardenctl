@@ -1,10 +1,7 @@
-# replicaCount: 1
 # networks:
 #   pods: 100.96.0.0/11
 #   services: 100.64.0.0/13
 #   nodes: 10.250.0.0/16
-# imagePullSecrets:
-# - name: secret
 # global:
 #   shootKubeVersion:
 #     gitVersion: v1.6.4
@@ -23,3 +20,6 @@ namespace:
   uid: 100c3bb5-48b9-4f88-96ef-48ed557d4212
 
 podAnnotations: {}
+replicas: 1
+apiserverServiceIP: 100.10.10.10
+prometheusPort: 9090

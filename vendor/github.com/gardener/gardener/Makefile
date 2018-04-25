@@ -1,4 +1,4 @@
-# Copyright 2018 The Gardener Authors.
+# Copyright (c) 2018 SAP SE or an SAP affiliate company. All rights reserved. This file is licensed under the Apache Software License, v. 2 except as noted otherwise in the LICENSE file
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -12,152 +12,114 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-VCS              := github.com
-ORGANIZATION     := gardener
-PROJECT          := gardener
-REPOSITORY       := $(VCS)/$(ORGANIZATION)/$(PROJECT)
-VERSION          := $(shell cat VERSION)
-LD_FLAGS         := "-w -X $(REPOSITORY)/pkg/version.Version=$(VERSION)"
-PACKAGES         := $(shell go list ./... | grep -vE '/vendor/|/pkg/client/garden|/pkg/apis')
-TEST_FOLDERS     := cmd pkg plugin
-LINT_FOLDERS     := $(shell echo $(PACKAGES) | sed "s|$(REPOSITORY)|.|g")
-REGISTRY         := eu.gcr.io/sap-cloud-platform-dev1
-IMAGE_REPOSITORY := $(REGISTRY)/garden/$(PROJECT)
-IMAGE_TAG        := $(VERSION)
+REGISTRY                           := eu.gcr.io/gardener-project/gardener
+APISERVER_IMAGE_REPOSITORY         := $(REGISTRY)/apiserver
+CONROLLER_MANAGER_IMAGE_REPOSITORY := $(REGISTRY)/controller-manager
+IMAGE_TAG                          := $(shell cat VERSION)
 
-TYPES_FILES      := $(shell find pkg/apis -name types.go)
+#########################################
+# Rules for local development scenarios #
+#########################################
 
-BUILD_DIR        := build
-BIN_DIR          := bin
-GOBIN            := $(PWD)/$(BIN_DIR)
-GO_EXTRA_FLAGS   := -v
-PATH             := $(GOBIN):$(PATH)
-USER             := $(shell id -u -n)
+.PHONY: dev-setup
+dev-setup:
+	@./hack/dev-setup
 
-export PATH
-export GOBIN
+.PHONY: dev-setup-local
+dev-setup-local:
+	@./hack/dev-setup-local
 
-.PHONY: dev
-dev:
-	$(eval LD_FLAGS_RUN = "-w -X $(REPOSITORY)/pkg/version.Version="$(shell ./hack/get-next-version))
-	@KUBECONFIG=dev/garden-kubeconfig.yaml WATCH_NAMESPACE=$(USER) go run -ldflags $(LD_FLAGS_RUN) cmd/garden-controller-manager/main.go --config=dev/componentconfig-garden-controller-manager.yaml
+.PHONY: start-api
+start-api:
+	@go run cmd/gardener-apiserver/main.go \
+			--authentication-kubeconfig ~/.kube/config \
+			--authorization-kubeconfig ~/.kube/config \
+			--enable-admission-plugins=ResourceReferenceManager,ShootSeedManager,ShootDNSHostedZone,ShootValidator,ShootQuotaValidator \
+			--etcd-servers=http://$(shell minikube ip):32379 \
+			--kubeconfig ~/.kube/config \
+			--tls-cert-file ~/.minikube/apiserver.crt \
+			--tls-private-key-file ~/.minikube/apiserver.key \
+			--secure-port=8443 \
+			--v=2
 
-.PHONY: dev-all
-dev-all:
-	$(eval LD_FLAGS_RUN = "-w -X $(REPOSITORY)/pkg/version.Version="$(shell ./hack/get-next-version))
-	@KUBECONFIG=dev/garden-kubeconfig.yaml go run -ldflags $(LD_FLAGS_RUN) cmd/garden-controller-manager/main.go --config=dev/componentconfig-garden-controller-manager.yaml
+.PHONY: start
+start:
+	@KUBECONFIG=~/.kube/config GARDENER_KUBECONFIG=~/.kube/config go run \
+			-ldflags "-w -X github.com/gardener/gardener/pkg/version.Version=$(shell ./hack/get-next-version)" \
+			cmd/gardener-controller-manager/main.go \
+			--config=dev/componentconfig-gardener-controller-manager.yaml
 
-.PHONY: verify
-verify: vet fmt lint test
+.PHONY: start-local
+start-local:
+	@go run cmd/gardener-local-provider/main.go
+
+#################################################################
+# Rules related to binary build, Docker image build and release #
+#################################################################
 
 .PHONY: revendor
 revendor:
 	@dep ensure -update
-	@dep prune
-
 
 .PHONY: build
-build: apiserver-build controller-manager-build
+build:
+	@.ci/build
+
+.PHONY: build-local
+build-local:
+	@env LOCAL_BUILD=1 .ci/build
 
 .PHONY: release
-release: apiserver-release controller-manager-release
+release: build build-local docker-images docker-login docker-push rename-binaries
 
-
-.PHONY: apiserver-release
-apiserver-release: apiserver-build apiserver-docker-build apiserver-docker-image docker-login apiserver-docker-push apiserver-rename-binaries
-
-.PHONY: apiserver-build
-apiserver-build:
-	@go build -o $(BIN_DIR)/garden-apiserver $(GO_EXTRA_FLAGS) -ldflags $(LD_FLAGS) cmd/garden-apiserver/*.go
-
-.PHONY: apiserver-build-release
-apiserver-build-release:
-	@go build -o /go/bin/garden-apiserver $(GO_EXTRA_FLAGS) -ldflags $(LD_FLAGS) cmd/garden-apiserver/*.go
-
-.PHONY: apiserver-docker-build
-apiserver-docker-build:
-	@./$(BUILD_DIR)/garden-apiserver/docker-build.sh
-	@sudo chown $(user):$(group) $(BIN_DIR)/rel/garden-apiserver
-
-.PHONY: apiserver-docker-image
-apiserver-docker-image:
-	@if [[ ! -f $(BIN_DIR)/rel/garden-apiserver ]]; then echo "No binary found. Please run 'make apiserver-docker-build'"; false; fi
-	@docker build -t $(IMAGE_REPOSITORY):$(IMAGE_TAG) -f $(BUILD_DIR)/garden-apiserver/Dockerfile --rm .
-
-.PHONY: apiserver-docker-push
-apiserver-docker-push:
-	@if ! docker images $(IMAGE_REPOSITORY) | awk '{ print $$2 }' | grep -q -F $(IMAGE_TAG); then echo "$(IMAGE_REPOSITORY) version $(IMAGE_TAG) is not yet built. Please run 'make apiserver-docker-image'"; false; fi
-	@gcloud docker -- push $(IMAGE_REPOSITORY):$(IMAGE_TAG)
-
-.PHONY: apiserver-rename-binaries
-apiserver-rename-binaries:
-	@if [[ -f $(BIN_DIR)/garden-apiserver ]]; then cp $(BIN_DIR)/garden-apiserver garden-apiserver-darwin-amd64; fi
-	@if [[ -f $(BIN_DIR)/rel/garden-apiserver ]]; then cp $(BIN_DIR)/rel/garden-apiserver garden-apiserver-linux-amd64; fi
-
-
-.PHONY: controller-manager-release
-controller-manager-release: controller-manager-build controller-manager-docker-build controller-manager-docker-image docker-login controller-manager-docker-push controller-manager-rename-binaries
-
-.PHONY: controller-manager-build
-controller-manager-build:
-	@go build -o $(BIN_DIR)/garden-controller-manager $(GO_EXTRA_FLAGS) -ldflags $(LD_FLAGS) cmd/garden-controller-manager/*.go
-
-.PHONY: controller-manager-build-release
-controller-manager-build-release:
-	@go build -o /go/bin/garden-controller-manager $(GO_EXTRA_FLAGS) -ldflags $(LD_FLAGS) cmd/garden-controller-manager/*.go
-
-.PHONY: controller-manager-docker-build
-controller-manager-docker-build:
-	@./$(BUILD_DIR)/garden-controller-manager/docker-build.sh
-	@sudo chown $(user):$(group) $(BIN_DIR)/rel/garden-controller-manager
-
-.PHONY: controller-manager-docker-image
-controller-manager-docker-image:
-	@if [[ ! -f $(BIN_DIR)/rel/garden-controller-manager ]]; then echo "No binary found. Please run 'make controller-manager-docker-build'"; false; fi
-	@docker build -t $(IMAGE_REPOSITORY):$(IMAGE_TAG) -f $(BUILD_DIR)/garden-controller-manager/Dockerfile --rm .
-
-.PHONY: controller-manager-docker-push
-controller-manager-docker-push:
-	@if ! docker images $(IMAGE_REPOSITORY) | awk '{ print $$2 }' | grep -q -F $(IMAGE_TAG); then echo "$(IMAGE_REPOSITORY) version $(IMAGE_TAG) is not yet built. Please run 'make controller-manager-docker-image'"; false; fi
-	@gcloud docker -- push $(IMAGE_REPOSITORY):$(IMAGE_TAG)
-
-.PHONY: controller-manager-rename-binaries
-controller-manager-rename-binaries:
-	@if [[ -f $(BIN_DIR)/garden-controller-manager ]]; then cp $(BIN_DIR)/garden-controller-manager garden-controller-manager-darwin-amd64; fi
-	@if [[ -f $(BIN_DIR)/rel/garden-controller-manager ]]; then cp $(BIN_DIR)/rel/garden-controller-manager garden-controller-manager-linux-amd64; fi
-
+.PHONY: docker-images
+docker-images:
+	@if [[ ! -f bin/rel/gardener-apiserver || ! -f bin/rel/gardener-controller-manager ]]; then echo "No binary found. Please run 'make build'"; false; fi
+	@docker build -t $(APISERVER_IMAGE_REPOSITORY):$(IMAGE_TAG)         -f build/gardener-apiserver/Dockerfile          --rm .
+	@docker build -t $(CONROLLER_MANAGER_IMAGE_REPOSITORY):$(IMAGE_TAG) -f build/gardener-controller-manager/Dockerfile --rm .
 
 .PHONY: docker-login
 docker-login:
 	@gcloud auth activate-service-account --key-file .kube-secrets/gcr/gcr-readwrite.json
 
+.PHONY: docker-push
+docker-push:
+	@if ! docker images $(APISERVER_IMAGE_REPOSITORY) | awk '{ print $$2 }' | grep -q -F $(IMAGE_TAG); then echo "$(APISERVER_IMAGE_REPOSITORY) version $(IMAGE_TAG) is not yet built. Please run 'make docker-images'"; false; fi
+	@if ! docker images $(CONROLLER_MANAGER_IMAGE_REPOSITORY) | awk '{ print $$2 }' | grep -q -F $(IMAGE_TAG); then echo "$(CONROLLER_MANAGER_IMAGE_REPOSITORY) version $(IMAGE_TAG) is not yet built. Please run 'make docker-images'"; false; fi
+	@gcloud docker -- push $(APISERVER_IMAGE_REPOSITORY):$(IMAGE_TAG)
+	@gcloud docker -- push $(CONROLLER_MANAGER_IMAGE_REPOSITORY):$(IMAGE_TAG)
+
+.PHONY: rename-binaries
+rename-binaries:
+	@if [[ -f bin/gardener-apiserver ]]; then cp bin/gardener-apiserver gardener-apiserver-darwin-amd64; fi
+	@if [[ -f bin/gardener-controller-manager ]]; then cp bin/gardener-controller-manager gardener-controller-manager-darwin-amd64; fi
+	@if [[ -f bin/rel/gardener-apiserver ]]; then cp bin/rel/gardener-apiserver gardener-apiserver-linux-amd64; fi
+	@if [[ -f bin/rel/gardener-controller-manager ]]; then cp bin/rel/gardener-controller-manager gardener-controller-manager-linux-amd64; fi
+
 .PHONY: clean
 clean:
-	@rm -rf $(BIN_DIR)/
+	@rm -rf bin/
 	@rm -f *linux-amd64
 	@rm -f *darwin-amd64
 
-.PHONY: fmt
-fmt:
-	@go fmt $(PACKAGES)
+#####################################################################
+# Rules for verification, formatting, linting, testing and cleaning #
+#####################################################################
 
-.PHONY: vet
-vet:
-	@go vet $(PACKAGES)
+.PHONY: verify
+verify: check test
 
-.PHONY: lint
-lint:
-	@for package in $(LINT_FOLDERS); do \
-		golint -set_exit_status $$(find $$package -maxdepth 1 -name "*.go" | grep -vE 'zz_generated|_test.go') || exit 1; \
-	done
+.PHONY: check
+check:
+	@.ci/check
 
 .PHONY: test
 test:
-	@ginkgo -r $(TEST_FOLDERS)
+	@.ci/test
 
 .PHONY: test-cov
 test-cov:
-	@ginkgo -cover -r $(TEST_FOLDERS)
+	@env COVERAGE=1 .ci/test
 	@echo "mode: set" > gardener.coverprofile && find . -name "*.coverprofile" -type f | xargs cat | grep -v mode: | sort -r | awk '{if($$1 != last) {print $$0;last=$$1}}' >> gardener.coverprofile
 	@go tool cover -html=gardener.coverprofile -o=gardener.coverage.html
 	@rm gardener.coverprofile

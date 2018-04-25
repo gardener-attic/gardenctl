@@ -1,4 +1,4 @@
-// Copyright 2018 The Gardener Authors.
+// Copyright (c) 2018 SAP SE or an SAP affiliate company. All rights reserved. This file is licensed under the Apache Software License, v. 2 except as noted otherwise in the LICENSE file
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,12 +17,13 @@ package kubernetes
 import (
 	"bytes"
 
-	gardenv1beta1 "github.com/gardener/gardener/pkg/apis/garden/v1beta1"
 	clientset "github.com/gardener/gardener/pkg/client/garden/clientset/versioned"
 	"github.com/gardener/gardener/pkg/client/kubernetes/mapping"
-	batch_v1 "k8s.io/api/batch/v1"
+	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
+	rbacv1 "k8s.io/api/rbac/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 )
@@ -31,54 +32,47 @@ import (
 // (which are performed with the help of kubernetes/client-go) in order to allow the implementation
 // of several Kubernetes versions.
 type Client interface {
-	Bootstrap() error
+	DiscoverAPIGroups() error
 
 	// Getter & Setter
+	Clientset() *kubernetes.Clientset
+	GardenClientset() *clientset.Clientset
 	GetAPIResourceList() []*metav1.APIResourceList
 	GetConfig() *rest.Config
-	GetClientset() *kubernetes.Clientset
-	GetGardenClientset() *clientset.Clientset
-	GetRESTClient() rest.Interface
+	GetResourceAPIGroups() map[string][]string
+	RESTClient() rest.Interface
 	SetConfig(*rest.Config)
 	SetClientset(*kubernetes.Clientset)
 	SetGardenClientset(*clientset.Clientset)
 	SetRESTClient(rest.Interface)
+	SetResourceAPIGroups(map[string][]string)
+	MachineV1alpha1(string, string, string) *rest.Request
 
-	// Shoots
-	CreateShoot(*gardenv1beta1.Shoot) (*gardenv1beta1.Shoot, error)
-	GetShoot(string, string) (*gardenv1beta1.Shoot, error)
-	PatchShoot(*gardenv1beta1.Shoot, []byte) (*gardenv1beta1.Shoot, error)
-	UpdateShoot(*gardenv1beta1.Shoot) (*gardenv1beta1.Shoot, error)
-	UpdateShootStatus(*gardenv1beta1.Shoot) (*gardenv1beta1.Shoot, error)
-	ListShoots(string) (*gardenv1beta1.ShootList, error)
-	DeleteShoot(string, string) error
-
-	// Seeds
-	CreateSeed(*gardenv1beta1.Seed) (*gardenv1beta1.Seed, error)
-	GetSeed(string) (*gardenv1beta1.Seed, error)
-	UpdateSeed(*gardenv1beta1.Seed) (*gardenv1beta1.Seed, error)
-	UpdateSeedStatus(*gardenv1beta1.Seed) (*gardenv1beta1.Seed, error)
-	DeleteSeed(string) error
+	// Cleanup
+	ListResources(...string) (unstructured.Unstructured, error)
+	CleanupResources(map[string]map[string]bool) error
+	CleanupAPIGroupResources(map[string]map[string]bool, string, []string) error
+	CheckResourceCleanup(map[string]map[string]bool, string, []string) (bool, error)
 
 	// Namespaces
-	CreateNamespace(string, bool) (*corev1.Namespace, error)
-	UpdateNamespace(string) (*corev1.Namespace, error)
+	CreateNamespace(*corev1.Namespace, bool) (*corev1.Namespace, error)
+	UpdateNamespace(*corev1.Namespace) (*corev1.Namespace, error)
 	GetNamespace(string) (*corev1.Namespace, error)
 	ListNamespaces(metav1.ListOptions) (*corev1.NamespaceList, error)
 	DeleteNamespace(string) error
 
 	// Secrets
 	CreateSecret(string, string, corev1.SecretType, map[string][]byte, bool) (*corev1.Secret, error)
+	CreateSecretObject(*corev1.Secret, bool) (*corev1.Secret, error)
 	UpdateSecret(string, string, corev1.SecretType, map[string][]byte) (*corev1.Secret, error)
+	UpdateSecretObject(*corev1.Secret) (*corev1.Secret, error)
 	ListSecrets(string, metav1.ListOptions) (*corev1.SecretList, error)
 	GetSecret(string, string) (*corev1.Secret, error)
 	DeleteSecret(string, string) error
 
-	// ServiceAccounts
-	GetServiceAccount(string, string) (*corev1.ServiceAccount, error)
-	PatchServiceAccount(string, string, []byte) (*corev1.ServiceAccount, error)
-
 	// ConfigMaps
+	CreateConfigMap(string, string, map[string]string, bool) (*corev1.ConfigMap, error)
+	UpdateConfigMap(string, string, map[string]string) (*corev1.ConfigMap, error)
 	GetConfigMap(string, string) (*corev1.ConfigMap, error)
 	DeleteConfigMap(string, string) error
 
@@ -94,7 +88,7 @@ type Client interface {
 	DeleteStatefulSet(string, string) error
 
 	// Jobs
-	GetJob(string, string) (*batch_v1.Job, error)
+	GetJob(string, string) (*batchv1.Job, error)
 	DeleteJob(string, string) error
 
 	// ReplicaSets
@@ -112,47 +106,14 @@ type Client interface {
 	// Nodes
 	ListNodes(metav1.ListOptions) (*corev1.NodeList, error)
 
-	// TPRs / CRDs
-	GetCRD(string) (*mapping.CustomResourceDefinition, error)
-
 	// RoleBindings
-	ListRoleBindings(string, metav1.ListOptions) ([]*mapping.RoleBinding, error)
+	ListRoleBindings(string, metav1.ListOptions) (*rbacv1.RoleBindingList, error)
 
 	// Arbitrary manifests
 	Apply([]byte) error
-	BuildPath(string, string, string) (string, error)
 
 	// Miscellaneous
 	Curl(string) (*rest.Result, error)
 	QueryVersion() (string, error)
 	Version() string
-	ListResources(bool, []string) ([]byte, error)
-
-	// Cleanup
-	CleanupResource(map[string]bool, bool, ...string) error
-	CleanupNamespaces(map[string]bool) error
-	CleanupPersistentVolumeClaims(map[string]bool) error
-	CleanupPods(map[string]bool) error
-	CleanupCRDs(map[string]bool) error
-	CleanupDaemonSets(map[string]bool) error
-	CleanupJobs(map[string]bool) error
-	CleanupReplicationControllers(map[string]bool) error
-	CleanupReplicaSets(map[string]bool) error
-	CleanupDeployments(map[string]bool) error
-	CleanupServices(map[string]bool) error
-	CleanupStatefulSets(map[string]bool) error
-
-	// Cleanup check
-	CheckResourceCleanup(map[string]bool, bool, ...string) (bool, error)
-	CheckNamespaceCleanup(map[string]bool) (bool, error)
-	CheckPersistentVolumeClaimCleanup(map[string]bool) (bool, error)
-	CheckPodCleanup(map[string]bool) (bool, error)
-	CheckCRDCleanup(map[string]bool) (bool, error)
-	CheckDaemonSetCleanup(map[string]bool) (bool, error)
-	CheckJobCleanup(map[string]bool) (bool, error)
-	CheckReplicationControllerCleanup(map[string]bool) (bool, error)
-	CheckReplicaSetCleanup(map[string]bool) (bool, error)
-	CheckDeploymentCleanup(map[string]bool) (bool, error)
-	CheckServiceCleanup(map[string]bool) (bool, error)
-	CheckStatefulSetCleanup(map[string]bool) (bool, error)
 }

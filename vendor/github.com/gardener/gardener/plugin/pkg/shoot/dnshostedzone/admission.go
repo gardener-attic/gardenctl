@@ -1,4 +1,4 @@
-// Copyright 2018 The Gardener Authors.
+// Copyright (c) 2018 SAP SE or an SAP affiliate company. All rights reserved. This file is licensed under the Apache Software License, v. 2 except as noted otherwise in the LICENSE file
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -25,6 +25,7 @@ import (
 	gardeninformers "github.com/gardener/gardener/pkg/client/garden/informers/internalversion"
 	gardenlisters "github.com/gardener/gardener/pkg/client/garden/listers/garden/internalversion"
 	"github.com/gardener/gardener/pkg/operation/cloudbotanist/awsbotanist"
+	"github.com/gardener/gardener/pkg/operation/cloudbotanist/gcpbotanist"
 	"github.com/gardener/gardener/pkg/operation/common"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -35,9 +36,14 @@ import (
 	kubecorev1listers "k8s.io/client-go/listers/core/v1"
 )
 
+const (
+	// PluginName is the name of this admission plugin.
+	PluginName = "ShootDNSHostedZone"
+)
+
 // Register registers a plugin.
 func Register(plugins *admission.Plugins) {
-	plugins.Register("ShootDNSHostedZone", func(config io.Reader) (admission.Interface, error) {
+	plugins.Register(PluginName, func(config io.Reader) (admission.Interface, error) {
 		return New()
 	})
 }
@@ -45,9 +51,8 @@ func Register(plugins *admission.Plugins) {
 // Finder contains listers and and admission handler.
 type Finder struct {
 	*admission.Handler
-	secretLister               kubecorev1listers.SecretLister
-	privateSecretBindingLister gardenlisters.PrivateSecretBindingLister
-	crossSecretBindingLister   gardenlisters.CrossSecretBindingLister
+	secretLister        kubecorev1listers.SecretLister
+	secretBindingLister gardenlisters.SecretBindingLister
 }
 
 var _ = admissioninitializer.WantsInternalGardenInformerFactory(&Finder{})
@@ -56,14 +61,13 @@ var _ = admissioninitializer.WantsKubeInformerFactory(&Finder{})
 // New creates a new Finder admission plugin.
 func New() (*Finder, error) {
 	return &Finder{
-		Handler: admission.NewHandler(admission.Create),
+		Handler: admission.NewHandler(admission.Create, admission.Update),
 	}, nil
 }
 
 // SetInternalGardenInformerFactory gets Lister from SharedInformerFactory.
 func (h *Finder) SetInternalGardenInformerFactory(f gardeninformers.SharedInformerFactory) {
-	h.privateSecretBindingLister = f.Garden().InternalVersion().PrivateSecretBindings().Lister()
-	h.crossSecretBindingLister = f.Garden().InternalVersion().CrossSecretBindings().Lister()
+	h.secretBindingLister = f.Garden().InternalVersion().SecretBindings().Lister()
 }
 
 // SetKubeInformerFactory gets Lister from SharedInformerFactory.
@@ -76,18 +80,13 @@ func (h *Finder) ValidateInitialization() error {
 	if h.secretLister == nil {
 		return errors.New("missing secret lister")
 	}
-	if h.privateSecretBindingLister == nil {
-		return errors.New("missing private secret binding lister")
-	}
-	if h.crossSecretBindingLister == nil {
-		return errors.New("missing cross secret binding lister")
+	if h.secretBindingLister == nil {
+		return errors.New("missing secret binding lister")
 	}
 	return nil
 }
 
-// Admit ensures that the object in-flight is of kind Shoot.
-// In addition it tries to find an adequate Seed cluster for the given cloud provider profile and region,
-// and writes the name into the Shoot specification.
+// Admit tries to determine a DNS hosted zone for the Shoot's external domain.
 func (h *Finder) Admit(a admission.Attributes) error {
 	// Wait until the caches have been synced
 	if !h.WaitForReady() {
@@ -112,7 +111,7 @@ func (h *Finder) Admit(a admission.Attributes) error {
 	// If not, we must ensure that the cloud provider secret provided by the user contain credentials for the
 	// respective DNS provider.
 	if shoot.Spec.DNS.HostedZoneID != nil {
-		if err := verifyHostedZoneID(shoot, h.privateSecretBindingLister, h.crossSecretBindingLister, h.secretLister); err != nil {
+		if err := verifyHostedZoneID(shoot, h.secretBindingLister, h.secretLister); err != nil {
 			return admission.NewForbidden(a, err)
 		}
 		return nil
@@ -129,7 +128,7 @@ func (h *Finder) Admit(a admission.Attributes) error {
 
 // verifyHostedZoneID verifies that the cloud provider secret for the Shoot cluster contains credentials for the
 // respective DNS provider.
-func verifyHostedZoneID(shoot *garden.Shoot, privateSecretBindingLister gardenlisters.PrivateSecretBindingLister, crossSecretBindingLister gardenlisters.CrossSecretBindingLister, secretLister kubecorev1listers.SecretLister) error {
+func verifyHostedZoneID(shoot *garden.Shoot, secretBindingLister gardenlisters.SecretBindingLister, secretLister kubecorev1listers.SecretLister) error {
 	secrets, err := getDefaultDomainSecrets(secretLister)
 	if err != nil {
 		return err
@@ -145,18 +144,35 @@ func verifyHostedZoneID(shoot *garden.Shoot, privateSecretBindingLister gardenli
 		}
 	}
 
-	// If the hosted zone id does not match a default domain then the cloud provider secret must contain valid
-	// credentials for the respective DNS provider.
-	cloudProviderSecret, err := getCloudProviderSecret(shoot, privateSecretBindingLister, crossSecretBindingLister, secretLister)
-	if err != nil {
-		return err
+	// If the hosted zone id does not match a default domain then either the cloud provider secret must contain valid
+	// credentials for the respective DNS provider, or the spec.dns section must contain a field 'secretName' which is
+	// a reference to a secret containing the needed credentials.
+	var credentials *corev1.Secret
+	if shoot.Spec.DNS.SecretName != nil {
+		referencedSecret, err := secretLister.Secrets(shoot.Namespace).Get(*shoot.Spec.DNS.SecretName)
+		if err != nil {
+			return err
+		}
+		credentials = referencedSecret
+	} else {
+		cloudProviderSecret, err := getCloudProviderSecret(shoot, secretBindingLister, secretLister)
+		if err != nil {
+			return err
+		}
+		credentials = cloudProviderSecret
 	}
+
 	switch shoot.Spec.DNS.Provider {
 	case garden.DNSAWSRoute53:
-		_, accessKeyFound := cloudProviderSecret.Data[awsbotanist.AccessKeyID]
-		_, secretKeyFound := cloudProviderSecret.Data[awsbotanist.SecretAccessKey]
+		_, accessKeyFound := credentials.Data[awsbotanist.AccessKeyID]
+		_, secretKeyFound := credentials.Data[awsbotanist.SecretAccessKey]
 		if !accessKeyFound || !secretKeyFound {
-			return errors.New("specifying the `.spec.dns.hostedZoneID` field is only possible if the cloud provider secret contains AWS credentials for Route53")
+			return fmt.Errorf("specifying the `.spec.dns.hostedZoneID` field is only possible if the cloud provider secret or the secret referenced in .spec.dns.secretName contains credentials for AWS Route53 (%s and %s)", awsbotanist.AccessKeyID, awsbotanist.SecretAccessKey)
+		}
+	case garden.DNSGoogleCloudDNS:
+		_, serviceAccountJSONFound := credentials.Data[gcpbotanist.ServiceAccountJSON]
+		if !serviceAccountJSONFound {
+			return fmt.Errorf("specifying the `.spec.dns.hostedZoneID` field is only possible if the cloud provider secret or the secret referenced in .spec.dns.secretName contains credentials for Google CloudDNS (%s)", gcpbotanist.ServiceAccountJSON)
 		}
 	}
 
@@ -209,23 +225,10 @@ func getDefaultDomainSecrets(secretLister kubecorev1listers.SecretLister) ([]cor
 }
 
 // getCloudProviderSecret reads the cloud provider secret specified by the binding referenced in the Shoot manifest.
-func getCloudProviderSecret(shoot *garden.Shoot, privateSecretBindingLister gardenlisters.PrivateSecretBindingLister, crossSecretBindingLister gardenlisters.CrossSecretBindingLister, secretLister kubecorev1listers.SecretLister) (*corev1.Secret, error) {
-	bindingRef := shoot.Spec.Cloud.SecretBindingRef
-
-	switch bindingRef.Kind {
-	case "PrivateSecretBinding":
-		binding, err := privateSecretBindingLister.PrivateSecretBindings(shoot.Namespace).Get(bindingRef.Name)
-		if err != nil {
-			return nil, err
-		}
-		return secretLister.Secrets(binding.Namespace).Get(binding.SecretRef.Name)
-	case "CrossSecretBinding":
-		binding, err := crossSecretBindingLister.CrossSecretBindings(shoot.Namespace).Get(bindingRef.Name)
-		if err != nil {
-			return nil, err
-		}
-		return secretLister.Secrets(binding.SecretRef.Namespace).Get(binding.SecretRef.Name)
-	default:
-		return nil, errors.New("unknown secret binding reference kind")
+func getCloudProviderSecret(shoot *garden.Shoot, secretBindingLister gardenlisters.SecretBindingLister, secretLister kubecorev1listers.SecretLister) (*corev1.Secret, error) {
+	binding, err := secretBindingLister.SecretBindings(shoot.Namespace).Get(shoot.Spec.Cloud.SecretBindingRef.Name)
+	if err != nil {
+		return nil, err
 	}
+	return secretLister.Secrets(binding.SecretRef.Namespace).Get(binding.SecretRef.Name)
 }

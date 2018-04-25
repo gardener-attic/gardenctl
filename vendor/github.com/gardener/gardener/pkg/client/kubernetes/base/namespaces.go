@@ -1,4 +1,4 @@
-// Copyright 2018 The Gardener Authors.
+// Copyright (c) 2018 SAP SE or an SAP affiliate company. All rights reserved. This file is licensed under the Apache Software License, v. 2 except as noted otherwise in the LICENSE file
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -20,78 +20,35 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-var namespacePath = []string{"api", "v1", "namespaces"}
-
 // CreateNamespace creates a new Namespace object.
-func (c *Client) CreateNamespace(name string, updateIfExists bool) (*corev1.Namespace, error) {
-	namespace, err := c.
-		Clientset.
-		CoreV1().
-		Namespaces().
-		Create(&corev1.Namespace{
-			ObjectMeta: metav1.ObjectMeta{
-				Name: name,
-			},
-		})
+func (c *Client) CreateNamespace(namespace *corev1.Namespace, updateIfExists bool) (*corev1.Namespace, error) {
+	res, err := c.clientset.CoreV1().Namespaces().Create(namespace)
 	if err != nil && apierrors.IsAlreadyExists(err) && updateIfExists {
-		return c.UpdateNamespace(name)
+		return c.UpdateNamespace(namespace)
 	}
-	return namespace, err
+	return res, err
 }
 
 // UpdateNamespace updates an already existing Namespace object.
-func (c *Client) UpdateNamespace(name string) (*corev1.Namespace, error) {
-	return c.
-		Clientset.
-		CoreV1().
-		Namespaces().
-		Update(&corev1.Namespace{
-			ObjectMeta: metav1.ObjectMeta{
-				Name: name,
-			},
-		})
+func (c *Client) UpdateNamespace(namespace *corev1.Namespace) (*corev1.Namespace, error) {
+	return c.clientset.CoreV1().Namespaces().Update(namespace)
 }
 
 // GetNamespace returns a Namespace object.
 func (c *Client) GetNamespace(name string) (*corev1.Namespace, error) {
-	return c.
-		Clientset.
-		CoreV1().
-		Namespaces().
-		Get(name, metav1.GetOptions{})
+	return c.clientset.CoreV1().Namespaces().Get(name, metav1.GetOptions{})
 }
 
 // ListNamespaces returns a list of namespaces. The selection can be restricted by passing a <selector>.
 func (c *Client) ListNamespaces(selector metav1.ListOptions) (*corev1.NamespaceList, error) {
-	return c.
-		Clientset.
-		CoreV1().
-		Namespaces().
-		List(selector)
+	return c.clientset.CoreV1().Namespaces().List(selector)
 }
 
 // DeleteNamespace deletes a namespace.
 func (c *Client) DeleteNamespace(name string) error {
 	deleteGracePeriod := int64(1)
-	return c.
-		Clientset.
-		CoreV1().
-		Namespaces().
-		Delete(name, &metav1.DeleteOptions{
-			PropagationPolicy:  &propagationPolicy,
-			GracePeriodSeconds: &deleteGracePeriod,
-		})
-}
-
-// CleanupNamespaces deletes all the Namespaces in the cluster other than those stored in the
-// exceptions map <exceptions>.
-func (c *Client) CleanupNamespaces(exceptions map[string]bool) error {
-	return c.CleanupResource(exceptions, false, namespacePath...)
-}
-
-// CheckNamespaceCleanup will check whether all the Namespaces in the cluster other than those
-// stored in the exceptions map <exceptions> have been deleted. It will return an error
-// in case it has not finished yet, and nil if all resources are gone.
-func (c *Client) CheckNamespaceCleanup(exceptions map[string]bool) (bool, error) {
-	return c.CheckResourceCleanup(exceptions, false, namespacePath...)
+	return c.clientset.CoreV1().Namespaces().Delete(name, &metav1.DeleteOptions{
+		PropagationPolicy:  &propagationPolicy,
+		GracePeriodSeconds: &deleteGracePeriod,
+	})
 }

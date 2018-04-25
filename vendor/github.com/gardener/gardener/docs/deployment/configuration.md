@@ -5,16 +5,14 @@ In order to establish different configuration settings for the same cloud enviro
 Seed clusters have their [own resource](../../example/seed-aws-dev.yaml) as well. These resources contain metadata about the respective Seed cluster and a reference to a secret holding the credentials (see below).
 
 The Gardener requires some secrets in order to work properly. These secrets are:
-* *Image pull secrets*, contain the [Docker configuration](https://kubernetes.io/docs/concepts/containers/images/#creating-a-secret-with-a-docker-config) holding the credentials required to pull images from private registries, please see [this](../../example/secret-image-pull.yaml) for an example.
-  * All configured image pull secrets will be created in the respective Kubernetes clusters to allow authenticating against the private registries.
-
 * *Seed cluster secrets*, contain the credentials of the cloud provider account in which the Seed cluster is deployed, and a Kubeconfig which can be used to authenticate against the Seed cluster's kube-apiserver, please see [this](../../example/secret-seed-aws-dev.yaml) for an example.
 
 * *Internal domain secrets* (optional), contain the DNS provider credentials (with appropriate privileges) which will be used to create/delete internal DNS records for the Shoot clusters (e.g., `example.com`), please see [this](../../example/secret-internal-domain.yaml) for an example.
   * These secrets are used in order to establish a stable endpoint for Shoot clusters which is used internally by all control plane components.
+  * It is forbidden to change the internal domain secret if there are existing Shoot clusters.
 
 * *Default domain secrets* (optional), contain the DNS provider credentials (with appropriate privileges) which will be used to create/delete DNS records for the default domain (e.g., `example.com`), please see [this](../../example/secret-default-domain.yaml) for an example.
-  * These secrets are used in order to allow not specifying a hosted zone when creating a Shoot cluster in the `.spec.dns.hostedZoneID` field (useful when a user does not have an own domain/hosted zone but want us to manage it). In this case, based on the provided `.spec.dns.domain` value, the Gardener tries to find an appropriate secret holding the credentials for the hosted zone of this domain. It will use them to manage the relevant DNS records. Currently, only AWS Route53 has been implemented as DNS provider. This is the required IAM policy document:
+  * These secrets are used in order to allow not specifying a hosted zone when creating a Shoot cluster in the `.spec.dns.hostedZoneID` field (useful when a user does not have an own domain/hosted zone but want us to manage it). In this case, based on the provided `.spec.dns.domain` value, the Gardener tries to find an appropriate secret holding the credentials for the hosted zone of this domain. It will use them to manage the relevant DNS records. Currently, we have implemented AWS Route53 and Google CloudDNS as DNS providers. For Google CloudDNS you need to provide a service account with the `DNS Administrator` role. For AWS you need to provide a user being assigned to this IAM policy document:
     ```bash
     {
       "Version": "2012-10-17",
@@ -44,9 +42,9 @@ The secrets are determined based on labels with key `garden.sapcloud.io/role`. P
 
 The Seed cluster which is used to deploy the control plane of a Shoot cluster can be specified by the user in the Shoot manifest (see [here](../../example/shoot-azure.yaml#L10)). If it is not specified, the Gardener will try to find an adequate Seed cluster (one deployed in the same region at the same cloud provider) automatically.
 
-The cloud provider secrets can be stored in any namespace. With [`PrivateSecretBindings`](../../example/privatesecretbinding-core-aws.yaml) one can reference a secret in the same namespace, whereas one has to use [`CrossSecretBindings`](../../example/crosssecretbinding-default-my-aws-secret.yaml) when referencing a secret in another namespace.
+The cloud provider secrets can be stored in any namespace. With [`SecretBindings`](../../example/secretbinding-core-aws.yaml) one can reference a secret in the same or in another namespace. These binding objects can also be used to reference `Quotas` for the specific secret.
 
-## Configuration file for Garden controller manager
-The Garden controller manager does only support one command line flag which should be a path to a valid configuration file.
+## Configuration file for Gardener controller manager
+The Gardener controller manager does only support one command line flag which should be a path to a valid configuration file.
 
-Please take a look at [this](../../example/componentconfig-garden-controller-manager.yaml) example configuration.
+Please take a look at [this](../../example/componentconfig-gardener-controller-manager.yaml) example configuration.

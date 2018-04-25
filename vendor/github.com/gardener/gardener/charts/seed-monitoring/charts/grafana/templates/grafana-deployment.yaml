@@ -1,13 +1,14 @@
 ---
-apiVersion: {{include "deploymentversion" .}}
+apiVersion: {{ include "deploymentversion" . }}
 kind: Deployment
 metadata:
   name: grafana
-  namespace: {{.Release.Namespace}}
+  namespace: {{ .Release.Namespace }}
   labels:
     component: grafana
 spec:
-  replicas: 1
+  revisionHistoryLimit: 0
+  replicas: {{ .Values.replicas }}
   selector:
     matchLabels:
       component: grafana
@@ -23,7 +24,7 @@ spec:
       initContainers:
       - name: init-prometheus
         image: {{ index .Values.images "busybox" }}
-        command: ['sh', '-c', 'until wget -T 5 -qO- http://prometheus-web:8080/status > /dev/null; do echo waiting for Prometheus; sleep 2; done;']
+        command: ['sh', '-c', 'until wget -T 5 -qO- http://prometheus-web/-/healthy > /dev/null; do echo waiting for Prometheus; sleep 2; done;']
       containers:
       - name: grafana
         image: {{ index .Values.images "grafana" }}

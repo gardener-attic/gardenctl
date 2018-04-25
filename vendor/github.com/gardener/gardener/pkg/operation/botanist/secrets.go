@@ -1,4 +1,4 @@
-// Copyright 2018 The Gardener Authors.
+// Copyright (c) 2018 SAP SE or an SAP affiliate company. All rights reserved. This file is licensed under the Apache Software License, v. 2 except as noted otherwise in the LICENSE file
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -286,14 +286,14 @@ func (b *Botanist) createRSASecret(secret RSASecret) (*corev1.Secret, error) {
 	if err != nil {
 		return nil, err
 	}
-	publicKey, err := generateRSAPublicKey(privateKey)
+	sshAuthorizedKeys, err := generateRSAPublicKey(privateKey)
 	if err != nil {
 		return nil, err
 	}
-	publicKey = append(publicKey, []byte(" "+secret.Name)...)
+	sshAuthorizedKeys = append(sshAuthorizedKeys, []byte(" "+secret.Name)...)
 	data := map[string][]byte{
 		"id_rsa":     utils.EncodePrivateKey(privateKey),
-		"id_rsa.pub": publicKey,
+		"id_rsa.pub": sshAuthorizedKeys,
 	}
 
 	if secret.DoNotApply {
@@ -534,28 +534,22 @@ func generateGardenSecretName(shootName, secretName string) string {
 // configuration for the creation of certificates (server/client), RSA key pairs, basic authentication
 // credentials, etc.
 func (b *Botanist) generateSecrets() ([]interface{}, error) {
-	alertManagerHost, err := b.Seed.GetIngressFQDN("a", b.Shoot.Info.Name, b.Garden.ProjectName)
-	if err != nil {
-		return nil, err
-	}
-	grafanaHost, err := b.Seed.GetIngressFQDN("g", b.Shoot.Info.Name, b.Garden.ProjectName)
-	if err != nil {
-		return nil, err
-	}
-	prometheusHost, err := b.Seed.GetIngressFQDN("p", b.Shoot.Info.Name, b.Garden.ProjectName)
-	if err != nil {
-		return nil, err
-	}
+	var (
+		alertManagerHost = b.Seed.GetIngressFQDN("a", b.Shoot.Info.Name, b.Garden.ProjectName)
+		grafanaHost      = b.Seed.GetIngressFQDN("g", b.Shoot.Info.Name, b.Garden.ProjectName)
+		prometheusHost   = b.Seed.GetIngressFQDN("p", b.Shoot.Info.Name, b.Garden.ProjectName)
+	)
 
 	apiServerCertDNSNames := []string{
 		fmt.Sprintf("kube-apiserver.%s", b.Shoot.SeedNamespace),
 		fmt.Sprintf("kube-apiserver.%s.svc", b.Shoot.SeedNamespace),
-		fmt.Sprintf("kube-apiserver.%s.svc.cluster.local", b.Shoot.SeedNamespace),
+		// TODO: Determine Seed cluster's domain that is configured for kubelet and kube-dns/coredns
+		// fmt.Sprintf("kube-apiserver.%s.svc.%s", b.Shoot.SeedNamespace, seed-kube-domain),
 		"kube-apiserver",
 		"kubernetes",
 		"kubernetes.default",
 		"kubernetes.default.svc",
-		"kubernetes.default.svc.cluster.local",
+		fmt.Sprintf("kubernetes.default.svc.%s", gardenv1beta1.DefaultDomain),
 		b.Shoot.InternalClusterDomain,
 	}
 	if b.Shoot.ExternalClusterDomain != nil {
@@ -646,6 +640,22 @@ func (b *Botanist) generateSecrets() ([]interface{}, error) {
 			RunsInSeed:         true,
 		},
 
+		// Secret definition for machine-controller-manager
+		ControlPlaneSecret{
+			TLSSecret: TLSSecret{
+				Secret: Secret{
+					Name: "machine-controller-manager",
+				},
+				CommonName:   "system:machine-controller-manager",
+				Organization: nil,
+				DNSNames:     nil,
+				IPAddresses:  nil,
+				IsServerCert: false,
+			},
+			KubeconfigRequired: true,
+			RunsInSeed:         true,
+		},
+
 		// Secret definition for kube-addon-manager
 		ControlPlaneSecret{
 			TLSSecret: TLSSecret{
@@ -677,39 +687,6 @@ func (b *Botanist) generateSecrets() ([]interface{}, error) {
 			KubeconfigRequired:                 true,
 			KubeconfigUseInternalClusterDomain: true,
 			RunsInSeed:                         false,
-		},
-
-		// Secret definition for kubelet
-		ControlPlaneSecret{
-			TLSSecret: TLSSecret{
-				Secret: Secret{
-					Name: "kubelet",
-				},
-				CommonName:   "kubelet",
-				Organization: []string{user.NodesGroup},
-				DNSNames:     nil,
-				IPAddresses:  nil,
-				IsServerCert: false,
-			},
-			KubeconfigRequired:                 true,
-			KubeconfigUseInternalClusterDomain: true,
-			RunsInSeed:                         false,
-		},
-
-		// Secret definition for auto-node-repair
-		ControlPlaneSecret{
-			TLSSecret: TLSSecret{
-				Secret: Secret{
-					Name: "auto-node-repair",
-				},
-				CommonName:   fmt.Sprintf("%s:monitoring:auto-node-repair", garden.GroupName),
-				Organization: []string{fmt.Sprintf("%s:monitoring", garden.GroupName)},
-				DNSNames:     nil,
-				IPAddresses:  nil,
-				IsServerCert: false,
-			},
-			KubeconfigRequired: true,
-			RunsInSeed:         true,
 		},
 
 		// Secret definition for kube-state-metrics
@@ -814,12 +791,20 @@ func (b *Botanist) generateSecrets() ([]interface{}, error) {
 			Bits: 4096,
 		},
 
+		// Secret definition for service-account-key
+		RSASecret{
+			Secret: Secret{
+				Name: "service-account-key",
+			},
+			Bits: 4096,
+		},
+
 		// Secret definition for alertmanager (ingress)
 		TLSSecret{
 			Secret: Secret{
 				Name: "alertmanager-tls",
 			},
-			CommonName:   alertManagerHost,
+			CommonName:   "alertmanager",
 			Organization: []string{fmt.Sprintf("%s:monitoring:ingress", garden.GroupName)},
 			DNSNames:     []string{alertManagerHost},
 			IPAddresses:  nil,
@@ -831,7 +816,7 @@ func (b *Botanist) generateSecrets() ([]interface{}, error) {
 			Secret: Secret{
 				Name: "grafana-tls",
 			},
-			CommonName:   grafanaHost,
+			CommonName:   "grafana",
 			Organization: []string{fmt.Sprintf("%s:monitoring:ingress", garden.GroupName)},
 			DNSNames:     []string{grafanaHost},
 			IPAddresses:  nil,
@@ -843,7 +828,7 @@ func (b *Botanist) generateSecrets() ([]interface{}, error) {
 			Secret: Secret{
 				Name: "prometheus-tls",
 			},
-			CommonName:   prometheusHost,
+			CommonName:   "prometheus",
 			Organization: []string{fmt.Sprintf("%s:monitoring:ingress", garden.GroupName)},
 			DNSNames:     []string{prometheusHost},
 			IPAddresses:  nil,
@@ -851,17 +836,14 @@ func (b *Botanist) generateSecrets() ([]interface{}, error) {
 		},
 	}
 
-	if b.Shoot.Info.Spec.Addons.Monocular.Enabled && b.Shoot.Info.Spec.DNS.Domain != nil {
-		monocularHost, err := b.Shoot.GetIngressFQDN("monocular")
-		if err != nil {
-			return nil, err
-		}
+	if b.Shoot.MonocularEnabled() && b.Shoot.Info.Spec.DNS.Domain != nil {
+		monocularHost := b.Shoot.GetIngressFQDN("monocular")
 		secretList = append(secretList, TLSSecret{
 			Secret: Secret{
 				Name:       "monocular-tls",
 				DoNotApply: true,
 			},
-			CommonName:   monocularHost,
+			CommonName:   "monocular",
 			Organization: nil,
 			DNSNames:     []string{monocularHost},
 			IPAddresses:  nil,

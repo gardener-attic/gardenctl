@@ -1,4 +1,4 @@
-// Copyright 2018 The Gardener Authors.
+// Copyright (c) 2018 SAP SE or an SAP affiliate company. All rights reserved. This file is licensed under the Apache Software License, v. 2 except as noted otherwise in the LICENSE file
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -31,5 +31,5 @@ func Serve(k8sGardenClient kubernetes.Client, bindAddress string, port int, metr
 
 	listenAddress := fmt.Sprintf("%s:%d", bindAddress, port)
 	go http.ListenAndServe(listenAddress, nil)
-	logger.Logger.Infof("Garden controller manager HTTP server started (serving on %s)", listenAddress)
+	logger.Logger.Infof("Gardener controller manager HTTP server started (serving on %s)", listenAddress)
 }

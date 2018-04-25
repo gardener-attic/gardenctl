@@ -1,4 +1,4 @@
-// Copyright 2018 The Gardener Authors.
+// Copyright (c) 2018 SAP SE or an SAP affiliate company. All rights reserved. This file is licensed under the Apache Software License, v. 2 except as noted otherwise in the LICENSE file
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -19,9 +19,8 @@ import (
 	"github.com/gardener/gardener/pkg/apis/garden"
 	gardenv1beta1 "github.com/gardener/gardener/pkg/apis/garden/v1beta1"
 	cloudprofilestore "github.com/gardener/gardener/pkg/registry/garden/cloudprofile/storage"
-	crosssecretbinding "github.com/gardener/gardener/pkg/registry/garden/crosssecretbinding/storage"
-	privatesecretbinding "github.com/gardener/gardener/pkg/registry/garden/privatesecretbinding/storage"
 	quotastore "github.com/gardener/gardener/pkg/registry/garden/quota/storage"
+	secretbinding "github.com/gardener/gardener/pkg/registry/garden/secretbinding/storage"
 	seedstore "github.com/gardener/gardener/pkg/registry/garden/seed/storage"
 	shootstore "github.com/gardener/gardener/pkg/registry/garden/shoot/storage"
 	"k8s.io/apiserver/pkg/registry/generic"
@@ -57,15 +56,11 @@ func (p StorageProvider) v1beta1Storage(restOptionsGetter generic.RESTOptionsGet
 	storage["seeds"] = seedStorage.Seed
 	storage["seeds/status"] = seedStorage.Status
 
-	privateSecretBindingStorage := privatesecretbinding.NewStorage(restOptionsGetter)
-	storage["privatesecretbindings"] = privateSecretBindingStorage.PrivateSecretBinding
-
-	crossSecretBindingStorage := crosssecretbinding.NewStorage(restOptionsGetter)
-	storage["crosssecretbindings"] = crossSecretBindingStorage.CrossSecretBinding
+	secretBindingStorage := secretbinding.NewStorage(restOptionsGetter)
+	storage["secretbindings"] = secretBindingStorage.SecretBinding
 
 	quotaStorage := quotastore.NewStorage(restOptionsGetter)
 	storage["quotas"] = quotaStorage.Quota
-	storage["quotas/status"] = quotaStorage.Status
 
 	shootStorage := shootstore.NewStorage(restOptionsGetter)
 	storage["shoots"] = shootStorage.Shoot

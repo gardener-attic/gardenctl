@@ -1,4 +1,4 @@
-// Copyright 2018 The Gardener Authors.
+// Copyright (c) 2018 SAP SE or an SAP affiliate company. All rights reserved. This file is licensed under the Apache Software License, v. 2 except as noted otherwise in the LICENSE file
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -28,22 +28,24 @@ func (b *AzureBotanist) DeployInfrastructure() error {
 	var (
 		createResourceGroup = true
 		createVNet          = true
-		resourceGroupName   = fmt.Sprintf("%s-sapk8s", b.Shoot.SeedNamespace)
-		vnetName            = fmt.Sprintf("%s-vnet", b.Shoot.SeedNamespace)
+		resourceGroupName   = b.Shoot.SeedNamespace
+		vnetName            = b.Shoot.SeedNamespace
 		vnetCIDR            = b.Shoot.Info.Spec.Cloud.Azure.Networks.Workers
 	)
+
 	// check if we should use an existing ResourceGroup or create a new one
 	if b.Shoot.Info.Spec.Cloud.Azure.ResourceGroup != nil {
 		createResourceGroup = false
 		resourceGroupName = b.Shoot.Info.Spec.Cloud.Azure.ResourceGroup.Name
 	}
+
 	// check if we should use an existing ResourceGroup or create a new one
-	if b.Shoot.Info.Spec.Cloud.Azure.Networks.VNet.Name != "" {
+	if b.Shoot.Info.Spec.Cloud.Azure.Networks.VNet.Name != nil {
 		createVNet = false
-		vnetName = b.Shoot.Info.Spec.Cloud.Azure.Networks.VNet.Name
+		vnetName = *b.Shoot.Info.Spec.Cloud.Azure.Networks.VNet.Name
 	}
-	if b.Shoot.Info.Spec.Cloud.Azure.Networks.VNet.CIDR != "" {
-		vnetCIDR = b.Shoot.Info.Spec.Cloud.Azure.Networks.VNet.CIDR
+	if b.Shoot.Info.Spec.Cloud.Azure.Networks.VNet.CIDR != nil {
+		vnetCIDR = *b.Shoot.Info.Spec.Cloud.Azure.Networks.VNet.CIDR
 	}
 
 	countUpdateDomains, err := findDomainCountForRegion(b.Shoot.Info.Spec.Cloud.Region, b.Shoot.CloudProfile.Spec.Azure.CountUpdateDomains)
@@ -83,30 +85,6 @@ func (b *AzureBotanist) generateTerraformInfraVariablesEnvironment() []map[strin
 // generateTerraformInfraConfig creates the Terraform variables and the Terraform config (for the infrastructure)
 // and returns them (these values will be stored as a ConfigMap and a Secret in the Garden cluster.
 func (b *AzureBotanist) generateTerraformInfraConfig(createResourceGroup, createVNet bool, resourceGroupName, vnetName string, vnetCIDR gardenv1beta1.CIDR, countUpdateDomains, countFaultDomains gardenv1beta1.AzureDomainCount) map[string]interface{} {
-	var (
-		sshSecret                   = b.Secrets["ssh-keypair"]
-		cloudConfigDownloaderSecret = b.Secrets["cloud-config-downloader"]
-		workers                     = []map[string]interface{}{}
-	)
-
-	networks := map[string]interface{}{
-		"worker": b.Shoot.Info.Spec.Cloud.Azure.Networks.Workers,
-	}
-	if b.Shoot.Info.Spec.Cloud.Azure.Networks.Public != nil {
-		networks["public"] = *(b.Shoot.Info.Spec.Cloud.Azure.Networks.Public)
-	}
-
-	for _, worker := range b.Shoot.Info.Spec.Cloud.Azure.Workers {
-		workers = append(workers, map[string]interface{}{
-			"name":          worker.Name,
-			"machineType":   worker.MachineType,
-			"volumeType":    worker.VolumeType,
-			"volumeSize":    common.DiskSize(worker.VolumeSize),
-			"autoScalerMin": worker.AutoScalerMin,
-			"autoScalerMax": worker.AutoScalerMax,
-		})
-	}
-
 	return map[string]interface{}{
 		"azure": map[string]interface{}{
 			"subscriptionID":     string(b.Shoot.Secret.Data[SubscriptionID]),
@@ -119,7 +97,6 @@ func (b *AzureBotanist) generateTerraformInfraConfig(createResourceGroup, create
 			"resourceGroup": createResourceGroup,
 			"vnet":          createVNet,
 		},
-		"sshPublicKey": string(sshSecret.Data["id_rsa.pub"]),
 		"resourceGroup": map[string]interface{}{
 			"name": resourceGroupName,
 			"vnet": map[string]interface{}{
@@ -128,15 +105,9 @@ func (b *AzureBotanist) generateTerraformInfraConfig(createResourceGroup, create
 			},
 		},
 		"clusterName": b.Shoot.SeedNamespace,
-		"coreOSImage": map[string]interface{}{
-			"sku":     b.Shoot.CloudProfile.Spec.Azure.MachineImage.Channel,
-			"version": b.Shoot.CloudProfile.Spec.Azure.MachineImage.Version,
+		"networks": map[string]interface{}{
+			"worker": b.Shoot.Info.Spec.Cloud.Azure.Networks.Workers,
 		},
-		"cloudConfig": map[string]interface{}{
-			"kubeconfig": string(cloudConfigDownloaderSecret.Data["kubeconfig"]),
-		},
-		"networks": networks,
-		"workers":  workers,
 	}
 }
 
@@ -170,12 +141,14 @@ func (b *AzureBotanist) generateTerraformBackupVariablesEnvironment() []map[stri
 // generateTerraformBackupConfig creates the Terraform variables and the Terraform config (for the backup)
 // and returns them.
 func (b *AzureBotanist) generateTerraformBackupConfig() map[string]interface{} {
+	shootUIDSha := utils.ComputeSHA1Hex([]byte(b.Shoot.Info.Status.UID))
 	return map[string]interface{}{
 		"azure": map[string]interface{}{
 			"subscriptionID":     string(b.Seed.Secret.Data[SubscriptionID]),
 			"tenantID":           string(b.Seed.Secret.Data[TenantID]),
 			"region":             b.Seed.Info.Spec.Cloud.Region,
-			"storageAccountName": fmt.Sprintf("bkp%s", utils.ComputeSHA1Hex([]byte(b.Shoot.Info.Status.UID))[:15]),
+			"storageAccountName": fmt.Sprintf("bkp%s", shootUIDSha[:15]),
+			"resourceGroupName":  fmt.Sprintf("%s-backup-%s", b.Shoot.SeedNamespace, shootUIDSha[:15]),
 		},
 		"clusterName": b.Shoot.SeedNamespace,
 	}

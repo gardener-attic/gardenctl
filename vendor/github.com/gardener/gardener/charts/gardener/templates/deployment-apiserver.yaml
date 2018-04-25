@@ -2,7 +2,8 @@
 apiVersion: {{ include "deploymentversion" . }}
 kind: Deployment
 metadata:
-  name: garden-apiserver
+  name: gardener-apiserver
+  namespace: garden
   labels:
     app: gardener
     role: apiserver
@@ -10,50 +11,65 @@ metadata:
     release: "{{ .Release.Name }}"
     heritage: "{{ .Release.Service }}"
 spec:
-  replicas: {{ .Values.apiserver.replicaCount }}
+  replicas: {{ required ".Values.apiserver.replicaCount is required" .Values.apiserver.replicaCount }}
   selector:
     matchLabels:
       app: gardener
       role: apiserver
   template:
     metadata:
+      annotations:
+        checksum/configmap-gardener-audit-policy-config: {{ include (print $.Template.BasePath "/configmap-apiserver-audit.yaml") . | sha256sum }}
+        checksum/secret-gardener-apiserver-cert: {{ include (print $.Template.BasePath "/secret-apiserver.yaml") . | sha256sum }}
       labels:
         app: gardener
         role: apiserver
         chart: "{{ .Chart.Name }}-{{ .Chart.Version }}"
         release: "{{ .Release.Name }}"
         heritage: "{{ .Release.Service }}"
+        {{- if .Values.apiserver.etcd.useSidecar }}
+        sidecar: etcd
+        {{- end }}
     spec:
-      serviceAccountName: {{ .Values.apiserver.serviceAccountName }}
+      serviceAccountName: {{ required ".Values.apiserver.serviceAccountName is required" .Values.apiserver.serviceAccountName }}
       containers:
-      - name: garden-apiserver
-        image: {{ .Values.apiserver.image.repository }}:{{ .Values.apiserver.image.tag }}
+      - name: gardener-apiserver
+        image: {{ required ".Values.apiserver.image.repository is required" .Values.apiserver.image.repository }}:{{ required ".Values.apiserver.image.tag is required" .Values.apiserver.image.tag }}
         imagePullPolicy: IfNotPresent
         command:
-        - /garden-apiserver
-        - --admission-control=ShootSeedFinder,ShootDNSHostedZone,ShootValidator,ShootQuotaValidator
+        - /gardener-apiserver
         - --audit-log-path=/var/lib/audit.log
         - --audit-policy-file=/etc/garden/audit/audit-policy.yaml
         - --audit-log-maxsize=100
         - --audit-log-maxbackup=5
-        {{- if .Values.apiserver.useEtcdSidecar }}
+        - --enable-admission-plugins=ResourceReferenceManager,ShootSeedManager,ShootDNSHostedZone,ShootValidator,ShootQuotaValidator
+        {{- if .Values.apiserver.etcd.useSidecar }}
         - --etcd-servers=http://localhost:2379
         {{- else }}
-        - --etcd-servers={{ .Values.apiserver.etcdServers }}
+        - --etcd-servers={{ required ".Values.apiserver.etcd.servers is required" .Values.apiserver.etcd.servers }}
+        {{- if .Values.apiserver.etcd.caBundle }}
+        - --etcd-cafile=/var/run/kubernetes/etcd-client-ca.crt
+        {{- end }}
+        {{- if .Values.apiserver.etcd.tls }}
+        - --etcd-certfile=/var/run/kubernetes/etcd-client.crt
+        {{- end }}
+        {{- if .Values.apiserver.etcd.tls }}
+        - --etcd-keyfile=/var/run/kubernetes/etcd-client.key
+        {{- end }}
         {{- end }}
         - --secure-port=443
-        - --tls-cert-file=/var/run/kubernetes/garden-apiserver.crt
-        - --tls-private-key-file=/var/run/kubernetes/garden-apiserver.key
+        - --tls-cert-file=/var/run/kubernetes/gardener-apiserver.crt
+        - --tls-private-key-file=/var/run/kubernetes/gardener-apiserver.key
         - --v=2
         volumeMounts:
-        - name: garden-apiserver-cert
+        - name: gardener-apiserver-cert
           mountPath: /var/run/kubernetes
           readOnly: true
-        - name: garden-audit-policy-config
+        - name: gardener-audit-policy-config
           mountPath: /etc/garden/audit
-      {{- if .Values.apiserver.useEtcdSidecar }}
+      {{- if .Values.apiserver.etcd.useSidecar }}
       - name: etcd
-        image: quay.io/coreos/etcd:v3.2
+        image: quay.io/coreos/etcd:v3.1.12
         imagePullPolicy: IfNotPresent
         command:
         - /usr/local/bin/etcd
@@ -85,22 +101,23 @@ spec:
           mountPath: /var/etcd/data
       {{- end }}
       volumes:
-      {{- if .Values.apiserver.useEtcdSidecar }}
+      {{- if .Values.apiserver.etcd.useSidecar }}
       - name: etcd
         emptyDir: {}
       {{- end }}
-      - name: garden-apiserver-cert
+      - name: gardener-apiserver-cert
         secret:
-          secretName: garden-apiserver-cert
-      - name: garden-audit-policy-config
+          secretName: gardener-apiserver-cert
+      - name: gardener-audit-policy-config
         configMap:
-          name: garden-audit-policy-config
-{{- if .Values.apiserver.useEtcdSidecar }}
+          name: gardener-audit-policy-config
+{{- if .Values.apiserver.etcd.useSidecar }}
 ---
 apiVersion: v1
 kind: Service
 metadata:
   name: etcd
+  namespace: garden
   labels:
     sidecar: etcd
     chart: "{{ .Chart.Name }}-{{ .Chart.Version }}"

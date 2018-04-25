@@ -1,4 +1,4 @@
-// Copyright 2018 The Gardener Authors.
+// Copyright (c) 2018 SAP SE or an SAP affiliate company. All rights reserved. This file is licensed under the Apache Software License, v. 2 except as noted otherwise in the LICENSE file
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -127,7 +127,7 @@ func (f *Flow) startTask(task *Task) {
 	go func() {
 		if !task.Skip {
 			f.infof("Executing %s", task)
-			err := utils.Retry(f.Logger, task.RetryDuration, utils.RetryFunc(task.Function))
+			err := utils.Retry(f.Logger, task.RetryDuration, utils.RetryFunc(f.Logger, task.Function))
 			if err != nil {
 				task.Error = utilerrors.New(err)
 			}

@@ -1,4 +1,4 @@
-// Copyright 2018 The Gardener Authors.
+// Copyright (c) 2018 SAP SE or an SAP affiliate company. All rights reserved. This file is licensed under the Apache Software License, v. 2 except as noted otherwise in the LICENSE file
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -16,6 +16,8 @@ package operation
 
 import (
 	"fmt"
+	"path/filepath"
+	"strings"
 
 	gardenv1beta1 "github.com/gardener/gardener/pkg/apis/garden/v1beta1"
 	"github.com/gardener/gardener/pkg/chartrenderer"
@@ -38,12 +40,15 @@ func New(shoot *gardenv1beta1.Shoot, shootLogger *logrus.Entry, k8sGardenClient 
 		secrets[k] = v
 	}
 
-	gardenObj := garden.New(shoot)
+	gardenObj, err := garden.New(k8sGardenClient, shoot)
+	if err != nil {
+		return nil, err
+	}
 	seedObj, err := seed.NewFromName(k8sGardenClient, k8sGardenInformers, *(shoot.Spec.Cloud.Seed))
 	if err != nil {
 		return nil, err
 	}
-	shootObj, err := shootpkg.New(k8sGardenClient, k8sGardenInformers, shoot, fmt.Sprintf("api.internal.%s.%s.%s", shoot.Name, gardenObj.ProjectName, secrets[common.GardenRoleInternalDomain].Annotations[common.DNSDomain]))
+	shootObj, err := shootpkg.New(k8sGardenClient, k8sGardenInformers, shoot, gardenObj.ProjectName, constructInternalDomain(shoot.Name, gardenObj.ProjectName, secrets[common.GardenRoleInternalDomain].Annotations[common.DNSDomain]))
 	if err != nil {
 		return nil, err
 	}
@@ -103,27 +108,6 @@ func (o *Operation) InitializeShootClients() error {
 	return nil
 }
 
-// EnsureImagePullSecretsGarden ensures that the image pull secrets do exist in the Garden cluster
-// namespace in which the Shoot resource has been created, and that the default service account in
-// that namespace contains the respective .imagePullSecrets[] field.
-func (o *Operation) EnsureImagePullSecretsGarden() error {
-	return common.EnsureImagePullSecrets(o.K8sGardenClient, o.Shoot.Info.Namespace, o.Secrets, true, o.Logger)
-}
-
-// EnsureImagePullSecretsSeed ensures that the image pull secrets do exist in the Seed cluster's
-// Shoot namespace and that the default service account in that namespace contains the respective
-// .imagePullSecrets[] field.
-func (o *Operation) EnsureImagePullSecretsSeed() error {
-	return common.EnsureImagePullSecrets(o.K8sSeedClient, o.Shoot.SeedNamespace, o.Secrets, true, o.Logger)
-}
-
-// EnsureImagePullSecretsShoot ensures that the image pull secrets do exist in the Shoot cluster's
-// kube-system namespace and that the default service account in that namespace contains the
-// respective .imagePullSecrets[] field.
-func (o *Operation) EnsureImagePullSecretsShoot() error {
-	return common.EnsureImagePullSecrets(o.K8sShootClient, metav1.NamespaceSystem, o.Secrets, true, o.Logger)
-}
-
 // ApplyChartGarden takes a path to a chart <chartPath>, name of the release <name>, release's namespace <namespace>
 // and two maps <defaultValues>, <additionalValues>, and renders the template based on the merged result of both value maps.
 // The resulting manifest will be applied to the Garden cluster.
@@ -151,19 +135,6 @@ func (o *Operation) GetSecretKeysOfRole(kind string) []string {
 	return common.GetSecretKeysWithPrefix(kind, o.Secrets)
 }
 
-// GetImagePullSecretsMap returns all known image pull secrets as map whereas the key is "name" and
-// the value is the respective name of the image pull secret. The map can be used to specify a list
-// of image pull secrets on a Kubernetes PodTemplateSpec object.
-func (o *Operation) GetImagePullSecretsMap() []map[string]interface{} {
-	imagePullSecrets := []map[string]interface{}{}
-	for _, key := range o.GetSecretKeysOfRole(common.GardenRoleImagePull) {
-		imagePullSecrets = append(imagePullSecrets, map[string]interface{}{
-			"name": o.Secrets[key].Name,
-		})
-	}
-	return imagePullSecrets
-}
-
 // ReportShootProgress will update the last operation object in the Shoot manifest `status` section
 // by the current progress of the Flow execution.
 func (o *Operation) ReportShootProgress(progress int, currentFunctions string) {
@@ -171,8 +142,7 @@ func (o *Operation) ReportShootProgress(progress int, currentFunctions string) {
 	o.Shoot.Info.Status.LastOperation.Progress = progress
 	o.Shoot.Info.Status.LastOperation.LastUpdateTime = metav1.Now()
 
-	newShoot, err := o.K8sGardenClient.UpdateShootStatus(o.Shoot.Info)
-	if err == nil {
+	if newShoot, err := o.K8sGardenClient.GardenClientset().GardenV1beta1().Shoots(o.Shoot.Info.Namespace).UpdateStatus(o.Shoot.Info); err == nil {
 		o.Shoot.Info = newShoot
 	}
 }
@@ -199,4 +169,56 @@ func (o *Operation) InjectImages(values map[string]interface{}, version string, 
 
 	copy["images"] = i
 	return copy, nil
+}
+
+// ComputeDownloaderCloudConfig computes the downloader cloud config which is injected as user data while
+// creating machines/VMs. It needs the name of the worker group it is used for (<workerName>) and returns
+// the rendered chart.
+func (o *Operation) ComputeDownloaderCloudConfig(workerName string) (*chartrenderer.RenderedChart, error) {
+	return o.ChartShootRenderer.Render(filepath.Join(common.ChartPath, "shoot-cloud-config", "charts", "downloader"), "shoot-cloud-config-downloader", metav1.NamespaceSystem, map[string]interface{}{
+		"kubeconfig": string(o.Secrets["cloud-config-downloader"].Data["kubeconfig"]),
+		"secretName": o.Shoot.ComputeCloudConfigSecretName(workerName),
+	})
+}
+
+// ComputeOriginalCloudConfig computes the original cloud config which is downloaded by the cloud config
+// downloader process running on machines/VMs. It will regularly check for new versions and restart all
+// units once it finds a newer state.
+func (o *Operation) ComputeOriginalCloudConfig(config map[string]interface{}) (*chartrenderer.RenderedChart, error) {
+	return o.ChartShootRenderer.Render(filepath.Join(common.ChartPath, "shoot-cloud-config", "charts", "original"), "shoot-cloud-config-original", metav1.NamespaceSystem, config)
+}
+
+// constructInternalDomain constructs the domain pointing to the kube-apiserver of a Shoot cluster
+// which is only used for internal purposes (all kubeconfigs except the one which is received by the
+// user will only talk with the kube-apiserver via this domain). In case the given <internalDomain>
+// already contains "internal", the result is constructed as "api.<shootName>.<shootProject>.<internalDomain>."
+// In case it does not, the word "internal" will be appended, resulting in
+// "api.<shootName>.<shootProject>.internal.<internalDomain>".
+func constructInternalDomain(shootName, shootProject, internalDomain string) string {
+	if strings.Contains(internalDomain, common.InternalDomainKey) {
+		return fmt.Sprintf("api.%s.%s.%s", shootName, shootProject, internalDomain)
+	}
+	return fmt.Sprintf("api.%s.%s.%s.%s", shootName, shootProject, common.InternalDomainKey, internalDomain)
+}
+
+// NameContainedInMachineDeploymentList checks whether the <name> is part of the <machineDeployments>
+// list, i.e. whether there is an entry whose 'Name' attribute matches <name>. It returns true or false.
+func NameContainedInMachineDeploymentList(name string, machineDeployments []MachineDeployment) bool {
+	for _, deployment := range machineDeployments {
+		if name == deployment.Name {
+			return true
+		}
+	}
+	return false
+}
+
+// ClassContainedInMachineDeploymentList checks whether the <className> is part of the <machineDeployments>
+// list, i.e. whether there is an entry whose 'ClassName' attribute matches <name>. It returns true or false.
+func ClassContainedInMachineDeploymentList(className string, machineDeployments []MachineDeployment) bool {
+	for _, deployment := range machineDeployments {
+		if className == deployment.ClassName {
+			return true
+		}
+	}
+	return false
 }

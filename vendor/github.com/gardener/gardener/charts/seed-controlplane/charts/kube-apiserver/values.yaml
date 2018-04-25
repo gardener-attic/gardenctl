@@ -1,6 +1,9 @@
 cloudProvider: aws
+replicas: 1
 kubernetesVersion: 1.8.5
 advertiseAddress: 127.0.0.1
+securePort: 443
+livenessProbeCredentials: base64(user:pass)
 serviceNetwork: 10.0.0.0/24
 podNetwork: 192.168.0.0/16
 nodeNetwork: 172.16.0.0/20
@@ -26,3 +29,4 @@ oidcConfig: {}
 images:
   hyperkube: image-repository
   vpn-seed: image-repository:image-tag
+  blackbox-exporter: image-repository:image-tag

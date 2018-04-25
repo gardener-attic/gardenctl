@@ -1,4 +1,4 @@
-// Copyright 2018 The Gardener Authors.
+// Copyright (c) 2018 SAP SE or an SAP affiliate company. All rights reserved. This file is licensed under the Apache Software License, v. 2 except as noted otherwise in the LICENSE file
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,14 +17,16 @@ package initializer
 import (
 	gardeninformers "github.com/gardener/gardener/pkg/client/garden/informers/internalversion"
 	"k8s.io/apiserver/pkg/admission"
+	"k8s.io/apiserver/pkg/authorization/authorizer"
 	kubeinformers "k8s.io/client-go/informers"
 )
 
 // New constructs new instance of PluginInitializer
-func New(gardenInformers gardeninformers.SharedInformerFactory, kubeInformers kubeinformers.SharedInformerFactory) admission.PluginInitializer {
+func New(gardenInformers gardeninformers.SharedInformerFactory, kubeInformers kubeinformers.SharedInformerFactory, authz authorizer.Authorizer) admission.PluginInitializer {
 	return pluginInitializer{
 		gardenInformers: gardenInformers,
 		kubeInformers:   kubeInformers,
+		authorizer:      authz,
 	}
 }
 
@@ -36,5 +38,8 @@ func (i pluginInitializer) Initialize(plugin admission.Interface) {
 	}
 	if wants, ok := plugin.(WantsKubeInformerFactory); ok {
 		wants.SetKubeInformerFactory(i.kubeInformers)
+	}
+	if wants, ok := plugin.(WantsAuthorizer); ok {
+		wants.SetAuthorizer(i.authorizer)
 	}
 }

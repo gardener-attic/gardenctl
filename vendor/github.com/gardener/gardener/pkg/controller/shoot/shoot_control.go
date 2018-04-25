@@ -1,4 +1,4 @@
-// Copyright 2018 The Gardener Authors.
+// Copyright (c) 2018 SAP SE or an SAP affiliate company. All rights reserved. This file is licensed under the Apache Software License, v. 2 except as noted otherwise in the LICENSE file
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -29,8 +29,8 @@ import (
 	"github.com/gardener/gardener/pkg/utils"
 	"github.com/gardener/gardener/pkg/utils/imagevector"
 	corev1 "k8s.io/api/core/v1"
-	apiequality "k8s.io/apimachinery/pkg/api/equality"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/tools/record"
@@ -51,34 +51,20 @@ func (c *Controller) shootUpdate(oldObj, newObj interface{}) {
 		newShoot        = newObj.(*gardenv1beta1.Shoot)
 		oldShootJSON, _ = json.Marshal(oldShoot)
 		newShootJSON, _ = json.Marshal(newShoot)
-		shoot           = newShoot.DeepCopy()
 		shootLogger     = logger.NewShootLogger(logger.Logger, newShoot.ObjectMeta.Name, newShoot.ObjectMeta.Namespace, "")
-		specChanged     = !apiequality.Semantic.DeepEqual(oldShoot.Spec, newShoot.Spec)
-		statusChanged   = !apiequality.Semantic.DeepEqual(oldShoot.Status, newShoot.Status)
 	)
 	shootLogger.Debugf(string(oldShootJSON))
 	shootLogger.Debugf(string(newShootJSON))
 
-	// If the .spec field has not changed, but the .status field has, then the Update event was triggerd by the
-	// Gardener itself as it has updated the .status field. In this case, we do not need to do anything.
-	if !specChanged && statusChanged {
+	// If the generation did not change for an update event (i.e., no changes to the .spec section have
+	// been made), we do not want to add the Shoot to th queue. The period reconciliation is handled
+	// elsewhere by adding the Shoot to the queue to dedicated times.
+	if newShoot.Generation == newShoot.Status.ObservedGeneration {
 		shootLogger.Debug("Do not need to do anything as the Update event occurred due to .status field changes")
 		return
 	}
 
-	key, err := cache.MetaNamespaceKeyFunc(newObj)
-	if err != nil {
-		logger.Logger.Errorf("Couldn't get key for object %+v: %v", newObj, err)
-		return
-	}
-
-	if !sets.NewString(shoot.Finalizers...).Has(gardenv1beta1.GardenerName) {
-		shootLogger.Debug("Do not need to do anything as the Shoot does not have my finalizer")
-		c.shootQueue.Forget(key)
-		return
-	}
-
-	c.shootQueue.Add(key)
+	c.shootAdd(newObj)
 }
 
 func (c *Controller) shootDelete(obj interface{}) {
@@ -107,17 +93,63 @@ func (c *Controller) reconcileShootKey(key string) error {
 		return err
 	}
 
-	// We check whether the Shoot's last operation status field indicates that the cluster has been successfully deleted.
-	lastOperation := shoot.Status.LastOperation
-	if lastOperation != nil && lastOperation.Type == gardenv1beta1.ShootLastOperationTypeDelete && lastOperation.State == gardenv1beta1.ShootLastOperationStateSucceeded {
+	shootLogger := logger.NewShootLogger(logger.Logger, shoot.ObjectMeta.Name, shoot.ObjectMeta.Namespace, "")
+	if mustIgnoreShoot(shoot.Annotations, c.config.Controllers.Shoot.RespectSyncPeriodOverwrite) {
+		shootLogger.Info("Skipping reconciliation because Shoot is marked as 'to-be-ignored'.")
 		return nil
 	}
 
-	err = c.control.ReconcileShoot(shoot, key)
-	if err != nil {
-		c.shootQueue.AddAfter(key, 15*time.Second)
+	if shoot.DeletionTimestamp != nil && !sets.NewString(shoot.Finalizers...).Has(gardenv1beta1.GardenerName) {
+		shootLogger.Debug("Do not need to do anything as the Shoot does not have my finalizer")
+		c.shootQueue.Forget(key)
+		return nil
 	}
+
+	needsRequeue, reconcileErr := c.control.ReconcileShoot(shoot, key)
+
+	if wantsResync, durationToNextSync := scheduleNextSync(shoot.ObjectMeta, reconcileErr != nil, c.config.Controllers.Shoot); wantsResync && needsRequeue {
+		c.shootQueue.AddAfter(key, durationToNextSync)
+		shootLogger.Infof("Scheduled next reconciliation for Shoot '%s' in %s", key, durationToNextSync)
+	}
+
 	return nil
+}
+
+func scheduleNextSync(objectMeta metav1.ObjectMeta, errorOccured bool, config componentconfig.ShootControllerConfiguration) (bool, time.Duration) {
+	if errorOccured {
+		return true, (*config.RetrySyncPeriod).Duration
+	}
+
+	var (
+		syncPeriod                 = config.SyncPeriod
+		respectSyncPeriodOverwrite = *config.RespectSyncPeriodOverwrite
+
+		currentTimeNano  = time.Now().UnixNano()
+		creationTimeNano = objectMeta.CreationTimestamp.UnixNano()
+	)
+
+	if syncPeriodOverwrite, ok := objectMeta.Annotations[common.ShootSyncPeriod]; ok && respectSyncPeriodOverwrite {
+		if syncPeriodDuration, err := time.ParseDuration(syncPeriodOverwrite); err == nil {
+			if syncPeriodDuration.Nanoseconds() == 0 {
+				return false, 0
+			}
+			if syncPeriodDuration >= time.Minute {
+				syncPeriod = metav1.Duration{Duration: syncPeriodDuration}
+			}
+		}
+	}
+
+	var (
+		syncPeriodNano = syncPeriod.Nanoseconds()
+		nextSyncNano   = currentTimeNano - (currentTimeNano-creationTimeNano)%syncPeriodNano + syncPeriodNano
+	)
+
+	return true, time.Duration(nextSyncNano - currentTimeNano)
+}
+
+func mustIgnoreShoot(annotations map[string]string, respectSyncPeriodOverwrite *bool) bool {
+	_, ignore := annotations[common.ShootIgnore]
+	return respectSyncPeriodOverwrite != nil && ignore && *respectSyncPeriodOverwrite
 }
 
 // ControlInterface implements the control logic for updating Shoots. It is implemented as an interface to allow
@@ -127,7 +159,8 @@ type ControlInterface interface {
 	// If an implementation returns a non-nil error, the invocation will be retried using a rate-limited strategy.
 	// Implementors should sink any errors that they do not wish to trigger a retry, and they may feel free to
 	// exit exceptionally at any point provided they wish the update to be re-run at a later point in time.
-	ReconcileShoot(shoot *gardenv1beta1.Shoot, key string) error
+	// The bool return value determines whether the Shoot should be automatically requeued for reconciliation.
+	ReconcileShoot(shoot *gardenv1beta1.Shoot, key string) (bool, error)
 }
 
 // NewDefaultControl returns a new instance of the default implementation ControlInterface that
@@ -150,20 +183,18 @@ type defaultControl struct {
 	updater            UpdaterInterface
 }
 
-func (c *defaultControl) ReconcileShoot(shootObj *gardenv1beta1.Shoot, key string) error {
+func (c *defaultControl) ReconcileShoot(shootObj *gardenv1beta1.Shoot, key string) (bool, error) {
 	key, err := cache.MetaNamespaceKeyFunc(shootObj)
 	if err != nil {
-		return err
+		return true, err
 	}
 
 	var (
-		shoot                              = shootObj.DeepCopy()
-		operationID                        = utils.GenerateRandomString(8)
-		shootLogger                        = logger.NewShootLogger(logger.Logger, shoot.Name, shoot.Namespace, operationID)
-		confirmationDeletionTimestampFound = checkConfirmationDeletionTimestamp(shoot)
-		confirmationDeletionTimestampValid = checkConfirmationDeletionTimestampValid(shoot)
-		triggerDeletion                    = sets.NewString(shoot.Finalizers...).Has(gardenv1beta1.GardenerName) && confirmationDeletionTimestampValid
-		lastOperation                      = shoot.Status.LastOperation
+		shoot         = shootObj.DeepCopy()
+		operationID   = utils.GenerateRandomString(8)
+		shootLogger   = logger.NewShootLogger(logger.Logger, shoot.Name, shoot.Namespace, operationID)
+		lastOperation = shoot.Status.LastOperation
+		operationType = computeOperationType(lastOperation)
 	)
 
 	logger.Logger.Infof("[SHOOT RECONCILE] %s", key)
@@ -172,78 +203,68 @@ func (c *defaultControl) ReconcileShoot(shootObj *gardenv1beta1.Shoot, key strin
 
 	operation, err := operation.New(shoot, shootLogger, c.k8sGardenClient, c.k8sGardenInformers, c.identity, c.secrets, c.imageVector)
 	if err != nil {
-		shootLogger.Errorf("could not initialize a new operation: %s", err.Error())
-		return err
+		shootLogger.Errorf("Could not initialize a new operation: %s", err.Error())
+		return true, err
 	}
 
-	// We check whether the Shoot's annotations contains the a key stating the Garden action equals to 'delete' which means that the
-	// user has confirmed the deletion via the Gardener UI. In this case we have to trigger the deletion of the Shoot cluster.
-	if shoot.DeletionTimestamp != nil && !confirmationDeletionTimestampFound {
-		shootLogger.Infof("Shoot cluster's deletionTimestamp is set but the confirmation annotation '%s' is missing. Skipping.", common.ConfirmationDeletionTimestamp)
-		return nil
+	// We check whether the Shoot's last operation status field indicates that the last operation failed (i.e. the operation
+	// will not be retried unless the shoot generation changes).
+	if lastOperation != nil && lastOperation.State == gardenv1beta1.ShootLastOperationStateFailed && shoot.Generation == shoot.Status.ObservedGeneration {
+		shootLogger.Infof("Will not reconcile as the last operation has been set to '%s' and the generation has not changed since then.", gardenv1beta1.ShootLastOperationStateFailed)
+		return false, nil
 	}
-	if triggerDeletion {
+
+	// When a Shoot clusters deletion timestamp is set we need to delete the cluster and must not trigger a new reconciliation operation.
+	if shoot.DeletionTimestamp != nil {
+		// In order to protect users from accidential/undesired deletion we check whether there is an annotation whose value is equal to the
+		// deletion timestamp itself. If the annotation is missing or the value does not match the deletion timestamp then we skip the deletion
+		// until it gets confirmed (by correctly putting the annotation).
+		if !metav1.HasAnnotation(shoot.ObjectMeta, common.ConfirmationDeletionTimestamp) || !common.CheckConfirmationDeletionTimestampValid(shoot.ObjectMeta) {
+			shootLogger.Infof("Shoot cluster's deletionTimestamp is set but the confirmation annotation '%s' is missing. Skipping.", common.ConfirmationDeletionTimestamp)
+			return false, nil
+		}
+
+		// If we reach this line then the deletion timestamp is set, the confirmation annotation exists and its value matches the deletion
+		// timestamp itself. Consequently, it's safe to trigger the Shoot cluster deletion here.
 		c.recorder.Eventf(shoot, corev1.EventTypeNormal, gardenv1beta1.ShootEventDeleting, "[%s] Deleting Shoot cluster", operationID)
-		shootLogger.Infof("Detected valid annotation '%s' confirming the Shoot deletion.", common.ConfirmationDeletionTimestamp)
 		if updateErr := c.updateShootStatusDeleteStart(operation); updateErr != nil {
 			shootLogger.Errorf("Could not update the Shoot status after deletion start: %+v", updateErr)
-			return updateErr
+			return true, updateErr
 		}
-		deleteErr := c.deleteShoot(operation)
-		if deleteErr != nil {
+		if deleteErr := c.deleteShoot(operation); deleteErr != nil {
 			c.recorder.Eventf(shoot, corev1.EventTypeWarning, gardenv1beta1.ShootEventDeleteError, "[%s] %s", operationID, deleteErr.Description)
-			if updateErr := c.updateShootStatusDeleteError(operation, deleteErr); updateErr != nil {
+			if state, updateErr := c.updateShootStatusDeleteError(operation, deleteErr); updateErr != nil {
 				shootLogger.Errorf("Could not update the Shoot status after deletion error: %+v", updateErr)
-				return updateErr
+				return state != gardenv1beta1.ShootLastOperationStateFailed, updateErr
 			}
-			return errors.New(deleteErr.Description)
+			return true, errors.New(deleteErr.Description)
 		}
 		c.recorder.Eventf(shoot, corev1.EventTypeNormal, gardenv1beta1.ShootEventDeleted, "[%s] Deleted Shoot cluster", operationID)
 		if updateErr := c.updateShootStatusDeleteSuccess(operation); updateErr != nil {
 			shootLogger.Errorf("Could not update the Shoot status after deletion success: %+v", updateErr)
-			return updateErr
+			return true, updateErr
 		}
-		return nil
+		return false, nil
 	}
 
-	// Re-enable reconciliation on a failed Shoot cluster resource because the specifcation has been changed.
-	if shoot.Generation != shoot.Status.ObservedGeneration {
-		if lastOperation != nil && lastOperation.State == gardenv1beta1.ShootLastOperationStateFailed {
-			shoot.Status.LastOperation.State = gardenv1beta1.ShootLastOperationStateError
-		}
-		// Set `.status.operationStartTime to nil because a new specification has been applied.
-		operation.Shoot.Info.Status.OperationStartTime = nil
-	}
-
-	// We check whether the Shoot's last operation status field indicates that the last operation failed (i.e. will not be retried).
-	if lastOperation != nil && lastOperation.State == gardenv1beta1.ShootLastOperationStateFailed {
-		shootLogger.Infof("Will not reconcile as the last operation has been set to '%s'.", gardenv1beta1.ShootLastOperationStateFailed)
-		return nil
-	}
-
-	operationType := gardenv1beta1.ShootLastOperationTypeReconcile
-	if lastOperation == nil || (lastOperation.Type == gardenv1beta1.ShootLastOperationTypeCreate && lastOperation.State != gardenv1beta1.ShootLastOperationStateSucceeded) {
-		operationType = gardenv1beta1.ShootLastOperationTypeCreate
-	}
-
+	// When a Shoot clusters deletion timestamp is not set we need to create/reconcile the cluster.
 	c.recorder.Eventf(shoot, corev1.EventTypeNormal, gardenv1beta1.ShootEventReconciling, "[%s] Reconciling Shoot cluster state", operationID)
 	if updateErr := c.updateShootStatusReconcileStart(operation, operationType); updateErr != nil {
 		shootLogger.Errorf("Could not update the Shoot status after reconciliation start: %+v", updateErr)
-		return updateErr
+		return true, updateErr
 	}
-	reconcileErr := c.reconcileShoot(operation, operationType, c.updater)
-	if reconcileErr != nil {
+	if reconcileErr := c.reconcileShoot(operation, operationType); reconcileErr != nil {
 		c.recorder.Eventf(shoot, corev1.EventTypeWarning, gardenv1beta1.ShootEventReconcileError, "[%s] %s", operationID, reconcileErr.Description)
-		if updateErr := c.updateShootStatusReconcileError(operation, operationType, reconcileErr); updateErr != nil {
+		if state, updateErr := c.updateShootStatusReconcileError(operation, operationType, reconcileErr); updateErr != nil {
 			shootLogger.Errorf("Could not update the Shoot status after reconciliation error: %+v", updateErr)
-			return updateErr
+			return state != gardenv1beta1.ShootLastOperationStateFailed, updateErr
 		}
-		return errors.New(reconcileErr.Description)
+		return true, errors.New(reconcileErr.Description)
 	}
 	c.recorder.Eventf(shoot, corev1.EventTypeNormal, gardenv1beta1.ShootEventReconciled, "[%s] Reconciled Shoot cluster state", operationID)
 	if updateErr := c.updateShootStatusReconcileSuccess(operation, operationType); updateErr != nil {
 		shootLogger.Errorf("Could not update the Shoot status after reconciliation success: %+v", updateErr)
-		return updateErr
+		return true, updateErr
 	}
-	return nil
+	return true, nil
 }

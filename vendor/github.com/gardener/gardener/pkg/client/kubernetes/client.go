@@ -1,4 +1,4 @@
-// Copyright 2018 The Gardener Authors.
+// Copyright (c) 2018 SAP SE or an SAP affiliate company. All rights reserved. This file is licensed under the Apache Software License, v. 2 except as noted otherwise in the LICENSE file
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -19,8 +19,7 @@ import (
 	"fmt"
 
 	"github.com/gardener/gardener/pkg/client/kubernetes/base"
-	"github.com/gardener/gardener/pkg/client/kubernetes/v16"
-	"github.com/gardener/gardener/pkg/client/kubernetes/v17"
+	"github.com/gardener/gardener/pkg/client/kubernetes/v110"
 	"github.com/gardener/gardener/pkg/client/kubernetes/v18"
 	"github.com/gardener/gardener/pkg/client/kubernetes/v19"
 	"github.com/gardener/gardener/pkg/logger"
@@ -100,14 +99,6 @@ func newKubernetesClient(config *rest.Config, clientset *kubernetes.Clientset, c
 	}
 	gitVersion := baseClient.Version()
 
-	k8s16, err := utils.CompareVersions(gitVersion, "~", "1.6")
-	if err != nil {
-		return nil, err
-	}
-	k8s17, err := utils.CompareVersions(gitVersion, "~", "1.7")
-	if err != nil {
-		return nil, err
-	}
 	k8s18, err := utils.CompareVersions(gitVersion, "~", "1.8")
 	if err != nil {
 		return nil, err
@@ -116,18 +107,12 @@ func newKubernetesClient(config *rest.Config, clientset *kubernetes.Clientset, c
 	if err != nil {
 		return nil, err
 	}
+	k8s110, err := utils.CompareVersions(gitVersion, "~", "1.10")
+	if err != nil {
+		return nil, err
+	}
 
 	switch {
-	case k8s16:
-		k8sClient, err = kubernetesv16.New(config, clientset, clientConfig)
-		if err != nil {
-			return nil, err
-		}
-	case k8s17:
-		k8sClient, err = kubernetesv17.New(config, clientset, clientConfig)
-		if err != nil {
-			return nil, err
-		}
 	case k8s18:
 		k8sClient, err = kubernetesv18.New(config, clientset, clientConfig)
 		if err != nil {
@@ -138,11 +123,16 @@ func newKubernetesClient(config *rest.Config, clientset *kubernetes.Clientset, c
 		if err != nil {
 			return nil, err
 		}
+	case k8s110:
+		k8sClient, err = kubernetesv110.New(config, clientset, clientConfig)
+		if err != nil {
+			return nil, err
+		}
 	default:
 		return nil, fmt.Errorf("Kubernetes cluster has version %s which is not supported", gitVersion)
 	}
 
-	if err := k8sClient.Bootstrap(); err != nil {
+	if err := k8sClient.DiscoverAPIGroups(); err != nil {
 		if len(k8sClient.GetAPIResourceList()) == 0 {
 			return nil, err
 		}

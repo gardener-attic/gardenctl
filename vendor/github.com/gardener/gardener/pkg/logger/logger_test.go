@@ -1,4 +1,4 @@
-// Copyright 2018 The Gardener Authors.
+// Copyright (c) 2018 SAP SE or an SAP affiliate company. All rights reserved. This file is licensed under the Apache Software License, v. 2 except as noted otherwise in the LICENSE file
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -80,14 +80,15 @@ var _ = Describe("logger", func() {
 			})
 		})
 
-		Describe("#NewSeedLogger", func() {
+		Describe("#NewFieldLogger", func() {
 			It("should return an Entry object with additional fields", func() {
 				logger := NewLogger("info")
-				name := "seed01"
+				key := "foo"
+				value := "bar"
 
-				shootLogger := NewSeedLogger(logger, name)
+				fieldLogger := NewFieldLogger(logger, key, value)
 
-				Expect(shootLogger.Data).To(HaveKeyWithValue("seed", name))
+				Expect(fieldLogger.Data).To(HaveKeyWithValue(key, value))
 			})
 		})
 	})

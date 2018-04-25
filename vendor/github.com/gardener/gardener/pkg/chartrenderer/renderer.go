@@ -1,4 +1,4 @@
-// Copyright 2018 The Gardener Authors.
+// Copyright (c) 2018 SAP SE or an SAP affiliate company. All rights reserved. This file is licensed under the Apache Software License, v. 2 except as noted otherwise in the LICENSE file
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -22,5 +22,6 @@ type ChartRenderer interface {
 // RenderedChart holds a map of rendered templates file with template file name as key and
 // rendered template as value.
 type RenderedChart struct {
-	Files map[string]string
+	ChartName string
+	Files     map[string]string
 }

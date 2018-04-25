@@ -1,6 +1,6 @@
 #!/bin/bash -eu
 #
-# Copyright 2018 The Gardener Authors.
+# Copyright (c) 2018 SAP SE or an SAP affiliate company. All rights reserved. This file is licensed under the Apache Software License, v. 2 except as noted otherwise in the LICENSE file
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -19,4 +19,4 @@ NAMESPACE="${2:-$(id -u -n)}"
 
 kubectl --namespace "$NAMESPACE" delete shoot "$NAME"
 deletionTimestamp="$(kubectl --namespace "$NAMESPACE" get shoot "$NAME" -o jsonpath --template={.metadata.deletionTimestamp})"
-kubectl --namespace "$NAMESPACE" patch  shoot "$NAME" --type=merge -p "{\"metadata\": {\"annotations\": {\"confirmation.garden.sapcloud.io/deletionTimestamp\": \"$deletionTimestamp\"}}}"
+kubectl --namespace "$NAMESPACE" patch shoot "$NAME" --type=merge -p "{\"metadata\": {\"annotations\": {\"confirmation.garden.sapcloud.io/deletionTimestamp\": \"$deletionTimestamp\"}}}"

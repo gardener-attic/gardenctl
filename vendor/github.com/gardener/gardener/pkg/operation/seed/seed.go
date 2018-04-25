@@ -1,4 +1,4 @@
-// Copyright 2018 The Gardener Authors.
+// Copyright (c) 2018 SAP SE or an SAP affiliate company. All rights reserved. This file is licensed under the Apache Software License, v. 2 except as noted otherwise in the LICENSE file
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -27,6 +27,7 @@ import (
 	"github.com/gardener/gardener/pkg/utils"
 	"github.com/gardener/gardener/pkg/utils/imagevector"
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 )
@@ -92,49 +93,42 @@ func List(k8sGardenClient kubernetes.Client, k8sGardenInformers gardeninformers.
 func BootstrapCluster(seed *Seed, k8sGardenClient kubernetes.Client, secrets map[string]*corev1.Secret, imageVector imagevector.ImageVector) error {
 	const chartName = "seed-bootstrap"
 
-	kubeStateMetricsImage, err := imageVector.FindImage("kube-state-metrics", k8sGardenClient.Version())
-	if err != nil {
-		return err
-	}
-	addonResizer, err := imageVector.FindImage("addon-resizer", k8sGardenClient.Version())
-	if err != nil {
-		return err
-	}
-
 	k8sSeedClient, err := kubernetes.NewClientFromSecretObject(seed.Secret)
 	if err != nil {
 		return err
 	}
-	if err := common.ApplyChart(
-		k8sSeedClient,
-		chartrenderer.New(k8sSeedClient),
-		filepath.Join("charts", chartName),
-		chartName,
-		metav1.NamespaceSystem,
-		nil,
-		map[string]interface{}{
-			"cloudProvider": seed.CloudProvider,
-			"images": map[string]interface{}{
-				"kube-state-metrics": kubeStateMetricsImage.String(),
-				"addon-resizer":      addonResizer.String(),
-			},
+
+	gardenNamespace := &corev1.Namespace{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: common.GardenNamespace,
 		},
-	); err != nil {
+	}
+	if _, err := k8sSeedClient.CreateNamespace(gardenNamespace, false); err != nil && !apierrors.IsAlreadyExists(err) {
 		return err
 	}
 
-	return common.EnsureImagePullSecrets(k8sSeedClient, metav1.NamespaceSystem, secrets, true, nil)
+	prometheusVersion, err := imageVector.FindImage("prometheus", k8sGardenClient.Version())
+	if err != nil {
+		return err
+	}
+	configMapReloader, err := imageVector.FindImage("configmap-reloader", k8sGardenClient.Version())
+	if err != nil {
+		return err
+	}
+
+	return common.ApplyChart(k8sSeedClient, chartrenderer.New(k8sSeedClient), filepath.Join("charts", chartName), chartName, common.GardenNamespace, nil, map[string]interface{}{
+		"cloudProvider": seed.CloudProvider,
+		"images": map[string]interface{}{
+			"prometheus":         prometheusVersion.String(),
+			"configmap-reloader": configMapReloader.String(),
+		},
+	})
 }
 
 // GetIngressFQDN returns the fully qualified domain name of ingress sub-resource for the Seed cluster. The
-// end result is '<subDomain>.<shoot-name>.<garden-namespace>.ingress.<seed-fqdn>'. It must not exceed 64
-// characters in length (see RFC-5280 for details).
-func (s *Seed) GetIngressFQDN(subDomain, shootName, shootNamespace string) (string, error) {
-	result := fmt.Sprintf("%s.%s.%s.ingress.%s", subDomain, shootName, shootNamespace, s.Info.Spec.Domain)
-	if len(result) > 64 {
-		return "", fmt.Errorf("the FQDN for '%s' cannot be longer than 64 characters", result)
-	}
-	return result, nil
+// end result is '<subDomain>.<shootName>.<projectName>.<seed-ingress-domain>'.
+func (s *Seed) GetIngressFQDN(subDomain, shootName, projectName string) string {
+	return fmt.Sprintf("%s.%s.%s.%s", subDomain, shootName, projectName, s.Info.Spec.IngressDomain)
 }
 
 // CheckMinimumK8SVersion checks whether the Kubernetes version of the Seed cluster fulfills the minimal requirements.
@@ -144,7 +138,7 @@ func (s *Seed) CheckMinimumK8SVersion() error {
 	case gardenv1beta1.CloudProviderAzure:
 		minSeedVersion = "1.8.6" // https://github.com/kubernetes/kubernetes/issues/56898
 	default:
-		minSeedVersion = "1.7"
+		minSeedVersion = "1.8" // CRD garbage collection
 	}
 
 	k8sSeedClient, err := kubernetes.NewClientFromSecretObject(s.Secret)
