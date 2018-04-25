@@ -666,7 +666,11 @@ func getKubeConfigOfClusterType(clusterType string) (pathToKubeconfig string) {
 			pathToKubeconfig = getGardenKubeConfig()
 		}
 	case "seed":
-		pathToKubeconfig = pathGardenHome + "/cache/seeds" + "/" + getSeedForProject(target.Target[2].Name) + "/" + "kubeconfig.yaml"
+		if target.Target[1].Kind == "seed" {
+			pathToKubeconfig = pathGardenHome + "/cache/seeds" + "/" + target.Target[1].Name + "/" + "kubeconfig.yaml"
+		} else {
+			pathToKubeconfig = pathGardenHome + "/cache/seeds" + "/" + getSeedForProject(target.Target[2].Name) + "/" + "kubeconfig.yaml"
+		}
 	case "shoot":
 		if target.Target[1].Kind == "seed" {
 			pathToKubeconfig = pathGardenHome + "/cache/seeds" + "/" + getSeedForProject(target.Target[2].Name) + "/" + target.Target[2].Name + "/" + "kubeconfig.yaml"
