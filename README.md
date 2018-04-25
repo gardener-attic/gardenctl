@@ -8,13 +8,15 @@
 
 
 # How to build it
-Currently, there are no binary builds available, so you need to build it from source. 
+Currently, there are no binary builds available, so you need to build it from source or `go get` it. 
 
 ## Prerequisites
 
 To build `gardenctl` from sources you need to have a running Golang environment with `dep` as dependency management system. Moreover, since `gardenctl` allows to execute `kubectl` as well as a running `kubectl` installation is recommended, but not required. Please check this [description](https://github.com/gardener/gardener/blob/master/docs/development/local_setup.md) for further details.
 
-## Build gardenctl from source
+## Build gardenctl 
+
+### From source
 
 First, you need to create a target folder structure before cloning and building `gardenctl`.
 
@@ -36,9 +38,19 @@ sudo mv gardenctl /usr/local/bin
 
 `gardenctl` allows like `kubectl` command completion. This recommended feature is bound to `gardenctl` or the alias `g`. To configure it you could e.g. run
 ```bash
-echo "gardenctl completion && source gardenctl_completion.sh && rm gardenctl_completion.sh" >> ~/.bashrc >> ~/.bashrc
+echo "gardenctl completion && source gardenctl_completion.sh && rm gardenctl_completion.sh" >> ~/.bashrc
 source ~/.bashrc
 ```
+
+### Via go tools
+First install `gardenctl` via the `go get` command.
+```go
+go get github.com/gardener/gardenctl
+```` 
+It will locate the binary under `$GOPATH/bin/gardenctl`. To generate the autocompletion and add it to your `~/.bashrc` file, run the following command. 
+```bash
+echo "$GOPATH/bin/gardenctl completion && source gardenctl_completion.sh && rm gardenctl_completion.sh" >> ~/.bashrc
+````
 
 ## Configure gardenctl
 
