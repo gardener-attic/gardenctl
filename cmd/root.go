@@ -49,6 +49,7 @@ func Execute() {
 	pathGardenConfig = filepath.Join(pathGardenHome, "config")
 	pathTarget = filepath.Join(pathGardenHome, "target")
 	createDir(pathGardenHome, 0751)
+	createFile(pathTarget, 0644)
 	gardenConfig = os.Getenv("GARDENCONFIG")
 	if gardenConfig != "" {
 		pathGardenConfig = gardenConfig
