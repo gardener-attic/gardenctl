@@ -3,7 +3,7 @@
 ![](https://github.com/gardener/gardenctl/blob/master/logo/logo_gardener_cli_large.png)
 
 # What is gardenctl?
-`gardenctl` is a command-line client for administrative purposes for the [Gardener](https://github.com/gardener/gardener). It facilitates the administration of even a big amount of Garden, Seed and Shoot clusters e.g. to check for any issue which occured in one of these systems. Details about the concept behind the Gardener are described in this [Gardener wiki](https://github.com/gardener/documentation/wiki/Architecture).
+`gardenctl` is a command-line client for administrative purposes for the [Gardener](https://github.com/gardener/gardener). It facilitates the administration of or one many garden, seed and shoot clusters, e.g. to check for issues which occured in one of these clusters. Details about the concept behind the Gardener are described in the [Gardener wiki](https://github.com/gardener/documentation/wiki/Architecture).
 
 
 
@@ -36,7 +36,8 @@ After the successful build you get the executable `gardenctl` in the the directo
 sudo mv gardenctl /usr/local/bin
 ```
 
-`gardenctl` allows like `kubectl` command completion. This recommended feature is bound to `gardenctl` or the alias `g`. To configure it you could e.g. run
+`gardenctl` supports auto completion. This recommended feature is bound to `gardenctl` or the alias `g`. To configure it you can run:
+
 ```bash
 echo "gardenctl completion && source gardenctl_completion.sh && rm gardenctl_completion.sh" >> ~/.bashrc
 source ~/.bashrc
@@ -46,44 +47,44 @@ source ~/.bashrc
 First install `gardenctl` via the `go get` command.
 ```go
 go get github.com/gardener/gardenctl
-```` 
-It will locate the binary under `$GOPATH/bin/gardenctl`. To generate the autocompletion and add it to your `~/.bashrc` file, run the following command. 
+```
+
+It will locate the binary under `$GOPATH/bin/gardenctl`. To generate the auto completion and add it to your `~/.bashrc` file, run the following command:
+
 ```bash
 echo "$GOPATH/bin/gardenctl completion && source gardenctl_completion.sh && rm gardenctl_completion.sh" >> ~/.bashrc
-````
+```
 
 ## Configure gardenctl
 
-`gardenctl` requires a configuration file, e.g. 
+`gardenctl` requires a configuration file. The default location is in `~/.garden/config`, but it can be overwritten with the environment variable `GARDENCONFIG`.
+
+Here an example file:
 ``` yaml
 gardenClusters:
-- name: dev-garden
-  kubeConfig: ~/clusters/garden-dev/kubeconfig.yaml
-- name: staging-garden
-  kubeConfig: ~/clusters/staging-garden/kubeconfig.yaml
-- name: canary-garden
-  kubeConfig: /Users/d123456/clusters/canary-garden/kubeconfig.yaml
-- name: prod-garden
-  kubeConfig: /Users/d123456/clusters/prod-garden/kubeconfig.yaml
+- name: dev
+  kubeConfig: ~/clusters/dev/kubeconfig.yaml
+- name: prod
+  kubeConfig: ~/clusters/prod/kubeconfig.yaml
 ```
-The path to the kubeconfig file of a garden cluster can be relative by using the ~ (tilde) expansion or absolute.
 
-The default location and name is of the `gardenctl` configuration file is  `~/.garden/config`. This default path and name can be overwritten with the environment variable `GARDENCONFIG`. `gardenctl` caches some information, e.g. the garden project names. The location of this cache is per default `$GARDENCTL_HOME/cache`. If `GARDENCTL_HOME` is not set, `~/.garden` is used.
+The path to the kubeconfig files of a garden cluster can be relative by using the ~ (tilde) expansion or absolute.
 
-`gardenctl` makes it easy to get additional information of your IaaS provider by using the secrets stored in the corresponding projects in the Gardener. To use this functionality, the command line interfaces of the IaaS provider need to be available. 
+`gardenctl` caches some information, e.g. the garden project names. The location of this cache is per default `$GARDENCTL_HOME/cache`. If `GARDENCTL_HOME` is not set, `~/.garden` is assumed.
 
-Please check the IaaS provider documentation for more details about their clis.
+`gardenctl` makes it easy to get additional information of your IaaS provider by using the secrets stored in the corresponding projects in the Gardener. To use this functionality, the CLIs of the IaaS providers need to be available. 
+
+Please check the IaaS provider documentation for more details about their CLIs.
   - [aws](https://aws.amazon.com/cli/)
   - [az](https://docs.microsoft.com/en-us/cli/azure/install-azure-cli?view=azure-cli-latest)
   - [gcloud](https://cloud.google.com/sdk/downloads)
   - [openstack](https://pypi.python.org/pypi/python-openstackclient)
 
-
 Moreover, `gardenctl` offers auto completion. To use it, the command
 ```bash
 gardenctl completion
 ``` 
-creates the file `gardenctl_completion.sh` which could then be sourced later on via 
+creates the file `gardenctl_completion.sh` which can then be sourced later on via 
 ```bash
 source gardenctl_completion.sh
 ```
@@ -91,9 +92,9 @@ Please keep in mind that the auto completion is bound to `gardenctl` or the alia
 
 ## Use gardenctl
 
-`gardenctl` requires the definition of a target, e.g. garden, project, seed or shoot. The following commands, e.g. `gardenctl ls shoots` use the target definition as a context for getting the information. 
+`gardenctl` requires the definition of a target, e.g. garden, project, seed or shoot. The following commands, e.g. `gardenctl ls shoots` usees the target definition as a context for getting the information. 
 
-Targets represents a hierarchical structure of the resources. On top, there is/are the garden/s. E.g. in case you setup a development and a production garden, you would have two entries in your `~/.garden/config`. Via `gardenctl ls gardens` you get a list of the available gardens. 
+Targets represent a hierarchical structure of resources. On top, there is/are the garden/s. E.g. in case you setup a development and a production garden, you would have two entries in your `~/.garden/config`. Via `gardenctl ls gardens` you get a list of the available gardens. 
 
 - `gardenctl get target`   
   Displays the current target
@@ -103,32 +104,32 @@ Targets represents a hierarchical structure of the resources. On top, there is/a
   Drop the deepest target. 
 
 ## Examples of basic usage:
-- List all seed cluster <br />
+- List all seed cluster <br/>
 `gardenctl ls seeds`
-- List all projects with shoot cluster <br />
+- List all projects with shoot cluster <br/>
 `gardenctl ls projects`
-- Target a seed cluster <br />
+- Target a seed cluster <br/>
 `gardenctl target seed-gce-dev`
-- Target a project <br />
+- Target a project <br/>
 `gardenctl target garden-vora`
-- Open prometheus ui for a targeted shoot-cluster <br />
+- Open prometheus ui for a targeted shoot-cluster <br/>
 `gardenctl show prometheus`
-- Execute an aws command on a targeted aws shoot cluster <br />
-`gardenctl aws ec2 describe-instances` or <br />
+- Execute an aws command on a targeted aws shoot cluster <br/>
+`gardenctl aws ec2 describe-instances` or <br/>
 `gardenctl aws ec2 describe-instances --no-cache` without locally caching credentials
-- Target a shoot directly and get all kube-dns pods in kube-system namespace <br />
-`gardenctl target myshoot`<br />
-`gardenctl kubectl get pods -- -n kube-system | grep kube-dns`<br />
-- List all cluster with an issue <br />
+- Target a shoot directly and get all kube-dns pods in kube-system namespace <br/>
+`gardenctl target myshoot`<br/>
+`gardenctl kubectl get pods -- -n kube-system | grep kube-dns`<br/>
+- List all cluster with an issue <br/>
 `gardenctl ls issues`
-- Drop an element from target stack <br />
+- Drop an element from target stack <br/>
 `gardenctl drop`
 
 ## Advanced usage based on JsonQuery
 
 The following examples are based on [jq](https://stedolan.github.io/jq/). The [Json Query Playground](https://jqplay.org/jq?q=.%5B%5D&j=%5B%5D) offers a convenient environment to test the queries.
 
-Below a list of examples. 
+Below a list of examples:
 
 - List the project name, shoot name and the state for all projects with issues
 ```bash
@@ -151,7 +152,7 @@ gardenctl ls issues -o json | jq '.issues[] | if (.status.lastOperation.state!="
 gardenctl k get shoots -- -n garden-core -o json | jq -r ".items[].metadata | {email: .annotations.\"garden.sapcloud.io/createdBy\", name: .name, namespace: .namespace}"
 ```
 
-Cluster analysis
+Here a few on cluster analysis:
 
 - Which states are there and how many clusters are in this state?
 ```bash 
