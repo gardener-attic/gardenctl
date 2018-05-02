@@ -1,0 +1,14 @@
+gardenctl:
+  template: 'default'
+  base_definition:
+    repo: ~
+    traits:
+      version: ~
+    steps:
+      build:
+        image: 'golang:1.9.4'
+  variants:
+    head-update: ~
+    pull-request:
+      traits:
+        pull-request: ~
