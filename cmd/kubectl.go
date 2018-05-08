@@ -50,6 +50,15 @@ var ksCmd = &cobra.Command{
 	},
 }
 
+var kgCmd = &cobra.Command{
+	Use:    "kg",
+	Hidden: true,
+	Run: func(cmd *cobra.Command, args []string) {
+		arguments := "kubectl " + strings.Join(args[:], " ") + " --namespace=garden"
+		kube(arguments)
+	},
+}
+
 func init() {
 }
 
