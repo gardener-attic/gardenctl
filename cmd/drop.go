@@ -16,7 +16,6 @@ package cmd
 
 import (
 	"fmt"
-	"io/ioutil"
 	"os"
 
 	yaml "gopkg.in/yaml.v2"
@@ -36,10 +35,7 @@ var dropCmd = &cobra.Command{
 		}
 		if len(args) == 0 {
 			var target Target
-			targetFile, err := ioutil.ReadFile(pathTarget)
-			checkError(err)
-			err = yaml.Unmarshal(targetFile, &target)
-			checkError(err)
+			ReadTarget(pathTarget, &target)
 			if len(target.Target) == 1 {
 				fmt.Println("Dropped " + target.Target[0].Kind + " " + target.Target[0].Name)
 			} else if len(target.Target) == 2 {
@@ -50,10 +46,7 @@ var dropCmd = &cobra.Command{
 			drop()
 		} else if len(args) == 1 {
 			var target Target
-			targetFile, err := ioutil.ReadFile(pathTarget)
-			checkError(err)
-			err = yaml.Unmarshal(targetFile, &target)
-			checkError(err)
+			ReadTarget(pathTarget, &target)
 			switch args[0] {
 			case "project":
 				if len(target.Target) == 2 && target.Target[1].Kind == "project" {
@@ -93,10 +86,7 @@ func init() {
 // drop drops target until stack is empty
 func drop() {
 	var target Target
-	targetFile, err := ioutil.ReadFile(pathTarget)
-	checkError(err)
-	err = yaml.Unmarshal(targetFile, &target)
-	checkError(err)
+	ReadTarget(pathTarget, &target)
 	if len(target.Target) > 0 {
 		target.Target = target.Target[:len(target.Target)-1]
 	} else {

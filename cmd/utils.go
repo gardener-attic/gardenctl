@@ -20,6 +20,8 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+
+	yaml "gopkg.in/yaml.v2"
 )
 
 // checkError checks if an error during execution occured
@@ -38,8 +40,8 @@ func HomeDir() string {
 	return os.Getenv("USERPROFILE")
 }
 
-// fileExists check if the directory exists
-func fileExists(path string) (bool, error) {
+// FileExists check if the directory exists
+func FileExists(path string) (bool, error) {
 	_, err := os.Stat(path)
 	if err == nil {
 		return true, nil
@@ -50,26 +52,26 @@ func fileExists(path string) (bool, error) {
 	return true, err
 }
 
-// createDir creates a directory if it does no exist
-func createDir(dirname string, permission os.FileMode) {
-	exists, err := fileExists(dirname)
+// CreateDir creates a directory if it does no exist
+func CreateDir(dirname string, permission os.FileMode) {
+	exists, err := FileExists(dirname)
 	checkError(err)
 	if !exists {
 		os.MkdirAll(dirname, permission)
 	}
 }
 
-// createFile creates an empty file if it does not exist
-func createFile(filename string, permission os.FileMode) {
-	exists, err := fileExists(filename)
+// CreateFileIfNotExists creates an empty file if it does not exist
+func CreateFileIfNotExists(filename string, permission os.FileMode) {
+	exists, err := FileExists(filename)
 	checkError(err)
 	if !exists {
 		ioutil.WriteFile(filename, []byte{}, permission)
 	}
 }
 
-// execCmd executes a command within set environment
-func execCmd(cmd string, suppressedOutput bool, environment ...string) (err error) {
+// ExecCmd executes a command within set environment
+func ExecCmd(cmd string, suppressedOutput bool, environment ...string) (err error) {
 	var command *exec.Cmd
 	parts := strings.Fields(cmd)
 	head := parts[0]
@@ -109,8 +111,8 @@ func execCmd(cmd string, suppressedOutput bool, environment ...string) (err erro
 	return nil
 }
 
-// execCmdReturnOutput executes a command within set environment and returns output
-func execCmdReturnOutput(cmd string, environment ...string) (output string) {
+// ExecCmdReturnOutput executes a command within set environment and returns output
+func ExecCmdReturnOutput(cmd string, environment ...string) (output string) {
 	var command *exec.Cmd
 	parts := strings.Fields(cmd)
 	head := parts[0]
@@ -136,14 +138,10 @@ func execCmdReturnOutput(cmd string, environment ...string) (output string) {
 	return string(out[:])
 }
 
-// getKubeconfig returns path to kubeconfig
-func getKubeconfig() (pathToKubeconfig string) {
-	env := os.Environ()
-	pathToKubeconfig = ""
-	for _, val := range env {
-		if strings.Contains(val, "KUBECONFIG=") {
-			pathToKubeconfig = strings.Trim(val, "KUBECONFIG=")
-		}
-	}
-	return pathToKubeconfig
+// ReadTarget file into Target
+func ReadTarget(pathTarget string, target *Target) {
+	targetFile, err := ioutil.ReadFile(pathTarget)
+	checkError(err)
+	err = yaml.Unmarshal(targetFile, target)
+	checkError(err)
 }

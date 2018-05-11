@@ -44,7 +44,7 @@ func getGardenClusterKubeConfigFromConfig() {
 		fmt.Println("Invalid gardenctl configuration")
 		os.Exit(2)
 	}
-	exists, err := fileExists(pathTarget)
+	exists, err := FileExists(pathTarget)
 	checkError(err)
 	if !exists {
 		// if no garden cluster is selected take the first as default cluster
@@ -105,7 +105,7 @@ func clientToTarget(target string) (*k8s.Clientset, error) {
 
 // nameOfTargetedCluster returns the full clustername of the currently targeted cluster
 func nameOfTargetedCluster() (clustername string) {
-	clustername = execCmdReturnOutput("kubectl config current-context", "KUBECONFIG="+KUBECONFIG)
+	clustername = ExecCmdReturnOutput("kubectl config current-context", "KUBECONFIG="+KUBECONFIG)
 	return clustername
 }
 
@@ -139,7 +139,7 @@ func getShootClusterName() (clustername string) {
 func getCredentials() (username, password string) {
 	_, err := clientToTarget("shoot")
 	checkError(err)
-	output := execCmdReturnOutput("kubectl config view", "KUBECONFIG="+KUBECONFIG)
+	output := ExecCmdReturnOutput("kubectl config view", "KUBECONFIG="+KUBECONFIG)
 	scanner := bufio.NewScanner(strings.NewReader(output))
 	for scanner.Scan() {
 		if strings.Contains(scanner.Text(), "password:") {
@@ -154,9 +154,7 @@ func getCredentials() (username, password string) {
 // getSeedNamespaceNameForShoot returns namespace name
 func getSeedNamespaceNameForShoot(shootName string) (namespaceSeed string) {
 	var target Target
-	targetFile, err := ioutil.ReadFile(pathTarget)
-	checkError(err)
-	err = yaml.Unmarshal(targetFile, &target)
+	ReadTarget(pathTarget, &target)
 	Client, err = clientToTarget("garden")
 	checkError(err)
 	k8sGardenClient, err := kubernetes.NewClientFromFile(*kubeconfig)
@@ -178,9 +176,7 @@ func getSeedNamespaceNameForShoot(shootName string) (namespaceSeed string) {
 // returns projectName for Shoot
 func getProjectForShoot() (projectName string) {
 	var target Target
-	targetFile, err := ioutil.ReadFile(pathTarget)
-	checkError(err)
-	err = yaml.Unmarshal(targetFile, &target)
+	ReadTarget(pathTarget, &target)
 	if target.Target[1].Kind == "project" {
 		projectName = target.Target[1].Name
 	} else {

@@ -48,18 +48,18 @@ func Execute() {
 	pathShootCache = filepath.Join(pathGardenHome, "cache", "shoots")
 	pathGardenConfig = filepath.Join(pathGardenHome, "config")
 	pathTarget = filepath.Join(pathGardenHome, "target")
-	createDir(pathGardenHome, 0751)
-	createFile(pathTarget, 0644)
+	CreateDir(pathGardenHome, 0751)
+	CreateFileIfNotExists(pathTarget, 0644)
 	gardenConfig = os.Getenv("GARDENCONFIG")
 	if gardenConfig != "" {
 		pathGardenConfig = gardenConfig
 	}
 	if _, err := os.Stat(pathGardenConfig); err != nil {
-		createFile(pathGardenConfig, 0644)
+		CreateFileIfNotExists(pathGardenConfig, 0644)
 	}
-	createDir(pathGardenHome+"/cache", 0751)
-	createDir(pathGardenHome+"/cache/seeds", 0751)
-	createDir(pathGardenHome+"/cache/projects", 0751)
+	CreateDir(pathGardenHome+"/cache", 0751)
+	CreateDir(pathGardenHome+"/cache/seeds", 0751)
+	CreateDir(pathGardenHome+"/cache/projects", 0751)
 	getGardenClusterKubeConfigFromConfig()
 	if err := RootCmd.Execute(); err != nil {
 		os.Exit(1)
