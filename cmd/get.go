@@ -88,10 +88,7 @@ func init() {
 func getProject(name string) {
 	var target Target
 	if name == "" {
-		targetFile, err := ioutil.ReadFile(pathTarget)
-		checkError(err)
-		err = yaml.Unmarshal(targetFile, &target)
-		checkError(err)
+		ReadTarget(pathTarget, &target)
 		if len(target.Target) < 2 {
 			fmt.Println("No project targeted")
 			os.Exit(2)
@@ -124,10 +121,7 @@ func getProject(name string) {
 func getGarden(name string) {
 	var target Target
 	if name == "" {
-		targetFile, err := ioutil.ReadFile(pathTarget)
-		checkError(err)
-		err = yaml.Unmarshal(targetFile, &target)
-		checkError(err)
+		ReadTarget(pathTarget, &target)
 		if len(target.Target) > 0 {
 			name = target.Target[0].Name
 		} else {
@@ -170,10 +164,7 @@ func getGarden(name string) {
 func getSeed(name string) {
 	var target Target
 	if name == "" {
-		targetFile, err := ioutil.ReadFile(pathTarget)
-		checkError(err)
-		err = yaml.Unmarshal(targetFile, &target)
-		checkError(err)
+		ReadTarget(pathTarget, &target)
 		if len(target.Target) > 1 && target.Target[1].Kind == "seed" {
 			name = target.Target[1].Name
 		} else if len(target.Target) > 1 && target.Target[1].Kind == "project" && len(target.Target) == 3 {
@@ -213,10 +204,7 @@ func getSeed(name string) {
 func getShoot(name string) {
 	var target Target
 	if name == "" {
-		targetFile, err := ioutil.ReadFile(pathTarget)
-		checkError(err)
-		err = yaml.Unmarshal(targetFile, &target)
-		checkError(err)
+		ReadTarget(pathTarget, &target)
 		if len(target.Target) > 2 {
 			name = target.Target[2].Name
 		} else {
@@ -269,10 +257,8 @@ func getShoot(name string) {
 
 // getTarget prints target stack
 func getTarget() {
-	targetFile, err := ioutil.ReadFile(pathTarget)
-	checkError(err)
 	var t Target
-	yaml.Unmarshal(targetFile, &t)
+	ReadTarget(pathTarget, &t)
 	if len(t.Target) == 0 {
 		fmt.Println("Target stack is empty")
 		os.Exit(2)

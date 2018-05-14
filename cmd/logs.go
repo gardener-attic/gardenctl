@@ -16,11 +16,8 @@ package cmd
 
 import (
 	"fmt"
-	"io/ioutil"
 	"os"
 	"strings"
-
-	yaml "gopkg.in/yaml.v2"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
@@ -43,10 +40,7 @@ var logsCmd = &cobra.Command{
 			os.Exit(2)
 		}
 		var t Target
-		targetFile, err := ioutil.ReadFile(pathTarget)
-		checkError(err)
-		err = yaml.Unmarshal(targetFile, &t)
-		checkError(err)
+		ReadTarget(pathTarget, &t)
 		if len(t.Target) < 3 && (args[0] != "gardener-apiserver") && (args[0] != "gardener-controller-manager") && (args[0] != "tf") && (args[0] != "dashboard") {
 			fmt.Println("No shoot targeted")
 			os.Exit(2)
@@ -133,10 +127,7 @@ func logPod(toMatch string, toTarget string, container string) {
 		container = " -c " + container
 	}
 	var target Target
-	targetFile, err := ioutil.ReadFile(pathTarget)
-	checkError(err)
-	err = yaml.Unmarshal(targetFile, &target)
-	checkError(err)
+	ReadTarget(pathTarget, &target)
 	if len(target.Target) < 3 {
 		fmt.Println("No shoot targeted")
 		os.Exit(2)
@@ -153,7 +144,7 @@ func logPod(toMatch string, toTarget string, container string) {
 	checkError(err)
 	for _, pod := range pods.Items {
 		if strings.Contains(pod.Name, toMatch) {
-			err := execCmd("kubectl logs --tail="+numberOfLines+" "+pod.Name+container+" -n "+namespace, false, "KUBECONFIG="+KUBECONFIG)
+			err := ExecCmd("kubectl logs --tail="+numberOfLines+" "+pod.Name+container+" -n "+namespace, false, "KUBECONFIG="+KUBECONFIG)
 			checkError(err)
 		}
 	}
@@ -167,7 +158,7 @@ func logPodGarden(toMatch, namespace string) {
 	checkError(err)
 	for _, pod := range pods.Items {
 		if strings.Contains(pod.Name, toMatch) {
-			err := execCmd("kubectl logs --tail="+numberOfLines+" "+pod.Name+" -n "+namespace, false, "KUBECONFIG="+KUBECONFIG)
+			err := ExecCmd("kubectl logs --tail="+numberOfLines+" "+pod.Name+" -n "+namespace, false, "KUBECONFIG="+KUBECONFIG)
 			checkError(err)
 			break
 		}
@@ -177,20 +168,14 @@ func logPodGarden(toMatch, namespace string) {
 // logsGardenerApiserver prints the logfile of the garndener-api-server
 func logsGardenerApiserver() {
 	var target Target
-	targetFile, err := ioutil.ReadFile(pathTarget)
-	checkError(err)
-	err = yaml.Unmarshal(targetFile, &target)
-	checkError(err)
+	ReadTarget(pathTarget, &target)
 	logPodGarden("gardener-apiserver", "garden")
 }
 
 // logsGardenerControllerManager prints the logfile of the gardener-controller-manager
 func logsGardenerControllerManager() {
 	var target Target
-	targetFile, err := ioutil.ReadFile(pathTarget)
-	checkError(err)
-	err = yaml.Unmarshal(targetFile, &target)
-	checkError(err)
+	ReadTarget(pathTarget, &target)
 	if len(target.Target) != 3 {
 		logPodGarden("gardener-controller-manager", "garden")
 	} else {
@@ -201,10 +186,7 @@ func logsGardenerControllerManager() {
 // logPodGardenImproved print logfiles for garden pods
 func logPodGardenImproved(podName string) {
 	var target Target
-	targetFile, err := ioutil.ReadFile(pathTarget)
-	checkError(err)
-	err = yaml.Unmarshal(targetFile, &target)
-	checkError(err)
+	ReadTarget(pathTarget, &target)
 	Client, err := clientToTarget("garden")
 	checkError(err)
 	pods, err := Client.CoreV1().Pods("garden").List(metav1.ListOptions{})
@@ -212,7 +194,7 @@ func logPodGardenImproved(podName string) {
 	projectName := getProjectForShoot()
 	for _, pod := range pods.Items {
 		if strings.Contains(pod.Name, podName) {
-			output := execCmdReturnOutput("kubectl logs "+pod.Name+" -n garden", "KUBECONFIG="+KUBECONFIG)
+			output := ExecCmdReturnOutput("kubectl logs "+pod.Name+" -n garden", "KUBECONFIG="+KUBECONFIG)
 			lines := strings.Split("time="+output, `time=`)
 			for _, line := range lines {
 				if strings.Contains(line, ("shoot=" + projectName + "/" + target.Target[2].Name)) {
@@ -289,10 +271,7 @@ func logsMachineControllerManager() {
 // logsDashboard prints the logfile of the dashboard
 func logsDashboard() {
 	var target Target
-	targetFile, err := ioutil.ReadFile(pathTarget)
-	checkError(err)
-	err = yaml.Unmarshal(targetFile, &target)
-	checkError(err)
+	ReadTarget(pathTarget, &target)
 	namespace := "kube-system"
 	if len(target.Target) == 3 {
 		Client, err = clientToTarget("shoot")
@@ -317,7 +296,7 @@ func logsDashboard() {
 	checkError(err)
 	for _, pod := range pods.Items {
 		if strings.Contains(pod.Name, "kubernetes-dashboard") {
-			err := execCmd("kubectl logs --tail="+numberOfLines+" "+pod.Name+" -n "+namespace, false, "KUBECONFIG="+KUBECONFIG)
+			err := ExecCmd("kubectl logs --tail="+numberOfLines+" "+pod.Name+" -n "+namespace, false, "KUBECONFIG="+KUBECONFIG)
 			checkError(err)
 		}
 	}
@@ -363,7 +342,7 @@ func logsTerraform(toMatch string) {
 	} else {
 		for i := 0; i < count; i++ {
 			fmt.Println("gardenctl logs " + podName[i] + " namespace=" + podNamespace[i])
-			err = execCmd("kubectl logs "+podName[i]+" -n "+podNamespace[i], false, "KUBECONFIG="+KUBECONFIG)
+			err = ExecCmd("kubectl logs "+podName[i]+" -n "+podNamespace[i], false, "KUBECONFIG="+KUBECONFIG)
 			checkError(err)
 		}
 	}

@@ -120,7 +120,7 @@ func showPodGarden(podName string, namespace string) {
 	checkError(err)
 	for _, pod := range pods.Items {
 		if strings.Contains(pod.Name, podName) {
-			execCmd("kubectl get pods "+pod.Name+" -o wide -n "+namespace, false, "KUBECONFIG="+KUBECONFIG)
+			ExecCmd("kubectl get pods "+pod.Name+" -o wide -n "+namespace, false, "KUBECONFIG="+KUBECONFIG)
 		}
 	}
 }
@@ -134,7 +134,7 @@ func showOperator() {
 // showUI opens the gardener landing page
 func showUI() {
 	showPodGarden("gardener-dashboard", "garden")
-	output := execCmdReturnOutput("kubectl get ingress gardener-dashboard-ingress -n garden", "KUBECONFIG="+KUBECONFIG)
+	output := ExecCmdReturnOutput("kubectl get ingress gardener-dashboard-ingress -n garden", "KUBECONFIG="+KUBECONFIG)
 	list := strings.Split(output, " ")
 	url := "-"
 	for _, val := range list {
@@ -156,7 +156,7 @@ func showUI() {
 			filteredUrls = append(filteredUrls, url)
 			fmt.Println("URL-" + strconv.Itoa(index+1) + ": " + "https://" + url)
 			if !opened {
-				execCmd(("open " + "https://" + url), false)
+				ExecCmd(("open " + "https://" + url), false)
 				opened = true
 			}
 		}
@@ -166,10 +166,7 @@ func showUI() {
 // showPod is an abstraction to show pods in seed cluster controlplane or kube-system namespace of shoot
 func showPod(toMatch string, toTarget string) {
 	var target Target
-	targetFile, err := ioutil.ReadFile(pathTarget)
-	checkError(err)
-	err = yaml.Unmarshal(targetFile, &target)
-	checkError(err)
+	ReadTarget(pathTarget, &target)
 	namespace := getSeedNamespaceNameForShoot(target.Target[2].Name)
 	Client, err = clientToTarget("seed")
 	checkError(err)
@@ -182,7 +179,7 @@ func showPod(toMatch string, toTarget string) {
 	checkError(err)
 	for _, pod := range pods.Items {
 		if strings.Contains(pod.Name, toMatch) {
-			execCmd("kubectl get pods "+pod.Name+" -o wide -n "+namespace, false, "KUBECONFIG="+KUBECONFIG)
+			ExecCmd("kubectl get pods "+pod.Name+" -o wide -n "+namespace, false, "KUBECONFIG="+KUBECONFIG)
 		}
 	}
 }
@@ -237,7 +234,7 @@ func showVpnShoot() {
 func showPrometheus() {
 	username, password = getCredentials()
 	showPod("prometheus", "seed")
-	output := execCmdReturnOutput("kubectl get ingress prometheus -n "+getShootClusterName(), "KUBECONFIG="+KUBECONFIG)
+	output := ExecCmdReturnOutput("kubectl get ingress prometheus -n "+getShootClusterName(), "KUBECONFIG="+KUBECONFIG)
 	list := strings.Split(output, " ")
 	url := "-"
 	for _, val := range list {
@@ -247,14 +244,14 @@ func showPrometheus() {
 	}
 	url = "https://" + username + ":" + password + "@" + url
 	fmt.Println("URL: " + url)
-	execCmd(("open " + url), false)
+	ExecCmd(("open " + url), false)
 }
 
 // showAltermanager shows the prometheus pods in the targeted seed cluster
 func showAltermanager() {
 	username, password = getCredentials()
 	showPod("alertmanager", "seed")
-	output := execCmdReturnOutput("kubectl get ingress alertmanager -n "+getShootClusterName(), "KUBECONFIG="+KUBECONFIG)
+	output := ExecCmdReturnOutput("kubectl get ingress alertmanager -n "+getShootClusterName(), "KUBECONFIG="+KUBECONFIG)
 	list := strings.Split(output, " ")
 	url := "-"
 	for _, val := range list {
@@ -264,7 +261,7 @@ func showAltermanager() {
 	}
 	url = "https://" + username + ":" + password + "@" + url
 	fmt.Println("URL: " + url)
-	execCmd(("open " + url), false)
+	ExecCmd(("open " + url), false)
 }
 
 // showMachineControllerManager shows the prometheus pods in the targeted seed cluster
@@ -275,10 +272,7 @@ func showMachineControllerManager() {
 // showDashboard shows the dashboard for the targetd cluster
 func showDashboard() {
 	var target Target
-	targetFile, err := ioutil.ReadFile(pathTarget)
-	checkError(err)
-	err = yaml.Unmarshal(targetFile, &target)
-	checkError(err)
+	ReadTarget(pathTarget, &target)
 	if len(target.Target) == 1 {
 		Client, err = clientToTarget("garden")
 		checkError(err)
@@ -286,7 +280,7 @@ func showDashboard() {
 		checkError(err)
 		for _, pod := range pods.Items {
 			if strings.Contains(pod.Name, "kubernetes-dashboard") {
-				execCmd("kubectl get pods "+pod.Name+" -o wide -n kube-system", false, "KUBECONFIG="+KUBECONFIG)
+				ExecCmd("kubectl get pods "+pod.Name+" -o wide -n kube-system", false, "KUBECONFIG="+KUBECONFIG)
 			}
 		}
 	} else if len(target.Target) == 2 {
@@ -305,7 +299,7 @@ func showDashboard() {
 		checkError(err)
 		for _, pod := range pods.Items {
 			if strings.Contains(pod.Name, "kubernetes-dashboard") {
-				execCmd("kubectl get pods "+pod.Name+" -o wide -n "+namespace, false, "KUBECONFIG="+KUBECONFIG)
+				ExecCmd("kubectl get pods "+pod.Name+" -o wide -n "+namespace, false, "KUBECONFIG="+KUBECONFIG)
 			}
 		}
 	} else if len(target.Target) == 3 {
@@ -314,15 +308,15 @@ func showDashboard() {
 		fmt.Println("No target")
 		os.Exit(2)
 	}
-	execCmd("open http://127.0.0.1:8002/ui", false)
-	execCmd("kubectl proxy -p 8002", false, "KUBECONFIG="+KUBECONFIG)
+	ExecCmd("open http://127.0.0.1:8002/ui", false)
+	ExecCmd("kubectl proxy -p 8002", false, "KUBECONFIG="+KUBECONFIG)
 }
 
 // showGrafana shows the grafana dashboard for the targetd cluster
 func showGrafana() {
 	username, password = getCredentials()
 	showPod("grafana", "seed")
-	output := execCmdReturnOutput("kubectl get ingress grafana -n "+getShootClusterName(), "KUBECONFIG="+KUBECONFIG)
+	output := ExecCmdReturnOutput("kubectl get ingress grafana -n "+getShootClusterName(), "KUBECONFIG="+KUBECONFIG)
 	list := strings.Split(output, " ")
 	url := "-"
 	for _, val := range list {
@@ -332,7 +326,7 @@ func showGrafana() {
 	}
 	url = "https://" + username + ":" + password + "@" + url
 	fmt.Println("URL: " + url)
-	execCmd(("open " + url), false)
+	ExecCmd(("open " + url), false)
 }
 
 // showTerraform pods for specified name
@@ -345,7 +339,7 @@ func showTerraform(name string) {
 	count := 0
 	for _, pod := range pods.Items {
 		if strings.Contains(pod.Name, name) && pod.Status.Phase == "Running" {
-			output = execCmdReturnOutput("kubectl get pods "+pod.Name+" -o wide -n "+pod.Namespace, "KUBECONFIG="+KUBECONFIG)
+			output = ExecCmdReturnOutput("kubectl get pods "+pod.Name+" -o wide -n "+pod.Namespace, "KUBECONFIG="+KUBECONFIG)
 			if count != 0 {
 				fmt.Printf("%s\n", strings.Split(output, "\n")[1])
 			} else {

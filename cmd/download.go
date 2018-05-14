@@ -22,7 +22,6 @@ import (
 
 	clientset "github.com/gardener/gardener/pkg/client/garden/clientset/versioned"
 	"github.com/gardener/gardener/pkg/client/kubernetes"
-	yaml "gopkg.in/yaml.v2"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	k8s "k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/clientcmd"
@@ -58,10 +57,7 @@ func init() {
 func downloadTerraformFiles(option string) {
 	namespace := ""
 	var target Target
-	targetFile, err := ioutil.ReadFile(pathTarget)
-	checkError(err)
-	err = yaml.Unmarshal(targetFile, &target)
-	checkError(err)
+	ReadTarget(pathTarget, &target)
 	Client, err = clientToTarget("garden")
 	if len(target.Target) < 3 && (option == "infra" || option == "internal-dns" || option == "external-dns" || option == "ingress" || option == "backup") {
 		fmt.Println("No Shoot targeted")
@@ -110,11 +106,11 @@ func downloadTerraformFiles(option string) {
 	checkError(err)
 	pathTerraform := ""
 	if target.Target[1].Kind == "project" {
-		createDir(pathGardenHome+"/cache/projects/"+target.Target[1].Name+"/"+target.Target[2].Name+"/terraform", 0751)
+		CreateDir(pathGardenHome+"/cache/projects/"+target.Target[1].Name+"/"+target.Target[2].Name+"/terraform", 0751)
 		pathTerraform = "cache/projects/" + target.Target[1].Name + "/" + target.Target[2].Name + "/terraform"
 
 	} else if target.Target[1].Kind == "seed" {
-		createDir(pathGardenHome+"/cache/seeds/"+target.Target[1].Name+"/"+target.Target[2].Name+"/terraform", 0751)
+		CreateDir(pathGardenHome+"/cache/seeds/"+target.Target[1].Name+"/"+target.Target[2].Name+"/terraform", 0751)
 		pathTerraform = "cache/seeds/" + target.Target[1].Name + "/" + target.Target[2].Name + "/terraform"
 	}
 	err = ioutil.WriteFile(pathGardenHome+"/"+pathTerraform+"/main.tf", []byte(cmTfConfig.Data["main.tf"]), 0644)
