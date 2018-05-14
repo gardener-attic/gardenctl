@@ -5,6 +5,8 @@ gardenctl:
     traits:
       version: ~
     steps:
+      test:
+        image: 'golang:1.9.4'
       build:
         image: 'golang:1.9.4'
   variants:

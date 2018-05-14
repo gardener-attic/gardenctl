@@ -24,7 +24,6 @@ import (
 	clientset "github.com/gardener/gardener/pkg/client/garden/clientset/versioned"
 	sapcloud "github.com/gardener/gardener/pkg/client/kubernetes"
 	"github.com/jmoiron/jsonq"
-	yaml "gopkg.in/yaml.v2"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -49,10 +48,7 @@ func operate(provider, arguments string) {
 	secretName, region := "", ""
 	namespaceSecret := ""
 	var target Target
-	targetFile, err := ioutil.ReadFile(pathTarget)
-	checkError(err)
-	err = yaml.Unmarshal(targetFile, &target)
-	checkError(err)
+	ReadTarget(pathTarget, &target)
 	Client, err = clientToTarget("garden")
 	k8sGardenClient, err := sapcloud.NewClientFromFile(*kubeconfig)
 	checkError(err)
@@ -77,16 +73,16 @@ func operate(provider, arguments string) {
 			awsPathCredentials := ""
 			awsPathConfig := ""
 			if target.Target[1].Kind == "project" {
-				createDir(pathGardenHome+"/cache/projects/"+target.Target[1].Name+"/"+target.Target[2].Name+"/.aws", 0751)
+				CreateDir(pathGardenHome+"/cache/projects/"+target.Target[1].Name+"/"+target.Target[2].Name+"/.aws", 0751)
 				awsPathCredentials = "cache/projects/" + target.Target[1].Name + "/" + target.Target[2].Name + "/.aws/credentials"
 				awsPathConfig = "cache/projects/" + target.Target[1].Name + "/" + target.Target[2].Name + "/.aws/config"
 			} else if target.Target[1].Kind == "seed" {
-				createDir(pathGardenHome+"/cache/seeds/"+target.Target[1].Name+"/"+target.Target[2].Name+"/.aws", 0751)
+				CreateDir(pathGardenHome+"/cache/seeds/"+target.Target[1].Name+"/"+target.Target[2].Name+"/.aws", 0751)
 				awsPathCredentials = "cache/seeds/" + target.Target[1].Name + "/" + target.Target[2].Name + "/.aws/credentials"
 				awsPathConfig = "cache/seeds/" + target.Target[1].Name + "/" + target.Target[2].Name + "/.aws/config"
 			}
-			createFile(pathGardenHome+"/"+awsPathCredentials, 0644)
-			createFile(pathGardenHome+"/"+awsPathConfig, 0644)
+			CreateFileIfNotExists(pathGardenHome+"/"+awsPathCredentials, 0644)
+			CreateFileIfNotExists(pathGardenHome+"/"+awsPathConfig, 0644)
 			removeOldEntryAWS(pathGardenHome+"/"+awsPathCredentials, "[gardenctl]")
 			removeOldEntryAWS(pathGardenHome+"/"+awsPathConfig, "[profile gardenctl]")
 			credentials := "[gardenctl]\n" + "aws_access_key_id=" + string(accessKeyID[:]) + "\n" + "aws_secret_access_key=" + string(secretAccessKey[:]) + "\n"
@@ -101,7 +97,7 @@ func operate(provider, arguments string) {
 			originalConfig.Close()
 			checkError(err)
 		}
-		err := execCmd(arguments, false, "AWS_ACCESS_KEY_ID="+string(accessKeyID[:]), "AWS_SECRET_ACCESS_KEY="+string(secretAccessKey[:]), "AWS_DEFAULT_REGION="+region, "AWS_DEFAULT_OUTPUT=text")
+		err := ExecCmd(arguments, false, "AWS_ACCESS_KEY_ID="+string(accessKeyID[:]), "AWS_SECRET_ACCESS_KEY="+string(secretAccessKey[:]), "AWS_DEFAULT_REGION="+region, "AWS_DEFAULT_OUTPUT=text")
 		if err != nil {
 			os.Exit(2)
 		}
@@ -112,19 +108,19 @@ func operate(provider, arguments string) {
 		if !cachevar {
 			gcpPathCredentials := ""
 			if target.Target[1].Kind == "project" {
-				createDir(pathGardenHome+"/cache/projects/"+target.Target[1].Name+"/"+target.Target[2].Name+"/.gcp", 0751)
+				CreateDir(pathGardenHome+"/cache/projects/"+target.Target[1].Name+"/"+target.Target[2].Name+"/.gcp", 0751)
 				gcpPathCredentials = "cache/projects/" + target.Target[1].Name + "/" + target.Target[2].Name + "/.gcp/credentials"
 			} else if target.Target[1].Kind == "seed" {
-				createDir(pathGardenHome+"/cache/seeds/"+target.Target[1].Name+"/"+target.Target[2].Name+"/.gcp", 0751)
+				CreateDir(pathGardenHome+"/cache/seeds/"+target.Target[1].Name+"/"+target.Target[2].Name+"/.gcp", 0751)
 				gcpPathCredentials = "cache/seeds/" + target.Target[1].Name + "/" + target.Target[2].Name + "/.gcp/credentials"
 			}
-			createFile(pathGardenHome+"/"+gcpPathCredentials, 0644)
+			CreateFileIfNotExists(pathGardenHome+"/"+gcpPathCredentials, 0644)
 			originalCredentials, err := os.OpenFile(filepath.Join(pathGardenHome, gcpPathCredentials), os.O_WRONLY, 0644)
 			checkError(err)
 			_, err = originalCredentials.WriteString(string(serviceaccount))
 			originalCredentials.Close()
 			checkError(err)
-			tmpAccount = execCmdReturnOutput("gcloud config list account --format json")
+			tmpAccount = ExecCmdReturnOutput("gcloud config list account --format json")
 			dec := json.NewDecoder(strings.NewReader(tmpAccount))
 			dec.Decode(&data)
 			jq := jsonq.NewQuery(data)
@@ -132,7 +128,7 @@ func operate(provider, arguments string) {
 			if err != nil {
 				os.Exit(2)
 			}
-			err = execCmd("gcloud auth activate-service-account --key-file="+pathGardenHome+"/"+gcpPathCredentials, false)
+			err = ExecCmd("gcloud auth activate-service-account --key-file="+pathGardenHome+"/"+gcpPathCredentials, false)
 			if err != nil {
 				os.Exit(2)
 			}
@@ -148,11 +144,11 @@ func operate(provider, arguments string) {
 		if err != nil {
 			os.Exit(2)
 		}
-		err = execCmd(arguments+" --account="+account+" --project="+project, false)
+		err = ExecCmd(arguments+" --account="+account+" --project="+project, false)
 		if err != nil {
 			os.Exit(2)
 		}
-		err = execCmd("gcloud config set account "+tmpAccount, false)
+		err = ExecCmd("gcloud config set account "+tmpAccount, false)
 		if err != nil {
 			os.Exit(2)
 		}
@@ -164,13 +160,13 @@ func operate(provider, arguments string) {
 		if !cachevar {
 			azurePathCredentials := ""
 			if target.Target[1].Kind == "project" {
-				createDir(pathGardenHome+"/cache/projects/"+target.Target[1].Name+"/"+target.Target[2].Name+"/.azure", 0751)
+				CreateDir(pathGardenHome+"/cache/projects/"+target.Target[1].Name+"/"+target.Target[2].Name+"/.azure", 0751)
 				azurePathCredentials = "cache/projects/" + target.Target[1].Name + "/" + target.Target[2].Name + "/.azure/credentials"
 			} else if target.Target[1].Kind == "seed" {
-				createDir(pathGardenHome+"/cache/seeds/"+target.Target[1].Name+"/"+target.Target[2].Name+"/.azure", 0751)
+				CreateDir(pathGardenHome+"/cache/seeds/"+target.Target[1].Name+"/"+target.Target[2].Name+"/.azure", 0751)
 				azurePathCredentials = "cache/seeds/" + target.Target[1].Name + "/" + target.Target[2].Name + "/.azure/credentials"
 			}
-			createFile(pathGardenHome+"/"+azurePathCredentials, 0644)
+			CreateFileIfNotExists(pathGardenHome+"/"+azurePathCredentials, 0644)
 			originalCredentials, err := os.OpenFile(filepath.Join(pathGardenHome, azurePathCredentials), os.O_WRONLY, 0644)
 			checkError(err)
 			credentials := "clientID: " + string(clientID[:]) + "\n" + "clientSecret: " + string(clientSecret[:]) + "\n" + "tenantID: " + string(tenantID[:]) + "\n"
@@ -178,11 +174,11 @@ func operate(provider, arguments string) {
 			originalCredentials.Close()
 			checkError(err)
 		}
-		err := execCmd("az login --service-principal -u "+string(clientID[:])+" -p "+string(clientSecret[:])+" --tenant "+string(tenantID[:]), true)
+		err := ExecCmd("az login --service-principal -u "+string(clientID[:])+" -p "+string(clientSecret[:])+" --tenant "+string(tenantID[:]), true)
 		if err != nil {
 			os.Exit(2)
 		}
-		err = execCmd(arguments, false)
+		err = ExecCmd(arguments, false)
 		if err != nil {
 			os.Exit(2)
 		}
@@ -195,13 +191,13 @@ func operate(provider, arguments string) {
 		if !cachevar {
 			openstackPathCredentials := ""
 			if target.Target[1].Kind == "project" {
-				createDir(pathGardenHome+"/cache/projects/"+target.Target[1].Name+"/"+target.Target[2].Name+"/.openstack", 0751)
+				CreateDir(pathGardenHome+"/cache/projects/"+target.Target[1].Name+"/"+target.Target[2].Name+"/.openstack", 0751)
 				openstackPathCredentials = "cache/projects/" + target.Target[1].Name + "/" + target.Target[2].Name + "/.openstack/credentials"
 			} else if target.Target[1].Kind == "seed" {
-				createDir(pathGardenHome+"/cache/seeds/"+target.Target[1].Name+"/"+target.Target[2].Name+"/.openstack", 0751)
+				CreateDir(pathGardenHome+"/cache/seeds/"+target.Target[1].Name+"/"+target.Target[2].Name+"/.openstack", 0751)
 				openstackPathCredentials = "cache/seeds/" + target.Target[1].Name + "/" + target.Target[2].Name + "/.openstack/credentials"
 			}
-			createFile(pathGardenHome+"/"+openstackPathCredentials, 0644)
+			CreateFileIfNotExists(pathGardenHome+"/"+openstackPathCredentials, 0644)
 			originalCredentials, err := os.OpenFile(filepath.Join(pathGardenHome, openstackPathCredentials), os.O_WRONLY, 0644)
 			checkError(err)
 			credentials := "authUrl: " + string(authUrl[:]) + "\n" + "domainName: " + string(domainName[:]) + "\n" + "password: " + string(password[:]) + "\n" + "tenantName: " + string(tenantName[:]) + "\n" + "username: " + string(username[:]) + "\n"
@@ -209,7 +205,7 @@ func operate(provider, arguments string) {
 			originalCredentials.Close()
 			checkError(err)
 		}
-		err := execCmd(arguments, false, "OS_IDENTITY_API_VERSION=3", "OS_AUTH_VERSION=3", "OS_AUTH_STRATEGY=keystone", "OS_AUTH_URL="+string(authUrl[:]), "OS_TENANT_NAME="+string(tenantName[:]),
+		err := ExecCmd(arguments, false, "OS_IDENTITY_API_VERSION=3", "OS_AUTH_VERSION=3", "OS_AUTH_STRATEGY=keystone", "OS_AUTH_URL="+string(authUrl[:]), "OS_TENANT_NAME="+string(tenantName[:]),
 			"OS_PROJECT_DOMAIN_NAME="+string(domainName[:]), "OS_USER_DOMAIN_NAME="+string(domainName[:]), "OS_USERNAME="+string(username[:]), "OS_PASSWORD="+string(password[:]), "OS_REGION_NAME="+region)
 		if err != nil {
 			os.Exit(2)

@@ -80,10 +80,7 @@ var lsCmd = &cobra.Command{
 			}
 		case "shoots":
 			var target Target
-			targetFile, err := ioutil.ReadFile(pathTarget)
-			checkError(err)
-			err = yaml.Unmarshal(targetFile, &target)
-			checkError(err)
+			ReadTarget(pathTarget, &target)
 			tmp := KUBECONFIG
 			Client, err = clientToTarget("garden")
 			if len(target.Target) == 1 {
@@ -185,10 +182,7 @@ func getSeeds() *v1beta1.SeedList {
 // getProjectsWithShootsForSeed
 func getProjectsWithShootsForSeed() {
 	var target Target
-	targetFile, err := ioutil.ReadFile(pathTarget)
-	checkError(err)
-	err = yaml.Unmarshal(targetFile, &target)
-	checkError(err)
+	ReadTarget(pathTarget, &target)
 	var projects Projects
 	k8sGardenClient, err := kubernetes.NewClientFromFile(*kubeconfig)
 	checkError(err)
@@ -318,10 +312,7 @@ func getIssues() {
 // getSeedsWithShootsForProject
 func getSeedsWithShootsForProject() {
 	var target Target
-	targetFile, err := ioutil.ReadFile(pathTarget)
-	checkError(err)
-	err = yaml.Unmarshal(targetFile, &target)
-	checkError(err)
+	ReadTarget(pathTarget, &target)
 	k8sGardenClient, err := kubernetes.NewClientFromFile(*kubeconfig)
 	checkError(err)
 	gardenClientset, err := clientset.NewForConfig(k8sGardenClient.GetConfig())

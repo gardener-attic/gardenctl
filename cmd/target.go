@@ -40,10 +40,7 @@ var targetCmd = &cobra.Command{
 			os.Exit(2)
 		}
 		var t Target
-		targetFile, err := ioutil.ReadFile(pathTarget)
-		checkError(err)
-		err = yaml.Unmarshal(targetFile, &t)
-		checkError(err)
+		ReadTarget(pathTarget, &t)
 		switch args[0] {
 		case "garden":
 			if len(args) != 2 {
@@ -283,10 +280,7 @@ func resolveNameProject(name string) (matches []string) {
 // targetProject targets a project
 func targetProject(name string) {
 	var target Target
-	targetFile, err := ioutil.ReadFile(pathTarget)
-	checkError(err)
-	err = yaml.Unmarshal(targetFile, &target)
-	checkError(err)
+	ReadTarget(pathTarget, &target)
 	if len(target.Target) == 1 {
 		target.Target = append(target.Target, TargetMeta{"project", name})
 	} else if len(target.Target) == 2 {
@@ -345,10 +339,7 @@ func resolveNameGarden(name string) (matches []string) {
 // targetGarden targets kubeconfig file of garden cluster
 func targetGarden(name string) {
 	var target Target
-	targetFile, err := ioutil.ReadFile(pathTarget)
-	checkError(err)
-	err = yaml.Unmarshal(targetFile, &target)
-	checkError(err)
+	ReadTarget(pathTarget, &target)
 	if len(target.Target) == 0 {
 		target.Target = append(target.Target, TargetMeta{"garden", name})
 	} else if len(target.Target) == 1 {
@@ -471,10 +462,7 @@ func resolveNameShoot(name string) (matches []string) {
 	checkError(err)
 	matcher := ""
 	var target Target
-	targetFile, err := ioutil.ReadFile(pathTarget)
-	checkError(err)
-	err = yaml.Unmarshal(targetFile, &target)
-	checkError(err)
+	ReadTarget(pathTarget, &target)
 	k8sGardenClient, err := kubernetes.NewClientFromFile(*kubeconfig)
 	checkError(err)
 	gardenClientset, err := clientset.NewForConfig(k8sGardenClient.GetConfig())
@@ -535,10 +523,7 @@ func targetShoot(name string) {
 	k8sGardenClient.SetGardenClientset(gardenClientset)
 	shootList, err := k8sGardenClient.GardenClientset().GardenV1beta1().Shoots("").List(metav1.ListOptions{})
 	var target Target
-	targetFile, err := ioutil.ReadFile(pathTarget)
-	checkError(err)
-	err = yaml.Unmarshal(targetFile, &target)
-	checkError(err)
+	ReadTarget(pathTarget, &target)
 	var matchedShoots []v1beta1.Shoot
 	seedName := ""
 	for _, item := range shootList.Items {
@@ -654,10 +639,7 @@ func getSeedForProject(shootName string) (seedName string) {
 // getKubeConfigOfClusterType return config of specified type
 func getKubeConfigOfClusterType(clusterType string) (pathToKubeconfig string) {
 	var target Target
-	targetFile, err := ioutil.ReadFile(pathTarget)
-	checkError(err)
-	err = yaml.Unmarshal(targetFile, &target)
-	checkError(err)
+	ReadTarget(pathTarget, &target)
 	switch clusterType {
 	case "garden":
 		if strings.Contains(getGardenKubeConfig(), "~") {
@@ -684,10 +666,7 @@ func getKubeConfigOfClusterType(clusterType string) (pathToKubeconfig string) {
 // getKubeConfigOfCurrentTarget returns the path to the kubeconfig of current target
 func getKubeConfigOfCurrentTarget() (pathToKubeconfig string) {
 	var target Target
-	targetFile, err := ioutil.ReadFile(pathTarget)
-	checkError(err)
-	err = yaml.Unmarshal(targetFile, &target)
-	checkError(err)
+	ReadTarget(pathTarget, &target)
 	if len(target.Target) == 1 {
 		if strings.Contains(getGardenKubeConfig(), "~") {
 			pathToKubeconfig = filepath.Clean(filepath.Join(HomeDir(), strings.Replace(getGardenKubeConfig(), "~", "", 1)))
@@ -715,10 +694,7 @@ func getGardenKubeConfig() (pathToGardenKubeConfig string) {
 	checkError(err)
 	err = yaml.Unmarshal(yamlGardenConfig, &gardenClusters)
 	checkError(err)
-	targetFile, err := ioutil.ReadFile(pathTarget)
-	checkError(err)
-	err = yaml.Unmarshal(targetFile, &target)
-	checkError(err)
+	ReadTarget(pathTarget, &target)
 	for _, value := range gardenClusters.GardenClusters {
 		if value.Name == target.Target[0].Name {
 			pathToGardenKubeConfig = value.KubeConfig
