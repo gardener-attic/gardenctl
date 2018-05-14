@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-set -ex
+set -e
 
 # For the test step concourse will set the following environment variables:
 # SOURCE_PATH - path to component repository root directory.
@@ -33,9 +33,4 @@ go get -u github.com/onsi/ginkgo/ginkgo
 
 ###############################################################################
 
-COVER_FLAG=""
-if [[ ! -z "$COVERAGE" ]]; then
-  COVER_FLAG="-cover"
-fi
-
-ginkgo ${COVER_FLAG} -r cmd
+ginkgo -cover -r cmd
