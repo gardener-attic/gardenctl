@@ -33,10 +33,8 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 )
 
-// getGardenClusterKubeConfigFromConfig
-func getGardenClusterKubeConfigFromConfig() {
-	var gardenClusters GardenClusters
-	var target Target
+// GetGardenClusters sets GardenCluster struct
+func GetGardenClusters(pathGardenConfig string, gardenClusters *GardenClusters) {
 	yamlGardenConfig, err := ioutil.ReadFile(pathGardenConfig)
 	checkError(err)
 	err = yaml.Unmarshal(yamlGardenConfig, &gardenClusters)
@@ -44,15 +42,22 @@ func getGardenClusterKubeConfigFromConfig() {
 		fmt.Println("Invalid gardenctl configuration")
 		os.Exit(2)
 	}
-	exists, err := FileExists(pathTarget)
+}
+
+// GetGardenClusterKubeConfigFromConfig return kubeconfig of garden cluster if exists
+func GetGardenClusterKubeConfigFromConfig(pathGardenConfig, pathTarget string) {
+	var gardenClusters GardenClusters
+	var target Target
+	i, err := os.Stat(pathTarget)
 	checkError(err)
-	if !exists {
+	if i.Size() == 0 {
 		// if no garden cluster is selected take the first as default cluster
 		i, err := os.Stat(pathGardenConfig)
 		if i.Size() == 0 {
 			fmt.Println("Please provide a gardenctl configuration before usage")
-			os.Exit(2)
+			return
 		}
+		GetGardenClusters(pathGardenConfig, &gardenClusters)
 		target.Target = []TargetMeta{{"garden", gardenClusters.GardenClusters[0].Name}}
 		file, err := os.OpenFile(pathTarget, os.O_WRONLY|os.O_CREATE, 0644)
 		checkError(err)

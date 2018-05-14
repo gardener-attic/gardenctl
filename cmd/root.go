@@ -60,7 +60,7 @@ func Execute() {
 	CreateDir(pathGardenHome+"/cache", 0751)
 	CreateDir(pathGardenHome+"/cache/seeds", 0751)
 	CreateDir(pathGardenHome+"/cache/projects", 0751)
-	getGardenClusterKubeConfigFromConfig()
+	GetGardenClusterKubeConfigFromConfig(pathGardenConfig, pathTarget)
 	if err := RootCmd.Execute(); err != nil {
 		os.Exit(1)
 	}
