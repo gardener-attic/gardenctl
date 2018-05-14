@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-set -e
+set -ex
 
 # For the test step concourse will set the following environment variables:
 # SOURCE_PATH - path to component repository root directory.
