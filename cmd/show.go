@@ -269,7 +269,7 @@ func showMachineControllerManager() {
 	showPod("machine-controller-manager", "seed")
 }
 
-// showDashboard shows the dashboard for the targetd cluster
+// showDashboard shows the dashboard for the targeted cluster
 func showDashboard() {
 	var target Target
 	ReadTarget(pathTarget, &target)
@@ -312,7 +312,7 @@ func showDashboard() {
 	ExecCmd("kubectl proxy -p 8002", false, "KUBECONFIG="+KUBECONFIG)
 }
 
-// showGrafana shows the grafana dashboard for the targetd cluster
+// showGrafana shows the grafana dashboard for the targeted cluster
 func showGrafana() {
 	username, password = getCredentials()
 	showPod("grafana", "seed")

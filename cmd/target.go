@@ -522,6 +522,7 @@ func targetShoot(name string) {
 	checkError(err)
 	k8sGardenClient.SetGardenClientset(gardenClientset)
 	shootList, err := k8sGardenClient.GardenClientset().GardenV1beta1().Shoots("").List(metav1.ListOptions{})
+	checkError(err)
 	var target Target
 	ReadTarget(pathTarget, &target)
 	var matchedShoots []v1beta1.Shoot
@@ -628,6 +629,7 @@ func getSeedForProject(shootName string) (seedName string) {
 	checkError(err)
 	k8sGardenClient.SetGardenClientset(gardenClientset)
 	shootList, err := k8sGardenClient.GardenClientset().GardenV1beta1().Shoots("").List(metav1.ListOptions{})
+	checkError(err)
 	for _, item := range shootList.Items {
 		if item.Name == shootName {
 			seedName = *item.Spec.Cloud.Seed

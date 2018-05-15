@@ -24,7 +24,7 @@ import (
 	yaml "gopkg.in/yaml.v2"
 )
 
-// checkError checks if an error during execution occured
+// checkError checks if an error during execution occurred
 func checkError(err error) {
 	if err != nil {
 		fmt.Println(err.Error())
@@ -115,7 +115,7 @@ func ExecCmd(cmd string, suppressedOutput bool, environment ...string) (err erro
 func ExecCmdReturnOutput(cmd string, args ...string) (output string) {
 	out, err := exec.Command(cmd, args...).Output()
 	if err != nil {
-		fmt.Println("Cmd was unsucessful")
+		fmt.Println("Cmd was unsuccessful")
 		os.Exit(2)
 	}
 	return strings.TrimSpace(string(out[:]))

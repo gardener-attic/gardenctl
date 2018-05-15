@@ -24,6 +24,8 @@ import (
 var Client *kubernetes.Clientset
 var err error
 var kubeconfig *string
+
+// KUBECONFIG contains path to file
 var KUBECONFIG string
 var masterURL *string
 var garden bool

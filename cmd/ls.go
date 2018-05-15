@@ -118,6 +118,7 @@ func getProjectsWithShoots() {
 	checkError(err)
 	k8sGardenClient.SetGardenClientset(gardenClientset)
 	shootList, err := k8sGardenClient.GardenClientset().GardenV1beta1().Shoots("").List(metav1.ListOptions{})
+	checkError(err)
 	var projects Projects
 	for _, project := range projectList.Items {
 		var pm ProjectMeta
@@ -176,6 +177,7 @@ func getSeeds() *v1beta1.SeedList {
 	checkError(err)
 	k8sGardenClient.SetGardenClientset(gardenClientset)
 	seedList, err := k8sGardenClient.GardenClientset().GardenV1beta1().Seeds().List(metav1.ListOptions{})
+	checkError(err)
 	return seedList
 }
 
@@ -232,6 +234,7 @@ func getIssues() {
 	checkError(err)
 	k8sGardenClient.SetGardenClientset(gardenClientset)
 	shootList, err := k8sGardenClient.GardenClientset().GardenV1beta1().Shoots("").List(metav1.ListOptions{})
+	checkError(err)
 	var issues Issues
 	for _, item := range shootList.Items {
 		var im IssuesMeta
@@ -319,6 +322,7 @@ func getSeedsWithShootsForProject() {
 	checkError(err)
 	k8sGardenClient.SetGardenClientset(gardenClientset)
 	shootList, err := k8sGardenClient.GardenClientset().GardenV1beta1().Shoots(target.Target[1].Name).List(metav1.ListOptions{})
+	checkError(err)
 	var seeds, seedsFiltered Seeds
 	seedList := getSeeds()
 	for _, seed := range seedList.Items {
