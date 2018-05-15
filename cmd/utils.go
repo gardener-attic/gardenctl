@@ -111,38 +111,11 @@ func ExecCmd(cmd string, suppressedOutput bool, environment ...string) (err erro
 	return nil
 }
 
-// ExecCmdReturnOutput executes a command within set environment and returns output
-func ExecCmdReturnOutput(cmd string, environment ...string) (output string) {
-	var command *exec.Cmd
-	parts := strings.Fields(cmd)
-	head := parts[0]
-	if len(parts) > 1 {
-		parts = parts[1:len(parts)]
-	} else {
-		parts = nil
-	}
-	command = exec.Command(head, parts...)
-	for index, env := range environment {
-		if index == 0 {
-			command.Env = append(os.Environ(),
-				env,
-			)
-		} else {
-			command.Env = append(command.Env,
-				env,
-			)
-		}
-	}
-	out, err := command.Output()
-	checkError(err)
-	return string(out[:])
-}
-
-// execCmdReturnOutput execute cmd and return output as array
-func execCmdReturnOutput(cmd string, args ...string) (output string) {
+// ExecCmdReturnOutput execute cmd and return output
+func ExecCmdReturnOutput(cmd string, args ...string) (output string) {
 	out, err := exec.Command(cmd, args...).Output()
 	if err != nil {
-		fmt.Println("Register/Unregister unsucessful")
+		fmt.Println("Cmd was unsucessful")
 		os.Exit(2)
 	}
 	return strings.TrimSpace(string(out[:]))

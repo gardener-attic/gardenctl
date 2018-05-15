@@ -134,7 +134,7 @@ func showOperator() {
 // showUI opens the gardener landing page
 func showUI() {
 	showPodGarden("gardener-dashboard", "garden")
-	output := ExecCmdReturnOutput("kubectl get ingress gardener-dashboard-ingress -n garden", "KUBECONFIG="+KUBECONFIG)
+	output := ExecCmdReturnOutput("bash", "-c", "KUBECONFIG="+KUBECONFIG+"; kubectl get ingress gardener-dashboard-ingress -n garden")
 	list := strings.Split(output, " ")
 	url := "-"
 	for _, val := range list {
@@ -234,7 +234,7 @@ func showVpnShoot() {
 func showPrometheus() {
 	username, password = getCredentials()
 	showPod("prometheus", "seed")
-	output := ExecCmdReturnOutput("kubectl get ingress prometheus -n "+getShootClusterName(), "KUBECONFIG="+KUBECONFIG)
+	output := ExecCmdReturnOutput("bash", "-c", "KUBECONFIG="+KUBECONFIG+"; kubectl get ingress prometheus -n "+getShootClusterName())
 	list := strings.Split(output, " ")
 	url := "-"
 	for _, val := range list {
@@ -251,7 +251,7 @@ func showPrometheus() {
 func showAltermanager() {
 	username, password = getCredentials()
 	showPod("alertmanager", "seed")
-	output := ExecCmdReturnOutput("kubectl get ingress alertmanager -n "+getShootClusterName(), "KUBECONFIG="+KUBECONFIG)
+	output := ExecCmdReturnOutput("bash", "-c", "KUBECONFIG="+KUBECONFIG+"; kubectl get ingress alertmanager -n "+getShootClusterName())
 	list := strings.Split(output, " ")
 	url := "-"
 	for _, val := range list {
@@ -316,7 +316,7 @@ func showDashboard() {
 func showGrafana() {
 	username, password = getCredentials()
 	showPod("grafana", "seed")
-	output := ExecCmdReturnOutput("kubectl get ingress grafana -n "+getShootClusterName(), "KUBECONFIG="+KUBECONFIG)
+	output := ExecCmdReturnOutput("bash", "-c", "KUBECONFIG="+KUBECONFIG+"; kubectl get ingress grafana -n "+getShootClusterName())
 	list := strings.Split(output, " ")
 	url := "-"
 	for _, val := range list {
@@ -339,7 +339,7 @@ func showTerraform(name string) {
 	count := 0
 	for _, pod := range pods.Items {
 		if strings.Contains(pod.Name, name) && pod.Status.Phase == "Running" {
-			output = ExecCmdReturnOutput("kubectl get pods "+pod.Name+" -o wide -n "+pod.Namespace, "KUBECONFIG="+KUBECONFIG)
+			output = ExecCmdReturnOutput("bash", "-c", "KUBECONFIG="+KUBECONFIG+"; kubectl get pods "+pod.Name+" -o wide -n "+pod.Namespace)
 			if count != 0 {
 				fmt.Printf("%s\n", strings.Split(output, "\n")[1])
 			} else {

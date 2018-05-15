@@ -120,7 +120,7 @@ func operate(provider, arguments string) {
 			_, err = originalCredentials.WriteString(string(serviceaccount))
 			originalCredentials.Close()
 			checkError(err)
-			tmpAccount = ExecCmdReturnOutput("gcloud config list account --format json")
+			tmpAccount = ExecCmdReturnOutput("bash", "-c", "gcloud config list account --format json")
 			dec := json.NewDecoder(strings.NewReader(tmpAccount))
 			dec.Decode(&data)
 			jq := jsonq.NewQuery(data)
