@@ -81,7 +81,7 @@ var _ = Describe("Utils", func() {
 
 	Context("After setting KUBECONFIG environment variable", func() {
 		It("ExecCmdReturnOutput should return /tmp/kubeconfig as output", func() {
-			output := strings.TrimSpace(ExecCmdReturnOutput("bash", "-c", "KUBECONFIG=\"/tmp/kubeconfig\"; printenv KUBECONFIG"))
+			output := strings.TrimSpace(ExecCmdReturnOutput("bash", "-c", "export KUBECONFIG=/tmp/kubeconfig; printenv KUBECONFIG"))
 			Expect(output).To(Equal("/tmp/kubeconfig"))
 		})
 	})

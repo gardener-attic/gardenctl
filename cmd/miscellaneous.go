@@ -110,7 +110,7 @@ func clientToTarget(target string) (*k8s.Clientset, error) {
 
 // nameOfTargetedCluster returns the full clustername of the currently targeted cluster
 func nameOfTargetedCluster() (clustername string) {
-	clustername = ExecCmdReturnOutput("bash", "-c", "KUBECONFIG="+KUBECONFIG+"; kubectl config current-context")
+	clustername = ExecCmdReturnOutput("bash", "-c", "export KUBECONFIG="+KUBECONFIG+"; kubectl config current-context")
 	return clustername
 }
 
@@ -144,7 +144,7 @@ func getShootClusterName() (clustername string) {
 func getCredentials() (username, password string) {
 	_, err := clientToTarget("shoot")
 	checkError(err)
-	output := ExecCmdReturnOutput("bash", "-c", "KUBECONFIG="+KUBECONFIG+"; kubectl config view")
+	output := ExecCmdReturnOutput("bash", "-c", "export KUBECONFIG="+KUBECONFIG+"; kubectl config view")
 	scanner := bufio.NewScanner(strings.NewReader(output))
 	for scanner.Scan() {
 		if strings.Contains(scanner.Text(), "password:") {
