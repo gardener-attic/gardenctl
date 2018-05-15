@@ -2,6 +2,7 @@
 
 ![](https://github.com/gardener/gardenctl/blob/master/logo/logo_gardener_cli_large.png)
 
+[![Go Report Card](https://goreportcard.com/badge/github.com/gardener/gardenctl)](https://goreportcard.com/report/github.com/gardener/gardenctl)
 # What is gardenctl?
 `gardenctl` is a command-line client for administrative purposes for the [Gardener](https://github.com/gardener/gardener). It facilitates the administration of or one many garden, seed and shoot clusters, e.g. to check for issues which occured in one of these clusters. Details about the concept behind the Gardener are described in the [Gardener wiki](https://github.com/gardener/documentation/wiki/Architecture).
 
