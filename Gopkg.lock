@@ -9,6 +9,12 @@
 
 [[projects]]
   branch = "master"
+  name = "github.com/badoux/checkmail"
+  packages = ["."]
+  revision = "0755fe2dc241caebab64327c352006712f6a55c4"
+
+[[projects]]
+  branch = "master"
   name = "github.com/docker/spdystream"
   packages = [
     ".",
@@ -399,6 +405,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "ed8449ea1c187c2eba8a48f34a88dc01b8d0c1b094d328ec6f004ff4ea0dd4d2"
+  inputs-digest = "368e19368797e363ceaf5a7fa2b2a810502314d806bed99535fb634ce602ee5f"
   solver-name = "gps-cdcl"
   solver-version = 1

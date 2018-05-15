@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/badoux/checkmail"
 	"github.com/spf13/cobra"
 )
 
@@ -31,19 +32,17 @@ var registerCmd = &cobra.Command{
 			fmt.Println("Command must be in the format: register (e-mail)")
 			os.Exit(2)
 		}
+
+		err = checkmail.ValidateFormat(args[0])
+		if err != nil {
+			fmt.Println(err)
+			os.Exit(2)
+		}
+		fmt.Println("Format Validated")
 		err := ExecCmd("kubectl set subject clusterrolebinding garden-administrators --user="+args[0], false, "KUBECONFIG="+getGardenKubeConfig())
 		checkError(err)
 	},
 }
 
 func init() {
-	// Here you will define your flags and configuration settings.
-
-	// Cobra supports Persistent Flags which will work for this command
-	// and all subcommands, e.g.:
-	// registerCmd.PersistentFlags().String("foo", "", "A help for foo")
-
-	// Cobra supports local flags which will only run when this command
-	// is called directly, e.g.:
-	// registerCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
 }
