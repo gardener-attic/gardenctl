@@ -74,6 +74,7 @@ func init() {
 	cobra.EnablePrefixMatching = prefixMatching
 	RootCmd.AddCommand(lsCmd, targetCmd, dropCmd, getCmd)
 	RootCmd.AddCommand(downloadCmd, showCmd, logsCmd)
+	RootCmd.AddCommand(registerCmd, unregisterCmd)
 	RootCmd.AddCommand(completionCmd)
 	RootCmd.AddCommand(kubectlCmd, kaCmd, ksCmd, kgCmd, awsCmd, azCmd, gcloudCmd, openstackCmd)
 	RootCmd.SuggestionsMinimumDistance = suggestionsMinimumDistance

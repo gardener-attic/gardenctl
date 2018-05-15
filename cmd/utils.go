@@ -138,6 +138,16 @@ func ExecCmdReturnOutput(cmd string, environment ...string) (output string) {
 	return string(out[:])
 }
 
+// execCmdReturnOutput execute cmd and return output as array
+func execCmdReturnOutput(cmd string, args ...string) (output string) {
+	out, err := exec.Command(cmd, args...).Output()
+	if err != nil {
+		fmt.Println("Register/Unregister unsucessful")
+		os.Exit(2)
+	}
+	return strings.TrimSpace(string(out[:]))
+}
+
 // ReadTarget file into Target
 func ReadTarget(pathTarget string, target *Target) {
 	targetFile, err := ioutil.ReadFile(pathTarget)
