@@ -205,10 +205,14 @@ func getShoot(name string) {
 	var target Target
 	if name == "" {
 		ReadTarget(pathTarget, &target)
-		if len(target.Target) > 2 {
-			name = target.Target[2].Name
-		} else {
+		if len(target.Target) < 3 {
 			fmt.Println("No shoot targeted")
+			os.Exit(2)
+		}
+	} else if name != "" {
+		ReadTarget(pathTarget, &target)
+		if len(target.Target) < 2 {
+			fmt.Println("No seed or project targeted")
 			os.Exit(2)
 		}
 	}
@@ -221,13 +225,19 @@ func getShoot(name string) {
 	k8sGardenClient.SetGardenClientset(gardenClientset)
 	shootList, err := k8sGardenClient.GardenClientset().GardenV1beta1().Shoots("").List(metav1.ListOptions{})
 	var ind int
+	var namespace string
 	for index, shoot := range shootList.Items {
-		if shoot.Name == target.Target[2].Name && (shoot.Namespace == target.Target[1].Name || *shoot.Spec.Cloud.Seed == target.Target[1].Name) {
+		if (name == "") && (shoot.Name == target.Target[2].Name) && (shoot.Namespace == target.Target[1].Name || *shoot.Spec.Cloud.Seed == target.Target[1].Name) {
 			ind = index
+			namespace = strings.Replace("shoot-"+shootList.Items[ind].Namespace+"-"+target.Target[2].Name, "-garden", "", 1)
+			break
+		}
+		if (name != "") && (shoot.Name == name) && (shoot.Namespace == target.Target[1].Name || *shoot.Spec.Cloud.Seed == target.Target[1].Name) {
+			ind = index
+			namespace = strings.Replace("shoot-"+shootList.Items[ind].Namespace+"-"+name, "-garden", "", 1)
 			break
 		}
 	}
-	namespace := strings.Replace("shoot-"+shootList.Items[ind].Namespace+"-"+target.Target[2].Name, "-garden", "", 1)
 	seed, err := k8sGardenClient.GardenClientset().GardenV1beta1().Seeds().Get(*shootList.Items[ind].Spec.Cloud.Seed, metav1.GetOptions{})
 	checkError(err)
 	kubeSecret, err := Client.CoreV1().Secrets(seed.Spec.SecretRef.Namespace).Get(seed.Spec.SecretRef.Name, metav1.GetOptions{})
