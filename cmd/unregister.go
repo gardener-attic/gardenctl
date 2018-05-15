@@ -39,9 +39,9 @@ var unregisterCmd = &cobra.Command{
 		}
 		fmt.Println("Format Validated")
 		cmdToExec := "kubectl get clusterrolebinding garden-administrators -o json | jq \".subjects | map(.name == \\\"" + args[0] + "\\\" ) | index(true)\""
-		index := ExecCmdReturnOutput("bash", "-c", "KUBECONFIG="+getGardenKubeConfig()+"; "+cmdToExec)
+		index := ExecCmdReturnOutput("bash", "-c", "export KUBECONFIG="+getGardenKubeConfig()+"; "+cmdToExec)
 		cmdToExec = "kubectl patch clusterrolebinding garden-administrators --type=json -p=\"[{\\\"op\\\":\\\"remove\\\",\\\"path\\\":\\\"/subjects/" + index + "\\\"}]\""
-		_ = ExecCmdReturnOutput("bash", "-c", "KUBECONFIG="+getGardenKubeConfig()+"; "+cmdToExec)
+		_ = ExecCmdReturnOutput("bash", "-c", "export KUBECONFIG="+getGardenKubeConfig()+"; "+cmdToExec)
 	},
 }
 
