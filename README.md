@@ -9,7 +9,7 @@
 
 
 # How to build it
-Currently, there are no binary builds available, so you need to build it from source or `go get` it. 
+Currently, there are no binary builds available, so you need to build it from source,`go get` it or build the docker image from Dockerfile. 
 
 ## Prerequisites
 
@@ -55,6 +55,9 @@ It will locate the binary under `$GOPATH/bin/gardenctl`. To generate the auto co
 ```bash
 echo "$GOPATH/bin/gardenctl completion && source gardenctl_completion.sh && rm gardenctl_completion.sh" >> ~/.bashrc
 ```
+### Via Dockerfile
+
+First clone the repository as described in the the build step "From source". Then build the container image via `docker build -t gardener/gardenctl:v1 .` in the cloned repository and run a shell in the image with `docker run -it gardener/gardenctl:v1 /bin/bash`.
 
 ## Configure gardenctl
 
