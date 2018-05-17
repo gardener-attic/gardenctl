@@ -212,7 +212,7 @@ func logsUI() {
 
 // logsAPIServer prints the logfile of the api-server
 func logsAPIServer() {
-	logPod("kube-apiserver", "seed", " -c kube-apiserver")
+	logPod("kube-apiserver", "seed", "kube-apiserver")
 }
 
 // logsScheduler prints the logfile of the scheduler
