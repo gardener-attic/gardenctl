@@ -20,10 +20,12 @@ RUN apt-get update &&\
     apt-get upgrade -qy &&\
     apt-get install -qy git &&\
     apt-get install -qy jq &&\
-    apt-get install -qy python &&\
-    apt-get install -qy sudo python python-pip python-setuptools &&\
+    apt-get install -qy sudo python python-pip python3-pip python-setuptools &&\
     pip install awscli &&\
     pip install azure-cli &&\
+    pip uninstall pyopenssl -y &&\
+    pip install pyopenssl &&\
+    pip3 install python-openstackclient &&\
     apt-get update && apt-get install -y apt-transport-https &&\
     curl -sSL https://sdk.cloud.google.com | bash
 
