@@ -47,6 +47,7 @@ func removeOldEntryAWS(filePath, contains string) {
 func operate(provider, arguments string) {
 	secretName, region := "", ""
 	namespaceSecret := ""
+	profile := ""
 	var target Target
 	ReadTarget(pathTarget, &target)
 	Client, err = clientToTarget("garden")
@@ -61,6 +62,7 @@ func operate(provider, arguments string) {
 			secretName = shoot.Spec.Cloud.SecretBindingRef.Name
 			region = shoot.Spec.Cloud.Region
 			namespaceSecret = shoot.Namespace
+			profile = shoot.Spec.Cloud.Profile
 		}
 	}
 	secret, err := Client.CoreV1().Secrets(namespaceSecret).Get((secretName), metav1.GetOptions{})
@@ -183,7 +185,13 @@ func operate(provider, arguments string) {
 			os.Exit(2)
 		}
 	case "openstack":
-		authUrl := []byte(secret.Data["authUrl"])
+		authURL := ""
+		cloudProfileList, err := k8sGardenClient.GardenClientset().GardenV1beta1().CloudProfiles().List(metav1.ListOptions{})
+		for _, cp := range cloudProfileList.Items {
+			if cp.Name == profile {
+				authURL = cp.Spec.OpenStack.KeyStoneURL
+			}
+		}
 		domainName := []byte(secret.Data["domainName"])
 		password := []byte(secret.Data["password"])
 		tenantName := []byte(secret.Data["tenantName"])
@@ -200,12 +208,12 @@ func operate(provider, arguments string) {
 			CreateFileIfNotExists(pathGardenHome+"/"+openstackPathCredentials, 0644)
 			originalCredentials, err := os.OpenFile(filepath.Join(pathGardenHome, openstackPathCredentials), os.O_WRONLY, 0644)
 			checkError(err)
-			credentials := "authUrl: " + string(authUrl[:]) + "\n" + "domainName: " + string(domainName[:]) + "\n" + "password: " + string(password[:]) + "\n" + "tenantName: " + string(tenantName[:]) + "\n" + "username: " + string(username[:]) + "\n"
+			credentials := "authURL: " + authURL + "\n" + "domainName: " + string(domainName[:]) + "\n" + "password: " + string(password[:]) + "\n" + "tenantName: " + string(tenantName[:]) + "\n" + "username: " + string(username[:]) + "\n"
 			_, err = originalCredentials.WriteString(credentials)
 			originalCredentials.Close()
 			checkError(err)
 		}
-		err := ExecCmd(arguments, false, "OS_IDENTITY_API_VERSION=3", "OS_AUTH_VERSION=3", "OS_AUTH_STRATEGY=keystone", "OS_AUTH_URL="+string(authUrl[:]), "OS_TENANT_NAME="+string(tenantName[:]),
+		err = ExecCmd(arguments, false, "OS_IDENTITY_API_VERSION=3", "OS_AUTH_VERSION=3", "OS_AUTH_STRATEGY=keystone", "OS_AUTH_URL="+authURL, "OS_TENANT_NAME="+string(tenantName[:]),
 			"OS_PROJECT_DOMAIN_NAME="+string(domainName[:]), "OS_USER_DOMAIN_NAME="+string(domainName[:]), "OS_USERNAME="+string(username[:]), "OS_PASSWORD="+string(password[:]), "OS_REGION_NAME="+region)
 		if err != nil {
 			os.Exit(2)
