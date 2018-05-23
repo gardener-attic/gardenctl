@@ -57,7 +57,7 @@ echo "$GOPATH/bin/gardenctl completion && source gardenctl_completion.sh && rm g
 ```
 ### Via Dockerfile
 
-First clone the repository as described in the the build step "From source". Then build the container image via `docker build -t gardener/gardenctl:v1 .` in the cloned repository and run a shell in the image with `docker run -it gardener/gardenctl:v1 /bin/bash`.
+First clone the repository as described in the the build step "From source". As next step add the garden "config" file and "clusters" folder with the corresponding kubeconfig files for the garden cluster. Then build the container image via `docker build -t gardener/gardenctl:v1 .` in the cloned repository and run a shell in the image with `docker run -it gardener/gardenctl:v1 /bin/bash`.
 
 ## Configure gardenctl
 
