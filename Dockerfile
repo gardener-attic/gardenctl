@@ -16,6 +16,9 @@ FROM golang:1.10
 
 ENV PATH $PATH:/root/google-cloud-sdk/bin
 
+COPY clusters /root/clusters
+COPY config /root/.garden/config
+
 RUN apt-get update &&\
     apt-get upgrade -qy &&\
     apt-get install -qy git &&\
@@ -27,13 +30,17 @@ RUN apt-get update &&\
     pip install pyopenssl &&\
     pip3 install python-openstackclient &&\
     apt-get update && apt-get install -y apt-transport-https &&\
-    curl -sSL https://sdk.cloud.google.com | bash
-
-RUN curl -LO https://storage.googleapis.com/kubernetes-release/release/$(curl -s https://storage.googleapis.com/kubernetes-release/release/stable.txt)/bin/linux/amd64/kubectl &&\
+    curl -sSL https://sdk.cloud.google.com | bash &&\
+    ln -s /root/google-cloud-sdk/bin/gcloud /usr/bin/gcloud &&\
+    curl -LO https://storage.googleapis.com/kubernetes-release/release/$(curl -s https://storage.googleapis.com/kubernetes-release/release/stable.txt)/bin/linux/amd64/kubectl &&\
     chmod +x ./kubectl &&\
-    sudo mv ./kubectl /usr/local/bin/kubectl
-
-RUN mkdir -p /go/src/github.com/gardener/gardenctl &&\
+    sudo mv ./kubectl /usr/local/bin/kubectl &&\
+    mkdir -p /go/src/github.com/gardener/gardenctl &&\
     cd /go/src/github.com/gardener &&\
     git clone https://github.com/gardener/gardenctl.git &&\
-    go install github.com/gardener/gardenctl
+    go install github.com/gardener/gardenctl &&\
+    /bin/bash -c "ln -s /go/bin/gardenctl /usr/local/bin/gardenctl" &&\
+    apt-get install bash-completion &&\
+    gardenctl completion; mv gardenctl_completion.sh /root/gardenctl_completion.sh &&\
+    echo ". /etc/profile" >> /root/.bashrc &&\
+    echo ". /root/gardenctl_completion.sh" >> /root/.bashrc
