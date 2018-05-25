@@ -23,7 +23,7 @@ RUN apt-get update &&\
     apt-get upgrade -qy &&\
     apt-get install -qy git &&\
     apt-get install -qy jq &&\
-    apt-get install -qy sudo python python-pip python3-pip python-setuptools &&\
+    apt-get install -qy python python-pip python3-pip python-setuptools &&\
     pip install awscli &&\
     pip install azure-cli &&\
     pip uninstall pyopenssl -y &&\
@@ -34,7 +34,7 @@ RUN apt-get update &&\
     ln -s /root/google-cloud-sdk/bin/gcloud /usr/bin/gcloud &&\
     curl -LO https://storage.googleapis.com/kubernetes-release/release/$(curl -s https://storage.googleapis.com/kubernetes-release/release/stable.txt)/bin/linux/amd64/kubectl &&\
     chmod +x ./kubectl &&\
-    sudo mv ./kubectl /usr/local/bin/kubectl &&\
+    mv ./kubectl /usr/local/bin/kubectl &&\
     mkdir -p /go/src/github.com/gardener/gardenctl &&\
     cd /go/src/github.com/gardener &&\
     git clone https://github.com/gardener/gardenctl.git &&\
