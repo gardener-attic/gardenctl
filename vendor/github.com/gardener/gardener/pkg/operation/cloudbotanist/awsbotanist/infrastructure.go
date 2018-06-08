@@ -19,7 +19,6 @@ import (
 
 	"github.com/gardener/gardener/pkg/operation/common"
 	"github.com/gardener/gardener/pkg/operation/terraformer"
-	"github.com/gardener/gardener/pkg/utils"
 )
 
 // DeployInfrastructure kicks off a Terraform job which deploys the infrastructure.
@@ -45,7 +44,7 @@ func (b *AWSBotanist) DeployInfrastructure() error {
 	}
 
 	return terraformer.
-		New(b.Operation, common.TerraformerPurposeInfra).
+		NewFromOperation(b.Operation, common.TerraformerPurposeInfra).
 		SetVariablesEnvironment(b.generateTerraformInfraVariablesEnvironment()).
 		DefineConfig("aws-infra", b.generateTerraformInfraConfig(createVPC, vpcID, internetGatewayID, vpcCIDR)).
 		Apply()
@@ -54,7 +53,7 @@ func (b *AWSBotanist) DeployInfrastructure() error {
 // DestroyInfrastructure kicks off a Terraform job which destroys the infrastructure.
 func (b *AWSBotanist) DestroyInfrastructure() error {
 	return terraformer.
-		New(b.Operation, common.TerraformerPurposeInfra).
+		NewFromOperation(b.Operation, common.TerraformerPurposeInfra).
 		SetVariablesEnvironment(b.generateTerraformInfraVariablesEnvironment()).
 		Destroy()
 }
@@ -117,7 +116,7 @@ func (b *AWSBotanist) generateTerraformInfraConfig(createVPC bool, vpcID, intern
 // It sets up the User and the Bucket to store the backups. Allocate permission to the User to access the bucket.
 func (b *AWSBotanist) DeployBackupInfrastructure() error {
 	return terraformer.
-		New(b.Operation, common.TerraformerPurposeBackup).
+		New(b.Logger, b.K8sSeedClient, common.TerraformerPurposeBackup, b.BackupInfrastructure.Name, common.GenerateBackupNamespaceName(b.BackupInfrastructure.Name), b.ImageVector).
 		SetVariablesEnvironment(b.generateTerraformBackupVariablesEnvironment()).
 		DefineConfig("aws-backup", b.generateTerraformBackupConfig()).
 		Apply()
@@ -126,7 +125,7 @@ func (b *AWSBotanist) DeployBackupInfrastructure() error {
 // DestroyBackupInfrastructure kicks off a Terraform job which destroys the infrastructure for etcd backup.
 func (b *AWSBotanist) DestroyBackupInfrastructure() error {
 	return terraformer.
-		New(b.Operation, common.TerraformerPurposeBackup).
+		New(b.Logger, b.K8sSeedClient, common.TerraformerPurposeBackup, b.BackupInfrastructure.Name, common.GenerateBackupNamespaceName(b.BackupInfrastructure.Name), b.ImageVector).
 		SetVariablesEnvironment(b.generateTerraformBackupVariablesEnvironment()).
 		Destroy()
 }
@@ -149,8 +148,8 @@ func (b *AWSBotanist) generateTerraformBackupConfig() map[string]interface{} {
 			"region": b.Seed.Info.Spec.Cloud.Region,
 		},
 		"bucket": map[string]interface{}{
-			"name": fmt.Sprintf("%s-%s", b.Shoot.SeedNamespace, utils.ComputeSHA1Hex([]byte(b.Shoot.Info.Status.UID))[:5]),
+			"name": b.Operation.BackupInfrastructure.Name,
 		},
-		"clusterName": b.Shoot.SeedNamespace,
+		"clusterName": b.Operation.BackupInfrastructure.Name,
 	}
 }

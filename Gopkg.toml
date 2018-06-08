@@ -4,12 +4,12 @@
 
 [[constraint]]
   name = "k8s.io/apimachinery"
-  version = "kubernetes-1.10.1"
+  version = "kubernetes-1.10.3"
 
 [[constraint]]
   name = "k8s.io/client-go"
-  version = "kubernetes-1.10.1"
+  version = "kubernetes-1.10.3"
 
 [[constraint]]
   name = "github.com/gardener/gardener"
-  version = "^0.3.1"
+  version = "^0.5.1"

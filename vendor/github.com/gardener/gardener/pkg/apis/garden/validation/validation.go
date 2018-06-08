@@ -20,6 +20,7 @@ import (
 	"net"
 	"regexp"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/Masterminds/semver"
@@ -664,6 +665,7 @@ func ValidateShoot(shoot *garden.Shoot) field.ErrorList {
 	allErrs := field.ErrorList{}
 
 	allErrs = append(allErrs, apivalidation.ValidateObjectMeta(&shoot.ObjectMeta, true, ValidateName, field.NewPath("metadata"))...)
+	allErrs = append(allErrs, validateShootName(shoot.Name, field.NewPath("metadata", "name"))...)
 	allErrs = append(allErrs, ValidateShootSpec(&shoot.Spec, field.NewPath("spec"))...)
 
 	return allErrs
@@ -708,6 +710,33 @@ func ValidateShootSpec(spec *garden.ShootSpec, fldPath *field.Path) field.ErrorL
 		if spec.DNS.SecretName != nil {
 			allErrs = append(allErrs, field.Invalid(fldPath.Child("dns", "secretName"), spec.DNS.SecretName, fmt.Sprintf("`.spec.dns.secretName` must not be set when `.spec.dns.provider` is '%s'", garden.DNSUnmanaged)))
 		}
+	}
+
+	return allErrs
+}
+
+// ValidateShootStatusUpdate validates the status field of a Shoot object.
+func ValidateShootStatusUpdate(newStatus, oldStatus garden.ShootStatus) field.ErrorList {
+	var (
+		allErrs = field.ErrorList{}
+		fldPath = field.NewPath("status")
+	)
+
+	if len(oldStatus.UID) > 0 {
+		allErrs = append(allErrs, apivalidation.ValidateImmutableField(newStatus.UID, oldStatus.UID, fldPath.Child("uid"))...)
+	}
+	if len(oldStatus.TechnicalID) > 0 {
+		allErrs = append(allErrs, apivalidation.ValidateImmutableField(newStatus.TechnicalID, oldStatus.TechnicalID, fldPath.Child("technicalID"))...)
+	}
+
+	return allErrs
+}
+
+func validateShootName(name string, fldPath *field.Path) field.ErrorList {
+	allErrs := field.ErrorList{}
+
+	if strings.Contains(name, "--") {
+		allErrs = append(allErrs, field.Invalid(fldPath, name, "shoot name may not contain two consecutive hyphens"))
 	}
 
 	return allErrs
@@ -1276,13 +1305,6 @@ func validateWorkerVolumeType(volumeType string, fldPath *field.Path) field.Erro
 	return allErrs
 }
 
-// ValidateShootStatusUpdate validates the status field of a Shoot object.
-func ValidateShootStatusUpdate(newShoot, oldShoot *garden.Shoot) field.ErrorList {
-	allErrs := field.ErrorList{}
-
-	return allErrs
-}
-
 // validateDNS1123Subdomain validates that a name is a proper DNS subdomain.
 func validateDNS1123Subdomain(value string, fldPath *field.Path) field.ErrorList {
 	allErrs := field.ErrorList{}
@@ -1290,6 +1312,61 @@ func validateDNS1123Subdomain(value string, fldPath *field.Path) field.ErrorList
 	for _, msg := range validation.IsDNS1123Subdomain(value) {
 		allErrs = append(allErrs, field.Invalid(fldPath, value, msg))
 	}
+
+	return allErrs
+}
+
+////////////////////////////////////////////////////
+//          BACKUP INFRASTRUCTURE                 //
+////////////////////////////////////////////////////
+
+// ValidateBackupInfrastructure validates a BackupInfrastructure object.
+func ValidateBackupInfrastructure(backupInfrastructure *garden.BackupInfrastructure) field.ErrorList {
+	allErrs := field.ErrorList{}
+
+	allErrs = append(allErrs, apivalidation.ValidateObjectMeta(&backupInfrastructure.ObjectMeta, true, ValidateName, field.NewPath("metadata"))...)
+	allErrs = append(allErrs, ValidateBackupInfrastructureSpec(&backupInfrastructure.Spec, field.NewPath("spec"))...)
+
+	return allErrs
+}
+
+// ValidateBackupInfrastructureUpdate validates a BackupInfrastructure object before an update.
+func ValidateBackupInfrastructureUpdate(newBackupInfrastructure, oldBackupInfrastructure *garden.BackupInfrastructure) field.ErrorList {
+	allErrs := field.ErrorList{}
+
+	allErrs = append(allErrs, apivalidation.ValidateObjectMetaUpdate(&newBackupInfrastructure.ObjectMeta, &oldBackupInfrastructure.ObjectMeta, field.NewPath("metadata"))...)
+	allErrs = append(allErrs, ValidateBackupInfrastructureSpecUpdate(&newBackupInfrastructure.Spec, &oldBackupInfrastructure.Spec, newBackupInfrastructure.DeletionTimestamp != nil, field.NewPath("spec"))...)
+	allErrs = append(allErrs, ValidateBackupInfrastructure(newBackupInfrastructure)...)
+
+	return allErrs
+}
+
+// ValidateBackupInfrastructureSpec validates the specification of a BackupInfrastructure object.
+func ValidateBackupInfrastructureSpec(spec *garden.BackupInfrastructureSpec, fldPath *field.Path) field.ErrorList {
+	allErrs := field.ErrorList{}
+
+	if len(spec.Seed) == 0 {
+		allErrs = append(allErrs, field.Invalid(fldPath.Child("seed"), spec.Seed, "seed name must not be empty"))
+	}
+	if len(spec.ShootUID) == 0 {
+		allErrs = append(allErrs, field.Invalid(fldPath.Child("shootUID"), spec.Seed, "shootUID must not be empty"))
+	}
+
+	return allErrs
+}
+
+// ValidateBackupInfrastructureSpecUpdate validates the specification of a BackupInfrastructure object.
+func ValidateBackupInfrastructureSpecUpdate(newSpec, oldSpec *garden.BackupInfrastructureSpec, deletionTimestampSet bool, fldPath *field.Path) field.ErrorList {
+	allErrs := field.ErrorList{}
+
+	allErrs = append(allErrs, apivalidation.ValidateImmutableField(newSpec.Seed, oldSpec.Seed, fldPath.Child("seed"))...)
+	allErrs = append(allErrs, apivalidation.ValidateImmutableField(newSpec.Seed, oldSpec.Seed, fldPath.Child("shootUID"))...)
+	return allErrs
+}
+
+// ValidateBackupInfrastructureStatusUpdate validates the status field of a BackupInfrastructure object.
+func ValidateBackupInfrastructureStatusUpdate(newBackupInfrastructure, oldBackupInfrastructure *garden.BackupInfrastructure) field.ErrorList {
+	allErrs := field.ErrorList{}
 
 	return allErrs
 }

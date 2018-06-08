@@ -18,7 +18,6 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
-	"strings"
 
 	clientset "github.com/gardener/gardener/pkg/client/garden/clientset/versioned"
 	"github.com/gardener/gardener/pkg/client/kubernetes"
@@ -81,7 +80,7 @@ func downloadTerraformFiles(option string) {
 				break
 			}
 		}
-		namespace = strings.Replace("shoot-"+shootList.Items[ind].Namespace+"-"+target.Target[2].Name, "-garden", "", 1)
+		namespace = shootList.Items[ind].Status.TechnicalID
 		fmt.Println(namespace)
 		seed, err := k8sGardenClient.GardenClientset().GardenV1beta1().Seeds().Get(*shootList.Items[ind].Spec.Cloud.Seed, metav1.GetOptions{})
 		checkError(err)

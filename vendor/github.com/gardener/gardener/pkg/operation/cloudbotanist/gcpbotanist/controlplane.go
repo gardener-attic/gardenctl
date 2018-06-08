@@ -39,6 +39,14 @@ token-url = nil
 node-tags = ` + b.Shoot.SeedNamespace, nil
 }
 
+// RefreshCloudProviderConfig refreshes the cloud provider credentials in the existing cloud
+// provider config.
+// Not needed on GCP (cloud provider config does not contain the credentials), hence, the
+// original is returned back.
+func (b *GCPBotanist) RefreshCloudProviderConfig(currentConfig map[string]string) map[string]string {
+	return currentConfig
+}
+
 // GenerateKubeAPIServerConfig generates the cloud provider specific values which are required to render the
 // Deployment manifest of the kube-apiserver properly.
 func (b *GCPBotanist) GenerateKubeAPIServerConfig() (map[string]interface{}, error) {
@@ -73,9 +81,14 @@ func (b *GCPBotanist) GenerateKubeSchedulerConfig() (map[string]interface{}, err
 
 // GenerateEtcdBackupConfig returns the etcd backup configuration for the etcd Helm chart.
 func (b *GCPBotanist) GenerateEtcdBackupConfig() (map[string][]byte, map[string]interface{}, error) {
-	mountPath := "/root/.gcp/"
-	bucketName := "bucketName"
-	stateVariables, err := terraformer.New(b.Operation, common.TerraformerPurposeBackup).GetStateOutputVariables(bucketName)
+	var (
+		mountPath                = "/root/.gcp/"
+		bucketName               = "bucketName"
+		backupInfrastructureName = common.GenerateBackupInfrastructureName(b.Shoot.SeedNamespace, b.Shoot.Info.Status.UID)
+		backupNamespace          = common.GenerateBackupNamespaceName(backupInfrastructureName)
+	)
+
+	stateVariables, err := terraformer.New(b.Logger, b.K8sSeedClient, common.TerraformerPurposeBackup, backupInfrastructureName, backupNamespace, b.ImageVector).GetStateOutputVariables(bucketName)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -83,6 +96,7 @@ func (b *GCPBotanist) GenerateEtcdBackupConfig() (map[string][]byte, map[string]
 	secretData := map[string][]byte{
 		ServiceAccountJSON: []byte(b.MinifiedServiceAccount),
 	}
+
 	backupConfigData := map[string]interface{}{
 		"schedule":         b.Shoot.Info.Spec.Backup.Schedule,
 		"maxBackups":       b.Shoot.Info.Spec.Backup.Maximum,

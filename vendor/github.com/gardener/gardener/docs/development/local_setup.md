@@ -5,6 +5,7 @@ Conceptionally, the Gardener is designated to run in containers within a Pod ins
 Further details could be found in
 
 1. [principles of Kubernetes](https://kubernetes.io/docs/concepts/), and its [components](https://kubernetes.io/docs/concepts/overview/components/)
+1. [Kubernetes Development Guide](https://github.com/kubernetes/community/tree/master/contributors/devel)
 1. [architecture of the Garden](https://github.com/gardener/documentation/wiki/Architecture)
 
 This setup is based on [minikube](https://github.com/kubernetes/minikube), a Kubernetes cluster running on a single node.
@@ -83,6 +84,18 @@ $ brew install git
 
 On other OS, please check the [Git installation documentation](https://git-scm.com/book/en/v2/Getting-Started-Installing-Git).
 
+## Installing `openvpn`
+
+We use `OpenVPN` to establish network connectivity from the control plane running in the Seed cluster to the Shoot's worker nodes running in private networks.
+To harden the security we need to generate another secret to encrypt the network traffic ([details](https://openvpn.net/index.php/open-source/documentation/howto.html#security)).
+Please install the `openvpn` binary. On Mac OS run
+
+```bash
+$ brew install openvpn
+```
+
+On other OS, please check the [OpenVPN downloads page](https://openvpn.net/index.php/open-source/downloads.html).
+
 ## Installing Minikube
 
 You'll need to have [minikube](https://github.com/kubernetes/minikube#installation) installed and running.
@@ -116,6 +129,22 @@ Please make sure that the executable `bsdtar` is available on your system.
 ## Installing `Virtualbox`
 
 In this local setup a virtualizer is needed. Here, [`Virtualbox`](https://www.virtualbox.org) is used. However, Vagrant supports other virtualizers as well. Please check the [`Vagrant` documentation](https://www.vagrantup.com/docs/index.html) for further details.
+
+## Test nip.io
+
+`nip.io` is used as an unmanaged DNS implementation for the local setup. Some ISPs don't handle `nip.io` very well. Test NS resolution:
+
+```bash
+nslookup 192.168.99.201.nip.io
+Server:         8.8.8.8
+Address:        8.8.8.8#53
+
+Non-authoritative answer:
+Name:   192.168.99.201.nip.io
+Address: 192.168.99.201
+```
+
+If there is an error, switch your DNS server to `8.8.8.8` / `8.8.4.4` or `1.1.1.1`.
 
 ## Local Gardener setup
 
@@ -238,7 +267,7 @@ seed "local-dev" created
 
 #### Check Vagrant setup
 
-To be sure that the Vagrant has been successfuly installed and configured, test your setup:
+To be sure that the Vagrant has been successfully installed and configured, test your setup:
 
 ```bash
 $ cd vagrant

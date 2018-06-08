@@ -130,50 +130,133 @@ var _ = Describe("validator", func() {
 			shoot.Spec.Cloud.OpenStack = nil
 		})
 
-		It("should reject Shoot resources with not fulfilling the length constraints (w/o project label on namespace)", func() {
-			tooLongName := "too-long-namespace"
-			namespace.ObjectMeta = metav1.ObjectMeta{
-				Name: tooLongName,
-			}
-			shoot.ObjectMeta = metav1.ObjectMeta{
-				Name:      "too-long-name",
-				Namespace: tooLongName,
-			}
+		Context("name/project length checks (w/o project label on namespace", func() {
+			It("should reject Shoot resources with two consecutive hyphens in project name", func() {
+				twoConsecutiveHyphensName := "n--o"
+				namespace.ObjectMeta = metav1.ObjectMeta{
+					Name: twoConsecutiveHyphensName,
+				}
+				shoot.ObjectMeta = metav1.ObjectMeta{
+					Name:      "shoot",
+					Namespace: twoConsecutiveHyphensName,
+				}
 
-			kubeInformerFactory.Core().V1().Namespaces().Informer().GetStore().Add(&namespace)
-			gardenInformerFactory.Garden().InternalVersion().CloudProfiles().Informer().GetStore().Add(&cloudProfile)
-			gardenInformerFactory.Garden().InternalVersion().Seeds().Informer().GetStore().Add(&seed)
-			attrs := admission.NewAttributesRecord(&shoot, nil, garden.Kind("Shoot").WithVersion("version"), shoot.Namespace, shoot.Name, garden.Resource("shoots").WithVersion("version"), "", admission.Create, nil)
+				kubeInformerFactory.Core().V1().Namespaces().Informer().GetStore().Add(&namespace)
+				gardenInformerFactory.Garden().InternalVersion().CloudProfiles().Informer().GetStore().Add(&cloudProfile)
+				gardenInformerFactory.Garden().InternalVersion().Seeds().Informer().GetStore().Add(&seed)
+				attrs := admission.NewAttributesRecord(&shoot, nil, garden.Kind("Shoot").WithVersion("version"), shoot.Namespace, shoot.Name, garden.Resource("shoots").WithVersion("version"), "", admission.Create, nil)
 
-			err := admissionHandler.Admit(attrs)
+				err := admissionHandler.Admit(attrs)
 
-			Expect(err).To(HaveOccurred())
-			Expect(apierrors.IsBadRequest(err)).To(BeTrue())
+				Expect(err).To(HaveOccurred())
+				Expect(apierrors.IsBadRequest(err)).To(BeTrue())
+				Expect(err.Error()).To(ContainSubstring("consecutive hyphens"))
+			})
+
+			It("should reject Shoot resources with not fulfilling the length constraints", func() {
+				tooLongName := "too-long-namespace"
+				namespace.ObjectMeta = metav1.ObjectMeta{
+					Name: tooLongName,
+				}
+				shoot.ObjectMeta = metav1.ObjectMeta{
+					Name:      "too-long-name",
+					Namespace: tooLongName,
+				}
+
+				kubeInformerFactory.Core().V1().Namespaces().Informer().GetStore().Add(&namespace)
+				gardenInformerFactory.Garden().InternalVersion().CloudProfiles().Informer().GetStore().Add(&cloudProfile)
+				gardenInformerFactory.Garden().InternalVersion().Seeds().Informer().GetStore().Add(&seed)
+				attrs := admission.NewAttributesRecord(&shoot, nil, garden.Kind("Shoot").WithVersion("version"), shoot.Namespace, shoot.Name, garden.Resource("shoots").WithVersion("version"), "", admission.Create, nil)
+
+				err := admissionHandler.Admit(attrs)
+
+				Expect(err).To(HaveOccurred())
+				Expect(apierrors.IsBadRequest(err)).To(BeTrue())
+				Expect(err.Error()).To(ContainSubstring("name must not exceed"))
+			})
 		})
 
-		It("should forbid Shoot resources with not fulfilling the length constraints (w/ project label on namespace)", func() {
-			shortName := "short"
-			projectName := "too-long-label"
-			namespace.ObjectMeta = metav1.ObjectMeta{
-				Name: shortName,
-				Labels: map[string]string{
-					common.ProjectName: projectName,
-				},
-			}
-			shoot.ObjectMeta = metav1.ObjectMeta{
-				Name:      shortName,
-				Namespace: shortName,
-			}
+		Context("name/project length checks (w/ project label on namespace", func() {
+			It("should reject Shoot resources with two consecutive hyphens in project name", func() {
+				namespaceName := "default"
+				twoConsecutiveHyphensName := "n--o"
+				namespace.ObjectMeta = metav1.ObjectMeta{
+					Name: namespaceName,
+					Labels: map[string]string{
+						common.ProjectName: twoConsecutiveHyphensName,
+					},
+				}
+				shoot.ObjectMeta = metav1.ObjectMeta{
+					Name:      "shoot",
+					Namespace: namespaceName,
+				}
 
-			kubeInformerFactory.Core().V1().Namespaces().Informer().GetStore().Add(&namespace)
-			gardenInformerFactory.Garden().InternalVersion().CloudProfiles().Informer().GetStore().Add(&cloudProfile)
-			gardenInformerFactory.Garden().InternalVersion().Seeds().Informer().GetStore().Add(&seed)
-			attrs := admission.NewAttributesRecord(&shoot, nil, garden.Kind("Shoot").WithVersion("version"), shoot.Namespace, shoot.Name, garden.Resource("shoots").WithVersion("version"), "", admission.Create, nil)
+				kubeInformerFactory.Core().V1().Namespaces().Informer().GetStore().Add(&namespace)
+				gardenInformerFactory.Garden().InternalVersion().CloudProfiles().Informer().GetStore().Add(&cloudProfile)
+				gardenInformerFactory.Garden().InternalVersion().Seeds().Informer().GetStore().Add(&seed)
+				attrs := admission.NewAttributesRecord(&shoot, nil, garden.Kind("Shoot").WithVersion("version"), shoot.Namespace, shoot.Name, garden.Resource("shoots").WithVersion("version"), "", admission.Create, nil)
 
-			err := admissionHandler.Admit(attrs)
+				err := admissionHandler.Admit(attrs)
 
-			Expect(err).To(HaveOccurred())
-			Expect(apierrors.IsBadRequest(err)).To(BeTrue())
+				Expect(err).To(HaveOccurred())
+				Expect(apierrors.IsBadRequest(err)).To(BeTrue())
+				Expect(err.Error()).To(ContainSubstring("consecutive hyphens"))
+			})
+
+			It("should forbid Shoot resources with not fulfilling the length constraints", func() {
+				shortName := "short"
+				projectName := "too-long-long-long-label"
+				namespace.ObjectMeta = metav1.ObjectMeta{
+					Name: shortName,
+					Labels: map[string]string{
+						common.ProjectName: projectName,
+					},
+				}
+				shoot.ObjectMeta = metav1.ObjectMeta{
+					Name:      shortName,
+					Namespace: shortName,
+				}
+
+				kubeInformerFactory.Core().V1().Namespaces().Informer().GetStore().Add(&namespace)
+				gardenInformerFactory.Garden().InternalVersion().CloudProfiles().Informer().GetStore().Add(&cloudProfile)
+				gardenInformerFactory.Garden().InternalVersion().Seeds().Informer().GetStore().Add(&seed)
+				attrs := admission.NewAttributesRecord(&shoot, nil, garden.Kind("Shoot").WithVersion("version"), shoot.Namespace, shoot.Name, garden.Resource("shoots").WithVersion("version"), "", admission.Create, nil)
+
+				err := admissionHandler.Admit(attrs)
+
+				Expect(err).To(HaveOccurred())
+				Expect(apierrors.IsBadRequest(err)).To(BeTrue())
+				Expect(err.Error()).To(ContainSubstring("name must not exceed"))
+			})
+
+			It("should not testing length constraints for operations other than CREATE", func() {
+				shortName := "short"
+				projectName := "too-long-long-long-label"
+				namespace.ObjectMeta = metav1.ObjectMeta{
+					Name: shortName,
+					Labels: map[string]string{
+						common.ProjectName: projectName,
+					},
+				}
+				shoot.ObjectMeta = metav1.ObjectMeta{
+					Name:      shortName,
+					Namespace: shortName,
+				}
+
+				kubeInformerFactory.Core().V1().Namespaces().Informer().GetStore().Add(&namespace)
+				gardenInformerFactory.Garden().InternalVersion().CloudProfiles().Informer().GetStore().Add(&cloudProfile)
+				gardenInformerFactory.Garden().InternalVersion().Seeds().Informer().GetStore().Add(&seed)
+
+				attrs := admission.NewAttributesRecord(&shoot, nil, garden.Kind("Shoot").WithVersion("version"), shoot.Namespace, shoot.Name, garden.Resource("shoots").WithVersion("version"), "", admission.Update, nil)
+				err := admissionHandler.Admit(attrs)
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).NotTo(ContainSubstring("name must not exceed"))
+
+				attrs = admission.NewAttributesRecord(&shoot, nil, garden.Kind("Shoot").WithVersion("version"), shoot.Namespace, shoot.Name, garden.Resource("shoots").WithVersion("version"), "", admission.Delete, nil)
+				err = admissionHandler.Admit(attrs)
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).NotTo(ContainSubstring("name must not exceed"))
+			})
 		})
 
 		It("should reject because the referenced cloud profile was not found", func() {

@@ -229,12 +229,12 @@ func getShoot(name string) {
 	for index, shoot := range shootList.Items {
 		if (name == "") && (shoot.Name == target.Target[2].Name) && (shoot.Namespace == target.Target[1].Name || *shoot.Spec.Cloud.Seed == target.Target[1].Name) {
 			ind = index
-			namespace = strings.Replace("shoot-"+shootList.Items[ind].Namespace+"-"+target.Target[2].Name, "-garden", "", 1)
+			namespace = shootList.Items[ind].Status.TechnicalID
 			break
 		}
 		if (name != "") && (shoot.Name == name) && (shoot.Namespace == target.Target[1].Name || *shoot.Spec.Cloud.Seed == target.Target[1].Name) {
 			ind = index
-			namespace = strings.Replace("shoot-"+shootList.Items[ind].Namespace+"-"+name, "-garden", "", 1)
+			namespace = shootList.Items[ind].Status.TechnicalID
 			break
 		}
 	}

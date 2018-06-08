@@ -37,9 +37,9 @@ spec:
         - /hyperkube
         - apiserver
         {{- if semverCompare "< 1.10" .Values.kubernetesVersion }}
-        - --admission-control=NamespaceLifecycle,LimitRanger,Initializers,ServiceAccount,NodeRestriction,DefaultStorageClass,PersistentVolumeLabel,DefaultTolerationSeconds,ResourceQuota
+        - --admission-control=NamespaceLifecycle,LimitRanger,ServiceAccount,NodeRestriction,DefaultStorageClass,PersistentVolumeLabel,DefaultTolerationSeconds,ResourceQuota
         {{- else }}
-        - --enable-admission-plugins=Initializers,NamespaceLifecycle,LimitRanger,ServiceAccount,NodeRestriction,DefaultStorageClass,PersistentVolumeLabel,DefaultTolerationSeconds,StorageObjectInUseProtection,{{ if semverCompare ">= 1.9" .Values.kubernetesVersion }}MutatingAdmissionWebhook,{{ end }}ValidatingAdmissionWebhook,ResourceQuota,PodPreset
+        - --enable-admission-plugins=NamespaceLifecycle,LimitRanger,ServiceAccount,NodeRestriction,DefaultStorageClass,PersistentVolumeLabel,DefaultTolerationSeconds,StorageObjectInUseProtection,{{ if semverCompare ">= 1.9" .Values.kubernetesVersion }}MutatingAdmissionWebhook,{{ end }}ValidatingAdmissionWebhook,ResourceQuota
         {{- end }}
         - --advertise-address={{ .Values.advertiseAddress }}
         - --allow-privileged=true
@@ -60,8 +60,11 @@ spec:
         - --cloud-config=/etc/kubernetes/cloudprovider/cloudprovider.conf
         - --enable-aggregator-routing=true
         - --enable-bootstrap-token-auth=true
-        - --etcd-servers=http://$(ETCD_MAIN_CLIENT_SERVICE_HOST):$(ETCD_MAIN_CLIENT_SERVICE_PORT)
-        - --etcd-servers-overrides=/events#http://$(ETCD_EVENTS_CLIENT_SERVICE_HOST):$(ETCD_EVENTS_CLIENT_SERVICE_PORT)
+        - --etcd-cafile=/srv/kubernetes/ca/ca.crt
+        - --etcd-certfile=/srv/kubernetes/etcd/tls.crt
+        - --etcd-keyfile=/srv/kubernetes/etcd/tls.key
+        - --etcd-servers=https://{{ .Values.etcdMainServiceFqdn }}:{{ .Values.etcdServicePort }}
+        - --etcd-servers-overrides=/events#https://{{ .Values.etcdEventsServiceFqdn }}:{{ .Values.etcdServicePort }}
         {{- include "kube-apiserver.featureGates" . | trimSuffix "," | indent 8 }}
         - --kubelet-preferred-address-types=InternalIP,Hostname,ExternalIP
         - --kubelet-client-certificate=/srv/kubernetes/apiserver-kubelet/kube-apiserver-kubelet.crt
@@ -111,6 +114,10 @@ spec:
         resources:
           requests:
             cpu: 200m
+            memory: 512Mi
+          limits:
+            cpu: 1500m
+            memory: 2500Mi
         volumeMounts:
         {{- if semverCompare ">= 1.8" .Values.kubernetesVersion }}
         - name: audit-policy-config
@@ -118,6 +125,8 @@ spec:
         {{- end }}
         - name: ca
           mountPath: /srv/kubernetes/ca
+        - name: etcd-client-tls
+          mountPath: /srv/kubernetes/etcd
         - name: kube-apiserver
           mountPath: /srv/kubernetes/apiserver
         - name: service-account-key
@@ -148,26 +157,33 @@ spec:
         env:
         - name: MAIN_VPN_SEED
           value: "true"
-        - name: IDENTITY_FILE
-          value: /srv/ssh/id_rsa
-        - name: USER
-          value: root
-        - name: SERVICE_NETWORK
-          value: {{ .Values.serviceNetwork }}
-        - name: POD_NETWORK
-          value: {{ .Values.podNetwork }}
-        - name: NODE_NETWORK
-          value: {{ .Values.nodeNetwork }}
+        - name: OPENVPN_PORT
+          value: "4314"
+        ports:
+        - name: https
+          containerPort: 1194
+          protocol: TCP
+        resources:
+          requests:
+            cpu: 100m
+            memory: 128Mi
+          limits:
+            cpu: 300m
+            memory: 512Mi
         securityContext:
-          privileged: true
           capabilities:
             add:
             - NET_ADMIN
+          privileged: true
+        terminationMessagePath: /dev/termination-log
+        terminationMessagePolicy: File
         volumeMounts:
-        - name: vpn-ssh-keypair
-          mountPath: /srv/ssh
-        - name: kube-apiserver-basic-auth
-          mountPath: /srv/auth
+        - mountPath: /srv/secrets/vpn-seed
+          name: vpn-seed
+        - mountPath: /srv/secrets/tlsauth
+          name: vpn-seed-tlsauth
+        - mountPath: /srv/auth
+          name: kube-apiserver-basic-auth
       - name: blackbox-exporter
         image: {{ index .Values.images "blackbox-exporter" }}
         args:
@@ -177,8 +193,15 @@ spec:
         - name: blackbox-export
           containerPort: 9115
           protocol: TCP
+        resources:
+          requests:
+            cpu: 5m
+            memory: 16Mi
+          limits:
+            cpu: 50m
+            memory: 128Mi
         volumeMounts:
-        - name: blackbox-exporter-config
+        - name: blackbox-exporter-config-apiserver
           mountPath: /vpn
       dnsPolicy: ClusterFirst
       restartPolicy: Always
@@ -196,6 +219,9 @@ spec:
       - name: kube-apiserver
         secret:
           secretName: kube-apiserver
+      - name: etcd-client-tls
+        secret:
+          secretName: etcd-client-tls
       - name: service-account-key
         secret:
           secretName: service-account-key
@@ -213,9 +239,12 @@ spec:
         secret:
           secretName: kube-apiserver-oidc-cabundle
       {{- end }}
-      - name: vpn-ssh-keypair
+      - name: vpn-seed
         secret:
-          secretName: vpn-ssh-keypair
+          secretName: vpn-seed
+      - name: vpn-seed-tlsauth
+        secret:
+          secretName: vpn-seed-tlsauth
       - name: cloud-provider-config
         configMap:
           name: cloud-provider-config
@@ -228,6 +257,6 @@ spec:
       - name: ssl-certs-hosts
         hostPath:
           path: /usr/share/ca-certificates
-      - name: blackbox-exporter-config
+      - name: blackbox-exporter-config-apiserver
         configMap:
-          name: blackbox-exporter-config
+          name: blackbox-exporter-config-apiserver

@@ -104,7 +104,7 @@ type defaultControl struct {
 }
 
 func (c *defaultControl) ReconcileSecretBinding(obj *gardenv1beta1.SecretBinding, key string) error {
-	key, err := cache.MetaNamespaceKeyFunc(obj)
+	_, err := cache.MetaNamespaceKeyFunc(obj)
 	if err != nil {
 		return err
 	}
@@ -114,7 +114,7 @@ func (c *defaultControl) ReconcileSecretBinding(obj *gardenv1beta1.SecretBinding
 		secretBindingLogger = logger.NewFieldLogger(logger.Logger, "secretbinding", fmt.Sprintf("%s/%s", secretBinding.Namespace, secretBinding.Name))
 	)
 
-	// The deletionTimestamp labels a SecretBinding as intented to get deleted. Before deletion,
+	// The deletionTimestamp labels a SecretBinding as intended to get deleted. Before deletion,
 	// it has to be ensured that no Shoots are depending on the SecretBinding anymore.
 	// When this happens the controller will remove the finalizers from the SecretBinding so that it can be garbage collected.
 	if secretBinding.DeletionTimestamp != nil {
@@ -150,7 +150,7 @@ func (c *defaultControl) ReconcileSecretBinding(obj *gardenv1beta1.SecretBinding
 			secretBindingFinalizers := sets.NewString(secretBinding.Finalizers...)
 			secretBindingFinalizers.Delete(gardenv1beta1.GardenerName)
 			secretBinding.Finalizers = secretBindingFinalizers.UnsortedList()
-			if _, err := c.k8sGardenClient.GardenClientset().GardenV1beta1().SecretBindings(secretBinding.Namespace).Update(secretBinding); err != nil {
+			if _, err := c.k8sGardenClient.GardenClientset().GardenV1beta1().SecretBindings(secretBinding.Namespace).Update(secretBinding); err != nil && !apierrors.IsNotFound(err) {
 				secretBindingLogger.Error(err.Error())
 				return err
 			}

@@ -20,6 +20,7 @@ import (
 	gardenv1beta1 "github.com/gardener/gardener/pkg/apis/garden/v1beta1"
 	"github.com/gardener/gardener/pkg/chartrenderer"
 	"github.com/gardener/gardener/pkg/operation/common"
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -29,7 +30,8 @@ import (
 func (b *HybridBotanist) generateCoreAddonsChart() (*chartrenderer.RenderedChart, error) {
 	var (
 		kubeProxySecret  = b.Secrets["kube-proxy"]
-		sshKeyPairSecret = b.Secrets["vpn-ssh-keypair"]
+		vpnShootSecret   = b.Secrets["vpn-shoot"]
+		vpnTLSAuthSecret = b.Secrets["vpn-seed-tlsauth"]
 		global           = map[string]interface{}{
 			"podNetwork": b.Shoot.GetPodNetwork(),
 		}
@@ -45,9 +47,18 @@ func (b *HybridBotanist) generateCoreAddonsChart() (*chartrenderer.RenderedChart
 		}
 		kubeProxyConfig = map[string]interface{}{
 			"kubeconfig": kubeProxySecret.Data["kubeconfig"],
+			"podAnnotations": map[string]interface{}{
+				"checksum/secret-kube-proxy": b.CheckSums["kube-proxy"],
+			},
 		}
 		vpnShootConfig = map[string]interface{}{
-			"authorizedKeys": sshKeyPairSecret.Data["id_rsa.pub"],
+			"podNetwork":     b.Shoot.GetPodNetwork(),
+			"serviceNetwork": b.Shoot.GetServiceNetwork(),
+			"nodeNetwork":    b.Shoot.GetNodeNetwork(),
+			"tlsAuth":        vpnTLSAuthSecret.Data["vpn.tlsauth"],
+			"podAnnotations": map[string]interface{}{
+				"checksum/secret-vpn-shoot": b.CheckSums["vpn-shoot"],
+			},
 		}
 		nodeExporterConfig = map[string]interface{}{}
 	)
@@ -55,6 +66,10 @@ func (b *HybridBotanist) generateCoreAddonsChart() (*chartrenderer.RenderedChart
 	proxyConfig := b.Shoot.Info.Spec.Kubernetes.KubeProxy
 	if proxyConfig != nil {
 		kubeProxyConfig["featureGates"] = proxyConfig.FeatureGates
+	}
+
+	if openvpnDiffieHellmanSecret, ok := b.Secrets[common.GardenRoleOpenVPNDiffieHellman]; ok {
+		vpnShootConfig["diffieHellmanKey"] = openvpnDiffieHellmanSecret.Data["dh2048.pem"]
 	}
 
 	calico, err := b.Botanist.InjectImages(calicoConfig, b.K8sShootClient.Version(), map[string]string{"calico-node": "calico-node", "calico-cni": "calico-cni", "calico-typha": "calico-typha"})
@@ -75,6 +90,10 @@ func (b *HybridBotanist) generateCoreAddonsChart() (*chartrenderer.RenderedChart
 	}
 	nodeExporter, err := b.Botanist.InjectImages(nodeExporterConfig, b.K8sShootClient.Version(), map[string]string{"node-exporter": "node-exporter"})
 	if err != nil {
+		return nil, err
+	}
+
+	if _, err := b.K8sShootClient.CreateSecret(metav1.NamespaceSystem, "vpn-shoot", corev1.SecretTypeOpaque, vpnShootSecret.Data, true); err != nil {
 		return nil, err
 	}
 
@@ -143,11 +162,11 @@ func (b *HybridBotanist) generateOptionalAddonsChart() (*chartrenderer.RenderedC
 	if err != nil {
 		return nil, err
 	}
-	monocular, err := b.Botanist.InjectImages(monocularConfig, b.K8sShootClient.Version(), map[string]string{"monocular-api": "monocular-api", "monocular-ui": "monocular-ui", "monocular-prerender": "monocular-prerender", "busybox": "busybox"})
+	monocular, err := b.Botanist.InjectImages(monocularConfig, b.K8sShootClient.Version(), map[string]string{"monocular-api": "monocular-api", "monocular-ui": "monocular-ui", "busybox": "busybox"})
 	if err != nil {
 		return nil, err
 	}
-	nginxIngress, err := b.Botanist.InjectImages(nginxIngressConfig, b.K8sShootClient.Version(), map[string]string{"nginx-ingress-controller": "nginx-ingress-controller", "ingress-default-backend": "ingress-default-backend", "vts-ingress-exporter": "vts-ingress-exporter"})
+	nginxIngress, err := b.Botanist.InjectImages(nginxIngressConfig, b.K8sShootClient.Version(), map[string]string{"nginx-ingress-controller": "nginx-ingress-controller", "ingress-default-backend": "ingress-default-backend"})
 	if err != nil {
 		return nil, err
 	}

@@ -39,11 +39,13 @@ spec:
           args:
           - /nginx-ingress-controller
           - --default-backend-service={{ if .Values.defaultBackend.enabled }}{{ .Release.Namespace }}/{{ template "defaultBackend.fullname" . }}{{ else }}{{ .Values.controller.defaultBackendService }}{{ end }}
+          - --enable-ssl-passthrough=true
           {{- if .Values.controller.publishService.enabled }}
           - --publish-service={{ template "controller.publishServicePath" . }}
           {{- end }}
           - --election-id={{ .Values.controller.electionID }}
           - --ingress-class={{ .Values.controller.ingressClass }}
+          - --update-status=true
           - --configmap={{ .Release.Namespace }}/{{ template "controller.fullname" . }}
           {{- if .Values.tcp }}
           - --tcp-services-configmap={{ .Release.Namespace }}/{{ template "fullname" . }}-tcp
@@ -102,26 +104,6 @@ spec:
               scheme: HTTP
           resources:
 {{ toYaml .Values.controller.resources | indent 12 }}
-      {{- if .Values.controller.stats.enabled }}
-        - name: {{ template "name" . }}-{{ .Values.statsExporter.name }}
-          image: {{ index .Values.images "vts-ingress-exporter" }}
-          imagePullPolicy: "{{ .Values.statsExporter.image.pullPolicy }}"
-          env:
-            - name: METRICS_ADDR
-              value: ":9913"
-            - name: METRICS_ENDPOINT
-              value: "{{ .Values.statsExporter.endpoint }}"
-            - name: METRICS_NS
-              value: "{{ .Values.statsExporter.metricsNamespace }}"
-            - name: NGINX_STATUS
-              value: "{{ .Values.statsExporter.statusPage }}"
-          ports:
-            - name: metrics
-              containerPort: 9913
-              protocol: TCP
-          resources:
-{{ toYaml .Values.statsExporter.resources | indent 12 }}
-      {{- end }}
       hostNetwork: {{ .Values.controller.hostNetwork }}
     {{- if .Values.controller.nodeSelector }}
       nodeSelector:

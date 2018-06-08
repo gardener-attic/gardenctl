@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"strings"
 
 	"github.com/gardener/gardener/pkg/apis/garden"
 	"github.com/gardener/gardener/pkg/apis/garden/helper"
@@ -118,20 +119,27 @@ func (h *ValidateShoot) Admit(a admission.Attributes) error {
 		return apierrors.NewBadRequest("could not find referenced namespace")
 	}
 
-	// We use the identifier "shoot-<project-name>-<shoot-name> in nearly all places: when creating infrastructure
-	// resources, Kubernetes resources, DNS names, etc. Some infrastructure resources have length constraints that
-	// this identifier must not exceed 30 characters, thus we need to check whether Shoots do not exceed this limit.
-	// The project name is a label on the namespace. If it is not found, the namespace name itself is used as project
-	// name.
-	var (
-		projectName = shoot.Namespace
-		lengthLimit = 23
-	)
-	if projectNameLabel, ok := namespace.Labels[common.ProjectName]; ok {
-		projectName = projectNameLabel
-	}
-	if len(projectName+shoot.Name) > lengthLimit {
-		return apierrors.NewBadRequest(fmt.Sprintf("the length of the shoot name and the project name must not exceed %d characters (project: %s; shoot: %s)", lengthLimit, projectName, shoot.Name))
+	// We currently use the identifier "shoot-<project-name>-<shoot-name> in nearly all places for old Shoots, but have
+	// changed that to "shoot--<project-name>-<shoot-name>": when creating infrastructure resources, Kubernetes resources,
+	// DNS names, etc., then this identifier is used to tag/name the resources. Some of those resources have length
+	// constraints that this identifier must not exceed 30 characters, thus we need to check whether Shoots do not exceed
+	// this limit. The project name is a label on the namespace. If it is not found, the namespace name itself is used as
+	// project name. These checks should only be performed for CREATE operations (we do not want to reject changes to existing
+	// Shoots in case the limits are changed in the future).
+	if a.GetOperation() == admission.Create {
+		var (
+			projectName = shoot.Namespace
+			lengthLimit = 21
+		)
+		if projectNameLabel, ok := namespace.Labels[common.ProjectName]; ok {
+			projectName = projectNameLabel
+		}
+		if len(projectName+shoot.Name) > lengthLimit {
+			return apierrors.NewBadRequest(fmt.Sprintf("the length of the shoot name and the project name must not exceed %d characters (project: %s; shoot: %s)", lengthLimit, projectName, shoot.Name))
+		}
+		if strings.Contains(projectName, "--") {
+			return apierrors.NewBadRequest(fmt.Sprintf("the project name must not contain two consecutive hyphens (project: %s)", projectName))
+		}
 	}
 
 	cloudProviderInShoot, err := helper.DetermineCloudProviderInShoot(shoot.Spec.Cloud)

@@ -2,17 +2,29 @@ groups:
 - name: kube-etcd3.rules
   rules:
 
-  # alert if etcd is down
-  - alert: KubeEtcd3Down
-    expr: absent(up{job="kube-etcd3",role="main"}) or absent(up{job="kube-etcd3",role="events"})
+  # alert if main etcd is down
+  - alert: KubeEtcdMainDown
+    expr: sum(up{job="kube-etcd3",role="main"}) < 1
+    for: 3m
+    labels:
+      service: etcd
+      severity: blocker
+      type: seed
+    annotations:
+      description: etcd3 cluster {{ $labels.role }} is unavailable or cannot be scrapped
+      summary: etcd3 main cluster down
+
+  # alert if events etcd is down
+  - alert: KubeEtcdEventsDown
+    expr: sum(up{job="kube-etcd3",role="events"}) < 1
     for: 3m
     labels:
       service: etcd
       severity: critical
       type: seed
     annotations:
-      description: etc3 cluster {{ $labels.role }} is unavailable or cannot be scrapped
-      summary: etcd3 cluster down
+      description: etcd3 cluster {{ $labels.role }} is unavailable or cannot be scrapped
+      summary: etcd3 events cluster down
 
   # etcd leader alerts
   - alert: KubeEtcd3NoLeader

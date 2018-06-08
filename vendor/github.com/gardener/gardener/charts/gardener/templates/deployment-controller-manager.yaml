@@ -23,6 +23,7 @@ spec:
         checksum/secret-default-domain: {{ include (print $.Template.BasePath "/secret-default-domain.yaml") . | sha256sum }}
         checksum/secret-internal-domain: {{ include (print $.Template.BasePath "/secret-internal-domain.yaml") . | sha256sum }}
         checksum/secret-alerting-smtp: {{ include (print $.Template.BasePath "/secret-alerting-smtp.yaml") . | sha256sum }}
+        checksum/secret-openvpn-diffie-hellman: {{ include (print $.Template.BasePath "/secret-openvpn-diffie-hellman.yaml") . | sha256sum }}
       labels:
         app: gardener
         role: controller-manager
@@ -48,16 +49,24 @@ spec:
         resources:
           requests:
             cpu: 100m
+            memory: 100Mi
           limits:
             cpu: 750m
+            memory: 512Mi
         terminationMessagePath: /dev/termination-log
         terminationMessagePolicy: File
         volumeMounts:
         - name: gardener-controller-manager-config
           mountPath: /etc/gardener-controller-manager
+{{- if .Values.controller.additionalVolumeMounts }}
+{{ toYaml .Values.controller.additionalVolumeMounts | indent 8 }}
+{{- end }}
       terminationGracePeriodSeconds: 3600
       volumes:
       - name: gardener-controller-manager-config
         configMap:
           name: gardener-controller-manager-configmap
+{{- if .Values.controller.additionalVolumes }}
+{{ toYaml .Values.controller.additionalVolumes | indent 6 }}
+{{- end }}
 {{- end}}

@@ -54,16 +54,22 @@ func retrieveTerraformErrors(logList map[string]string) []string {
 
 // determineErrorCode determines the Garden error code for the given error message.
 func determineErrorCode(message string) error {
-	var code gardenv1beta1.ErrorCode
+	var (
+		code                         gardenv1beta1.ErrorCode
+		unauthorizedRegexp           = regexp.MustCompile(`(?i)(Unauthorized|InvalidClientTokenId|SignatureDoesNotMatch|Authentication failed)`)
+		quotaExceededRegexp          = regexp.MustCompile(`(?i)(LimitExceeded|Quota)`)
+		insufficientPrivilegesRegexp = regexp.MustCompile(`(?i)(AccessDenied|Forbidden)`)
+		dependenciesRegexp           = regexp.MustCompile(`(?i)(DependencyViolation)`)
+	)
 
 	switch {
-	case strings.Contains(message, "UnauthorizedOperation") || strings.Contains(message, "InvalidClientTokenId") || strings.Contains(message, "SignatureDoesNotMatch"):
+	case unauthorizedRegexp.MatchString(message):
 		code = gardenv1beta1.ErrorInfraUnauthorized
-	case strings.Contains(message, "LimitExceeded"):
+	case quotaExceededRegexp.MatchString(message):
 		code = gardenv1beta1.ErrorInfraQuotaExceeded
-	case strings.Contains(message, "AccessDenied"):
+	case insufficientPrivilegesRegexp.MatchString(message):
 		code = gardenv1beta1.ErrorInfraInsufficientPrivileges
-	case strings.Contains(message, "DependencyViolation"):
+	case dependenciesRegexp.MatchString(message):
 		code = gardenv1beta1.ErrorInfraDependencies
 	}
 
@@ -86,7 +92,7 @@ func findTerraformErrors(output string) string {
 		valid        = []string{}
 	)
 
-	// Strip optional explaination how Terraform behaves in case of errors.
+	// Strip optional explanation how Terraform behaves in case of errors.
 	if suffixIndex := strings.Index(errorMessage, "\n\nTerraform does not automatically rollback"); suffixIndex != -1 {
 		errorMessage = errorMessage[:suffixIndex]
 	}

@@ -20,9 +20,11 @@ import (
 
 	"github.com/gardener/gardener/pkg/apis/garden"
 	. "github.com/gardener/gardener/pkg/apis/garden/validation"
+	"github.com/gardener/gardener/pkg/utils"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/validation/field"
 
 	. "github.com/onsi/ginkgo"
@@ -1722,6 +1724,18 @@ var _ = Describe("validation", func() {
 			}
 		})
 
+		It("should forbid shoots containing two consecutive hyphens", func() {
+			shoot.ObjectMeta.Name = "sho--ot"
+
+			errorList := ValidateShoot(shoot)
+
+			Expect(len(errorList)).To(Equal(1))
+			Expect(*errorList[0]).To(MatchFields(IgnoreExtras, Fields{
+				"Type":  Equal(field.ErrorTypeInvalid),
+				"Field": Equal("metadata.name"),
+			}))
+		})
+
 		It("should forbid empty Shoot resources", func() {
 			shoot := &garden.Shoot{
 				ObjectMeta: metav1.ObjectMeta{},
@@ -3300,6 +3314,145 @@ var _ = Describe("validation", func() {
 			Expect(len(errorList)).To(Equal(0))
 		})
 	})
+
+	Describe("#ValidateShootStatus, #ValidateShootStatusUpdate", func() {
+		var shoot *garden.Shoot
+
+		BeforeEach(func() {
+			shoot = &garden.Shoot{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "shoot",
+					Namespace: "my-namespace",
+				},
+				Spec:   garden.ShootSpec{},
+				Status: garden.ShootStatus{},
+			}
+		})
+
+		Context("uid checks", func() {
+			It("should allow setting the uid", func() {
+				newShoot := prepareShootForUpdate(shoot)
+				newShoot.Status.UID = types.UID("1234")
+
+				errorList := ValidateShootStatusUpdate(newShoot.Status, shoot.Status)
+
+				Expect(len(errorList)).To(Equal(0))
+			})
+
+			It("should forbid changing the uid", func() {
+				newShoot := prepareShootForUpdate(shoot)
+				shoot.Status.UID = types.UID("1234")
+				newShoot.Status.UID = types.UID("1235")
+
+				errorList := ValidateShootStatusUpdate(newShoot.Status, shoot.Status)
+
+				Expect(len(errorList)).To(Equal(1))
+				Expect(*errorList[0]).To(MatchFields(IgnoreExtras, Fields{
+					"Type":  Equal(field.ErrorTypeInvalid),
+					"Field": Equal("status.uid"),
+				}))
+			})
+		})
+
+		Context("technical id checks", func() {
+			It("should allow setting the technical id", func() {
+				newShoot := prepareShootForUpdate(shoot)
+				newShoot.Status.TechnicalID = "shoot--foo--bar"
+
+				errorList := ValidateShootStatusUpdate(newShoot.Status, shoot.Status)
+
+				Expect(len(errorList)).To(Equal(0))
+			})
+
+			It("should forbid changing the technical id", func() {
+				newShoot := prepareShootForUpdate(shoot)
+				shoot.Status.TechnicalID = "shoot-foo-bar"
+				newShoot.Status.TechnicalID = "shoot--foo--bar"
+
+				errorList := ValidateShootStatusUpdate(newShoot.Status, shoot.Status)
+
+				Expect(len(errorList)).To(Equal(1))
+				Expect(*errorList[0]).To(MatchFields(IgnoreExtras, Fields{
+					"Type":  Equal(field.ErrorTypeInvalid),
+					"Field": Equal("status.technicalID"),
+				}))
+			})
+		})
+	})
+
+	Describe("#ValidateBackupInfrastructure", func() {
+		var backupInfrastructure *garden.BackupInfrastructure
+
+		BeforeEach(func() {
+			backupInfrastructure = &garden.BackupInfrastructure{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "example-backupinfrastructure",
+					Namespace: "garden",
+				},
+				Spec: garden.BackupInfrastructureSpec{
+					Seed:     "aws",
+					ShootUID: types.UID(utils.ComputeSHA1Hex([]byte(fmt.Sprintf(fmt.Sprintf("shoot-%s-%s", "garden", "backup-infrastructure"))))),
+				},
+			}
+		})
+
+		It("should not return any errors", func() {
+			errorList := ValidateBackupInfrastructure(backupInfrastructure)
+
+			Expect(len(errorList)).To(Equal(0))
+		})
+
+		It("should forbid BackupInfrastructure resources with empty metadata", func() {
+			backupInfrastructure.ObjectMeta = metav1.ObjectMeta{}
+
+			errorList := ValidateBackupInfrastructure(backupInfrastructure)
+
+			Expect(len(errorList)).To(Equal(2))
+			Expect(*errorList[0]).To(MatchFields(IgnoreExtras, Fields{
+				"Type":  Equal(field.ErrorTypeRequired),
+				"Field": Equal("metadata.name"),
+			}))
+			Expect(*errorList[1]).To(MatchFields(IgnoreExtras, Fields{
+				"Type":  Equal(field.ErrorTypeRequired),
+				"Field": Equal("metadata.namespace"),
+			}))
+		})
+
+		It("should forbid BackupInfrastructure specification with empty or invalid keys", func() {
+			backupInfrastructure.Spec.Seed = ""
+			backupInfrastructure.Spec.ShootUID = ""
+
+			errorList := ValidateBackupInfrastructure(backupInfrastructure)
+
+			Expect(len(errorList)).To(Equal(2))
+			Expect(*errorList[0]).To(MatchFields(IgnoreExtras, Fields{
+				"Type":  Equal(field.ErrorTypeInvalid),
+				"Field": Equal("spec.seed"),
+			}))
+			Expect(*errorList[1]).To(MatchFields(IgnoreExtras, Fields{
+				"Type":  Equal(field.ErrorTypeInvalid),
+				"Field": Equal("spec.shootUID"),
+			}))
+		})
+
+		It("should forbid updating some keys", func() {
+			newBackupInfrastructure := prepareBackupInfrastructureForUpdate(backupInfrastructure)
+			newBackupInfrastructure.Spec.Seed = "another-seed"
+			newBackupInfrastructure.Spec.ShootUID = "another-uid"
+
+			errorList := ValidateBackupInfrastructureUpdate(newBackupInfrastructure, backupInfrastructure)
+
+			Expect(len(errorList)).To(Equal(2))
+			Expect(*errorList[0]).To(MatchFields(IgnoreExtras, Fields{
+				"Type":  Equal(field.ErrorTypeInvalid),
+				"Field": Equal("spec.seed"),
+			}))
+			Expect(*errorList[1]).To(MatchFields(IgnoreExtras, Fields{
+				"Type":  Equal(field.ErrorTypeInvalid),
+				"Field": Equal("spec.shootUID"),
+			}))
+		})
+	})
 })
 
 // Helper functions
@@ -3313,4 +3466,10 @@ func prepareShootForUpdate(shoot *garden.Shoot) *garden.Shoot {
 	s := shoot.DeepCopy()
 	s.ResourceVersion = "1"
 	return s
+}
+
+func prepareBackupInfrastructureForUpdate(backupInfrastructure *garden.BackupInfrastructure) *garden.BackupInfrastructure {
+	b := backupInfrastructure.DeepCopy()
+	b.ResourceVersion = "1"
+	return b
 }

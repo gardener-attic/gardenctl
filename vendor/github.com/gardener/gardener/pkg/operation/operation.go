@@ -17,6 +17,7 @@ package operation
 import (
 	"fmt"
 	"path/filepath"
+	"regexp"
 	"strings"
 
 	gardenv1beta1 "github.com/gardener/gardener/pkg/apis/garden/v1beta1"
@@ -33,39 +34,55 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-// New creates a new operation object.
-func New(shoot *gardenv1beta1.Shoot, shootLogger *logrus.Entry, k8sGardenClient kubernetes.Client, k8sGardenInformers gardeninformers.Interface, gardenerInfo *gardenv1beta1.Gardener, secretsMap map[string]*corev1.Secret, imageVector imagevector.ImageVector) (*Operation, error) {
+// New creates a new operation object with a Shoot resource object.
+func New(shoot *gardenv1beta1.Shoot, logger *logrus.Entry, k8sGardenClient kubernetes.Client, k8sGardenInformers gardeninformers.Interface, gardenerInfo *gardenv1beta1.Gardener, secretsMap map[string]*corev1.Secret, imageVector imagevector.ImageVector) (*Operation, error) {
+	return newOperation(logger, k8sGardenClient, k8sGardenInformers, gardenerInfo, secretsMap, imageVector, shoot.Namespace, *(shoot.Spec.Cloud.Seed), shoot, nil)
+}
+
+// NewWithBackupInfrastructure creates a new operation object without a Shoot resource object but the BackupInfrastructure resource.
+func NewWithBackupInfrastructure(backupInfrastructure *gardenv1beta1.BackupInfrastructure, logger *logrus.Entry, k8sGardenClient kubernetes.Client, k8sGardenInformers gardeninformers.Interface, gardenerInfo *gardenv1beta1.Gardener, secretsMap map[string]*corev1.Secret, imageVector imagevector.ImageVector) (*Operation, error) {
+	return newOperation(logger, k8sGardenClient, k8sGardenInformers, gardenerInfo, secretsMap, imageVector, backupInfrastructure.Namespace, backupInfrastructure.Spec.Seed, nil, backupInfrastructure)
+}
+
+func newOperation(logger *logrus.Entry, k8sGardenClient kubernetes.Client, k8sGardenInformers gardeninformers.Interface, gardenerInfo *gardenv1beta1.Gardener, secretsMap map[string]*corev1.Secret, imageVector imagevector.ImageVector, namespace, seedName string, shoot *gardenv1beta1.Shoot, backupInfrastructure *gardenv1beta1.BackupInfrastructure) (*Operation, error) {
 	secrets := make(map[string]*corev1.Secret)
 	for k, v := range secretsMap {
 		secrets[k] = v
 	}
 
-	gardenObj, err := garden.New(k8sGardenClient, shoot)
+	gardenObj, err := garden.New(k8sGardenClient, namespace)
 	if err != nil {
 		return nil, err
 	}
-	seedObj, err := seed.NewFromName(k8sGardenClient, k8sGardenInformers, *(shoot.Spec.Cloud.Seed))
-	if err != nil {
-		return nil, err
-	}
-	shootObj, err := shootpkg.New(k8sGardenClient, k8sGardenInformers, shoot, gardenObj.ProjectName, constructInternalDomain(shoot.Name, gardenObj.ProjectName, secrets[common.GardenRoleInternalDomain].Annotations[common.DNSDomain]))
+	seedObj, err := seed.NewFromName(k8sGardenClient, k8sGardenInformers, seedName)
 	if err != nil {
 		return nil, err
 	}
 
-	return &Operation{
-		Logger:              shootLogger,
-		GardenerInfo:        gardenerInfo,
-		Secrets:             secrets,
-		ImageVector:         imageVector,
-		CheckSums:           make(map[string]string),
-		Garden:              gardenObj,
-		Seed:                seedObj,
-		Shoot:               shootObj,
-		K8sGardenClient:     k8sGardenClient,
-		K8sGardenInformers:  k8sGardenInformers,
-		ChartGardenRenderer: chartrenderer.New(k8sGardenClient),
-	}, nil
+	operation := &Operation{
+		Logger:               logger,
+		GardenerInfo:         gardenerInfo,
+		Secrets:              secrets,
+		ImageVector:          imageVector,
+		CheckSums:            make(map[string]string),
+		Garden:               gardenObj,
+		Seed:                 seedObj,
+		K8sGardenClient:      k8sGardenClient,
+		K8sGardenInformers:   k8sGardenInformers,
+		ChartGardenRenderer:  chartrenderer.New(k8sGardenClient),
+		BackupInfrastructure: backupInfrastructure,
+	}
+
+	if shoot != nil {
+		internalDomain := constructInternalDomain(shoot.Name, gardenObj.ProjectName, secretsMap[common.GardenRoleInternalDomain].Annotations[common.DNSDomain])
+		shootObj, err := shootpkg.New(k8sGardenClient, k8sGardenInformers, shoot, gardenObj.ProjectName, internalDomain)
+		if err != nil {
+			return nil, err
+		}
+		operation.Shoot = shootObj
+	}
+
+	return operation, nil
 }
 
 // InitializeSeedClients will use the Garden Kubernetes client to read the Seed Secret in the Garden
@@ -138,7 +155,7 @@ func (o *Operation) GetSecretKeysOfRole(kind string) []string {
 // ReportShootProgress will update the last operation object in the Shoot manifest `status` section
 // by the current progress of the Flow execution.
 func (o *Operation) ReportShootProgress(progress int, currentFunctions string) {
-	o.Shoot.Info.Status.LastOperation.Description = "Currently executing " + currentFunctions
+	o.Shoot.Info.Status.LastOperation.Description = fmt.Sprintf("Executing %s.", sanitizeFunctionNames(currentFunctions))
 	o.Shoot.Info.Status.LastOperation.Progress = progress
 	o.Shoot.Info.Status.LastOperation.LastUpdateTime = metav1.Now()
 
@@ -147,18 +164,34 @@ func (o *Operation) ReportShootProgress(progress int, currentFunctions string) {
 	}
 }
 
+// ReportBackupInfrastructureProgress will update the phase and error in the BackupInfrastructure manifest `status` section
+// by the current progress of the Flow execution.
+func (o *Operation) ReportBackupInfrastructureProgress(progress int, currentFunctions string) {
+	o.BackupInfrastructure.Status.LastOperation.Description = fmt.Sprintf("Executing %s.", sanitizeFunctionNames(currentFunctions))
+	o.BackupInfrastructure.Status.LastOperation.Progress = progress
+	o.BackupInfrastructure.Status.LastOperation.LastUpdateTime = metav1.Now()
+
+	if newBackupInfrastructure, err := o.K8sGardenClient.GardenClientset().GardenV1beta1().BackupInfrastructures(o.BackupInfrastructure.Namespace).UpdateStatus(o.BackupInfrastructure); err == nil {
+		o.BackupInfrastructure = newBackupInfrastructure
+	}
+}
+
+func sanitizeFunctionNames(functions string) string {
+	re := regexp.MustCompile(`\([^)]*\)\.`)
+	return re.ReplaceAllString(functions, "")
+}
+
 // InjectImages injects images from the image vector into the provided <values> map.
 func (o *Operation) InjectImages(values map[string]interface{}, version string, imageMap map[string]string) (map[string]interface{}, error) {
-	if values == nil {
-		return nil, nil
-	}
+	var (
+		copy = make(map[string]interface{})
+		i    = make(map[string]interface{})
+	)
 
-	copy := make(map[string]interface{})
 	for k, v := range values {
 		copy[k] = v
 	}
 
-	i := make(map[string]interface{})
 	for keyInChart, imageName := range imageMap {
 		image, err := o.ImageVector.FindImage(imageName, version)
 		if err != nil {

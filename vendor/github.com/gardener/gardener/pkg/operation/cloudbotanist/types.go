@@ -32,6 +32,7 @@ type CloudBotanist interface {
 
 	// Control Plane
 	GenerateCloudProviderConfig() (string, error)
+	RefreshCloudProviderConfig(map[string]string) map[string]string
 	GenerateCloudConfigUserDataConfig() *common.CloudConfigUserDataConfig
 	GenerateEtcdBackupConfig() (map[string][]byte, map[string]interface{}, error)
 	GenerateKubeAPIServerConfig() (map[string]interface{}, error)
@@ -41,6 +42,7 @@ type CloudBotanist interface {
 	// Machines
 	GetMachineClassInfo() (string, string, string)
 	GenerateMachineConfig() ([]map[string]interface{}, []operation.MachineDeployment, error)
+	GenerateMachineClassSecretData() map[string][]byte
 
 	// Addons
 	DeployKube2IAMResources() error

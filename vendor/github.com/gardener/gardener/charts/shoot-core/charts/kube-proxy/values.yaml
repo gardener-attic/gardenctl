@@ -1,6 +1,7 @@
-kubeconfig: dumy-b64-data-here
+kubeconfig: dummy-b64-data-here
 featureGates: {}
   # CustomResourceValidation: true
   # RotateKubeletServerCertificate: false
 images:
   hyperkube: image-repository
+podAnnotations: {}
