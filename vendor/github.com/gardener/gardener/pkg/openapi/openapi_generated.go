@@ -886,6 +886,154 @@ func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenA
 			},
 			Dependencies: []string{},
 		},
+		"github.com/gardener/gardener/pkg/apis/garden/v1beta1.BackupInfrastructure": {
+			Schema: spec.Schema{
+				SchemaProps: spec.SchemaProps{
+					Description: "BackupInfrastructure holds details about backup infrastructure",
+					Properties: map[string]spec.Schema{
+						"kind": {
+							SchemaProps: spec.SchemaProps{
+								Description: "Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/api-conventions.md#types-kinds",
+								Type:        []string{"string"},
+								Format:      "",
+							},
+						},
+						"apiVersion": {
+							SchemaProps: spec.SchemaProps{
+								Description: "APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/api-conventions.md#resources",
+								Type:        []string{"string"},
+								Format:      "",
+							},
+						},
+						"metadata": {
+							SchemaProps: spec.SchemaProps{
+								Description: "Standard object metadata.",
+								Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"),
+							},
+						},
+						"spec": {
+							SchemaProps: spec.SchemaProps{
+								Description: "Specification of the Backup Infrastructure.",
+								Ref:         ref("github.com/gardener/gardener/pkg/apis/garden/v1beta1.BackupInfrastructureSpec"),
+							},
+						},
+						"status": {
+							SchemaProps: spec.SchemaProps{
+								Description: "Most recently observed status of the Backup Infrastructure.",
+								Ref:         ref("github.com/gardener/gardener/pkg/apis/garden/v1beta1.BackupInfrastructureStatus"),
+							},
+						},
+					},
+				},
+				VendorExtensible: spec.VendorExtensible{
+					Extensions: spec.Extensions{
+						"x-kubernetes-print-columns": "custom-columns=NAMESPACE:.metadata.namespace,NAME:.metadata.name,SEED:.spec.seed,STATUS:.status.lastOperation.state",
+					},
+				},
+			},
+			Dependencies: []string{
+				"github.com/gardener/gardener/pkg/apis/garden/v1beta1.BackupInfrastructureSpec", "github.com/gardener/gardener/pkg/apis/garden/v1beta1.BackupInfrastructureStatus", "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"},
+		},
+		"github.com/gardener/gardener/pkg/apis/garden/v1beta1.BackupInfrastructureList": {
+			Schema: spec.Schema{
+				SchemaProps: spec.SchemaProps{
+					Description: "BackupInfrastructureList is a list of BackupInfrastructure objects.",
+					Properties: map[string]spec.Schema{
+						"kind": {
+							SchemaProps: spec.SchemaProps{
+								Description: "Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/api-conventions.md#types-kinds",
+								Type:        []string{"string"},
+								Format:      "",
+							},
+						},
+						"apiVersion": {
+							SchemaProps: spec.SchemaProps{
+								Description: "APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/api-conventions.md#resources",
+								Type:        []string{"string"},
+								Format:      "",
+							},
+						},
+						"metadata": {
+							SchemaProps: spec.SchemaProps{
+								Description: "Standard list object metadata.",
+								Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"),
+							},
+						},
+						"items": {
+							SchemaProps: spec.SchemaProps{
+								Description: "Items is the list of BackupInfrastructure.",
+								Type:        []string{"array"},
+								Items: &spec.SchemaOrArray{
+									Schema: &spec.Schema{
+										SchemaProps: spec.SchemaProps{
+											Ref: ref("github.com/gardener/gardener/pkg/apis/garden/v1beta1.BackupInfrastructure"),
+										},
+									},
+								},
+							},
+						},
+					},
+					Required: []string{"items"},
+				},
+			},
+			Dependencies: []string{
+				"github.com/gardener/gardener/pkg/apis/garden/v1beta1.BackupInfrastructure", "k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"},
+		},
+		"github.com/gardener/gardener/pkg/apis/garden/v1beta1.BackupInfrastructureSpec": {
+			Schema: spec.Schema{
+				SchemaProps: spec.SchemaProps{
+					Description: "BackupInfrastructureSpec is the specification of a Backup Infrastructure.",
+					Properties: map[string]spec.Schema{
+						"seed": {
+							SchemaProps: spec.SchemaProps{
+								Description: "Seed is the name of a Seed object.",
+								Type:        []string{"string"},
+								Format:      "",
+							},
+						},
+						"shootUID": {
+							SchemaProps: spec.SchemaProps{
+								Description: "ShootUID is a unique identifier for the Shoot cluster for which the BackupInfrastructure object is created.",
+								Type:        []string{"string"},
+								Format:      "",
+							},
+						},
+					},
+					Required: []string{"seed", "shootUID"},
+				},
+			},
+			Dependencies: []string{},
+		},
+		"github.com/gardener/gardener/pkg/apis/garden/v1beta1.BackupInfrastructureStatus": {
+			Schema: spec.Schema{
+				SchemaProps: spec.SchemaProps{
+					Description: "BackupInfrastructureStatus holds the most recently observed status of the Backup Infrastructure.",
+					Properties: map[string]spec.Schema{
+						"lastOperation": {
+							SchemaProps: spec.SchemaProps{
+								Description: "LastOperation holds information about the last operation on the BackupInfrastructure.",
+								Ref:         ref("github.com/gardener/gardener/pkg/apis/garden/v1beta1.LastOperation"),
+							},
+						},
+						"lastError": {
+							SchemaProps: spec.SchemaProps{
+								Description: "LastError holds information about the last occurred error during an operation.",
+								Ref:         ref("github.com/gardener/gardener/pkg/apis/garden/v1beta1.LastError"),
+							},
+						},
+						"observedGeneration": {
+							SchemaProps: spec.SchemaProps{
+								Description: "ObservedGeneration is the most recent generation observed for this BackupInfrastructure. It corresponds to the BackupInfrastructure's generation, which is updated on mutation by the API Server.",
+								Type:        []string{"integer"},
+								Format:      "int64",
+							},
+						},
+					},
+				},
+			},
+			Dependencies: []string{
+				"github.com/gardener/gardener/pkg/apis/garden/v1beta1.LastError", "github.com/gardener/gardener/pkg/apis/garden/v1beta1.LastOperation"},
+		},
 		"github.com/gardener/gardener/pkg/apis/garden/v1beta1.Cloud": {
 			Schema: spec.Schema{
 				SchemaProps: spec.SchemaProps{
@@ -2924,7 +3072,7 @@ func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenA
 						"secretRef": {
 							SchemaProps: spec.SchemaProps{
 								Description: "SecretRef is a reference to a secret object in the same or another namespace.",
-								Ref:         ref("k8s.io/api/core/v1.ObjectReference"),
+								Ref:         ref("k8s.io/api/core/v1.SecretReference"),
 							},
 						},
 						"quotas": {
@@ -2945,7 +3093,7 @@ func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenA
 				},
 			},
 			Dependencies: []string{
-				"k8s.io/api/core/v1.ObjectReference", "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"},
+				"k8s.io/api/core/v1.ObjectReference", "k8s.io/api/core/v1.SecretReference", "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"},
 		},
 		"github.com/gardener/gardener/pkg/apis/garden/v1beta1.SecretBindingList": {
 			Schema: spec.Schema{
@@ -3163,7 +3311,7 @@ func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenA
 						"secretRef": {
 							SchemaProps: spec.SchemaProps{
 								Description: "SecretRef is a reference to a Secret object containing the Kubeconfig and the cloud provider credentials for the account the Seed cluster has been deployed to.",
-								Ref:         ref("k8s.io/api/core/v1.ObjectReference"),
+								Ref:         ref("k8s.io/api/core/v1.SecretReference"),
 							},
 						},
 						"networks": {
@@ -3191,7 +3339,7 @@ func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenA
 				},
 			},
 			Dependencies: []string{
-				"github.com/gardener/gardener/pkg/apis/garden/v1beta1.SeedCloud", "github.com/gardener/gardener/pkg/apis/garden/v1beta1.SeedNetworks", "k8s.io/api/core/v1.ObjectReference"},
+				"github.com/gardener/gardener/pkg/apis/garden/v1beta1.SeedCloud", "github.com/gardener/gardener/pkg/apis/garden/v1beta1.SeedNetworks", "k8s.io/api/core/v1.SecretReference"},
 		},
 		"github.com/gardener/gardener/pkg/apis/garden/v1beta1.SeedStatus": {
 			Schema: spec.Schema{
@@ -3393,17 +3541,31 @@ func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenA
 								Ref:         ref("github.com/gardener/gardener/pkg/apis/garden/v1beta1.LastError"),
 							},
 						},
+						"observedGeneration": {
+							SchemaProps: spec.SchemaProps{
+								Description: "ObservedGeneration is the most recent generation observed for this Shoot. It corresponds to the Shoot's generation, which is updated on mutation by the API Server.",
+								Type:        []string{"integer"},
+								Format:      "int64",
+							},
+						},
 						"retryCycleStartTime": {
 							SchemaProps: spec.SchemaProps{
 								Description: "RetryCycleStartTime is the start time of the last retry cycle (used to determine how often an operation must be retried until we give up).",
 								Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.Time"),
 							},
 						},
-						"observedGeneration": {
+						"seed": {
 							SchemaProps: spec.SchemaProps{
-								Description: "ObservedGeneration is the most recent generation observed for this Shoot. It corresponds to the Shoot's generation, which is updated on mutation by the API Server.",
-								Type:        []string{"integer"},
-								Format:      "int64",
+								Description: "Seed is the name of the seed cluster that runs the control plane of the Shoot. This value is only written after a successful create/reconcile operation. It will be used when control planes are moved between Seeds.",
+								Type:        []string{"string"},
+								Format:      "",
+							},
+						},
+						"technicalID": {
+							SchemaProps: spec.SchemaProps{
+								Description: "TechnicalID is the name that is used for creating the Seed namespace, the infrastructure resources, and basically everything that is related to this particular Shoot.",
+								Type:        []string{"string"},
+								Format:      "",
 							},
 						},
 						"uid": {
@@ -3414,7 +3576,7 @@ func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenA
 							},
 						},
 					},
-					Required: []string{"gardener", "uid"},
+					Required: []string{"gardener", "technicalID", "uid"},
 				},
 			},
 			Dependencies: []string{

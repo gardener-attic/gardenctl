@@ -591,7 +591,8 @@ func targetShoot(name string) {
 		err = ioutil.WriteFile(pathSeed+"/kubeconfig.yaml", kubeSecret.Data["kubeconfig"], 0644)
 		checkError(err)
 		KUBECONFIG = pathSeed + "/kubeconfig.yaml"
-		namespace := strings.Replace("shoot-"+matchedShoots[0].Namespace+"-"+matchedShoots[0].Name, "-garden", "", 1)
+		namespace := matchedShoots[0].Status.TechnicalID
+
 		Client, err = clientToTarget("seed")
 		checkError(err)
 		kubeSecret, err = Client.CoreV1().Secrets(namespace).Get("kubecfg", metav1.GetOptions{})

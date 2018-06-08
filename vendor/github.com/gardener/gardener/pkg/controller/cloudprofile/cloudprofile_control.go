@@ -98,7 +98,7 @@ type defaultControl struct {
 }
 
 func (c *defaultControl) ReconcileCloudProfile(obj *gardenv1beta1.CloudProfile, key string) error {
-	key, err := cache.MetaNamespaceKeyFunc(obj)
+	_, err := cache.MetaNamespaceKeyFunc(obj)
 	if err != nil {
 		return err
 	}
@@ -134,7 +134,7 @@ func (c *defaultControl) ReconcileCloudProfile(obj *gardenv1beta1.CloudProfile, 
 			finalizers.Delete(gardenv1beta1.GardenerName)
 			cloudProfile.Finalizers = finalizers.UnsortedList()
 
-			if _, err := c.k8sGardenClient.GardenClientset().GardenV1beta1().CloudProfiles().Update(cloudProfile); err != nil {
+			if _, err := c.k8sGardenClient.GardenClientset().GardenV1beta1().CloudProfiles().Update(cloudProfile); err != nil && !apierrors.IsNotFound(err) {
 				logger.Logger.Error(err)
 				return err
 			}

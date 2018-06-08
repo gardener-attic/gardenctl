@@ -95,15 +95,31 @@ func (c *defaultControl) deleteShoot(o *operation.Operation) *gardenv1beta1.Last
 	}
 
 	var (
-		cleanupShootResources = namespace.Status.Phase != corev1.NamespaceTerminating && kubeAPIServerFound
-		defaultRetry          = 30 * time.Second
-		isCloud               = o.Shoot.Info.Spec.Cloud.Local == nil
+		nonTerminatingNamespace = namespace.Status.Phase != corev1.NamespaceTerminating
+		cleanupShootResources   = nonTerminatingNamespace && kubeAPIServerFound
+		defaultRetry            = 30 * time.Second
+		isCloud                 = o.Shoot.Info.Spec.Cloud.Local == nil
 
-		f                                = flow.New("Shoot cluster deletion").SetProgressReporter(o.ReportShootProgress).SetLogger(o.Logger)
-		initializeShootClients           = f.AddTaskConditional(botanist.InitializeShootClients, 2*time.Minute, cleanupShootResources)
+		f = flow.New("Shoot cluster deletion").SetProgressReporter(o.ReportShootProgress).SetLogger(o.Logger)
+
+		// We need to ensure that the deployed cloud provider secret is up-to-date. In case it has changed then we
+		// need to redeploy the cloud provider config (containing the secrets for some cloud providers) as well as
+		// restart the components using the secrets (API server, controller manager). We also need to update all
+		// existing machine class secrets.
+		deploySecrets                 = f.AddTaskConditional(botanist.DeploySecrets, 0, cleanupShootResources)
+		refreshMachineClassSecrets    = f.AddTaskConditional(hybridBotanist.RefreshMachineClassSecrets, defaultRetry, cleanupShootResources, deploySecrets)
+		refreshCloudProviderConfig    = f.AddTaskConditional(hybridBotanist.RefreshCloudProviderConfig, defaultRetry, cleanupShootResources, deploySecrets)
+		refreshKubeAPIServer          = f.AddTaskConditional(botanist.RefreshKubeAPIServerChecksums, defaultRetry, cleanupShootResources, deploySecrets, refreshCloudProviderConfig)
+		refreshKubeControllerManager  = f.AddTaskConditional(botanist.RefreshKubeControllerManagerChecksums, defaultRetry, cleanupShootResources, deploySecrets, refreshCloudProviderConfig, refreshKubeAPIServer)
+		waitUntilKubeAPIServerIsReady = f.AddTaskConditional(botanist.WaitUntilKubeAPIServerReady, 0, cleanupShootResources, refreshKubeAPIServer)
+
+		// Deletion of monitoring stack (to avoid false positive alerts) and kube-addon-manager (to avoid redeploying
+		// resources).
+		initializeShootClients           = f.AddTaskConditional(botanist.InitializeShootClients, 2*time.Minute, cleanupShootResources, deploySecrets, refreshMachineClassSecrets, refreshCloudProviderConfig, refreshKubeAPIServer, refreshKubeControllerManager, waitUntilKubeAPIServerIsReady)
 		deleteSeedMonitoring             = f.AddTask(botanist.DeleteSeedMonitoring, defaultRetry, initializeShootClients)
 		deleteKubeAddonManager           = f.AddTask(botanist.DeleteKubeAddonManager, defaultRetry, initializeShootClients)
 		waitUntilKubeAddonManagerDeleted = f.AddTask(botanist.WaitUntilKubeAddonManagerDeleted, 0, deleteKubeAddonManager)
+
 		// We need to clean up the cluster resources which may have footprints in the infrastructure (such as
 		// LoadBalancers, volumes, ...). We do that by deleting all namespaces other than the three standard
 		// namespaces which cannot be deleted (kube-system, default, kube-public). In those three namespaces
@@ -112,16 +128,27 @@ func (c *defaultControl) deleteShoot(o *operation.Operation) *gardenv1beta1.Last
 		cleanCustomResourceDefinitions = f.AddTaskConditional(botanist.CleanCustomResourceDefinitions, 5*time.Minute, cleanupShootResources, waitUntilKubeAddonManagerDeleted)
 		cleanKubernetesResources       = f.AddTaskConditional(botanist.CleanKubernetesResources, 5*time.Minute, cleanupShootResources, cleanCustomResourceDefinitions)
 		destroyMachines                = f.AddTaskConditional(hybridBotanist.DestroyMachines, defaultRetry, isCloud, cleanKubernetesResources)
-		destroyNginxIngressResources   = f.AddTask(botanist.DestroyNginxIngressResources, 0, cleanKubernetesResources)
+		destroyNginxIngressResources   = f.AddTask(botanist.DestroyIngressDNSRecord, 0, cleanKubernetesResources)
 		destroyKube2IAMResources       = f.AddTask(shootCloudBotanist.DestroyKube2IAMResources, 0, cleanKubernetesResources)
 		destroyInfrastructure          = f.AddTask(shootCloudBotanist.DestroyInfrastructure, 0, cleanKubernetesResources, destroyMachines)
 		destroyExternalDomainDNSRecord = f.AddTask(botanist.DestroyExternalDomainDNSRecord, 0, cleanKubernetesResources)
 		syncPointTerraformers          = f.AddSyncPoint(deleteSeedMonitoring, destroyNginxIngressResources, destroyKube2IAMResources, destroyInfrastructure, destroyExternalDomainDNSRecord)
 		deleteKubeAPIServer            = f.AddTask(botanist.DeleteKubeAPIServer, defaultRetry, syncPointTerraformers)
-		destroyBackupInfrastructure    = f.AddTask(seedCloudBotanist.DestroyBackupInfrastructure, 0, deleteKubeAPIServer)
+
+		// Although BackupInfrastructure controller has responsibility of deploying backup namespace, for backward
+		// compatibility Shoot controller will have to deploy backup namespace and move terraform resources from
+		// Shoot's main seed namespace to backup namespace.
+		// TODO: These tasks (deployBackupNamespace, moveBackupTerraformResources & deployBackupInfrastructure) should be
+		// removed from flow, once we have all shoots reconciled with new gardener having this change i.e. for all
+		// existing shoots, all backup infrastructure related terraform resources are present only in backup namespace.
+		deployBackupNamespace        = f.AddTaskConditional(botanist.DeployBackupNamespaceFromShoot, defaultRetry, isCloud && nonTerminatingNamespace)
+		moveBackupTerraformResources = f.AddTaskConditional(botanist.MoveBackupTerraformResources, 0, isCloud, deployBackupNamespace)
+		deployBackupInfrastructure   = f.AddTaskConditional(botanist.DeployBackupInfrastructure, 0, isCloud, moveBackupTerraformResources)
+
+		deleteBackupInfrastructure     = f.AddTask(botanist.DeleteBackupInfrastructure, 0, deleteKubeAPIServer, deployBackupInfrastructure)
 		destroyInternalDomainDNSRecord = f.AddTask(botanist.DestroyInternalDomainDNSRecord, 0, syncPointTerraformers)
-		deleteNamespace                = f.AddTask(botanist.DeleteNamespace, defaultRetry, syncPointTerraformers, destroyInternalDomainDNSRecord, destroyBackupInfrastructure, deleteKubeAPIServer)
-		_                              = f.AddTask(botanist.WaitUntilNamespaceDeleted, 0, deleteNamespace)
+		deleteNamespace                = f.AddTask(botanist.DeleteNamespace, defaultRetry, syncPointTerraformers, destroyInternalDomainDNSRecord, deleteBackupInfrastructure, deleteKubeAPIServer)
+		_                              = f.AddTask(botanist.WaitUntilSeedNamespaceDeleted, 0, deleteNamespace)
 		_                              = f.AddTask(botanist.DeleteGardenSecrets, defaultRetry, deleteNamespace)
 	)
 	if e := f.Execute(); e != nil {
@@ -141,6 +168,9 @@ func (c *defaultControl) updateShootStatusDeleteStart(o *operation.Operation) er
 
 	if status.RetryCycleStartTime == nil || (status.LastOperation != nil && status.LastOperation.Type != gardenv1beta1.ShootLastOperationTypeDelete) {
 		o.Shoot.Info.Status.RetryCycleStartTime = &now
+	}
+	if len(status.TechnicalID) == 0 {
+		o.Shoot.Info.Status.TechnicalID = o.Shoot.SeedNamespace
 	}
 
 	o.Shoot.Info.Status.Gardener = *o.GardenerInfo

@@ -15,11 +15,8 @@
 package openstackbotanist
 
 import (
-	"fmt"
-
 	"github.com/gardener/gardener/pkg/operation/common"
 	"github.com/gardener/gardener/pkg/operation/terraformer"
-	"github.com/gardener/gardener/pkg/utils"
 )
 
 // DeployInfrastructure kicks off a Terraform job which deploys the infrastructure.
@@ -36,7 +33,7 @@ func (b *OpenStackBotanist) DeployInfrastructure() error {
 	}
 
 	return terraformer.
-		New(b.Operation, common.TerraformerPurposeInfra).
+		NewFromOperation(b.Operation, common.TerraformerPurposeInfra).
 		SetVariablesEnvironment(b.generateTerraformInfraVariablesEnvironment()).
 		DefineConfig("openstack-infra", b.generateTerraformInfraConfig(createRouter, routerID)).
 		Apply()
@@ -45,7 +42,7 @@ func (b *OpenStackBotanist) DeployInfrastructure() error {
 // DestroyInfrastructure kicks off a Terraform job which destroys the infrastructure.
 func (b *OpenStackBotanist) DestroyInfrastructure() error {
 	return terraformer.
-		New(b.Operation, common.TerraformerPurposeInfra).
+		NewFromOperation(b.Operation, common.TerraformerPurposeInfra).
 		SetVariablesEnvironment(b.generateTerraformInfraVariablesEnvironment()).
 		Destroy()
 }
@@ -90,7 +87,7 @@ func (b *OpenStackBotanist) generateTerraformInfraConfig(createRouter bool, rout
 // DeployBackupInfrastructure kicks off a Terraform job which creates the infrastructure resources for backup.
 func (b *OpenStackBotanist) DeployBackupInfrastructure() error {
 	return terraformer.
-		New(b.Operation, common.TerraformerPurposeBackup).
+		New(b.Logger, b.K8sSeedClient, common.TerraformerPurposeBackup, b.BackupInfrastructure.Name, common.GenerateBackupNamespaceName(b.BackupInfrastructure.Name), b.ImageVector).
 		SetVariablesEnvironment(b.generateTerraformBackupVariablesEnvironment()).
 		DefineConfig("openstack-backup", b.generateTerraformBackupConfig()).
 		Apply()
@@ -98,14 +95,10 @@ func (b *OpenStackBotanist) DeployBackupInfrastructure() error {
 
 // DestroyBackupInfrastructure kicks off a Terraform job which destroys the infrastructure for backup.
 func (b *OpenStackBotanist) DestroyBackupInfrastructure() error {
-	return nil
-	//TODO: Remove this comment when backup is to be pushed on to swift container i.e.
-	// when we have next(v1.4.0) realease of https://github.com/terraform-providers/terraform-provider-openstack/releases
-	/* return terraformer.
-	New(b.Operation, common.TerraformerPurposeBackup).
-	SetVariablesEnvironment(b.generateTerraformBackupVariablesEnvironment()).
-	Destroy()
-	*/
+	return terraformer.
+		New(b.Logger, b.K8sSeedClient, common.TerraformerPurposeBackup, b.BackupInfrastructure.Name, common.GenerateBackupNamespaceName(b.BackupInfrastructure.Name), b.ImageVector).
+		SetVariablesEnvironment(b.generateTerraformBackupVariablesEnvironment()).
+		Destroy()
 }
 
 // generateTerraformBackupVariablesEnvironment generates the environment containing the credentials which
@@ -129,8 +122,8 @@ func (b *OpenStackBotanist) generateTerraformBackupConfig() map[string]interface
 			"region":     b.Seed.Info.Spec.Cloud.Region,
 		},
 		"container": map[string]interface{}{
-			"name": fmt.Sprintf("%s-%s", b.Shoot.SeedNamespace, utils.ComputeSHA1Hex([]byte(b.Shoot.Info.Status.UID))[:5]),
+			"name": b.Operation.BackupInfrastructure.Name,
 		},
-		"clusterName": b.Shoot.SeedNamespace,
+		"clusterName": b.Operation.BackupInfrastructure.Name,
 	}
 }

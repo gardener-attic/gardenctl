@@ -11,6 +11,7 @@ Make sure that you have completed the following steps:
 - [Installing `Local`](../development/local_setup.md#installing-local)
 - [Installing `Virtualbox`](../development/local_setup.md#installing-virtualbox)
 - [Get the sources](../development/local_setup.md#get-the-sources)
+- [Test nip.io](../development/local_setup.md#test-nip.io)
 
 ## Running
 
@@ -33,7 +34,7 @@ $ helm install charts/gardener \
   --values=charts/gardener/values.yaml \
   --values=charts/gardener/local-values.yaml
 
-# Check that everything is deployed successfuly and running without a problem
+# Check that everything is deployed successfully and running without a problem
 $ kubectl -n garden get pods
 NAME                                           READY     STATUS    RESTARTS   AGE
 gardener-apiserver-d5989f856-swgbg             2/2       Running   0          32s

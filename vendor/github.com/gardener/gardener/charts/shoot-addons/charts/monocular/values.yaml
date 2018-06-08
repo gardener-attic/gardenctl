@@ -4,7 +4,6 @@
 images:
   monocular-api: image-repository:image-tag
   monocular-ui: image-repository:image-tag
-  monocular-prerender: image-repository:image-tag
   busybox: image-repository:image-tag
 
 api:
@@ -17,12 +16,12 @@ api:
     externalPort: 80
     internalPort: 8081
   resources:
-    limits:
-      cpu: 100m
-      memory: 512Mi
     requests:
       cpu: 100m
       memory: 128Mi
+    limits:
+      cpu: 100m
+      memory: 512Mi
   livenessProbe:
     initialDelaySeconds: 180
   config:
@@ -53,10 +52,10 @@ ui:
     externalPort: 80
     internalPort: 80
   resources:
-    limits:
+    requests:
       cpu: 100m
       memory: 128Mi
-    requests:
+    limits:
       cpu: 100m
       memory: 128Mi
   # ui-config populate
@@ -66,21 +65,6 @@ ui:
   backendHostname: /api
   # e.g. API served on a different domain
   # backendHostname: http://monocular-api.local
-
-prerender:
-  replicaCount: 1
-  image:
-    pullPolicy: Always
-  cacheEnabled: true
-  service:
-    name: prerender
-    type: NodePort
-    externalPort: 80
-    internalPort: 3000
-  resources:
-    requests:
-      cpu: 100m
-      memory: 128Mi
 
 ingress:
   enabled: true

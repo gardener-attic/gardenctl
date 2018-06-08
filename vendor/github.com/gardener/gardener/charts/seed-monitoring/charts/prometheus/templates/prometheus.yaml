@@ -2,7 +2,7 @@ apiVersion: v1
 kind: ServiceAccount
 metadata:
   name: prometheus
-  namespace: {{.Release.Namespace}}
+  namespace: {{ .Release.Namespace }}
   labels:
     app: prometheus
     role: monitoring
@@ -11,7 +11,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: prometheus-web
-  namespace: {{.Release.Namespace}}
+  namespace: {{ .Release.Namespace }}
   labels:
     app: prometheus
     role: monitoring
@@ -35,7 +35,7 @@ apiVersion: {{include "statefulsetversion" .}}
 kind: StatefulSet
 metadata:
   name: prometheus
-  namespace: {{.Release.Namespace}}
+  namespace: {{ .Release.Namespace }}
   labels:
     app: prometheus
     role: monitoring
@@ -50,8 +50,11 @@ spec:
   serviceName: prometheus
   template:
     metadata:
-{{- if .Values.podAnnotations }}
       annotations:
+        checksum/configmap-config: {{ include (print $.Template.BasePath "/config.yaml") . | sha256sum }}
+        checksum/configmap-rules: {{ include (print $.Template.BasePath "/rules.yaml") . | sha256sum }}
+        checksum/configmap-blackbox-exporter: {{ include (print $.Template.BasePath "/blackbox-exporter-config.yaml") . | sha256sum }}
+{{- if .Values.podAnnotations }}
 {{ toYaml .Values.podAnnotations | indent 8 }}
 {{- end }}
       labels:
@@ -99,10 +102,12 @@ spec:
         #   successThreshold: 1
         #   timeoutSeconds: 3
         resources:
-          limits:
-            memory: 2400Mi
           requests:
-            memory: 500Mi
+            cpu: 50m
+            memory: 1200Mi
+          limits:
+            cpu: 200m
+            memory: 2400Mi
         volumeMounts:
         - mountPath: /etc/prometheus/config
           name: config
@@ -124,9 +129,12 @@ spec:
         - -volume-dir=/etc/prometheus/config
         - -volume-dir=/etc/prometheus/rules
         resources:
-          limits:
+          requests:
             cpu: 5m
             memory: 10Mi
+          limits:
+            cpu: 10m
+            memory: 20Mi
         volumeMounts:
         - mountPath: /etc/prometheus/config
           name: config
@@ -140,35 +148,45 @@ spec:
         - -webhook-url=http://localhost:9115/-/reload
         - -volume-dir=/vpn
         resources:
-          limits:
+          requests:
             cpu: 5m
             memory: 10Mi
+          limits:
+            cpu: 10m
+            memory: 20Mi
         volumeMounts:
         - mountPath: /vpn
-          name: blackbox-exporter-config
+          name: blackbox-exporter-config-prometheus
           readOnly: true
-      - name: vpn-seed
-        image: {{ index .Values.images "vpn-seed" }}
+      - image: {{ index .Values.images "vpn-seed" }}
         imagePullPolicy: IfNotPresent
+        name: vpn-seed
         env:
-        - name: IDENTITY_FILE
-          value: /srv/ssh/id_rsa
-        - name: USER
-          value: root
-        - name: SERVICE_NETWORK
-          value: {{.Values.networks.services}}
-        - name: POD_NETWORK
-          value: {{.Values.networks.pods}}
-        - name: NODE_NETWORK
-          value: {{.Values.networks.nodes}}
+        - name: OPENVPN_PORT
+          value: "4314"
+        ports:
+        - name: https
+          containerPort: 1194
+          protocol: TCP
+        resources:
+          requests:
+            cpu: 100m
+            memory: 128Mi
+          limits:
+            cpu: 300m
+            memory: 512Mi
         securityContext:
           capabilities:
             add:
             - NET_ADMIN
           privileged: true
+        terminationMessagePath: /dev/termination-log
+        terminationMessagePolicy: File
         volumeMounts:
-        - mountPath: /srv/ssh
-          name: vpn-ssh-keypair
+        - mountPath: /srv/secrets/vpn-seed
+          name: vpn-seed
+        - mountPath: /srv/secrets/tlsauth
+          name: vpn-seed-tlsauth
         - mountPath: /srv/auth
           name: kube-apiserver-basic-auth
       - name: blackbox-exporter
@@ -180,8 +198,15 @@ spec:
         - name: blackbox-export
           containerPort: 9115
           protocol: TCP
+        resources:
+          requests:
+            cpu: 5m
+            memory: 16Mi
+          limits:
+            cpu: 50m
+            memory: 128Mi
         volumeMounts:
-        - name: blackbox-exporter-config
+        - name: blackbox-exporter-config-prometheus
           mountPath: /vpn
       terminationGracePeriodSeconds: 300
       volumes:
@@ -193,10 +218,12 @@ spec:
         configMap:
           defaultMode: 420
           name: prometheus-rules
-      - name: vpn-ssh-keypair
+      - name: vpn-seed
         secret:
-          defaultMode: 420
-          secretName: vpn-ssh-keypair
+          secretName: vpn-seed
+      - name: vpn-seed-tlsauth
+        secret:
+          secretName: vpn-seed-tlsauth
       - name: shoot-ca
         secret:
           defaultMode: 420
@@ -207,9 +234,9 @@ spec:
       - name: prometheus-kubeconfig
         secret:
           secretName: prometheus
-      - name: blackbox-exporter-config
+      - name: blackbox-exporter-config-prometheus
         configMap:
-          name: blackbox-exporter-config
+          name: blackbox-exporter-config-prometheus
   volumeClaimTemplates:
   - metadata:
       name: prometheus-db

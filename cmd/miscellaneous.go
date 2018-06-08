@@ -176,7 +176,8 @@ func getSeedNamespaceNameForShoot(shootName string) (namespaceSeed string) {
 			break
 		}
 	}
-	return strings.Replace("shoot-"+shootList.Items[ind].Namespace+"-"+shootName, "-garden", "", 1)
+	return shootList.Items[ind].Status.TechnicalID
+
 }
 
 // returns projectName for Shoot

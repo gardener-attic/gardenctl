@@ -23,6 +23,7 @@ import (
 
 	"github.com/gardener/gardener/pkg/operation"
 	"github.com/gardener/gardener/pkg/operation/common"
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -94,24 +95,17 @@ func (b *HybridBotanist) DestroyMachines() error {
 		return err
 	}
 
-	if err := machineList.EachListItem(func(o runtime.Object) error {
-		var (
-			obj         = o.(*unstructured.Unstructured)
-			machineName = obj.GetName()
-		)
-
-		labels := obj.GetLabels()
-		labels["force-deletion"] = "True"
-		obj.SetLabels(labels)
-
-		body, err := json.Marshal(obj.UnstructuredContent())
-		if err != nil {
-			return fmt.Errorf("Marshalling machine object failed: %s", err.Error())
-		}
-
-		return b.K8sSeedClient.MachineV1alpha1("PUT", "machines", b.Shoot.SeedNamespace).Name(machineName).Body(body).Do().Error()
-	}); err != nil {
-		return fmt.Errorf("Labelling machines failed: %s", err.Error())
+	var errorList []error
+	machineList.EachListItem(func(o runtime.Object) error {
+		go func(obj *unstructured.Unstructured) {
+			if err := b.labelMachine(obj); err != nil {
+				errorList = append(errorList, err)
+			}
+		}(o.(*unstructured.Unstructured))
+		return nil
+	})
+	if len(errorList) > 0 {
+		return fmt.Errorf("Labelling machines failed: %v", errorList)
 	}
 
 	var (
@@ -129,6 +123,29 @@ func (b *HybridBotanist) DestroyMachines() error {
 	// Wait until all machine resources have been properly deleted.
 	if err := b.waitUntilMachineResourcesDeleted(machineClassPlural); err != nil {
 		return fmt.Errorf("Failed while waiting for all machine resources to be deleted: '%s'", err.Error())
+	}
+
+	return nil
+}
+
+// RefreshMachineClassSecrets updates all existing machine class secrets to reflect the latest
+// cloud provider credentials.
+func (b *HybridBotanist) RefreshMachineClassSecrets() error {
+	secretList, err := b.listMachineClassSecrets()
+	if err != nil {
+		return err
+	}
+
+	// Refresh all secrets by updating the cloud provider credentials to the latest known values.
+	for _, secret := range secretList.Items {
+		var newSecret = secret
+
+		newSecret.Data = b.ShootCloudBotanist.GenerateMachineClassSecretData()
+		newSecret.Data["userData"] = secret.Data["userData"]
+
+		if _, err := b.K8sSeedClient.UpdateSecretObject(&newSecret); err != nil {
+			return err
+		}
 	}
 
 	return nil
@@ -161,6 +178,28 @@ func (b *HybridBotanist) generateMachineDeploymentConfig(machineDeployments []op
 	return map[string]interface{}{
 		"machineDeployments": values,
 	}, nil
+}
+
+// labelMachine labels a machine object to be forcefully deleted.
+func (b *HybridBotanist) labelMachine(obj *unstructured.Unstructured) error {
+	var (
+		labels      = obj.GetLabels()
+		machineName = obj.GetName()
+	)
+
+	if val, ok := labels["force-deletion"]; ok && val == "True" {
+		return nil
+	}
+
+	labels["force-deletion"] = "True"
+	obj.SetLabels(labels)
+
+	body, err := json.Marshal(obj.UnstructuredContent())
+	if err != nil {
+		return fmt.Errorf("Marshalling machine %s object failed: %s", machineName, err.Error())
+	}
+
+	return b.K8sSeedClient.MachineV1alpha1("PUT", "machines", b.Shoot.SeedNamespace).Name(machineName).Body(body).Do().Error()
 }
 
 // waitUntilMachineDeploymentsAvailable waits for a maximum of 30 minutes until all the desired <machineDeployments>
@@ -308,12 +347,16 @@ func (b *HybridBotanist) cleanupMachineDeployments(machineDeployments []operatio
 	})
 }
 
+func (b *HybridBotanist) listMachineClassSecrets() (*corev1.SecretList, error) {
+	return b.K8sSeedClient.ListSecrets(b.Shoot.SeedNamespace, metav1.ListOptions{
+		LabelSelector: fmt.Sprintf("%s=machineclass", common.GardenPurpose),
+	})
+}
+
 // cleanupMachineClassSecrets deletes all unused machine class secrets (i.e., those which are not part
 // of the provided list <usedSecrets>.
 func (b *HybridBotanist) cleanupMachineClassSecrets(usedSecrets sets.String) error {
-	secretList, err := b.K8sShootClient.ListSecrets(b.Shoot.SeedNamespace, metav1.ListOptions{
-		LabelSelector: fmt.Sprintf("%s=machineclass", common.GardenPurpose),
-	})
+	secretList, err := b.listMachineClassSecrets()
 	if err != nil {
 		return err
 	}
@@ -321,7 +364,7 @@ func (b *HybridBotanist) cleanupMachineClassSecrets(usedSecrets sets.String) err
 	// Cleanup all secrets which were used for machine classes that do not exist anymore.
 	for _, secret := range secretList.Items {
 		if !usedSecrets.Has(secret.Name) {
-			if err := b.K8sShootClient.DeleteSecret(secret.Namespace, secret.Name); err != nil {
+			if err := b.K8sSeedClient.DeleteSecret(secret.Namespace, secret.Name); err != nil {
 				return err
 			}
 		}

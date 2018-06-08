@@ -28,7 +28,7 @@ func (b *AWSBotanist) GenerateCloudProviderConfig() (string, error) {
 		subnetID = "subnet_public_utility_z0"
 	)
 
-	stateVariables, err := terraformer.New(b.Operation, common.TerraformerPurposeInfra).GetStateOutputVariables(vpcID, subnetID)
+	stateVariables, err := terraformer.NewFromOperation(b.Operation, common.TerraformerPurposeInfra).GetStateOutputVariables(vpcID, subnetID)
 	if err != nil {
 		return "", err
 	}
@@ -40,6 +40,14 @@ DisableSecurityGroupIngress = true
 KubernetesClusterTag = ` + b.Shoot.SeedNamespace + `
 KubernetesClusterID = ` + b.Shoot.SeedNamespace + `
 Zone = ` + b.Shoot.Info.Spec.Cloud.AWS.Zones[0], nil
+}
+
+// RefreshCloudProviderConfig refreshes the cloud provider credentials in the existing cloud
+// provider config.
+// Not needed on AWS (cloud provider config does not contain the credentials), hence, the
+// original is returned back.
+func (b *AWSBotanist) RefreshCloudProviderConfig(currentConfig map[string]string) map[string]string {
+	return currentConfig
 }
 
 // GenerateKubeAPIServerConfig generates the cloud provider specific values which are required to render the
@@ -73,7 +81,7 @@ func getAWSCredentialsEnvironment() []map[string]interface{} {
 			"valueFrom": map[string]interface{}{
 				"secretKeyRef": map[string]interface{}{
 					"key":  AccessKeyID,
-					"name": "cloudprovider",
+					"name": common.CloudProviderSecretName,
 				},
 			},
 		},
@@ -82,7 +90,7 @@ func getAWSCredentialsEnvironment() []map[string]interface{} {
 			"valueFrom": map[string]interface{}{
 				"secretKeyRef": map[string]interface{}{
 					"key":  SecretAccessKey,
-					"name": "cloudprovider",
+					"name": common.CloudProviderSecretName,
 				},
 			},
 		},
@@ -91,11 +99,17 @@ func getAWSCredentialsEnvironment() []map[string]interface{} {
 
 // GenerateEtcdBackupConfig returns the etcd backup configuration for the etcd Helm chart.
 func (b *AWSBotanist) GenerateEtcdBackupConfig() (map[string][]byte, map[string]interface{}, error) {
-	bucketName := "bucketName"
-	stateVariables, err := terraformer.New(b.Operation, common.TerraformerPurposeBackup).GetStateOutputVariables(bucketName)
+	var (
+		bucketName               = "bucketName"
+		backupInfrastructureName = common.GenerateBackupInfrastructureName(b.Shoot.SeedNamespace, b.Shoot.Info.Status.UID)
+		backupNamespace          = common.GenerateBackupNamespaceName(backupInfrastructureName)
+	)
+
+	stateVariables, err := terraformer.New(b.Logger, b.K8sSeedClient, common.TerraformerPurposeBackup, backupInfrastructureName, backupNamespace, b.ImageVector).GetStateOutputVariables(bucketName)
 	if err != nil {
 		return nil, nil, err
 	}
+
 	secretData := map[string][]byte{
 		Region:          []byte(b.Seed.Info.Spec.Cloud.Region),
 		AccessKeyID:     b.Seed.Secret.Data[AccessKeyID],
