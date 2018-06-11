@@ -308,7 +308,7 @@ func showDashboard() {
 		fmt.Println("No target")
 		os.Exit(2)
 	}
-	ExecCmd("open http://127.0.0.1:8002/ui", false)
+	ExecCmd("open http://127.0.0.1:8002/api/v1/namespaces/kube-system/services/https:kubernetes-dashboard:/proxy/", false)
 	ExecCmd("kubectl proxy -p 8002", false, "KUBECONFIG="+KUBECONFIG)
 }
 
