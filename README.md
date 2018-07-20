@@ -9,7 +9,7 @@
 
 
 # How to build it
-Currently, there are no binary builds available, so you need to build it from source,`go get` it or build the docker image from Dockerfile. 
+Currently, there are no binary builds available, so you need to build it from source,`go get` it or build the docker image from Dockerfile. Please keep in mind to use an up to date version of [golang](https://golang.org/doc/devel/release.html). 
 
 ## Prerequisites
 
