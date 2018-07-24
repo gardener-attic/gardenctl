@@ -31,7 +31,7 @@ go build gardenctl.go
 
 In case dependencies are missing, run `dep ensure` and build `gardenctl` again via `go build gardenctl.go`.
 
-After the successful build you get the executable `gardenctl` in the the directory `~/go/src/github.com/gardener`. Next, make it available by moving the executable to e.g. `/usr/local/bin`.
+After the successful build you get the executable `gardenctl` in the the directory `~/go/src/github.com/gardener/gardenctl`. Next, make it available by moving the executable to e.g. `/usr/local/bin`.
 
 ```bash
 sudo mv gardenctl /usr/local/bin
