@@ -95,18 +95,16 @@ func ExecCmd(cmd string, suppressedOutput bool, environment ...string) (err erro
 	if suppressedOutput {
 		err = command.Run()
 		if err != nil {
-			return err
+			os.Exit(2)
 		}
 	} else {
-		val, err := command.Output()
+		command.Stdout = os.Stdout
+		command.Stderr = os.Stderr
+		command.Stdin = os.Stdin
+		err = command.Run()
 		if err != nil {
-			ee, ok := err.(*exec.ExitError)
-			fmt.Println(string(ee.Stderr))
-			if !ok {
-				return err
-			}
+			os.Exit(2)
 		}
-		fmt.Println(string(val))
 	}
 	return nil
 }
