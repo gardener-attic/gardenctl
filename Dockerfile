@@ -13,16 +13,22 @@
 # limitations under the License.
 
 FROM golang:1.10
+RUN mkdir -p /go/src/github.com/gardener/gardenctl &&\
+    cd /go/src/github.com/gardener &&\
+    git clone https://github.com/gardener/gardenctl.git &&\
+    cd ./gardenctl &&\
+    CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o gardenctl .
 
+FROM ubuntu:18.04
 ENV PATH $PATH:/root/google-cloud-sdk/bin
-
 COPY clusters /root/clusters
 COPY config /root/.garden/config
-
+COPY --from=0 /go/src/github.com/gardener/gardenctl/gardenctl .
 RUN apt-get update &&\
     apt-get upgrade -qy &&\
     apt-get install -qy git &&\
     apt-get install -qy jq &&\
+    apt-get install -qy curl &&\
     apt-get install -qy python python-pip python3-pip python-setuptools &&\
     pip install awscli &&\
     pip install azure-cli &&\
@@ -35,11 +41,9 @@ RUN apt-get update &&\
     curl -LO https://storage.googleapis.com/kubernetes-release/release/$(curl -s https://storage.googleapis.com/kubernetes-release/release/stable.txt)/bin/linux/amd64/kubectl &&\
     chmod +x ./kubectl &&\
     mv ./kubectl /usr/local/bin/kubectl &&\
-    mkdir -p /go/src/github.com/gardener/gardenctl &&\
-    cd /go/src/github.com/gardener &&\
-    git clone https://github.com/gardener/gardenctl.git &&\
-    go install github.com/gardener/gardenctl &&\
-    /bin/bash -c "ln -s /go/bin/gardenctl /usr/local/bin/gardenctl" &&\
+    mkdir -p /opt/gardenctl/bin &&\
+    mv gardenctl /opt/gardenctl/bin/gardenctl &&\
+    /bin/bash -c "ln -s /opt/gardenctl/bin/gardenctl /usr/local/bin/gardenctl" &&\
     apt-get install bash-completion &&\
     gardenctl completion; mv gardenctl_completion.sh /root/gardenctl_completion.sh &&\
     echo ". /etc/profile" >> /root/.bashrc &&\
