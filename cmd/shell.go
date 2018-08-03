@@ -78,7 +78,7 @@ func shellToNode(nodename string) {
 		os.Exit(2)
 	}
 	manifest := strings.Replace(shellManifest, "HOSTNAME", hostname, -1)
-	err = ExecCmd([]byte(manifest), "kubectl apply -f -", false, "KUBECONFIG="+getKubeConfigOfClusterType(typeName))
+	err = ExecCmd([]byte(manifest), "kubectl -n default apply -f -", false, "KUBECONFIG="+getKubeConfigOfClusterType(typeName))
 	checkError(err)
 	for true {
 		pod, err := Client.CoreV1().Pods("default").Get("rootpod", metav1.GetOptions{})
@@ -105,7 +105,6 @@ apiVersion: v1
 kind: Pod
 metadata:
   name: rootpod
-  namespace: default
 spec:
   containers:
   - image: busybox
