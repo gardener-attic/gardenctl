@@ -16,6 +16,7 @@ package cmd
 
 import (
 	"bufio"
+	"errors"
 	"flag"
 	"fmt"
 	"io/ioutil"
@@ -204,4 +205,21 @@ func getProjectForShoot() (projectName string) {
 		}
 	}
 	return projectName
+}
+
+// getTargetType returns error and name of type
+func getTargetType() (string, error) {
+	var target Target
+	ReadTarget(pathTarget, &target)
+	length := len(target.Target)
+	switch length {
+	case 1:
+		return "garden", nil
+	case 2:
+		return "seed", nil
+	case 3:
+		return "shoot", nil
+	default:
+		return "", errors.New("No target selected")
+	}
 }

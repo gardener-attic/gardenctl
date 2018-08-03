@@ -71,7 +71,7 @@ func CreateFileIfNotExists(filename string, permission os.FileMode) {
 }
 
 // ExecCmd executes a command within set environment
-func ExecCmd(cmd string, suppressedOutput bool, environment ...string) (err error) {
+func ExecCmd(input []byte, cmd string, suppressedOutput bool, environment ...string) (err error) {
 	var command *exec.Cmd
 	parts := strings.Fields(cmd)
 	head := parts[0]
@@ -92,6 +92,19 @@ func ExecCmd(cmd string, suppressedOutput bool, environment ...string) (err erro
 			)
 		}
 	}
+	var stdin = os.Stdin
+	if input != nil {
+		r, w, err := os.Pipe()
+		if err != nil {
+			return err
+		}
+		defer r.Close()
+		go func() {
+			w.Write([]byte(input))
+			w.Close()
+		}()
+		stdin = r
+	}
 	if suppressedOutput {
 		err = command.Run()
 		if err != nil {
@@ -100,7 +113,7 @@ func ExecCmd(cmd string, suppressedOutput bool, environment ...string) (err erro
 	} else {
 		command.Stdout = os.Stdout
 		command.Stderr = os.Stderr
-		command.Stdin = os.Stdin
+		command.Stdin = stdin
 		err = command.Run()
 		if err != nil {
 			os.Exit(2)

@@ -65,6 +65,6 @@ func init() {
 // kube executes a kubectl command on targeted cluster
 func kube(args string) {
 	KUBECONFIG = getKubeConfigOfCurrentTarget()
-	err := ExecCmd("/usr/local/bin/"+args, false, "KUBECONFIG="+KUBECONFIG)
+	err := ExecCmd(nil, "/usr/local/bin/"+args, false, "KUBECONFIG="+KUBECONFIG)
 	checkError(err)
 }

@@ -120,7 +120,7 @@ func showPodGarden(podName string, namespace string) {
 	checkError(err)
 	for _, pod := range pods.Items {
 		if strings.Contains(pod.Name, podName) {
-			ExecCmd("kubectl get pods "+pod.Name+" -o wide -n "+namespace, false, "KUBECONFIG="+KUBECONFIG)
+			ExecCmd(nil, "kubectl get pods "+pod.Name+" -o wide -n "+namespace, false, "KUBECONFIG="+KUBECONFIG)
 		}
 	}
 }
@@ -156,7 +156,7 @@ func showUI() {
 			filteredUrls = append(filteredUrls, url)
 			fmt.Println("URL-" + strconv.Itoa(index+1) + ": " + "https://" + url)
 			if !opened {
-				ExecCmd(("open " + "https://" + url), false)
+				ExecCmd(nil, ("open " + "https://" + url), false)
 				opened = true
 			}
 		}
@@ -179,7 +179,7 @@ func showPod(toMatch string, toTarget string) {
 	checkError(err)
 	for _, pod := range pods.Items {
 		if strings.Contains(pod.Name, toMatch) {
-			ExecCmd("kubectl get pods "+pod.Name+" -o wide -n "+namespace, false, "KUBECONFIG="+KUBECONFIG)
+			ExecCmd(nil, "kubectl get pods "+pod.Name+" -o wide -n "+namespace, false, "KUBECONFIG="+KUBECONFIG)
 		}
 	}
 }
@@ -244,7 +244,7 @@ func showPrometheus() {
 	}
 	url = "https://" + username + ":" + password + "@" + url
 	fmt.Println("URL: " + url)
-	ExecCmd(("open " + url), false)
+	ExecCmd(nil, ("open " + url), false)
 }
 
 // showAltermanager shows the prometheus pods in the targeted seed cluster
@@ -261,7 +261,7 @@ func showAltermanager() {
 	}
 	url = "https://" + username + ":" + password + "@" + url
 	fmt.Println("URL: " + url)
-	ExecCmd(("open " + url), false)
+	ExecCmd(nil, ("open " + url), false)
 }
 
 // showMachineControllerManager shows the prometheus pods in the targeted seed cluster
@@ -280,7 +280,7 @@ func showDashboard() {
 		checkError(err)
 		for _, pod := range pods.Items {
 			if strings.Contains(pod.Name, "kubernetes-dashboard") {
-				ExecCmd("kubectl get pods "+pod.Name+" -o wide -n kube-system", false, "KUBECONFIG="+KUBECONFIG)
+				ExecCmd(nil, "kubectl get pods "+pod.Name+" -o wide -n kube-system", false, "KUBECONFIG="+KUBECONFIG)
 			}
 		}
 	} else if len(target.Target) == 2 {
@@ -299,7 +299,7 @@ func showDashboard() {
 		checkError(err)
 		for _, pod := range pods.Items {
 			if strings.Contains(pod.Name, "kubernetes-dashboard") {
-				ExecCmd("kubectl get pods "+pod.Name+" -o wide -n "+namespace, false, "KUBECONFIG="+KUBECONFIG)
+				ExecCmd(nil, "kubectl get pods "+pod.Name+" -o wide -n "+namespace, false, "KUBECONFIG="+KUBECONFIG)
 			}
 		}
 	} else if len(target.Target) == 3 {
@@ -308,8 +308,8 @@ func showDashboard() {
 		fmt.Println("No target")
 		os.Exit(2)
 	}
-	ExecCmd("open http://127.0.0.1:8002/api/v1/namespaces/kube-system/services/https:kubernetes-dashboard:/proxy/", false)
-	ExecCmd("kubectl proxy -p 8002", false, "KUBECONFIG="+KUBECONFIG)
+	ExecCmd(nil, "open http://127.0.0.1:8002/api/v1/namespaces/kube-system/services/https:kubernetes-dashboard:/proxy/", false)
+	ExecCmd(nil, "kubectl proxy -p 8002", false, "KUBECONFIG="+KUBECONFIG)
 }
 
 // showGrafana shows the grafana dashboard for the targeted cluster
@@ -326,7 +326,7 @@ func showGrafana() {
 	}
 	url = "https://" + username + ":" + password + "@" + url
 	fmt.Println("URL: " + url)
-	ExecCmd(("open " + url), false)
+	ExecCmd(nil, ("open " + url), false)
 }
 
 // showTerraform pods for specified name
