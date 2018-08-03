@@ -128,6 +128,8 @@ Targets represent a hierarchical structure of resources. On top, there is/are th
 `gardenctl ls issues`
 - Drop an element from target stack <br/>
 `gardenctl drop`
+- Open a shell to a cluster node <br/>
+`gardenctl shell nodename`
 
 ## Advanced usage based on JsonQuery
 
