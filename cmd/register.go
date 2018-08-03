@@ -39,7 +39,7 @@ var registerCmd = &cobra.Command{
 			os.Exit(2)
 		}
 		fmt.Println("Format Validated")
-		err := ExecCmd("kubectl set subject clusterrolebinding garden-administrators --user="+args[0], false, "KUBECONFIG="+getGardenKubeConfig())
+		err := ExecCmd(nil, "kubectl set subject clusterrolebinding garden-administrators --user="+args[0], false, "KUBECONFIG="+getGardenKubeConfig())
 		checkError(err)
 	},
 }

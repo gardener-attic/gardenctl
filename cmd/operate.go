@@ -99,7 +99,7 @@ func operate(provider, arguments string) {
 			originalConfig.Close()
 			checkError(err)
 		}
-		err := ExecCmd(arguments, false, "AWS_ACCESS_KEY_ID="+string(accessKeyID[:]), "AWS_SECRET_ACCESS_KEY="+string(secretAccessKey[:]), "AWS_DEFAULT_REGION="+region, "AWS_DEFAULT_OUTPUT=text")
+		err := ExecCmd(nil, arguments, false, "AWS_ACCESS_KEY_ID="+string(accessKeyID[:]), "AWS_SECRET_ACCESS_KEY="+string(secretAccessKey[:]), "AWS_DEFAULT_REGION="+region, "AWS_DEFAULT_OUTPUT=text")
 		if err != nil {
 			os.Exit(2)
 		}
@@ -130,7 +130,7 @@ func operate(provider, arguments string) {
 			if err != nil {
 				os.Exit(2)
 			}
-			err = ExecCmd("gcloud auth activate-service-account --key-file="+pathGardenHome+"/"+gcpPathCredentials, false)
+			err = ExecCmd(nil, "gcloud auth activate-service-account --key-file="+pathGardenHome+"/"+gcpPathCredentials, false)
 			if err != nil {
 				os.Exit(2)
 			}
@@ -146,11 +146,11 @@ func operate(provider, arguments string) {
 		if err != nil {
 			os.Exit(2)
 		}
-		err = ExecCmd(arguments+" --account="+account+" --project="+project, false)
+		err = ExecCmd(nil, arguments+" --account="+account+" --project="+project, false)
 		if err != nil {
 			os.Exit(2)
 		}
-		err = ExecCmd("gcloud config set account "+tmpAccount, false)
+		err = ExecCmd(nil, "gcloud config set account "+tmpAccount, false)
 		if err != nil {
 			os.Exit(2)
 		}
@@ -176,11 +176,11 @@ func operate(provider, arguments string) {
 			originalCredentials.Close()
 			checkError(err)
 		}
-		err := ExecCmd("az login --service-principal -u "+string(clientID[:])+" -p "+string(clientSecret[:])+" --tenant "+string(tenantID[:]), true)
+		err := ExecCmd(nil, "az login --service-principal -u "+string(clientID[:])+" -p "+string(clientSecret[:])+" --tenant "+string(tenantID[:]), true)
 		if err != nil {
 			os.Exit(2)
 		}
-		err = ExecCmd(arguments, false)
+		err = ExecCmd(nil, arguments, false)
 		if err != nil {
 			os.Exit(2)
 		}
@@ -213,7 +213,7 @@ func operate(provider, arguments string) {
 			originalCredentials.Close()
 			checkError(err)
 		}
-		err = ExecCmd(arguments, false, "OS_IDENTITY_API_VERSION=3", "OS_AUTH_VERSION=3", "OS_AUTH_STRATEGY=keystone", "OS_AUTH_URL="+authURL, "OS_TENANT_NAME="+string(tenantName[:]),
+		err = ExecCmd(nil, arguments, false, "OS_IDENTITY_API_VERSION=3", "OS_AUTH_VERSION=3", "OS_AUTH_STRATEGY=keystone", "OS_AUTH_URL="+authURL, "OS_TENANT_NAME="+string(tenantName[:]),
 			"OS_PROJECT_DOMAIN_NAME="+string(domainName[:]), "OS_USER_DOMAIN_NAME="+string(domainName[:]), "OS_USERNAME="+string(username[:]), "OS_PASSWORD="+string(password[:]), "OS_REGION_NAME="+region)
 		if err != nil {
 			os.Exit(2)

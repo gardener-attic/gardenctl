@@ -144,7 +144,7 @@ func logPod(toMatch string, toTarget string, container string) {
 	checkError(err)
 	for _, pod := range pods.Items {
 		if strings.Contains(pod.Name, toMatch) {
-			err := ExecCmd("kubectl logs --tail="+numberOfLines+" "+pod.Name+container+" -n "+namespace, false, "KUBECONFIG="+KUBECONFIG)
+			err := ExecCmd(nil, "kubectl logs --tail="+numberOfLines+" "+pod.Name+container+" -n "+namespace, false, "KUBECONFIG="+KUBECONFIG)
 			checkError(err)
 		}
 	}
@@ -158,7 +158,7 @@ func logPodGarden(toMatch, namespace string) {
 	checkError(err)
 	for _, pod := range pods.Items {
 		if strings.Contains(pod.Name, toMatch) {
-			err := ExecCmd("kubectl logs --tail="+numberOfLines+" "+pod.Name+" -n "+namespace, false, "KUBECONFIG="+KUBECONFIG)
+			err := ExecCmd(nil, "kubectl logs --tail="+numberOfLines+" "+pod.Name+" -n "+namespace, false, "KUBECONFIG="+KUBECONFIG)
 			checkError(err)
 			break
 		}
@@ -296,7 +296,7 @@ func logsDashboard() {
 	checkError(err)
 	for _, pod := range pods.Items {
 		if strings.Contains(pod.Name, "kubernetes-dashboard") {
-			err := ExecCmd("kubectl logs --tail="+numberOfLines+" "+pod.Name+" -n "+namespace, false, "KUBECONFIG="+KUBECONFIG)
+			err := ExecCmd(nil, "kubectl logs --tail="+numberOfLines+" "+pod.Name+" -n "+namespace, false, "KUBECONFIG="+KUBECONFIG)
 			checkError(err)
 		}
 	}
@@ -342,7 +342,7 @@ func logsTerraform(toMatch string) {
 	} else {
 		for i := 0; i < count; i++ {
 			fmt.Println("gardenctl logs " + podName[i] + " namespace=" + podNamespace[i])
-			err = ExecCmd("kubectl logs "+podName[i]+" -n "+podNamespace[i], false, "KUBECONFIG="+KUBECONFIG)
+			err = ExecCmd(nil, "kubectl logs "+podName[i]+" -n "+podNamespace[i], false, "KUBECONFIG="+KUBECONFIG)
 			checkError(err)
 		}
 	}

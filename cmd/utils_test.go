@@ -74,7 +74,7 @@ var _ = Describe("Utils", func() {
 
 	Context("After executing a shell command", func() {
 		It("ExecCmd should return err == nil", func() {
-			err := ExecCmd("sleep 1", false)
+			err := ExecCmd(nil, "sleep 1", false)
 			Expect(err).To(BeNil())
 		})
 	})
