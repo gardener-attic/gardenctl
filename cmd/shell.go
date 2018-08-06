@@ -41,7 +41,11 @@ var shellCmd = &cobra.Command{
 	},
 }
 
+// Image specify the container image to use
+var Image string
+
 func init() {
+	shellCmd.PersistentFlags().StringVarP(&Image, "image", "i", "busybox", "image type")
 }
 
 // printNodes print all nodes in k8s cluster
@@ -77,7 +81,9 @@ func shellToNode(nodename string) {
 		fmt.Println("Nodename not found")
 		os.Exit(2)
 	}
-	manifest := strings.Replace(shellManifest, "HOSTNAME", hostname, -1)
+
+	manifest := strings.Replace(shellManifest, "busybox", Image, -1)
+	manifest = strings.Replace(manifest, "HOSTNAME", hostname, -1)
 	err = ExecCmd([]byte(manifest), "kubectl -n default apply -f -", false, "KUBECONFIG="+getKubeConfigOfClusterType(typeName))
 	checkError(err)
 	for true {
@@ -94,7 +100,7 @@ func shellToNode(nodename string) {
 		}
 	}
 	time.Sleep(1000)
-	err = ExecCmd(nil, "kubectl -n default exec -it rootpod -- chroot /hostroot", false, "KUBECONFIG="+getKubeConfigOfClusterType(typeName))
+	err = ExecCmd(nil, "kubectl -n default exec -it rootpod -- chroot /hostroot /bin/bash", false, "KUBECONFIG="+getKubeConfigOfClusterType(typeName))
 	checkError(err)
 	err = ExecCmd(nil, "kubectl -n default delete pod rootpod", false, "KUBECONFIG="+getKubeConfigOfClusterType(typeName))
 	checkError(err)
@@ -105,6 +111,7 @@ apiVersion: v1
 kind: Pod
 metadata:
   name: rootpod
+  namespace: default
 spec:
   containers:
   - image: busybox
