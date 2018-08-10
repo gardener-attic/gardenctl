@@ -26,7 +26,7 @@ import (
 
 // shellCmd represents the shell command
 var shellCmd = &cobra.Command{
-	Use:   "shell (node)",
+	Use:   "shell (node|pod)",
 	Short: "Shell to a node\n",
 	Long:  ``,
 	Run: func(cmd *cobra.Command, args []string) {
@@ -62,17 +62,28 @@ func printNodes() {
 }
 
 // shellToNode creates a rootpod on node
-func shellToNode(nodename string) {
+func shellToNode(name string) {
+	namespace := "default"
 	typeName, err := getTargetType()
 	checkError(err)
 	Client, err = clientToTarget(typeName)
 	checkError(err)
+	// check if the node name was a pod name and we should actually identify the node from the pod (node that runs the pod)
+	pods, err := Client.CoreV1().Pods("").List(metav1.ListOptions{})
+	checkError(err)
+	for _, p := range pods.Items {
+		if p.Name == name {
+			name = p.Spec.NodeName
+			namespace = p.Namespace
+			break
+		}
+	}
+	hostname := ""
 	nodes, err := Client.CoreV1().Nodes().List(metav1.ListOptions{})
 	checkError(err)
-	var hostname string = ""
 	for _, n := range nodes.Items {
 		host := n.Labels
-		if strings.Contains(host["kubernetes.io/hostname"], nodename) {
+		if strings.Contains(host["kubernetes.io/hostname"], name) {
 			hostname = host["kubernetes.io/hostname"]
 			break
 		}
@@ -81,13 +92,23 @@ func shellToNode(nodename string) {
 		fmt.Println("Nodename not found")
 		os.Exit(2)
 	}
-
-	manifest := strings.Replace(shellManifest, "busybox", Image, -1)
+	podName := "rootpod-" + ExecCmdReturnOutput("whoami")
+	typeOfTarget, err := getTargetType()
+	checkError(err)
+	if typeOfTarget == "shoot" {
+		namespace = "kube-system"
+	} else if typeOfTarget == "project" {
+		fmt.Println("Project targeted")
+		os.Exit(2)
+	}
+	manifest := strings.Replace(shellManifest, "rootpod", podName, -1)
+	manifest = strings.Replace(manifest, "default", namespace, -1)
+	manifest = strings.Replace(manifest, "busybox", Image, -1)
 	manifest = strings.Replace(manifest, "HOSTNAME", hostname, -1)
-	err = ExecCmd([]byte(manifest), "kubectl -n default apply -f -", false, "KUBECONFIG="+getKubeConfigOfClusterType(typeName))
+	err = ExecCmd([]byte(manifest), "kubectl -n "+namespace+" apply -f -", false, "KUBECONFIG="+getKubeConfigOfClusterType(typeName))
 	checkError(err)
 	for true {
-		pod, err := Client.CoreV1().Pods("default").Get("rootpod", metav1.GetOptions{})
+		pod, err := Client.CoreV1().Pods(namespace).Get(podName, metav1.GetOptions{})
 		if err != nil {
 			fmt.Printf("pod not found: %s\n", err)
 		} else {
@@ -100,9 +121,9 @@ func shellToNode(nodename string) {
 		}
 	}
 	time.Sleep(1000)
-	err = ExecCmd(nil, "kubectl -n default exec -it rootpod -- chroot /hostroot /bin/bash", false, "KUBECONFIG="+getKubeConfigOfClusterType(typeName))
+	err = ExecCmd(nil, "kubectl -n "+namespace+" exec -it "+podName+" -- chroot /hostroot /bin/bash", false, "KUBECONFIG="+getKubeConfigOfClusterType(typeName))
 	checkError(err)
-	err = ExecCmd(nil, "kubectl -n default delete pod rootpod", false, "KUBECONFIG="+getKubeConfigOfClusterType(typeName))
+	err = ExecCmd(nil, "kubectl -n "+namespace+" delete pod "+podName, false, "KUBECONFIG="+getKubeConfigOfClusterType(typeName))
 	checkError(err)
 }
 
@@ -119,6 +140,9 @@ spec:
     command:
     - sleep 
     - "10000000"
+    stdin: true
+    securityContext:
+      privileged: true
     volumeMounts:
     - mountPath: /hostroot
       name: root-volume

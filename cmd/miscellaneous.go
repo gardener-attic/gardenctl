@@ -216,7 +216,11 @@ func getTargetType() (string, error) {
 	case 1:
 		return "garden", nil
 	case 2:
-		return "seed", nil
+		if target.Target[1].Kind == "seed" {
+			return "seed", nil
+		} else {
+			return "project", nil
+		}
 	case 3:
 		return "shoot", nil
 	default:
