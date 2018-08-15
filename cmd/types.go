@@ -47,6 +47,12 @@ type SeedMeta struct {
 	Shoots []string `yaml:"shoots,omitempty" json:"shoots,omitempty"`
 }
 
+//GardenConfig contains config for gardenctl
+type GardenConfig struct {
+	GithubURL      string              `yaml:"githubURL,omitempty" json:"githubURL,omitempty"`
+	GardenClusters []GardenClusterMeta `yaml:"gardenClusters,omitempty" json:"gardenClusters,omitempty"`
+}
+
 // GardenClusters contains all gardenclusters
 type GardenClusters struct {
 	GardenClusters []GardenClusterMeta `yaml:"gardenClusters,omitempty" json:"gardenClusters,omitempty"`
