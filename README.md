@@ -65,6 +65,7 @@ First clone the repository as described in the the build step "From source". As 
 
 Here an example file:
 ``` yaml
+githubURL: https://github.location.company.corp
 gardenClusters:
 - name: dev
   kubeConfig: ~/clusters/dev/kubeconfig.yaml
