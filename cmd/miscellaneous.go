@@ -34,11 +34,11 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 )
 
-// GetGardenClusters sets GardenCluster struct
-func GetGardenClusters(pathGardenConfig string, gardenClusters *GardenClusters) {
+// GetGardenConfig sets GardenConfig struct
+func GetGardenConfig(pathGardenConfig string, gardenConfig *GardenConfig) {
 	yamlGardenConfig, err := ioutil.ReadFile(pathGardenConfig)
 	checkError(err)
-	err = yaml.Unmarshal(yamlGardenConfig, &gardenClusters)
+	err = yaml.Unmarshal(yamlGardenConfig, &gardenConfig)
 	if err != nil {
 		fmt.Println("Invalid gardenctl configuration")
 		os.Exit(2)
@@ -47,7 +47,7 @@ func GetGardenClusters(pathGardenConfig string, gardenClusters *GardenClusters) 
 
 // GetGardenClusterKubeConfigFromConfig return kubeconfig of garden cluster if exists
 func GetGardenClusterKubeConfigFromConfig(pathGardenConfig, pathTarget string) {
-	var gardenClusters GardenClusters
+	var gardenConfig GardenConfig
 	var target Target
 	i, err := os.Stat(pathTarget)
 	checkError(err)
@@ -58,8 +58,8 @@ func GetGardenClusterKubeConfigFromConfig(pathGardenConfig, pathTarget string) {
 			fmt.Println("Please provide a gardenctl configuration before usage")
 			return
 		}
-		GetGardenClusters(pathGardenConfig, &gardenClusters)
-		target.Target = []TargetMeta{{"garden", gardenClusters.GardenClusters[0].Name}}
+		GetGardenConfig(pathGardenConfig, &gardenConfig)
+		target.Target = []TargetMeta{{"garden", gardenConfig.GardenClusters[0].Name}}
 		file, err := os.OpenFile(pathTarget, os.O_WRONLY|os.O_CREATE, 0644)
 		checkError(err)
 		defer file.Close()
@@ -226,4 +226,19 @@ func getTargetType() (string, error) {
 	default:
 		return "", errors.New("No target selected")
 	}
+}
+
+func getEmail(githubURL string) string {
+	if githubURL == "" {
+		return "null"
+	}
+	res := ExecCmdReturnOutput("bash", "-c", "curl -ks "+githubURL+"/api/v3/users/"+os.Getenv("USER")+" | jq -r .email")
+	fmt.Printf("used github email: %s\n", res)
+	return res
+}
+
+func getGithubURL() string {
+	var gardenConfig GardenConfig
+	GetGardenConfig(pathGardenConfig, &gardenConfig)
+	return gardenConfig.GithubURL
 }
