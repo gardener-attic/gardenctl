@@ -18,17 +18,6 @@
   revision = "0755fe2dc241caebab64327c352006712f6a55c4"
 
 [[projects]]
-  branch = "master"
-  digest = "1:6c48291ff15f3c3b263ed6f7356acea45da69e7fca8d0d76d2c021a075fbd52a"
-  name = "github.com/docker/spdystream"
-  packages = [
-    ".",
-    "spdy",
-  ]
-  pruneopts = ""
-  revision = "bc6354cbbc295e925e4c611ffe90c1f287ee54db"
-
-[[projects]]
   digest = "1:74bccc44aa7d9cc602e9f2375c4b8f3ab9e98327f52b090ed2e3273144407ed0"
   name = "github.com/gardener/gardener"
   packages = [
@@ -37,12 +26,6 @@
     "pkg/client/garden/clientset/versioned",
     "pkg/client/garden/clientset/versioned/scheme",
     "pkg/client/garden/clientset/versioned/typed/garden/v1beta1",
-    "pkg/client/kubernetes",
-    "pkg/client/kubernetes/base",
-    "pkg/client/kubernetes/mapping",
-    "pkg/client/kubernetes/v110",
-    "pkg/client/kubernetes/v18",
-    "pkg/client/kubernetes/v19",
     "pkg/logger",
     "pkg/utils",
   ]
@@ -381,8 +364,6 @@
     "pkg/util/clock",
     "pkg/util/errors",
     "pkg/util/framer",
-    "pkg/util/httpstream",
-    "pkg/util/httpstream/spdy",
     "pkg/util/intstr",
     "pkg/util/json",
     "pkg/util/net",
@@ -395,7 +376,6 @@
     "pkg/util/yaml",
     "pkg/version",
     "pkg/watch",
-    "third_party/forked/golang/netutil",
     "third_party/forked/golang/reflect",
   ]
   pruneopts = ""
@@ -449,10 +429,8 @@
     "tools/clientcmd/api/latest",
     "tools/clientcmd/api/v1",
     "tools/metrics",
-    "tools/portforward",
     "tools/reference",
     "transport",
-    "transport/spdy",
     "util/cert",
     "util/flowcontrol",
     "util/homedir",
@@ -469,7 +447,6 @@
     "github.com/badoux/checkmail",
     "github.com/gardener/gardener/pkg/apis/garden/v1beta1",
     "github.com/gardener/gardener/pkg/client/garden/clientset/versioned",
-    "github.com/gardener/gardener/pkg/client/kubernetes",
     "github.com/ghodss/yaml",
     "github.com/jmoiron/jsonq",
     "github.com/onsi/ginkgo",
@@ -479,6 +456,7 @@
     "k8s.io/api/rbac/v1",
     "k8s.io/apimachinery/pkg/apis/meta/v1",
     "k8s.io/client-go/kubernetes",
+    "k8s.io/client-go/rest",
     "k8s.io/client-go/tools/clientcmd",
   ]
   solver-name = "gps-cdcl"

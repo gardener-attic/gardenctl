@@ -23,7 +23,6 @@ import (
 
 	"github.com/gardener/gardener/pkg/apis/garden/v1beta1"
 	clientset "github.com/gardener/gardener/pkg/client/garden/clientset/versioned"
-	"github.com/gardener/gardener/pkg/client/kubernetes"
 	"github.com/spf13/cobra"
 	yaml "gopkg.in/yaml.v2"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -245,11 +244,6 @@ func resolveNameProject(name string) (matches []string) {
 		LabelSelector: fmt.Sprintf("%s", projectLabel),
 	})
 	checkError(err)
-	k8sGardenClient, err := kubernetes.NewClientFromFile(*kubeconfig)
-	checkError(err)
-	gardenClientset, err := clientset.NewForConfig(k8sGardenClient.GetConfig())
-	checkError(err)
-	k8sGardenClient.SetGardenClientset(gardenClientset)
 	matcher := ""
 	for _, project := range projectList.Items {
 		if strings.HasPrefix(name, "*") && strings.HasSuffix(name, "*") {
@@ -406,12 +400,9 @@ func resolveNameSeed(name string) (matches []string) {
 func targetSeed(name string, cache bool) {
 	Client, err = clientToTarget("garden")
 	checkError(err)
-	k8sGardenClient, err := kubernetes.NewClientFromFile(*kubeconfig)
+	gardenClientset, err := clientset.NewForConfig(NewConfigFromBytes(*kubeconfig))
 	checkError(err)
-	gardenClientset, err := clientset.NewForConfig(k8sGardenClient.GetConfig())
-	checkError(err)
-	k8sGardenClient.SetGardenClientset(gardenClientset)
-	seed, err := k8sGardenClient.GardenClientset().GardenV1beta1().Seeds().Get(name, metav1.GetOptions{})
+	seed, err := gardenClientset.GardenV1beta1().Seeds().Get(name, metav1.GetOptions{})
 	if err != nil {
 		fmt.Println("Seed not found")
 		os.Exit(2)
@@ -463,17 +454,14 @@ func resolveNameShoot(name string) (matches []string) {
 	matcher := ""
 	var target Target
 	ReadTarget(pathTarget, &target)
-	k8sGardenClient, err := kubernetes.NewClientFromFile(*kubeconfig)
+	gardenClientset, err := clientset.NewForConfig(NewConfigFromBytes(*kubeconfig))
 	checkError(err)
-	gardenClientset, err := clientset.NewForConfig(k8sGardenClient.GetConfig())
-	checkError(err)
-	k8sGardenClient.SetGardenClientset(gardenClientset)
 	var shootList *v1beta1.ShootList
 	if len(target.Target) > 1 && target.Target[1].Kind == "project" {
-		shootList, err = k8sGardenClient.GardenClientset().GardenV1beta1().Shoots(target.Target[1].Name).List(metav1.ListOptions{})
+		shootList, err = gardenClientset.GardenV1beta1().Shoots(target.Target[1].Name).List(metav1.ListOptions{})
 		checkError(err)
 	} else if len(target.Target) > 1 && target.Target[1].Kind == "seed" {
-		shootList, err = k8sGardenClient.GardenClientset().GardenV1beta1().Shoots("").List(metav1.ListOptions{})
+		shootList, err = gardenClientset.GardenV1beta1().Shoots("").List(metav1.ListOptions{})
 		checkError(err)
 		var filteredShoots []v1beta1.Shoot
 		for _, shoot := range shootList.Items {
@@ -483,7 +471,7 @@ func resolveNameShoot(name string) (matches []string) {
 		}
 		shootList.Items = filteredShoots
 	} else {
-		shootList, err = k8sGardenClient.GardenClientset().GardenV1beta1().Shoots("").List(metav1.ListOptions{})
+		shootList, err = gardenClientset.GardenV1beta1().Shoots("").List(metav1.ListOptions{})
 		checkError(err)
 	}
 	for _, shoot := range shootList.Items {
@@ -516,12 +504,8 @@ func resolveNameShoot(name string) (matches []string) {
 // targetShoot targets shoot cluster with project as default value in stack
 func targetShoot(name string) {
 	Client, err = clientToTarget("garden")
-	k8sGardenClient, err := kubernetes.NewClientFromFile(*kubeconfig)
-	checkError(err)
-	gardenClientset, err := clientset.NewForConfig(k8sGardenClient.GetConfig())
-	checkError(err)
-	k8sGardenClient.SetGardenClientset(gardenClientset)
-	shootList, err := k8sGardenClient.GardenClientset().GardenV1beta1().Shoots("").List(metav1.ListOptions{})
+	gardenClientset, err := clientset.NewForConfig(NewConfigFromBytes(*kubeconfig))
+	shootList, err := gardenClientset.GardenV1beta1().Shoots("").List(metav1.ListOptions{})
 	checkError(err)
 	var target Target
 	ReadTarget(pathTarget, &target)
@@ -582,7 +566,7 @@ func targetShoot(name string) {
 		file.Close()
 		Client, err = clientToTarget("garden")
 		checkError(err)
-		seed, err := k8sGardenClient.GardenClientset().GardenV1beta1().Seeds().Get(seedName, metav1.GetOptions{})
+		seed, err := gardenClientset.GardenV1beta1().Seeds().Get(seedName, metav1.GetOptions{})
 		checkError(err)
 		kubeSecret, err := Client.CoreV1().Secrets(seed.Spec.SecretRef.Namespace).Get(seed.Spec.SecretRef.Name, metav1.GetOptions{})
 		checkError(err)
@@ -624,12 +608,10 @@ func targetShoot(name string) {
 // getSeedForProject
 func getSeedForProject(shootName string) (seedName string) {
 	Client, err = clientToTarget("garden")
-	k8sGardenClient, err := kubernetes.NewClientFromFile(*kubeconfig)
 	checkError(err)
-	gardenClientset, err := clientset.NewForConfig(k8sGardenClient.GetConfig())
+	gardenClientset, err := clientset.NewForConfig(NewConfigFromBytes(*kubeconfig))
 	checkError(err)
-	k8sGardenClient.SetGardenClientset(gardenClientset)
-	shootList, err := k8sGardenClient.GardenClientset().GardenV1beta1().Shoots("").List(metav1.ListOptions{})
+	shootList, err := gardenClientset.GardenV1beta1().Shoots("").List(metav1.ListOptions{})
 	checkError(err)
 	for _, item := range shootList.Items {
 		if item.Name == shootName {

@@ -22,7 +22,6 @@ import (
 	"strings"
 
 	clientset "github.com/gardener/gardener/pkg/client/garden/clientset/versioned"
-	sapcloud "github.com/gardener/gardener/pkg/client/kubernetes"
 	"github.com/jmoiron/jsonq"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -51,12 +50,9 @@ func operate(provider, arguments string) {
 	var target Target
 	ReadTarget(pathTarget, &target)
 	Client, err = clientToTarget("garden")
-	k8sGardenClient, err := sapcloud.NewClientFromFile(*kubeconfig)
+	gardenClientset, err := clientset.NewForConfig(NewConfigFromBytes(*kubeconfig))
 	checkError(err)
-	gardenClientset, err := clientset.NewForConfig(k8sGardenClient.GetConfig())
-	checkError(err)
-	k8sGardenClient.SetGardenClientset(gardenClientset)
-	shootList, err := k8sGardenClient.GardenClientset().GardenV1beta1().Shoots("").List(metav1.ListOptions{})
+	shootList, err := gardenClientset.GardenV1beta1().Shoots("").List(metav1.ListOptions{})
 	for _, shoot := range shootList.Items {
 		if shoot.Name == target.Target[2].Name {
 			secretName = shoot.Spec.Cloud.SecretBindingRef.Name
@@ -186,7 +182,7 @@ func operate(provider, arguments string) {
 		}
 	case "openstack":
 		authURL := ""
-		cloudProfileList, err := k8sGardenClient.GardenClientset().GardenV1beta1().CloudProfiles().List(metav1.ListOptions{})
+		cloudProfileList, err := gardenClientset.GardenV1beta1().CloudProfiles().List(metav1.ListOptions{})
 		for _, cp := range cloudProfileList.Items {
 			if cp.Name == profile {
 				authURL = cp.Spec.OpenStack.KeyStoneURL

@@ -20,7 +20,6 @@ import (
 	"os"
 
 	clientset "github.com/gardener/gardener/pkg/client/garden/clientset/versioned"
-	"github.com/gardener/gardener/pkg/client/kubernetes"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	k8s "k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/clientcmd"
@@ -67,12 +66,9 @@ func downloadTerraformFiles(option string) {
 	} else {
 		Client, err = clientToTarget("garden")
 		checkError(err)
-		k8sGardenClient, err := kubernetes.NewClientFromFile(*kubeconfig)
+		gardenClientset, err := clientset.NewForConfig(NewConfigFromBytes(*kubeconfig))
 		checkError(err)
-		gardenClientset, err := clientset.NewForConfig(k8sGardenClient.GetConfig())
-		checkError(err)
-		k8sGardenClient.SetGardenClientset(gardenClientset)
-		shootList, err := k8sGardenClient.GardenClientset().GardenV1beta1().Shoots("").List(metav1.ListOptions{})
+		shootList, err := gardenClientset.GardenV1beta1().Shoots("").List(metav1.ListOptions{})
 		var ind int
 		for index, shoot := range shootList.Items {
 			if shoot.Name == target.Target[2].Name && (shoot.Namespace == target.Target[1].Name || *shoot.Spec.Cloud.Seed == target.Target[1].Name) {
@@ -82,7 +78,7 @@ func downloadTerraformFiles(option string) {
 		}
 		namespace = shootList.Items[ind].Status.TechnicalID
 		fmt.Println(namespace)
-		seed, err := k8sGardenClient.GardenClientset().GardenV1beta1().Seeds().Get(*shootList.Items[ind].Spec.Cloud.Seed, metav1.GetOptions{})
+		seed, err := gardenClientset.GardenV1beta1().Seeds().Get(*shootList.Items[ind].Spec.Cloud.Seed, metav1.GetOptions{})
 		checkError(err)
 		kubeSecret, err := Client.CoreV1().Secrets(seed.Spec.SecretRef.Namespace).Get(seed.Spec.SecretRef.Name, metav1.GetOptions{})
 		checkError(err)

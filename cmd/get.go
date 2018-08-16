@@ -24,7 +24,6 @@ import (
 	"strings"
 
 	clientset "github.com/gardener/gardener/pkg/client/garden/clientset/versioned"
-	"github.com/gardener/gardener/pkg/client/kubernetes"
 	yaml2 "github.com/ghodss/yaml"
 	"github.com/spf13/cobra"
 	yaml "gopkg.in/yaml.v2"
@@ -176,12 +175,9 @@ func getSeed(name string) {
 	}
 	Client, err = clientToTarget("garden")
 	checkError(err)
-	k8sGardenClient, err := kubernetes.NewClientFromFile(*kubeconfig)
+	gardenClientset, err := clientset.NewForConfig(NewConfigFromBytes(*kubeconfig))
 	checkError(err)
-	gardenClientset, err := clientset.NewForConfig(k8sGardenClient.GetConfig())
-	checkError(err)
-	k8sGardenClient.SetGardenClientset(gardenClientset)
-	seed, err := k8sGardenClient.GardenClientset().GardenV1beta1().Seeds().Get(name, metav1.GetOptions{})
+	seed, err := gardenClientset.GardenV1beta1().Seeds().Get(name, metav1.GetOptions{})
 	checkError(err)
 	kubeSecret, err := Client.CoreV1().Secrets(seed.Spec.SecretRef.Namespace).Get(seed.Spec.SecretRef.Name, metav1.GetOptions{})
 	checkError(err)
@@ -218,12 +214,9 @@ func getShoot(name string) {
 	}
 	Client, err = clientToTarget("garden")
 	checkError(err)
-	k8sGardenClient, err := kubernetes.NewClientFromFile(*kubeconfig)
+	gardenClientset, err := clientset.NewForConfig(NewConfigFromBytes(*kubeconfig))
 	checkError(err)
-	gardenClientset, err := clientset.NewForConfig(k8sGardenClient.GetConfig())
-	checkError(err)
-	k8sGardenClient.SetGardenClientset(gardenClientset)
-	shootList, err := k8sGardenClient.GardenClientset().GardenV1beta1().Shoots("").List(metav1.ListOptions{})
+	shootList, err := gardenClientset.GardenV1beta1().Shoots("").List(metav1.ListOptions{})
 	var ind int
 	var namespace string
 	for index, shoot := range shootList.Items {
@@ -238,7 +231,7 @@ func getShoot(name string) {
 			break
 		}
 	}
-	seed, err := k8sGardenClient.GardenClientset().GardenV1beta1().Seeds().Get(*shootList.Items[ind].Spec.Cloud.Seed, metav1.GetOptions{})
+	seed, err := gardenClientset.GardenV1beta1().Seeds().Get(*shootList.Items[ind].Spec.Cloud.Seed, metav1.GetOptions{})
 	checkError(err)
 	kubeSecret, err := Client.CoreV1().Secrets(seed.Spec.SecretRef.Namespace).Get(seed.Spec.SecretRef.Name, metav1.GetOptions{})
 	checkError(err)
