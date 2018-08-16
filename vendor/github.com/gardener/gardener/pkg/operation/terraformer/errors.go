@@ -15,17 +15,14 @@
 package terraformer
 
 import (
-	"errors"
 	"fmt"
 	"regexp"
 	"sort"
 	"strings"
-
-	gardenv1beta1 "github.com/gardener/gardener/pkg/apis/garden/v1beta1"
 )
 
 // retrieveTerraformErrors gets a map <logList> whose keys are pod names and whose values are the corresponding logs,
-// and it parses the logs for Terraform errors. If none are found, it will return nil, and otherwhise the list of
+// and it parses the logs for Terraform errors. If none are found, it will return nil, and otherwise the list of
 // found errors as string slice.
 func retrieveTerraformErrors(logList map[string]string) []string {
 	var (
@@ -52,39 +49,11 @@ func retrieveTerraformErrors(logList map[string]string) []string {
 	return errorList
 }
 
-// determineErrorCode determines the Garden error code for the given error message.
-func determineErrorCode(message string) error {
-	var (
-		code                         gardenv1beta1.ErrorCode
-		unauthorizedRegexp           = regexp.MustCompile(`(?i)(Unauthorized|InvalidClientTokenId|SignatureDoesNotMatch|Authentication failed)`)
-		quotaExceededRegexp          = regexp.MustCompile(`(?i)(LimitExceeded|Quota)`)
-		insufficientPrivilegesRegexp = regexp.MustCompile(`(?i)(AccessDenied|Forbidden)`)
-		dependenciesRegexp           = regexp.MustCompile(`(?i)(DependencyViolation)`)
-	)
-
-	switch {
-	case unauthorizedRegexp.MatchString(message):
-		code = gardenv1beta1.ErrorInfraUnauthorized
-	case quotaExceededRegexp.MatchString(message):
-		code = gardenv1beta1.ErrorInfraQuotaExceeded
-	case insufficientPrivilegesRegexp.MatchString(message):
-		code = gardenv1beta1.ErrorInfraInsufficientPrivileges
-	case dependenciesRegexp.MatchString(message):
-		code = gardenv1beta1.ErrorInfraDependencies
-	}
-
-	if len(code) != 0 {
-		message = fmt.Sprintf("CODE:%s %s", code, message)
-	}
-
-	return errors.New(message)
-}
-
 // findTerraformErrors gets the <output> of a Terraform run and parses it to find the occurred
 // errors (which will be returned). If no errors occurred, an empty string will be returned.
 func findTerraformErrors(output string) string {
 	var (
-		regexTerraformError = regexp.MustCompile(`(?:Error [^:]*|Errors): *([\s\S]*)`)
+		regexTerraformError = regexp.MustCompile(`(?:Error *[^:]*|Errors): *([\s\S]*)`)
 		regexUUID           = regexp.MustCompile(`(?i)[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}`)
 		regexMultiNewline   = regexp.MustCompile(`\n{2,}`)
 

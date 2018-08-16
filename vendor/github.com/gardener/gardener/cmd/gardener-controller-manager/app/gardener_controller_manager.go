@@ -18,6 +18,8 @@ import (
 	"errors"
 	"fmt"
 	"io/ioutil"
+	"net"
+	"net/http"
 	"os"
 	"strings"
 	"time"
@@ -29,6 +31,7 @@ import (
 	gardeninformers "github.com/gardener/gardener/pkg/client/garden/informers/externalversions"
 	"github.com/gardener/gardener/pkg/client/kubernetes"
 	"github.com/gardener/gardener/pkg/controller"
+	gardenerfeatures "github.com/gardener/gardener/pkg/features"
 	"github.com/gardener/gardener/pkg/logger"
 	"github.com/gardener/gardener/pkg/operation/common"
 	"github.com/gardener/gardener/pkg/server"
@@ -143,17 +146,36 @@ func (o *Options) applyDefaults(in *componentconfig.ControllerManagerConfigurati
 }
 
 func (o *Options) run(stopCh chan struct{}) error {
-	config := o.config
-
 	if len(o.ConfigFile) > 0 {
 		c, err := o.loadConfigFromFile(o.ConfigFile)
 		if err != nil {
 			return err
 		}
-		config = c
+		o.config = c
 	}
 
-	gardener, err := NewGardener(config)
+	if o.config.ClientConnection.DisableTCPKeepAlive {
+		http.DefaultTransport = &http.Transport{
+			Proxy: http.ProxyFromEnvironment,
+			DialContext: (&net.Dialer{
+				Timeout:   30 * time.Second,
+				KeepAlive: 30 * time.Second,
+				DualStack: true,
+			}).DialContext,
+			MaxIdleConns:          100,
+			IdleConnTimeout:       90 * time.Second,
+			TLSHandshakeTimeout:   10 * time.Second,
+			ExpectContinueTimeout: 1 * time.Second,
+			DisableKeepAlives:     true,
+		}
+	}
+
+	// Add feature flags
+	if err := gardenerfeatures.ControllerFeatureGate.SetFromMap(o.config.FeatureGates); err != nil {
+		return err
+	}
+
+	gardener, err := NewGardener(o.config)
 	if err != nil {
 		return err
 	}
@@ -222,7 +244,7 @@ func NewGardener(config *componentconfig.ControllerManagerConfiguration) (*Garde
 	// Initialize logger
 	logger := logger.NewLogger(config.LogLevel)
 	logger.Info("Starting Gardener controller manager...")
-
+	logger.Infof("Feature Gates: %s", gardenerfeatures.ControllerFeatureGate.String())
 	// Prepare a Kubernetes client object for the Garden cluster which contains all the Clientsets
 	// that can be used to access the Kubernetes API.
 	var (
@@ -251,11 +273,11 @@ func NewGardener(config *componentconfig.ControllerManagerConfiguration) (*Garde
 	}
 
 	// Create a GardenV1beta1Client and the respective API group scheme for the Garden API group.
-	gardenerClientset, err := gardenclientset.NewForConfig(gardenerClientConfig)
+	gardenClientset, err := gardenclientset.NewForConfig(gardenerClientConfig)
 	if err != nil {
 		return nil, err
 	}
-	k8sGardenClient.SetGardenClientset(gardenerClientset)
+	k8sGardenClient.SetGardenClientset(gardenClientset)
 
 	// Set up leader election if enabled and prepare event recorder.
 	var (
@@ -291,14 +313,16 @@ func (g *Gardener) Run(stopCh chan struct{}) error {
 	run := func(stop <-chan struct{}) {
 		go startControllers(g, stopCh)
 		<-stop
-		if _, stopChIsNotClosed := (<-stopCh); stopChIsNotClosed {
+		select {
+		case <-stopCh:
+			// can only happen if stopCh is already closed because it's never written to it
+		default:
 			close(stopCh)
 		}
-		select {}
 	}
 
 	// Start HTTP server
-	go server.Serve(g.K8sGardenClient, g.Config.Server.BindAddress, g.Config.Server.Port, g.Config.Metrics.Interval.Duration)
+	go server.Serve(g.K8sGardenClient, g.Config.Server.BindAddress, g.Config.Server.Port, g.Config.Metrics.Interval.Duration, stopCh)
 	handlers.UpdateHealth(true)
 
 	// If leader election is enabled, run via LeaderElector until done and exit.
@@ -381,16 +405,28 @@ func makeLeaderElectionConfig(config componentconfig.LeaderElectionConfiguration
 // there is no container id.
 func determineGardenerIdentity(watchNamespace *string) (*gardenv1beta1.Gardener, string, error) {
 	var (
-		gardenerID        = utils.GenerateRandomString(64)
-		gardenerName, _   = os.Hostname()
+		gardenerID        string
+		gardenerName      string
 		gardenerNamespace = common.GardenNamespace
+		err               error
 	)
 
+	gardenerName, err = os.Hostname()
+	if err != nil {
+		return nil, "", fmt.Errorf("unable to get hostname: %v", err)
+	}
+
 	// If running inside a Kubernetes cluster (as container) we can read the container id from the proc file system.
+	// Otherwise generate a random string for the gardenerID
 	if cgroup, err := ioutil.ReadFile("/proc/self/cgroup"); err == nil {
 		splitByNewline := strings.Split(string(cgroup), "\n")
 		splitBySlash := strings.Split(splitByNewline[0], "/")
 		gardenerID = splitBySlash[len(splitBySlash)-1]
+	} else {
+		gardenerID, err = utils.GenerateRandomString(64)
+		if err != nil {
+			return nil, "", fmt.Errorf("unable to generate gardenerID: %v", err)
+		}
 	}
 
 	// If running inside a Kubernetes cluster we will have a service account mount.

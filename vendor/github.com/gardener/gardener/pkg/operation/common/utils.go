@@ -21,14 +21,12 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
-	"time"
 
 	gardenv1beta1 "github.com/gardener/gardener/pkg/apis/garden/v1beta1"
 	"github.com/gardener/gardener/pkg/chartrenderer"
 	"github.com/gardener/gardener/pkg/client/kubernetes"
 	"github.com/gardener/gardener/pkg/utils"
 	corev1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 )
 
@@ -169,22 +167,6 @@ func GenerateTerraformVariablesEnvironment(secret *corev1.Secret, keyValueMap ma
 	return m
 }
 
-// CheckConfirmationDeletionTimestampValid checks whether an annotation with the key of the constant <ConfirmationDeletionTimestamp>
-// variable exists on the provided <shoot> object and if yes, whether its value is equal to the Shoot's
-// '.metadata.deletionTimestamp' value. In that case, it returns true, otherwise false.
-func CheckConfirmationDeletionTimestampValid(objectMeta metav1.ObjectMeta) bool {
-	deletionTimestamp := objectMeta.DeletionTimestamp
-	if !metav1.HasAnnotation(objectMeta, ConfirmationDeletionTimestamp) || deletionTimestamp == nil {
-		return false
-	}
-	timestamp, err := time.Parse(time.RFC3339, objectMeta.Annotations[ConfirmationDeletionTimestamp])
-	if err != nil {
-		return false
-	}
-	confirmationDeletionTimestamp := metav1.NewTime(timestamp)
-	return confirmationDeletionTimestamp.Equal(deletionTimestamp)
-}
-
 // ExtractShootName returns Shoot resource name extracted from provided <backupInfrastructureName>.
 func ExtractShootName(backupInfrastructureName string) string {
 	tokens := strings.Split(backupInfrastructureName, "-")
@@ -214,4 +196,32 @@ func IsFollowingNewNamingConvention(seedNamespace string) bool {
 // ReplaceCloudProviderConfigKey replaces a key with the new value in the given cloud provider config.
 func ReplaceCloudProviderConfigKey(cloudProviderConfig, separator, key, value string) string {
 	return regexp.MustCompile(fmt.Sprintf("%s%s(.*)\n", key, separator)).ReplaceAllString(cloudProviderConfig, fmt.Sprintf("%s%s%s\n", key, separator, value))
+}
+
+// DetermineErrorCode determines the Garden error code for the given error message.
+func DetermineErrorCode(message string) error {
+	var (
+		code                         gardenv1beta1.ErrorCode
+		unauthorizedRegexp           = regexp.MustCompile(`(?i)(Unauthorized|InvalidClientTokenId|SignatureDoesNotMatch|Authentication failed|AuthFailure|invalid character|invalid_grant|invalid_client|Authorization Profile was not found)`)
+		quotaExceededRegexp          = regexp.MustCompile(`(?i)(LimitExceeded|Quota)`)
+		insufficientPrivilegesRegexp = regexp.MustCompile(`(?i)(AccessDenied|Forbidden)`)
+		dependenciesRegexp           = regexp.MustCompile(`(?i)(PendingVerification|Access Not Configured|accessNotConfigured|DependencyViolation|OptInRequired)`)
+	)
+
+	switch {
+	case unauthorizedRegexp.MatchString(message):
+		code = gardenv1beta1.ErrorInfraUnauthorized
+	case quotaExceededRegexp.MatchString(message):
+		code = gardenv1beta1.ErrorInfraQuotaExceeded
+	case insufficientPrivilegesRegexp.MatchString(message):
+		code = gardenv1beta1.ErrorInfraInsufficientPrivileges
+	case dependenciesRegexp.MatchString(message):
+		code = gardenv1beta1.ErrorInfraDependencies
+	}
+
+	if len(code) != 0 {
+		message = fmt.Sprintf("CODE:%s %s", code, message)
+	}
+
+	return errors.New(message)
 }

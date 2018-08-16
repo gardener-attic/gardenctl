@@ -17,8 +17,10 @@ package kubernetes
 import (
 	"bytes"
 
-	clientset "github.com/gardener/gardener/pkg/client/garden/clientset/versioned"
+	gardenclientset "github.com/gardener/gardener/pkg/client/garden/clientset/versioned"
 	"github.com/gardener/gardener/pkg/client/kubernetes/mapping"
+	machineclientset "github.com/gardener/gardener/pkg/client/machine/clientset/versioned"
+	"github.com/sirupsen/logrus"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
@@ -36,29 +38,34 @@ type Client interface {
 
 	// Getter & Setter
 	Clientset() *kubernetes.Clientset
-	GardenClientset() *clientset.Clientset
+	GardenClientset() *gardenclientset.Clientset
+	MachineClientset() *machineclientset.Clientset
 	GetAPIResourceList() []*metav1.APIResourceList
 	GetConfig() *rest.Config
 	GetResourceAPIGroups() map[string][]string
 	RESTClient() rest.Interface
 	SetConfig(*rest.Config)
 	SetClientset(*kubernetes.Clientset)
-	SetGardenClientset(*clientset.Clientset)
+	SetGardenClientset(*gardenclientset.Clientset)
+	SetMachineClientset(*machineclientset.Clientset)
 	SetRESTClient(rest.Interface)
 	SetResourceAPIGroups(map[string][]string)
-	MachineV1alpha1(string, string, string) *rest.Request
 
 	// Cleanup
 	ListResources(...string) (unstructured.Unstructured, error)
 	CleanupResources(map[string]map[string]bool) error
 	CleanupAPIGroupResources(map[string]map[string]bool, string, []string) error
-	CheckResourceCleanup(map[string]map[string]bool, string, []string) (bool, error)
+	CheckResourceCleanup(*logrus.Entry, map[string]map[string]bool, string, []string) (bool, error)
+
+	// Machines
+	MachineV1alpha1(string, string, string) *rest.Request
 
 	// Namespaces
 	CreateNamespace(*corev1.Namespace, bool) (*corev1.Namespace, error)
 	UpdateNamespace(*corev1.Namespace) (*corev1.Namespace, error)
 	GetNamespace(string) (*corev1.Namespace, error)
 	ListNamespaces(metav1.ListOptions) (*corev1.NamespaceList, error)
+	PatchNamespace(name string, body []byte) (*corev1.Namespace, error)
 	DeleteNamespace(string) error
 
 	// Secrets

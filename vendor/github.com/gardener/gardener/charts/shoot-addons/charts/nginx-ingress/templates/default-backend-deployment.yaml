@@ -9,6 +9,7 @@ metadata:
     heritage: {{ .Release.Service }}
     release: {{ .Release.Name }}
     addonmanager.kubernetes.io/mode: Reconcile
+    origin: gardener
   name: {{ template "defaultBackend.fullname" . }}
   namespace: kube-system
 spec:
@@ -41,7 +42,7 @@ spec:
           {{- end }}
           livenessProbe:
             httpGet:
-              path: /healthz
+              path: /healthy
               port: 8080
               scheme: HTTP
             initialDelaySeconds: 30

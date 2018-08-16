@@ -19,10 +19,6 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/gardener/gardener/pkg/version"
-
-	"github.com/gardener/gardener/pkg/openapi"
-
 	"github.com/gardener/gardener/pkg/api"
 	"github.com/gardener/gardener/pkg/apis/garden"
 	gardenv1beta1 "github.com/gardener/gardener/pkg/apis/garden/v1beta1"
@@ -30,7 +26,10 @@ import (
 	admissioninitializer "github.com/gardener/gardener/pkg/apiserver/admission/initializer"
 	gardenclientset "github.com/gardener/gardener/pkg/client/garden/clientset/internalversion"
 	gardeninformers "github.com/gardener/gardener/pkg/client/garden/informers/internalversion"
+	"github.com/gardener/gardener/pkg/openapi"
+	"github.com/gardener/gardener/pkg/version"
 	resourcereferencemanager "github.com/gardener/gardener/plugin/pkg/global/resourcereferencemanager"
+	shootdeletionconfirmation "github.com/gardener/gardener/plugin/pkg/shoot/deletionconfirmation"
 	shootdnshostedzone "github.com/gardener/gardener/plugin/pkg/shoot/dnshostedzone"
 	shootquotavalidator "github.com/gardener/gardener/plugin/pkg/shoot/quotavalidator"
 	shootseedmanager "github.com/gardener/gardener/plugin/pkg/shoot/seedmanager"
@@ -39,8 +38,10 @@ import (
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apiserver/pkg/admission"
+	openapinamer "k8s.io/apiserver/pkg/endpoints/openapi"
 	genericapiserver "k8s.io/apiserver/pkg/server"
 	genericoptions "k8s.io/apiserver/pkg/server/options"
+	utilfeature "k8s.io/apiserver/pkg/util/feature"
 	kubeinformers "k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/clientcmd"
@@ -73,6 +74,7 @@ These so-called control plane components are hosted in Kubernetes clusters thems
 	}
 
 	flags := cmd.Flags()
+	utilfeature.DefaultFeatureGate.AddFlag(flags)
 	opts.Recommended.AddFlags(flags)
 	return cmd
 }
@@ -116,9 +118,11 @@ func (o *Options) complete() error {
 	shootseedmanager.Register(o.Recommended.Admission.Plugins)
 	shootdnshostedzone.Register(o.Recommended.Admission.Plugins)
 	shootvalidator.Register(o.Recommended.Admission.Plugins)
+	shootdeletionconfirmation.Register(o.Recommended.Admission.Plugins)
 
 	allOrderedPlugins := []string{
 		resourcereferencemanager.PluginName,
+		shootdeletionconfirmation.PluginName,
 		shootdnshostedzone.PluginName,
 		shootquotavalidator.PluginName,
 		shootseedmanager.PluginName,
@@ -133,16 +137,6 @@ func (o *Options) complete() error {
 }
 
 func (o *Options) config() (*apiserver.Config, error) {
-	// Enable some admission plugins by default
-	enabledPlugins := sets.NewString(o.Recommended.Admission.EnablePlugins...)
-	if !enabledPlugins.Has(resourcereferencemanager.PluginName) {
-		enabledPlugins.Insert(resourcereferencemanager.PluginName)
-	}
-	if !enabledPlugins.Has(shootvalidator.PluginName) {
-		enabledPlugins.Insert(shootvalidator.PluginName)
-	}
-	o.Recommended.Admission.EnablePlugins = enabledPlugins.List()
-
 	// Create clientset for the garden.sapcloud.io API group
 	// Use loopback config to create a new Kubernetes client for the garden.sapcloud.io API group
 	gardenerAPIServerConfig := genericapiserver.NewRecommendedConfig(api.Codecs)
@@ -153,6 +147,7 @@ func (o *Options) config() (*apiserver.Config, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	kubeClient, err := kubernetes.NewForConfig(kubeAPIServerConfig)
 	if err != nil {
 		return nil, err
@@ -168,10 +163,10 @@ func (o *Options) config() (*apiserver.Config, error) {
 		}
 		gardenInformerFactory := gardeninformers.NewSharedInformerFactory(gardenClient, gardenerAPIServerConfig.LoopbackClientConfig.Timeout)
 		o.GardenInformerFactory = gardenInformerFactory
-		return []admission.PluginInitializer{admissioninitializer.New(gardenInformerFactory, kubeInformerFactory, gardenerAPIServerConfig.Authorization.Authorizer)}, nil
+		return []admission.PluginInitializer{admissioninitializer.New(gardenInformerFactory, kubeInformerFactory, kubeClient, gardenerAPIServerConfig.Authorization.Authorizer)}, nil
 	}
 
-	gardenerAPIServerConfig.OpenAPIConfig = genericapiserver.DefaultOpenAPIConfig(openapi.GetOpenAPIDefinitions, api.Scheme)
+	gardenerAPIServerConfig.OpenAPIConfig = genericapiserver.DefaultOpenAPIConfig(openapi.GetOpenAPIDefinitions, openapinamer.NewDefinitionNamer(api.Scheme))
 	gardenerAPIServerConfig.OpenAPIConfig.Info.Title = "Gardener"
 	gardenerAPIServerConfig.OpenAPIConfig.Info.Version = version.Version
 	gardenerAPIServerConfig.SwaggerConfig = genericapiserver.DefaultSwaggerConfig()
@@ -191,7 +186,6 @@ func (o Options) run(stopCh <-chan struct{}) error {
 	if err != nil {
 		return err
 	}
-
 	server, err := config.Complete().New()
 	if err != nil {
 		return err

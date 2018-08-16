@@ -18,8 +18,10 @@ import (
 	"path/filepath"
 
 	gardenv1beta1 "github.com/gardener/gardener/pkg/apis/garden/v1beta1"
+	"github.com/gardener/gardener/pkg/apis/garden/v1beta1/helper"
 	"github.com/gardener/gardener/pkg/chartrenderer"
 	"github.com/gardener/gardener/pkg/operation/common"
+	"github.com/gardener/gardener/pkg/utils"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -113,6 +115,10 @@ func (b *HybridBotanist) generateCoreAddonsChart() (*chartrenderer.RenderedChart
 // will be stored as a Secret (as it may contain credentials) and mounted into the Pod. The configuration
 // contains specially labelled Kubernetes manifests which will be created and periodically reconciled.
 func (b *HybridBotanist) generateOptionalAddonsChart() (*chartrenderer.RenderedChart, error) {
+	clusterAutoscalerConfig, err := b.Botanist.GenerateClusterAutoscalerConfig()
+	if err != nil {
+		return nil, err
+	}
 	heapsterConfig, err := b.Botanist.GenerateHeapsterConfig()
 	if err != nil {
 		return nil, err
@@ -140,6 +146,28 @@ func (b *HybridBotanist) generateOptionalAddonsChart() (*chartrenderer.RenderedC
 	nginxIngressConfig, err := b.ShootCloudBotanist.GenerateNginxIngressConfig()
 	if err != nil {
 		return nil, err
+	}
+	if b.Shoot.NginxIngressEnabled() {
+		nginxIngressConfig = utils.MergeMaps(nginxIngressConfig, map[string]interface{}{
+			"controller": map[string]interface{}{
+				"service": map[string]interface{}{
+					"loadBalancerSourceRanges": b.Shoot.Info.Spec.Addons.NginxIngress.LoadBalancerSourceRanges,
+				},
+			},
+		})
+
+		if shootUsedAsSeed, _, _ := helper.IsUsedAsSeed(b.Shoot.Info); shootUsedAsSeed {
+			nginxIngressConfig = utils.MergeMaps(nginxIngressConfig, map[string]interface{}{
+				"controller": map[string]interface{}{
+					"resources": map[string]interface{}{
+						"limits": map[string]interface{}{
+							"cpu":    "500m",
+							"memory": "1024Mi",
+						},
+					},
+				},
+			})
+		}
 	}
 
 	heapster, err := b.Botanist.InjectImages(heapsterConfig, b.K8sShootClient.Version(), map[string]string{"heapster": "heapster", "heapster-nanny": "addon-resizer"})
@@ -172,6 +200,7 @@ func (b *HybridBotanist) generateOptionalAddonsChart() (*chartrenderer.RenderedC
 	}
 
 	return b.ChartShootRenderer.Render(filepath.Join(common.ChartPath, "shoot-addons"), "addons", metav1.NamespaceSystem, map[string]interface{}{
+		"cluster-autoscaler":   clusterAutoscalerConfig,
 		"heapster":             heapster,
 		"helm-tiller":          helmTiller,
 		"kube-lego":            kubeLego,

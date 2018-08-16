@@ -4,4 +4,4 @@
 
 [[constraint]]
   name = "github.com/gardener/gardener"
-  version = "^0.5.1"
+  version = "^0.9.0"

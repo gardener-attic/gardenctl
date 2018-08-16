@@ -19,6 +19,7 @@ import (
 	"time"
 
 	gardenv1beta1 "github.com/gardener/gardener/pkg/apis/garden/v1beta1"
+	"github.com/gardener/gardener/pkg/apis/garden/v1beta1/helper"
 	"github.com/gardener/gardener/pkg/operation"
 	botanistpkg "github.com/gardener/gardener/pkg/operation/botanist"
 	cloudbotanistpkg "github.com/gardener/gardener/pkg/operation/cloudbotanist"
@@ -55,23 +56,15 @@ func (c *defaultControl) reconcileShoot(o *operation.Operation, operationType ga
 		managedDNS   = o.Shoot.Info.Spec.DNS.Provider != gardenv1beta1.DNSUnmanaged
 		isCloud      = o.Shoot.Info.Spec.Cloud.Local == nil
 
-		f                                    = flow.New("Shoot cluster creation").SetProgressReporter(o.ReportShootProgress).SetLogger(o.Logger)
-		deployNamespace                      = f.AddTask(botanist.DeployNamespace, defaultRetry)
-		deployKubeAPIServerService           = f.AddTask(botanist.DeployKubeAPIServerService, defaultRetry, deployNamespace)
-		waitUntilKubeAPIServerServiceIsReady = f.AddTaskConditional(botanist.WaitUntilKubeAPIServerServiceIsReady, 0, isCloud, deployKubeAPIServerService)
-		deploySecrets                        = f.AddTask(botanist.DeploySecrets, 0, waitUntilKubeAPIServerServiceIsReady)
-		_                                    = f.AddTask(botanist.DeployInternalDomainDNSRecord, 0, waitUntilKubeAPIServerServiceIsReady)
-		_                                    = f.AddTaskConditional(botanist.DeployExternalDomainDNSRecord, 0, managedDNS)
-		deployInfrastructure                 = f.AddTask(shootCloudBotanist.DeployInfrastructure, 0, deploySecrets)
-		// Although BackupInfrastructure controller has responsibility of deploying backup namespace, for backward
-		// compatibility Shoot controller will have to deploy backup namespace and move terraform resources from
-		// shoot's main seed namespace to backup namespace.
-		// TODO: These tasks (deployBackupNamespace and moveBackupTerraformResources) should be removed from flow, once
-		// we have all shoots reconciled with new gardener having this change i.e. for all existing shoots, all backup
-		// infrastructure related terraform resources are present only in backup namespace.
-		deployBackupNamespace                   = f.AddTaskConditional(botanist.DeployBackupNamespaceFromShoot, defaultRetry, isCloud, deployNamespace)
-		moveBackupTerraformResources            = f.AddTaskConditional(botanist.MoveBackupTerraformResources, 0, isCloud, deployBackupNamespace)
-		deployBackupInfrastructure              = f.AddTaskConditional(botanist.DeployBackupInfrastructure, 0, isCloud, moveBackupTerraformResources)
+		f                                       = flow.New("Shoot cluster reconciliation").SetProgressReporter(o.ReportShootProgress).SetLogger(o.Logger)
+		deployNamespace                         = f.AddTask(botanist.DeployNamespace, defaultRetry)
+		deployKubeAPIServerService              = f.AddTask(botanist.DeployKubeAPIServerService, defaultRetry, deployNamespace)
+		waitUntilKubeAPIServerServiceIsReady    = f.AddTaskConditional(botanist.WaitUntilKubeAPIServerServiceIsReady, 0, isCloud, deployKubeAPIServerService)
+		deploySecrets                           = f.AddTask(botanist.DeploySecrets, 0, waitUntilKubeAPIServerServiceIsReady)
+		_                                       = f.AddTask(botanist.DeployInternalDomainDNSRecord, 0, waitUntilKubeAPIServerServiceIsReady)
+		_                                       = f.AddTaskConditional(botanist.DeployExternalDomainDNSRecord, 0, managedDNS)
+		deployInfrastructure                    = f.AddTask(shootCloudBotanist.DeployInfrastructure, 0, deploySecrets)
+		deployBackupInfrastructure              = f.AddTaskConditional(botanist.DeployBackupInfrastructure, 0, isCloud)
 		waitUntilBackupInfrastructureReconciled = f.AddTaskConditional(botanist.WaitUntilBackupInfrastructureReconciled, 0, isCloud, deployBackupInfrastructure)
 		deployETCD                              = f.AddTask(hybridBotanist.DeployETCD, defaultRetry, deploySecrets, waitUntilBackupInfrastructureReconciled)
 		deployCloudProviderConfig               = f.AddTask(hybridBotanist.DeployCloudProviderConfig, defaultRetry, deployInfrastructure)
@@ -81,13 +74,14 @@ func (c *defaultControl) reconcileShoot(o *operation.Operation, operationType ga
 		waitUntilKubeAPIServerIsReady           = f.AddTask(botanist.WaitUntilKubeAPIServerReady, 0, deployKubeAPIServer)
 		initializeShootClients                  = f.AddTask(botanist.InitializeShootClients, 2*time.Minute, waitUntilKubeAPIServerIsReady)
 		deployMachineControllerManager          = f.AddTaskConditional(botanist.DeployMachineControllerManager, defaultRetry, isCloud, initializeShootClients)
-		deployMachines                          = f.AddTaskConditional(hybridBotanist.DeployMachines, defaultRetry, isCloud, deployMachineControllerManager, deployInfrastructure, initializeShootClients)
+		reconcileMachines                       = f.AddTaskConditional(hybridBotanist.ReconcileMachines, defaultRetry, isCloud, deployMachineControllerManager, deployInfrastructure, initializeShootClients)
 		deployKubeAddonManager                  = f.AddTask(hybridBotanist.DeployKubeAddonManager, defaultRetry, initializeShootClients, deployInfrastructure)
 		_                                       = f.AddTask(shootCloudBotanist.DeployKube2IAMResources, defaultRetry, deployInfrastructure)
 		_                                       = f.AddTaskConditional(botanist.EnsureIngressDNSRecord, 10*time.Minute, managedDNS, deployKubeAddonManager)
-		waitUntilVPNConnectionExists            = f.AddTaskConditional(botanist.WaitUntilVPNConnectionExists, 0, !o.Shoot.Hibernated, deployKubeAddonManager, deployMachines)
+		waitUntilVPNConnectionExists            = f.AddTaskConditional(botanist.WaitUntilVPNConnectionExists, 0, !o.Shoot.Hibernated, deployKubeAddonManager, reconcileMachines)
 		applyCreateHook                         = f.AddTask(seedCloudBotanist.ApplyCreateHook, defaultRetry, waitUntilVPNConnectionExists)
-		_                                       = f.AddTask(botanist.DeploySeedMonitoring, defaultRetry, waitUntilKubeAPIServerIsReady, initializeShootClients, waitUntilVPNConnectionExists, deployMachines, applyCreateHook)
+		deploySeedMonitoring                    = f.AddTask(botanist.DeploySeedMonitoring, defaultRetry, waitUntilKubeAPIServerIsReady, initializeShootClients, waitUntilVPNConnectionExists, reconcileMachines, applyCreateHook)
+		_                                       = f.AddTask(botanist.DeployClusterAutoscaler, defaultRetry, reconcileMachines, deployKubeAddonManager, deploySeedMonitoring)
 	)
 
 	if e := f.Execute(); e != nil {
@@ -96,13 +90,15 @@ func (c *defaultControl) reconcileShoot(o *operation.Operation, operationType ga
 	}
 
 	// Register the Shoot as Seed cluster if it was annotated properly and in the garden namespace
-	if shootIsUsedAsSeed(o.Shoot.Info) {
-		if err := botanist.RegisterAsSeed(); err != nil {
-			o.Logger.Errorf("Could not register '%s' as Seed: '%s'", o.Shoot.Info.Name, err.Error())
-		}
-	} else {
-		if err := botanist.UnregisterAsSeed(); err != nil {
-			o.Logger.Errorf("Could not unregister '%s' as Seed: '%s'", o.Shoot.Info.Name, err.Error())
+	if o.Shoot.Info.Namespace == common.GardenNamespace {
+		if shootUsedAsSeed, protected, visible := helper.IsUsedAsSeed(o.Shoot.Info); shootUsedAsSeed {
+			if err := botanist.RegisterAsSeed(protected, visible); err != nil {
+				o.Logger.Errorf("Could not register '%s' as Seed: '%s'", o.Shoot.Info.Name, err.Error())
+			}
+		} else {
+			if err := botanist.UnregisterAsSeed(); err != nil {
+				o.Logger.Errorf("Could not unregister '%s' as Seed: '%s'", o.Shoot.Info.Name, err.Error())
+			}
 		}
 	}
 

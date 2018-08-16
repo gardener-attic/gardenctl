@@ -18,7 +18,7 @@
   revision = "0755fe2dc241caebab64327c352006712f6a55c4"
 
 [[projects]]
-  digest = "1:74bccc44aa7d9cc602e9f2375c4b8f3ab9e98327f52b090ed2e3273144407ed0"
+  digest = "1:5513ab6531f990e3131d79e4c9e03fea42e33435ad694bf4b9770e9d33d1bd89"
   name = "github.com/gardener/gardener"
   packages = [
     "pkg/apis/garden",
@@ -30,8 +30,8 @@
     "pkg/utils",
   ]
   pruneopts = ""
-  revision = "f7e7570d56b0eb647c05c0a227a2a84fac57f408"
-  version = "0.5.1"
+  revision = "b1cbef5b468e770c303a127cc84f329860ba530b"
+  version = "0.9.1"
 
 [[projects]]
   digest = "1:b13707423743d41665fd23f0c36b2f37bb49c30e94adb813319c44188a51ba22"

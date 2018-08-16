@@ -15,7 +15,10 @@
 REGISTRY                           := eu.gcr.io/gardener-project/gardener
 APISERVER_IMAGE_REPOSITORY         := $(REGISTRY)/apiserver
 CONROLLER_MANAGER_IMAGE_REPOSITORY := $(REGISTRY)/controller-manager
-IMAGE_TAG                          := $(shell cat VERSION)
+VERSION                            := $(shell cat VERSION)
+IMAGE_TAG                          := ${VERSION}
+WORKDIR                            := $(shell pwd)
+PUSH_LATEST                        := true
 
 #########################################
 # Rules for local development scenarios #
@@ -31,23 +34,14 @@ dev-setup-local:
 
 .PHONY: start-api
 start-api:
-	@go run cmd/gardener-apiserver/main.go \
-			--authentication-kubeconfig ~/.kube/config \
-			--authorization-kubeconfig ~/.kube/config \
-			--enable-admission-plugins=ResourceReferenceManager,ShootSeedManager,ShootDNSHostedZone,ShootValidator,ShootQuotaValidator \
-			--etcd-servers=http://$(shell minikube ip):32379 \
-			--kubeconfig ~/.kube/config \
-			--tls-cert-file ~/.minikube/apiserver.crt \
-			--tls-private-key-file ~/.minikube/apiserver.key \
-			--secure-port=8443 \
-			--v=2
+	@./hack/start-api
 
 .PHONY: start
 start:
 	@KUBECONFIG=~/.kube/config GARDENER_KUBECONFIG=~/.kube/config go run \
 			-ldflags "-w -X github.com/gardener/gardener/pkg/version.Version=$(shell ./hack/get-next-version)" \
 			cmd/gardener-controller-manager/main.go \
-			--config=dev/componentconfig-gardener-controller-manager.yaml
+			--config=dev/20-componentconfig-gardener-controller-manager.yaml
 
 .PHONY: start-local
 start-local:
@@ -63,20 +57,28 @@ revendor:
 
 .PHONY: build
 build:
-	@.ci/build
+	@CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \
+		-ldflags "-w -X github.com/gardener/gardener/pkg/version.Version=${VERSION}" \
+		-o bin/gardener-apiserver \
+		cmd/gardener-apiserver/*.go
+	@CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \
+		-ldflags "-w -X github.com/gardener/gardener/pkg/version.Version=${VERSION}" \
+		-o bin/gardener-controller-manager \
+		cmd/gardener-controller-manager/*.go
 
 .PHONY: build-local
 build-local:
-	@env LOCAL_BUILD=1 .ci/build
+	@GOBIN=${WORKDIR}/bin go install \
+		-ldflags "-w -X github.com/gardener/gardener/pkg/version.Version=${VERSION}" \
+		./cmd/...
 
 .PHONY: release
 release: build build-local docker-images docker-login docker-push rename-binaries
 
 .PHONY: docker-images
 docker-images:
-	@if [[ ! -f bin/rel/gardener-apiserver || ! -f bin/rel/gardener-controller-manager ]]; then echo "No binary found. Please run 'make build'"; false; fi
-	@docker build -t $(APISERVER_IMAGE_REPOSITORY):$(IMAGE_TAG)         -t $(APISERVER_IMAGE_REPOSITORY):latest         -f build/gardener-apiserver/Dockerfile          --rm .
-	@docker build -t $(CONROLLER_MANAGER_IMAGE_REPOSITORY):$(IMAGE_TAG) -t $(CONROLLER_MANAGER_IMAGE_REPOSITORY):latest -f build/gardener-controller-manager/Dockerfile --rm .
+	@docker build -t $(APISERVER_IMAGE_REPOSITORY):$(IMAGE_TAG)         -t $(APISERVER_IMAGE_REPOSITORY):latest         -f Dockerfile --target apiserver .
+	@docker build -t $(CONROLLER_MANAGER_IMAGE_REPOSITORY):$(IMAGE_TAG) -t $(CONROLLER_MANAGER_IMAGE_REPOSITORY):latest -f Dockerfile --target controller-manager .
 
 .PHONY: docker-login
 docker-login:
@@ -87,9 +89,9 @@ docker-push:
 	@if ! docker images $(APISERVER_IMAGE_REPOSITORY) | awk '{ print $$2 }' | grep -q -F $(IMAGE_TAG); then echo "$(APISERVER_IMAGE_REPOSITORY) version $(IMAGE_TAG) is not yet built. Please run 'make docker-images'"; false; fi
 	@if ! docker images $(CONROLLER_MANAGER_IMAGE_REPOSITORY) | awk '{ print $$2 }' | grep -q -F $(IMAGE_TAG); then echo "$(CONROLLER_MANAGER_IMAGE_REPOSITORY) version $(IMAGE_TAG) is not yet built. Please run 'make docker-images'"; false; fi
 	@gcloud docker -- push $(APISERVER_IMAGE_REPOSITORY):$(IMAGE_TAG)
-	@gcloud docker -- push $(APISERVER_IMAGE_REPOSITORY):latest
+	@if [[ "$(PUSH_LATEST)" == "true" ]]; then gcloud docker -- push $(APISERVER_IMAGE_REPOSITORY):latest; fi
 	@gcloud docker -- push $(CONROLLER_MANAGER_IMAGE_REPOSITORY):$(IMAGE_TAG)
-	@gcloud docker -- push $(CONROLLER_MANAGER_IMAGE_REPOSITORY):latest
+	@if [[ "$(PUSH_LATEST)" == "true" ]]; then gcloud docker -- push $(CONROLLER_MANAGER_IMAGE_REPOSITORY):latest; fi
 
 .PHONY: rename-binaries
 rename-binaries:
