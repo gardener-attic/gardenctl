@@ -25,6 +25,9 @@
 {{- if (include "kubelet.featureGates" .) }}
 {{- include "kubelet.featureGates" . | trimSuffix "," }} \
 {{- end }}
+{{- if semverCompare "< 1.11" .kubernetes.version }}
+--feature-gates=PodPriority=true \
+{{- end }}
 --image-gc-high-threshold=50 \
 --image-gc-low-threshold=40 \
 --kubeconfig=/var/lib/kubelet/kubeconfig-real \
@@ -49,11 +52,12 @@
 {{- if semverCompare "< 1.12" .kubernetes.version }}
 --cadvisor-port=0 \
 {{- end }}
---enable-debugging-handlers=true \
 --kubeconfig=/var/lib/kubelet/kubeconfig-real \
 --network-plugin=cni \
 --node-labels="kubernetes.io/role=node,node-role.kubernetes.io/node=,worker.garden.sapcloud.io/group={{ required "workers.name is required" .worker.name }}" \
+{{- if semverCompare "< 1.11" .kubernetes.version }}
 --rotate-certificates=true \
+{{- end }}
 {{- range $index, $param := .kubernetes.kubelet.parameters }}
 {{ $param }} \
 {{- end }}

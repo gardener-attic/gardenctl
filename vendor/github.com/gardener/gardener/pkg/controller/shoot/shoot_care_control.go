@@ -71,14 +71,8 @@ func (c *Controller) reconcileShootCareKey(key string) error {
 
 	defer c.shootCareAdd(shoot)
 
-	if operationOngoing(shoot) {
-		logger.Logger.Debugf("[SHOOT CARE] %s - skipping because an operation in ongoing", key)
-		return nil
-	}
-
-	// Either ignore Shoots which are marked as to-be-ignored or execute care operations.
-	if mustIgnoreShoot(shoot.Annotations, c.config.Controllers.Shoot.RespectSyncPeriodOverwrite) {
-		logger.Logger.Infof("[SHOOT CARE] %s - skipping because Shoot is marked as 'to-be-ignored'.", key)
+	if shoot.Status.LastOperation == nil || operationOngoing(shoot) {
+		logger.Logger.Debugf("[SHOOT CARE] %s - skipping because Shoot is new or an operation in ongoing", key)
 		return nil
 	}
 
@@ -204,8 +198,8 @@ func (c *defaultCareControl) labelShoot(shoot *gardenv1beta1.Shoot, healthy bool
 	return err
 }
 
-// garbageCollection cleans the Seed and the Shoot cluster from unrequired objects.
-// It receives a Garden object <garden> which stores the Shoot object.
+// garbageCollection cleans the Seed and the Shoot cluster from no longer required
+// objects. It receives a Garden object <garden> which stores the Shoot object.
 func garbageCollection(botanist *botanistpkg.Botanist) {
 	var wg sync.WaitGroup
 

@@ -180,7 +180,11 @@ func (b *Botanist) DeploySecrets() error {
 			"password": csv[0],
 		}
 	} else {
-		basicAuthUsername, basicAuthPassword := generateBasicAuthData()
+		basicAuthUsername, basicAuthPassword, err := generateBasicAuthData()
+		if err != nil {
+			return err
+		}
+
 		basicAuthData = map[string]string{
 			"username": basicAuthUsername,
 			"password": basicAuthPassword,
@@ -215,6 +219,25 @@ func (b *Botanist) DeploySecrets() error {
 		}
 	} else {
 		b.Secrets[name] = tlsAuthSecret
+	}
+
+	// We create the basic auth credentials for ingress resources used by the monitoring stack
+	name = "monitoring-ingress-credentials"
+	if val, ok := secretsMap[name]; ok {
+		b.Secrets[name] = val
+	} else {
+		monitoringUser, monitoringPassword, err := generateBasicAuthData()
+		if err != nil {
+			return err
+		}
+		data = map[string][]byte{
+			"username": []byte(monitoringUser),
+			"password": []byte(monitoringPassword),
+		}
+		b.Secrets[name], err = b.K8sSeedClient.CreateSecret(b.Shoot.SeedNamespace, name, corev1.SecretTypeOpaque, data, false)
+		if err != nil {
+			return err
+		}
 	}
 
 	// Now we are prepared enough to generate the remaining secrets, i.e. server certificates, client certificates,
@@ -529,8 +552,9 @@ func signCertificate(certificateTemplate, certificateTemplateSigner *x509.Certif
 
 // generateBasicAuthData computes a username/password keypair. It uses "admin" as username and generates a
 // random password of length 32.
-func generateBasicAuthData() (string, string) {
-	return "admin", utils.GenerateRandomString(32)
+func generateBasicAuthData() (string, string, error) {
+	password, err := utils.GenerateRandomString(32)
+	return "admin", password, err
 }
 
 // generateKubeconfig generates a Kubernetes Kubeconfig for communicating with the kube-apiserver by using
@@ -736,6 +760,22 @@ func (b *Botanist) generateSecrets() ([]interface{}, error) {
 					Name: "machine-controller-manager",
 				},
 				CommonName:   "system:machine-controller-manager",
+				Organization: nil,
+				DNSNames:     nil,
+				IPAddresses:  nil,
+				CertType:     ClientCert,
+			},
+			KubeconfigRequired: true,
+			RunsInSeed:         true,
+		},
+
+		// Secret definition for cluster-autoscaler
+		ControlPlaneSecret{
+			TLSSecret: TLSSecret{
+				Secret: Secret{
+					Name: "cluster-autoscaler",
+				},
+				CommonName:   "system:cluster-autoscaler",
 				Organization: nil,
 				DNSNames:     nil,
 				IPAddresses:  nil,

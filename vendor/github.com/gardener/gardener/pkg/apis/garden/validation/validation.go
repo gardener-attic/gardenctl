@@ -161,8 +161,8 @@ func validateDNSProviders(providers []garden.DNSProviderConstraint, fldPath *fie
 
 	for i, provider := range providers {
 		idxPath := fldPath.Index(i)
-		if provider.Name != garden.DNSUnmanaged && provider.Name != garden.DNSAWSRoute53 && provider.Name != garden.DNSGoogleCloudDNS {
-			allErrs = append(allErrs, field.NotSupported(idxPath, provider.Name, []string{string(garden.DNSUnmanaged), string(garden.DNSAWSRoute53), string(garden.DNSGoogleCloudDNS)}))
+		if provider.Name != garden.DNSUnmanaged && provider.Name != garden.DNSAWSRoute53 && provider.Name != garden.DNSGoogleCloudDNS && provider.Name != garden.DNSOpenstackDesignate {
+			allErrs = append(allErrs, field.NotSupported(idxPath, provider.Name, []string{string(garden.DNSUnmanaged), string(garden.DNSAWSRoute53), string(garden.DNSGoogleCloudDNS), string(garden.DNSOpenstackDesignate)}))
 		}
 	}
 
@@ -466,11 +466,7 @@ func ValidateSeedSpec(seedSpec *garden.SeedSpec, fldPath *field.Path) field.Erro
 		allErrs = append(allErrs, field.Required(cloudPath.Child("region"), "must provide a region"))
 	}
 
-	r, _ := regexp.Compile(`^(?:[a-zA-Z0-9\-]+\.)*[a-zA-Z0-9]+\.[a-zA-Z0-9]{2,6}$`)
-	if !r.MatchString(seedSpec.IngressDomain) {
-		allErrs = append(allErrs, field.Invalid(fldPath.Child("ingressDomain"), seedSpec.IngressDomain, fmt.Sprintf("domain must match the regex %s", r)))
-	}
-
+	allErrs = append(allErrs, validateDNS1123Subdomain(seedSpec.IngressDomain, fldPath.Child("ingressDomain"))...)
 	allErrs = append(allErrs, validateSecretReference(seedSpec.SecretRef, fldPath.Child("secretRef"))...)
 
 	networksPath := fldPath.Child("networks")
@@ -595,6 +591,8 @@ func ValidateSecretBindingUpdate(newBinding, oldBinding *garden.SecretBinding) f
 	allErrs := field.ErrorList{}
 
 	allErrs = append(allErrs, apivalidation.ValidateObjectMetaUpdate(&newBinding.ObjectMeta, &oldBinding.ObjectMeta, field.NewPath("metadata"))...)
+	allErrs = append(allErrs, apivalidation.ValidateImmutableField(newBinding.SecretRef, oldBinding.SecretRef, field.NewPath("secretRef"))...)
+	allErrs = append(allErrs, apivalidation.ValidateImmutableField(newBinding.Quotas, oldBinding.Quotas, field.NewPath("quotas"))...)
 	allErrs = append(allErrs, ValidateSecretBinding(newBinding)...)
 
 	return allErrs
@@ -664,7 +662,7 @@ func validateSecretReferenceOptionalNamespace(ref corev1.SecretReference, fldPat
 func ValidateShoot(shoot *garden.Shoot) field.ErrorList {
 	allErrs := field.ErrorList{}
 
-	allErrs = append(allErrs, apivalidation.ValidateObjectMeta(&shoot.ObjectMeta, true, ValidateName, field.NewPath("metadata"))...)
+	allErrs = append(allErrs, apivalidation.ValidateObjectMeta(&shoot.ObjectMeta, true, apivalidation.NameIsDNSLabel, field.NewPath("metadata"))...)
 	allErrs = append(allErrs, validateShootName(shoot.Name, field.NewPath("metadata", "name"))...)
 	allErrs = append(allErrs, ValidateShootSpec(&shoot.Spec, field.NewPath("spec"))...)
 
@@ -687,15 +685,16 @@ func ValidateShootSpec(spec *garden.ShootSpec, fldPath *field.Path) field.ErrorL
 	allErrs := field.ErrorList{}
 
 	cloudPath := fldPath.Child("cloud")
-	provider, err := helper.DetermineCloudProviderInShoot(spec.Cloud)
-	if err != nil {
+	if _, err := helper.DetermineCloudProviderInShoot(spec.Cloud); err != nil {
 		allErrs = append(allErrs, field.Forbidden(cloudPath.Child("aws/azure/gcp/openstack/local"), "cloud section must only contain exactly one field of aws/azure/gcp/openstack/local"))
 		return allErrs
 	}
 
+	autoScalingEnabled := spec.Addons != nil && spec.Addons.ClusterAutoscaler != nil && spec.Addons.ClusterAutoscaler.Enabled
+
 	allErrs = append(allErrs, validateAddons(spec.Addons, fldPath.Child("addons"))...)
-	allErrs = append(allErrs, validateBackup(spec.Backup, provider, fldPath.Child("backup"))...)
-	allErrs = append(allErrs, validateCloud(spec.Cloud, fldPath.Child("cloud"))...)
+	allErrs = append(allErrs, validateBackup(spec.Backup, fldPath.Child("backup"))...)
+	allErrs = append(allErrs, validateCloud(spec.Cloud, autoScalingEnabled, fldPath.Child("cloud"))...)
 	allErrs = append(allErrs, validateDNS(spec.DNS, fldPath.Child("dns"))...)
 	allErrs = append(allErrs, validateKubernetes(spec.Kubernetes, fldPath.Child("kubernetes"))...)
 	allErrs = append(allErrs, validateMaintenance(spec.Maintenance, fldPath.Child("maintenance"))...)
@@ -779,7 +778,7 @@ func validateAddons(addons *garden.Addons, fldPath *field.Path) field.ErrorList 
 	return allErrs
 }
 
-func validateBackup(backup *garden.Backup, cloudProvider garden.CloudProvider, fldPath *field.Path) field.ErrorList {
+func validateBackup(backup *garden.Backup, fldPath *field.Path) field.ErrorList {
 	allErrs := field.ErrorList{}
 
 	if backup == nil {
@@ -795,7 +794,7 @@ func validateBackup(backup *garden.Backup, cloudProvider garden.CloudProvider, f
 	return allErrs
 }
 
-func validateCloud(cloud garden.Cloud, fldPath *field.Path) field.ErrorList {
+func validateCloud(cloud garden.Cloud, autoScalingEnabled bool, fldPath *field.Path) field.ErrorList {
 	allErrs := field.ErrorList{}
 	workerNames := make(map[string]bool)
 
@@ -856,7 +855,7 @@ func validateCloud(cloud garden.Cloud, fldPath *field.Path) field.ErrorList {
 		}
 		for i, worker := range aws.Workers {
 			idxPath := awsPath.Child("workers").Index(i)
-			allErrs = append(allErrs, validateWorker(worker.Worker, idxPath)...)
+			allErrs = append(allErrs, validateWorker(worker.Worker, autoScalingEnabled, idxPath)...)
 			allErrs = append(allErrs, validateWorkerVolumeSize(worker.VolumeSize, idxPath.Child("volumeSize"))...)
 			allErrs = append(allErrs, validateWorkerMinimumVolumeSize(worker.VolumeSize, 20, idxPath.Child("volumeSize"))...)
 			allErrs = append(allErrs, validateWorkerVolumeType(worker.VolumeType, idxPath.Child("volumeType"))...)
@@ -910,13 +909,10 @@ func validateCloud(cloud garden.Cloud, fldPath *field.Path) field.ErrorList {
 		}
 		for i, worker := range azure.Workers {
 			idxPath := azurePath.Child("workers").Index(i)
-			allErrs = append(allErrs, validateWorker(worker.Worker, idxPath)...)
+			allErrs = append(allErrs, validateWorker(worker.Worker, autoScalingEnabled, idxPath)...)
 			allErrs = append(allErrs, validateWorkerVolumeSize(worker.VolumeSize, idxPath.Child("volumeSize"))...)
 			allErrs = append(allErrs, validateWorkerMinimumVolumeSize(worker.VolumeSize, 35, idxPath.Child("volumeSize"))...)
 			allErrs = append(allErrs, validateWorkerVolumeType(worker.VolumeType, idxPath.Child("volumeType"))...)
-			if worker.AutoScalerMax != worker.AutoScalerMin {
-				allErrs = append(allErrs, field.Forbidden(idxPath.Child("autoScalerMax"), "maximum value must be equal to minimum value"))
-			}
 			if workerNames[worker.Name] {
 				allErrs = append(allErrs, field.Duplicate(idxPath, worker.Name))
 			}
@@ -952,7 +948,7 @@ func validateCloud(cloud garden.Cloud, fldPath *field.Path) field.ErrorList {
 		}
 		for i, worker := range gcp.Workers {
 			idxPath := gcpPath.Child("workers").Index(i)
-			allErrs = append(allErrs, validateWorker(worker.Worker, idxPath)...)
+			allErrs = append(allErrs, validateWorker(worker.Worker, autoScalingEnabled, idxPath)...)
 			allErrs = append(allErrs, validateWorkerVolumeSize(worker.VolumeSize, idxPath.Child("volumeSize"))...)
 			allErrs = append(allErrs, validateWorkerMinimumVolumeSize(worker.VolumeSize, 20, idxPath.Child("volumeSize"))...)
 			allErrs = append(allErrs, validateWorkerVolumeType(worker.VolumeType, idxPath.Child("volumeType"))...)
@@ -999,10 +995,7 @@ func validateCloud(cloud garden.Cloud, fldPath *field.Path) field.ErrorList {
 		}
 		for i, worker := range openStack.Workers {
 			idxPath := openStackPath.Child("workers").Index(i)
-			allErrs = append(allErrs, validateWorker(worker.Worker, idxPath)...)
-			if worker.AutoScalerMax != worker.AutoScalerMin {
-				allErrs = append(allErrs, field.Forbidden(idxPath.Child("autoScalerMax"), "maximum value must be equal to minimum value"))
-			}
+			allErrs = append(allErrs, validateWorker(worker.Worker, autoScalingEnabled, idxPath)...)
 			if workerNames[worker.Name] {
 				allErrs = append(allErrs, field.Duplicate(idxPath, worker.Name))
 			}
@@ -1087,6 +1080,11 @@ func validateDNSUpdate(new, old garden.DNS, fldPath *field.Path) field.ErrorList
 func validateKubernetesVersionUpdate(new, old string, fldPath *field.Path) field.ErrorList {
 	allErrs := field.ErrorList{}
 
+	if len(new) == 0 {
+		allErrs = append(allErrs, field.Invalid(fldPath, new, "cannot validate kubernetes version upgrade because it is unset"))
+		return allErrs
+	}
+
 	// Forbid Kubernetes version downgrade
 	downgrade, err := utils.CompareVersions(new, "<", old)
 	if err != nil {
@@ -1117,8 +1115,8 @@ func validateKubernetesVersionUpdate(new, old string, fldPath *field.Path) field
 func validateDNS(dns garden.DNS, fldPath *field.Path) field.ErrorList {
 	allErrs := field.ErrorList{}
 
-	if dns.Provider != garden.DNSUnmanaged && dns.Provider != garden.DNSAWSRoute53 && dns.Provider != garden.DNSGoogleCloudDNS {
-		allErrs = append(allErrs, field.NotSupported(fldPath.Child("provider"), dns.Provider, []string{string(garden.DNSUnmanaged), string(garden.DNSAWSRoute53), string(garden.DNSGoogleCloudDNS)}))
+	if dns.Provider != garden.DNSUnmanaged && dns.Provider != garden.DNSAWSRoute53 && dns.Provider != garden.DNSGoogleCloudDNS && dns.Provider != garden.DNSOpenstackDesignate {
+		allErrs = append(allErrs, field.NotSupported(fldPath.Child("provider"), dns.Provider, []string{string(garden.DNSUnmanaged), string(garden.DNSAWSRoute53), string(garden.DNSGoogleCloudDNS), string(garden.DNSOpenstackDesignate)}))
 	}
 
 	if dns.HostedZoneID != nil {
@@ -1163,33 +1161,52 @@ func validateK8SNetworks(networks garden.K8SNetworks, fldPath *field.Path) field
 func validateKubernetes(kubernetes garden.Kubernetes, fldPath *field.Path) field.ErrorList {
 	allErrs := field.ErrorList{}
 
-	kubeAPIServer := kubernetes.KubeAPIServer
-	if kubeAPIServer != nil {
-		oidc := kubeAPIServer.OIDCConfig
-		if oidc != nil {
+	if len(kubernetes.Version) == 0 {
+		allErrs = append(allErrs, field.Required(fldPath.Child("version"), "kubernetes version must not be empty"))
+		return allErrs
+	}
+
+	if kubeAPIServer := kubernetes.KubeAPIServer; kubeAPIServer != nil {
+		if oidc := kubeAPIServer.OIDCConfig; oidc != nil {
 			oidcPath := fldPath.Child("kubeAPIServer", "oidcConfig")
 
-			_, err := utils.DecodeCertificate([]byte(*oidc.CABundle))
+			geqKubernetes110, err := utils.CheckVersionMeetsConstraint(kubernetes.Version, ">= 1.10")
 			if err != nil {
-				allErrs = append(allErrs, field.Invalid(oidcPath.Child("caBundle"), oidc.CABundle, "caBundle is not a valid PEM-encoded certificate"))
+				geqKubernetes110 = false
 			}
-			if len(*oidc.ClientID) == 0 {
-				allErrs = append(allErrs, field.Invalid(oidcPath.Child("clientID"), oidc.ClientID, "client id cannot be empty when key is provided"))
+			geqKubernetes111, err := utils.CheckVersionMeetsConstraint(kubernetes.Version, ">= 1.11")
+			if err != nil {
+				geqKubernetes111 = false
 			}
-			if len(*oidc.GroupsClaim) == 0 {
-				allErrs = append(allErrs, field.Invalid(oidcPath.Child("groupsClaim"), oidc.GroupsClaim, "groups claim cannot be empty when key is provided"))
+
+			if oidc.CABundle != nil {
+				if _, err := utils.DecodeCertificate([]byte(*oidc.CABundle)); err != nil {
+					allErrs = append(allErrs, field.Invalid(oidcPath.Child("caBundle"), *oidc.CABundle, "caBundle is not a valid PEM-encoded certificate"))
+				}
 			}
-			if len(*oidc.GroupsPrefix) == 0 {
-				allErrs = append(allErrs, field.Invalid(oidcPath.Child("groupsPrefix"), oidc.GroupsPrefix, "groups prefix cannot be empty when key is provided"))
+			if oidc.ClientID != nil && len(*oidc.ClientID) == 0 {
+				allErrs = append(allErrs, field.Invalid(oidcPath.Child("clientID"), *oidc.ClientID, "client id cannot be empty when key is provided"))
 			}
-			if len(*oidc.IssuerURL) == 0 {
-				allErrs = append(allErrs, field.Invalid(oidcPath.Child("issuerURL"), oidc.IssuerURL, "issuer url cannot be empty when key is provided"))
+			if oidc.GroupsClaim != nil && len(*oidc.GroupsClaim) == 0 {
+				allErrs = append(allErrs, field.Invalid(oidcPath.Child("groupsClaim"), *oidc.GroupsClaim, "groups claim cannot be empty when key is provided"))
 			}
-			if len(*oidc.UsernameClaim) == 0 {
-				allErrs = append(allErrs, field.Invalid(oidcPath.Child("usernameClaim"), oidc.UsernameClaim, "username claim cannot be empty when key is provided"))
+			if oidc.GroupsPrefix != nil && len(*oidc.GroupsPrefix) == 0 {
+				allErrs = append(allErrs, field.Invalid(oidcPath.Child("groupsPrefix"), *oidc.GroupsPrefix, "groups prefix cannot be empty when key is provided"))
 			}
-			if len(*oidc.UsernamePrefix) == 0 {
-				allErrs = append(allErrs, field.Invalid(oidcPath.Child("usernamePrefix"), oidc.UsernamePrefix, "username prefix cannot be empty when key is provided"))
+			if oidc.IssuerURL != nil && len(*oidc.IssuerURL) == 0 {
+				allErrs = append(allErrs, field.Invalid(oidcPath.Child("issuerURL"), *oidc.IssuerURL, "issuer url cannot be empty when key is provided"))
+			}
+			if !geqKubernetes110 && oidc.SigningAlgs != nil {
+				allErrs = append(allErrs, field.Forbidden(oidcPath.Child("signingAlgs"), "signings algs cannot be provided when version is not greater or equal 1.10"))
+			}
+			if !geqKubernetes111 && oidc.RequiredClaims != nil {
+				allErrs = append(allErrs, field.Forbidden(oidcPath.Child("requiredClaims"), "required claims cannot be provided when version is not greater or equal 1.11"))
+			}
+			if oidc.UsernameClaim != nil && len(*oidc.UsernameClaim) == 0 {
+				allErrs = append(allErrs, field.Invalid(oidcPath.Child("usernameClaim"), *oidc.UsernameClaim, "username claim cannot be empty when key is provided"))
+			}
+			if oidc.UsernamePrefix != nil && len(*oidc.UsernamePrefix) == 0 {
+				allErrs = append(allErrs, field.Invalid(oidcPath.Child("usernamePrefix"), *oidc.UsernamePrefix, "username prefix cannot be empty when key is provided"))
 			}
 		}
 	}
@@ -1245,10 +1262,10 @@ func validateMaintenance(maintenance *garden.Maintenance, fldPath *field.Path) f
 	return allErrs
 }
 
-func validateWorker(worker garden.Worker, fldPath *field.Path) field.ErrorList {
+func validateWorker(worker garden.Worker, autoScalingEnabled bool, fldPath *field.Path) field.ErrorList {
 	allErrs := field.ErrorList{}
 
-	allErrs = append(allErrs, validateDNS1123Subdomain(worker.Name, fldPath.Child("name"))...)
+	allErrs = append(allErrs, validateDNS1123Label(worker.Name, fldPath.Child("name"))...)
 	maxWorkerNameLength := 15
 	if len(worker.Name) > maxWorkerNameLength {
 		allErrs = append(allErrs, field.TooLong(fldPath.Child("name"), worker.Name, maxWorkerNameLength))
@@ -1264,6 +1281,12 @@ func validateWorker(worker garden.Worker, fldPath *field.Path) field.ErrorList {
 	}
 	if worker.AutoScalerMax < worker.AutoScalerMin {
 		allErrs = append(allErrs, field.Forbidden(fldPath.Child("autoScalerMax"), "maximum value must not be less or equal than minimum value"))
+	}
+	if !autoScalingEnabled && worker.AutoScalerMin != worker.AutoScalerMax {
+		allErrs = append(allErrs, field.Forbidden(fldPath.Child("autoScalerMin/autoScalerMax"), "maximum value must be equal to minimum value if cluster autoscaler addon is disabled"))
+	}
+	if autoScalingEnabled && worker.AutoScalerMax != 0 && worker.AutoScalerMin == 0 {
+		allErrs = append(allErrs, field.Forbidden(fldPath.Child("autoScalerMin"), "minimum value must be larger than 0 if autoscaling is enabled and maximum is not equals zero"))
 	}
 
 	return allErrs
@@ -1316,6 +1339,17 @@ func validateDNS1123Subdomain(value string, fldPath *field.Path) field.ErrorList
 	return allErrs
 }
 
+// validateDNS1123Label valides a name is a proper RFC1123 DNS label.
+func validateDNS1123Label(value string, fldPath *field.Path) field.ErrorList {
+	allErrs := field.ErrorList{}
+
+	for _, msg := range validation.IsDNS1123Label(value) {
+		allErrs = append(allErrs, field.Invalid(fldPath, value, msg))
+	}
+
+	return allErrs
+}
+
 ////////////////////////////////////////////////////
 //          BACKUP INFRASTRUCTURE                 //
 ////////////////////////////////////////////////////
@@ -1360,7 +1394,7 @@ func ValidateBackupInfrastructureSpecUpdate(newSpec, oldSpec *garden.BackupInfra
 	allErrs := field.ErrorList{}
 
 	allErrs = append(allErrs, apivalidation.ValidateImmutableField(newSpec.Seed, oldSpec.Seed, fldPath.Child("seed"))...)
-	allErrs = append(allErrs, apivalidation.ValidateImmutableField(newSpec.Seed, oldSpec.Seed, fldPath.Child("shootUID"))...)
+	allErrs = append(allErrs, apivalidation.ValidateImmutableField(newSpec.ShootUID, oldSpec.ShootUID, fldPath.Child("shootUID"))...)
 	return allErrs
 }
 

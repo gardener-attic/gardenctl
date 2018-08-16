@@ -8,7 +8,7 @@ import (
 	unsafe "unsafe"
 
 	garden "github.com/gardener/gardener/pkg/apis/garden"
-	core_v1 "k8s.io/api/core/v1"
+	corev1 "k8s.io/api/core/v1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	conversion "k8s.io/apimachinery/pkg/conversion"
 	runtime "k8s.io/apimachinery/pkg/runtime"
@@ -1040,7 +1040,7 @@ func Convert_garden_ClusterAutoscaler_To_v1beta1_ClusterAutoscaler(in *garden.Cl
 
 func autoConvert_v1beta1_Condition_To_garden_Condition(in *Condition, out *garden.Condition, s conversion.Scope) error {
 	out.Type = garden.ConditionType(in.Type)
-	out.Status = core_v1.ConditionStatus(in.Status)
+	out.Status = corev1.ConditionStatus(in.Status)
 	out.LastTransitionTime = in.LastTransitionTime
 	out.Reason = in.Reason
 	out.Message = in.Message
@@ -1054,7 +1054,7 @@ func Convert_v1beta1_Condition_To_garden_Condition(in *Condition, out *garden.Co
 
 func autoConvert_garden_Condition_To_v1beta1_Condition(in *garden.Condition, out *Condition, s conversion.Scope) error {
 	out.Type = ConditionType(in.Type)
-	out.Status = core_v1.ConditionStatus(in.Status)
+	out.Status = corev1.ConditionStatus(in.Status)
 	out.LastTransitionTime = in.LastTransitionTime
 	out.Reason = in.Reason
 	out.Message = in.Message
@@ -1954,6 +1954,7 @@ func autoConvert_v1beta1_NginxIngress_To_garden_NginxIngress(in *NginxIngress, o
 	if err := Convert_v1beta1_Addon_To_garden_Addon(&in.Addon, &out.Addon, s); err != nil {
 		return err
 	}
+	out.LoadBalancerSourceRanges = *(*[]string)(unsafe.Pointer(&in.LoadBalancerSourceRanges))
 	return nil
 }
 
@@ -1966,6 +1967,7 @@ func autoConvert_garden_NginxIngress_To_v1beta1_NginxIngress(in *garden.NginxIng
 	if err := Convert_garden_Addon_To_v1beta1_Addon(&in.Addon, &out.Addon, s); err != nil {
 		return err
 	}
+	out.LoadBalancerSourceRanges = *(*[]string)(unsafe.Pointer(&in.LoadBalancerSourceRanges))
 	return nil
 }
 
@@ -1980,6 +1982,8 @@ func autoConvert_v1beta1_OIDCConfig_To_garden_OIDCConfig(in *OIDCConfig, out *ga
 	out.GroupsClaim = (*string)(unsafe.Pointer(in.GroupsClaim))
 	out.GroupsPrefix = (*string)(unsafe.Pointer(in.GroupsPrefix))
 	out.IssuerURL = (*string)(unsafe.Pointer(in.IssuerURL))
+	out.RequiredClaims = *(*map[string]string)(unsafe.Pointer(&in.RequiredClaims))
+	out.SigningAlgs = *(*[]string)(unsafe.Pointer(&in.SigningAlgs))
 	out.UsernameClaim = (*string)(unsafe.Pointer(in.UsernameClaim))
 	out.UsernamePrefix = (*string)(unsafe.Pointer(in.UsernamePrefix))
 	return nil
@@ -1996,6 +2000,8 @@ func autoConvert_garden_OIDCConfig_To_v1beta1_OIDCConfig(in *garden.OIDCConfig, 
 	out.GroupsClaim = (*string)(unsafe.Pointer(in.GroupsClaim))
 	out.GroupsPrefix = (*string)(unsafe.Pointer(in.GroupsPrefix))
 	out.IssuerURL = (*string)(unsafe.Pointer(in.IssuerURL))
+	out.RequiredClaims = *(*map[string]string)(unsafe.Pointer(&in.RequiredClaims))
+	out.SigningAlgs = *(*[]string)(unsafe.Pointer(&in.SigningAlgs))
 	out.UsernameClaim = (*string)(unsafe.Pointer(in.UsernameClaim))
 	out.UsernamePrefix = (*string)(unsafe.Pointer(in.UsernamePrefix))
 	return nil
@@ -2318,7 +2324,7 @@ func Convert_garden_QuotaList_To_v1beta1_QuotaList(in *garden.QuotaList, out *Qu
 
 func autoConvert_v1beta1_QuotaSpec_To_garden_QuotaSpec(in *QuotaSpec, out *garden.QuotaSpec, s conversion.Scope) error {
 	out.ClusterLifetimeDays = (*int)(unsafe.Pointer(in.ClusterLifetimeDays))
-	out.Metrics = *(*core_v1.ResourceList)(unsafe.Pointer(&in.Metrics))
+	out.Metrics = *(*corev1.ResourceList)(unsafe.Pointer(&in.Metrics))
 	out.Scope = garden.QuotaScope(in.Scope)
 	return nil
 }
@@ -2330,7 +2336,7 @@ func Convert_v1beta1_QuotaSpec_To_garden_QuotaSpec(in *QuotaSpec, out *garden.Qu
 
 func autoConvert_garden_QuotaSpec_To_v1beta1_QuotaSpec(in *garden.QuotaSpec, out *QuotaSpec, s conversion.Scope) error {
 	out.ClusterLifetimeDays = (*int)(unsafe.Pointer(in.ClusterLifetimeDays))
-	out.Metrics = *(*core_v1.ResourceList)(unsafe.Pointer(&in.Metrics))
+	out.Metrics = *(*corev1.ResourceList)(unsafe.Pointer(&in.Metrics))
 	out.Scope = QuotaScope(in.Scope)
 	return nil
 }
@@ -2343,7 +2349,7 @@ func Convert_garden_QuotaSpec_To_v1beta1_QuotaSpec(in *garden.QuotaSpec, out *Qu
 func autoConvert_v1beta1_SecretBinding_To_garden_SecretBinding(in *SecretBinding, out *garden.SecretBinding, s conversion.Scope) error {
 	out.ObjectMeta = in.ObjectMeta
 	out.SecretRef = in.SecretRef
-	out.Quotas = *(*[]core_v1.ObjectReference)(unsafe.Pointer(&in.Quotas))
+	out.Quotas = *(*[]corev1.ObjectReference)(unsafe.Pointer(&in.Quotas))
 	return nil
 }
 
@@ -2355,7 +2361,7 @@ func Convert_v1beta1_SecretBinding_To_garden_SecretBinding(in *SecretBinding, ou
 func autoConvert_garden_SecretBinding_To_v1beta1_SecretBinding(in *garden.SecretBinding, out *SecretBinding, s conversion.Scope) error {
 	out.ObjectMeta = in.ObjectMeta
 	out.SecretRef = in.SecretRef
-	out.Quotas = *(*[]core_v1.ObjectReference)(unsafe.Pointer(&in.Quotas))
+	out.Quotas = *(*[]corev1.ObjectReference)(unsafe.Pointer(&in.Quotas))
 	return nil
 }
 

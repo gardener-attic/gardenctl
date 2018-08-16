@@ -1,0 +1,54 @@
+---
+apiVersion: garden.sapcloud.io/v1beta1
+kind: Shoot
+metadata:
+  name: johndoe-openstack
+  namespace: garden-dev
+spec:
+  cloud:
+    profile: openstack
+    region: europe-1
+    secretBindingRef:
+      name: core-openstack
+    openstack:
+      loadBalancerProvider: haproxy
+      floatingPoolName: MY-FLOATING-POOL
+      networks:
+      # router:
+      #   id: 1234
+        workers: ['10.250.0.0/19']
+      workers:
+      - name: cpu-worker
+        machineType: medium_2_4
+        autoScalerMin: 2
+        autoScalerMax: 2
+      zones: ['europe-1a']
+  kubernetes:
+    version: 1.11.0
+  dns:
+    provider: aws-route53
+    domain: johndoe-openstack.garden-dev.example.com
+  maintenance:
+    timeWindow:
+      begin: 220000+0100
+      end: 230000+0100
+    autoUpdate:
+      kubernetesVersion: true
+  backup:
+    schedule: "*/5 * * * *"
+    maximum: 7
+  addons:
+    heapster:
+      enabled: true
+    kubernetes-dashboard:
+      enabled: true
+    cluster-autoscaler:
+      enabled: true
+    nginx-ingress:
+      enabled: true
+      loadBalancerSourceRanges: []
+    kube-lego:
+      enabled: true
+      email: john.doe@example.com
+    monocular:
+      enabled: false

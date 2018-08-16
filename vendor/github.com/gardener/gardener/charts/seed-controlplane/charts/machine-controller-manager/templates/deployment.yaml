@@ -40,13 +40,23 @@ spec:
         - --target-kubeconfig=/var/lib/machine-controller-manager/kubeconfig
         - --namespace={{ .Release.Namespace }}
         - --v=2
+        livenessProbe:
+          failureThreshold: 3
+          httpGet:
+            path: /healthz
+            port: 10258
+            scheme: HTTP
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          successThreshold: 1
+          timeoutSeconds: 5
         resources:
           requests:
-            cpu: 5m
+            cpu: 50m
             memory: 64Mi
           limits:
-            cpu: 100m
-            memory: 128Mi
+            cpu: 350m
+            memory: 256Mi
         volumeMounts:
         - mountPath: /var/lib/machine-controller-manager
           name: machine-controller-manager

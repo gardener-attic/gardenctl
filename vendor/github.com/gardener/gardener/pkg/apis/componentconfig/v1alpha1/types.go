@@ -40,6 +40,12 @@ type ControllerManagerConfiguration struct {
 	Metrics MetricsConfiguration `json:"metrics"`
 	// Server defines the configuration of the HTTP server.
 	Server ServerConfiguration `json:"server"`
+	// FeatureGates is a map of feature names to bools that enable or disable alpha/experimental
+	// features. This field modifies piecemeal the built-in default values from
+	// "github.com/gardener/gardener/pkg/features/gardener_features.go".
+	// Default: nil
+	// +optional
+	FeatureGates map[string]bool `json:"featureGates,omitempty"`
 }
 
 // ClientConnectionConfiguration contains details for constructing a client.
@@ -57,6 +63,8 @@ type ClientConnectionConfiguration struct {
 	QPS float32 `json:"qps"`
 	// Burst allows extra queries to accumulate when a client is exceeding its rate.
 	Burst int32 `json:"burst"`
+	// Disable TCP connection reuse for Kubernetes clients (client-go)
+	DisableTCPKeepAlive bool `json:"disableTCPKeepAlive"`
 }
 
 // ControllerManagerControllerConfiguration defines the configuration of the controllers.
@@ -113,6 +121,15 @@ type SeedControllerConfiguration struct {
 	// ConcurrentSyncs is the number of workers used for the controller to work on
 	// events.
 	ConcurrentSyncs int `json:"concurrentSyncs"`
+	// ReserveExcessCapacity indicates whether the Seed controller should reserve
+	// excess capacity for Shoot control planes in the Seeds. This is done via
+	// PodPriority and requires the Seed cluster to have Kubernetes version 1.11 or
+	// the PodPriority feature gate as well as the scheduling.k8s.io/v1alpha1 API
+	// group enabled. It defaults to true.
+	// +optional
+	ReserveExcessCapacity *bool `json:"reserveExcessCapacity,omitempty"`
+	// SyncPeriod is the duration how often the existing resources are reconciled.
+	SyncPeriod metav1.Duration `json:"syncPeriod"`
 }
 
 // ShootControllerConfiguration defines the configuration of the CloudProfile

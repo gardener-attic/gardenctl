@@ -15,18 +15,23 @@
 package shoot
 
 import (
+	"fmt"
 	"sync"
 	"time"
 
 	"github.com/gardener/gardener/pkg/apis/componentconfig"
+	garden "github.com/gardener/gardener/pkg/apis/garden"
 	gardenv1beta1 "github.com/gardener/gardener/pkg/apis/garden/v1beta1"
+	"github.com/gardener/gardener/pkg/apis/garden/v1beta1/helper"
 	gardeninformers "github.com/gardener/gardener/pkg/client/garden/informers/externalversions"
 	gardenlisters "github.com/gardener/gardener/pkg/client/garden/listers/garden/v1beta1"
 	"github.com/gardener/gardener/pkg/client/kubernetes"
 	controllerutils "github.com/gardener/gardener/pkg/controller/utils"
 	"github.com/gardener/gardener/pkg/logger"
 	"github.com/gardener/gardener/pkg/utils/imagevector"
+	"github.com/robfig/cron"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/tools/record"
 	"k8s.io/client-go/util/workqueue"
@@ -166,6 +171,49 @@ func (c *Controller) Run(shootWorkers, shootCareWorkers, shootMaintenanceWorkers
 	}
 	logger.Logger.Info("Shoot controller initialized.")
 
+	// Update Shoots before starting the workers.
+	shoots, err := c.shootLister.List(labels.Everything())
+	if err != nil {
+		logger.Logger.Errorf("Failed to fetch shoots resources: %v", err.Error())
+		return
+	}
+	for _, shoot := range shoots {
+		var (
+			newShoot    = shoot.DeepCopy()
+			needsUpdate = false
+		)
+
+		// Check if the backup defaults are valid. If not, update the shoots with the default backup schedule.
+		schedule, err := cron.ParseStandard(shoot.Spec.Backup.Schedule)
+		if err != nil {
+			logger.Logger.Errorf("Failed to parse the schedule for shoot [%v]: %v ", shoot.ObjectMeta.Name, err.Error())
+			return
+		}
+
+		var (
+			nextScheduleTime              = schedule.Next(time.Now())
+			scheduleTimeAfterNextSchedule = schedule.Next(nextScheduleTime)
+			granularity                   = scheduleTimeAfterNextSchedule.Sub(nextScheduleTime)
+		)
+
+		if shoot.DeletionTimestamp == nil && granularity < garden.MinimumETCDFullBackupTimeInterval {
+			newShoot.Spec.Backup.Schedule = garden.DefaultETCDBackupSchedule
+			needsUpdate = true
+		}
+
+		// Check if the status indicates that an operation is processing and mark it as "aborted".
+		if shoot.Status.LastOperation != nil && shoot.Status.LastOperation.State == gardenv1beta1.ShootLastOperationStateProcessing {
+			newShoot.Status.LastOperation.State = gardenv1beta1.ShootLastOperationStateAborted
+			needsUpdate = true
+		}
+
+		if needsUpdate {
+			if _, err := c.k8sGardenClient.GardenClientset().Garden().Shoots(newShoot.Namespace).Update(newShoot); err != nil {
+				panic(fmt.Sprintf("Failed to update shoot [%v]: %v ", newShoot.ObjectMeta.Name, err.Error()))
+			}
+		}
+	}
+
 	for i := 0; i < shootWorkers; i++ {
 		controllerutils.CreateWorker(c.shootQueue, "Shoot", c.reconcileShootKey, stopCh, &waitGroup, c.workerCh)
 	}
@@ -225,8 +273,10 @@ func (c *Controller) shootNamespaceFilter(obj interface{}) bool {
 }
 
 func (c *Controller) getShootQueue(obj interface{}) workqueue.RateLimitingInterface {
-	if shoot, ok := obj.(*gardenv1beta1.Shoot); ok && shootIsUsedAsSeed(shoot) {
-		return c.shootSeedQueue
+	if shoot, ok := obj.(*gardenv1beta1.Shoot); ok {
+		if shootUsedAsSeed, _, _ := helper.IsUsedAsSeed(shoot); shootUsedAsSeed {
+			return c.shootSeedQueue
+		}
 	}
 	return c.shootQueue
 }

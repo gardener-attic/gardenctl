@@ -18,6 +18,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"time"
 
 	"github.com/gardener/gardener/pkg/apis/garden"
 	gardenv1beta1 "github.com/gardener/gardener/pkg/apis/garden/v1beta1"
@@ -29,6 +30,7 @@ import (
 	"k8s.io/apiserver/pkg/admission"
 	"k8s.io/apiserver/pkg/authorization/authorizer"
 	kubeinformers "k8s.io/client-go/informers"
+	"k8s.io/client-go/kubernetes"
 	kubecorev1listers "k8s.io/client-go/listers/core/v1"
 )
 
@@ -47,23 +49,40 @@ func Register(plugins *admission.Plugins) {
 // ReferenceManager contains listers and and admission handler.
 type ReferenceManager struct {
 	*admission.Handler
+	kubeClient          kubernetes.Interface
 	authorizer          authorizer.Authorizer
 	secretLister        kubecorev1listers.SecretLister
 	cloudProfileLister  gardenlisters.CloudProfileLister
 	seedLister          gardenlisters.SeedLister
 	secretBindingLister gardenlisters.SecretBindingLister
 	quotaLister         gardenlisters.QuotaLister
+	readyFunc           admission.ReadyFunc
 }
 
-var _ = admissioninitializer.WantsInternalGardenInformerFactory(&ReferenceManager{})
-var _ = admissioninitializer.WantsKubeInformerFactory(&ReferenceManager{})
-var _ = admissioninitializer.WantsAuthorizer(&ReferenceManager{})
+var (
+	_ = admissioninitializer.WantsInternalGardenInformerFactory(&ReferenceManager{})
+	_ = admissioninitializer.WantsKubeInformerFactory(&ReferenceManager{})
+	_ = admissioninitializer.WantsKubeClientset(&ReferenceManager{})
+	_ = admissioninitializer.WantsAuthorizer(&ReferenceManager{})
+
+	readyFuncs = []admission.ReadyFunc{}
+
+	// MissingSecretWait is the time how long to wait for a missing secret before re-checking the cache
+	// (and then doing a live lookup).
+	MissingSecretWait = 50 * time.Millisecond
+)
 
 // New creates a new ReferenceManager admission plugin.
 func New() (*ReferenceManager, error) {
 	return &ReferenceManager{
 		Handler: admission.NewHandler(admission.Create, admission.Update),
 	}, nil
+}
+
+// AssignReadyFunc assigns the ready function to the admission handler.
+func (r *ReferenceManager) AssignReadyFunc(f admission.ReadyFunc) {
+	r.readyFunc = f
+	r.SetReadyFunc(f)
 }
 
 // SetAuthorizer gets the authorizer.
@@ -73,15 +92,32 @@ func (r *ReferenceManager) SetAuthorizer(authorizer authorizer.Authorizer) {
 
 // SetInternalGardenInformerFactory gets Lister from SharedInformerFactory.
 func (r *ReferenceManager) SetInternalGardenInformerFactory(f gardeninformers.SharedInformerFactory) {
-	r.cloudProfileLister = f.Garden().InternalVersion().CloudProfiles().Lister()
-	r.seedLister = f.Garden().InternalVersion().Seeds().Lister()
-	r.secretBindingLister = f.Garden().InternalVersion().SecretBindings().Lister()
-	r.quotaLister = f.Garden().InternalVersion().Quotas().Lister()
+	seedInformer := f.Garden().InternalVersion().Seeds()
+	r.seedLister = seedInformer.Lister()
+
+	cloudProfileInformer := f.Garden().InternalVersion().CloudProfiles()
+	r.cloudProfileLister = cloudProfileInformer.Lister()
+
+	secretBindingInformer := f.Garden().InternalVersion().SecretBindings()
+	r.secretBindingLister = secretBindingInformer.Lister()
+
+	quotaInformer := f.Garden().InternalVersion().Quotas()
+	r.quotaLister = quotaInformer.Lister()
+
+	readyFuncs = append(readyFuncs, seedInformer.Informer().HasSynced, cloudProfileInformer.Informer().HasSynced, secretBindingInformer.Informer().HasSynced, quotaInformer.Informer().HasSynced)
 }
 
 // SetKubeInformerFactory gets Lister from SharedInformerFactory.
 func (r *ReferenceManager) SetKubeInformerFactory(f kubeinformers.SharedInformerFactory) {
-	r.secretLister = f.Core().V1().Secrets().Lister()
+	secretInformer := f.Core().V1().Secrets()
+	r.secretLister = secretInformer.Lister()
+
+	readyFuncs = append(readyFuncs, secretInformer.Informer().HasSynced)
+}
+
+// SetKubeClientset gets the clientset from the Kubernetes client.
+func (r *ReferenceManager) SetKubeClientset(c kubernetes.Interface) {
+	r.kubeClient = c
 }
 
 // ValidateInitialization checks whether the plugin was correctly initialized.
@@ -114,6 +150,16 @@ func skipVerification(operation admission.Operation, metadata metav1.ObjectMeta)
 // Admit ensures that referenced resources do actually exist.
 func (r *ReferenceManager) Admit(a admission.Attributes) error {
 	// Wait until the caches have been synced
+	if r.readyFunc == nil {
+		r.AssignReadyFunc(func() bool {
+			for _, readyFunc := range readyFuncs {
+				if !readyFunc() {
+					return false
+				}
+			}
+			return true
+		})
+	}
 	if !r.WaitForReady() {
 		return admission.NewForbidden(a, errors.New("not yet ready to handle request"))
 	}
@@ -176,7 +222,7 @@ func (r *ReferenceManager) ensureSecretBindingReferences(attributes admission.At
 		return errors.New("SecretBinding cannot reference a secret you are not allowed to read")
 	}
 
-	if _, err := r.secretLister.Secrets(binding.SecretRef.Namespace).Get(binding.SecretRef.Name); err != nil {
+	if err := r.lookupSecret(binding.SecretRef.Namespace, binding.SecretRef.Name); err != nil {
 		return err
 	}
 
@@ -226,7 +272,7 @@ func (r *ReferenceManager) ensureSeedReferences(seed *garden.Seed) error {
 		return err
 	}
 
-	if _, err := r.secretLister.Secrets(seed.Spec.SecretRef.Namespace).Get(seed.Spec.SecretRef.Name); err != nil {
+	if err := r.lookupSecret(seed.Spec.SecretRef.Namespace, seed.Spec.SecretRef.Name); err != nil {
 		return err
 	}
 
@@ -245,6 +291,40 @@ func (r *ReferenceManager) ensureShootReferences(shoot *garden.Shoot) error {
 	}
 
 	if _, err := r.secretBindingLister.SecretBindings(shoot.Namespace).Get(shoot.Spec.Cloud.SecretBindingRef.Name); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (r *ReferenceManager) lookupSecret(namespace, name string) error {
+	// First try to detect the secret in the cache.
+	var err error
+
+	_, err = r.secretLister.Secrets(namespace).Get(name)
+	if err == nil {
+		return nil
+	}
+	if !apierrors.IsNotFound(err) {
+		return err
+	}
+
+	// Second try to detect the secret in the cache after the first try failed.
+	// Give the cache time to observe the secret before rejecting a create.
+	// This helps when creating a secret and immediately creating a secretbinding referencing it.
+	time.Sleep(MissingSecretWait)
+	_, err = r.secretLister.Secrets(namespace).Get(name)
+	switch {
+	case apierrors.IsNotFound(err):
+		// no-op
+	case err != nil:
+		return err
+	default:
+		return nil
+	}
+
+	// Third try to detect the secret, now by doing a live lookup instead of relying on the cache.
+	if _, err := r.kubeClient.CoreV1().Secrets(namespace).Get(name, metav1.GetOptions{}); err != nil {
 		return err
 	}
 

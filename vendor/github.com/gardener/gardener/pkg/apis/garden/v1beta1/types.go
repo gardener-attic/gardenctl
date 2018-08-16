@@ -15,6 +15,8 @@
 package v1beta1
 
 import (
+	"time"
+
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -870,6 +872,9 @@ type ClusterAutoscaler struct {
 // NginxIngress describes configuration values for the nginx-ingress addon.
 type NginxIngress struct {
 	Addon `json:",inline"`
+	// LoadBalancerSourceRanges is list of whitelist IP sources for NginxIngress
+	// +optional
+	LoadBalancerSourceRanges []string `json:"loadBalancerSourceRanges,omitempty"`
 }
 
 // Monocular describes configuration values for the monocular addon.
@@ -881,14 +886,16 @@ type Monocular struct {
 type KubeLego struct {
 	Addon `json:",inline"`
 	// Mail is the email address to register at Let's Encrypt.
-	Mail string `json:"email"`
+	// +optional
+	Mail string `json:"email,omitempty"`
 }
 
 // Kube2IAM describes configuration values for the kube2iam addon.
 type Kube2IAM struct {
 	Addon `json:",inline"`
 	// Roles is list of AWS IAM roles which should be created by the Gardener.
-	Roles []Kube2IAMRole `json:"roles"`
+	// +optional
+	Roles []Kube2IAMRole `json:"roles,omitempty"`
 }
 
 // Kube2IAMRole allows passing AWS IAM policies which will result in IAM roles.
@@ -937,6 +944,8 @@ const (
 	DNSAWSRoute53 DNSProvider = "aws-route53"
 	// DNSGoogleCloudDNS is a constant for the 'google-clouddns' DNS provider.
 	DNSGoogleCloudDNS DNSProvider = "google-clouddns"
+	//DNSOpenstackDesignate is a constance for the designate DNS provider
+	DNSOpenstackDesignate DNSProvider = "openstack-designate"
 )
 
 // CloudProvider is a string alias.
@@ -1018,6 +1027,14 @@ type OIDCConfig struct {
 	// The URL of the OpenID issuer, only HTTPS scheme will be accepted. If set, it will be used to verify the OIDC JSON Web Token (JWT).
 	// +optional
 	IssuerURL *string `json:"issuerURL,omitempty"`
+	// ATTENTION: Only meaningful for Kubernetes >= 1.11
+	// key=value pairs that describes a required claim in the ID Token. If set, the claim is verified to be present in the ID Token with a matching value.
+	// +optional
+	RequiredClaims map[string]string `json:"requiredClaims,omitempty"`
+	// ATTENTION: Only meaningful for Kubernetes >= 1.10
+	// List of allowed JOSE asymmetric signing algorithms. JWTs with a 'alg' header value not in this list will be rejected. Values are defined by RFC 7518 https://tools.ietf.org/html/rfc7518#section-3.1
+	// +optional
+	SigningAlgs []string `json:"signingAlgs,omitempty"`
 	// The OpenID claim to use as the user name. Note that claims other than the default ('sub') is not guaranteed to be unique and immutable. This flag is experimental, please see the authentication documentation for further details. (default "sub")
 	// +optional
 	UsernameClaim *string `json:"usernameClaim,omitempty"`
@@ -1079,9 +1096,11 @@ const (
 	// DefaultServiceNetworkCIDR is a constant for the default service network CIDR of a Shoot cluster.
 	DefaultServiceNetworkCIDR = CIDR("100.64.0.0/13")
 	// DefaultETCDBackupSchedule is a constant for the default schedule to take backups of a Shoot cluster (5 minutes).
-	DefaultETCDBackupSchedule = "*/5 * * * *"
+	DefaultETCDBackupSchedule = "0 */24 * * *"
 	// DefaultETCDBackupMaximum is a constant for the default number of etcd backups to keep for a Shoot cluster.
 	DefaultETCDBackupMaximum = 7
+	// MinimumETCDFullBackupTimeInterval is the time interval between consecutive full backups.
+	MinimumETCDFullBackupTimeInterval = 24 * time.Hour
 )
 
 ////////////////////////
@@ -1107,9 +1126,9 @@ type LastOperation struct {
 	LastUpdateTime metav1.Time `json:"lastUpdateTime"`
 	// The progress in percentage (0-100) of the last operation.
 	Progress int `json:"progress"`
-	// Status of the last operation, one of Processing, Succeeded, Error, Failed.
+	// Status of the last operation, one of Aborted, Processing, Succeeded, Error, Failed.
 	State ShootLastOperationState `json:"state"`
-	// Type of the last operation, one of Create, Reconcile, Update, Delete.
+	// Type of the last operation, one of Create, Reconcile, Delete.
 	Type ShootLastOperationType `json:"type"`
 }
 
@@ -1121,8 +1140,6 @@ const (
 	ShootLastOperationTypeCreate ShootLastOperationType = "Create"
 	// ShootLastOperationTypeReconcile indicates a 'reconcile' operation.
 	ShootLastOperationTypeReconcile ShootLastOperationType = "Reconcile"
-	// ShootLastOperationTypeUpdate indicates an 'update' operation.
-	ShootLastOperationTypeUpdate ShootLastOperationType = "Update"
 	// ShootLastOperationTypeDelete indicates a 'delete' operation.
 	ShootLastOperationTypeDelete ShootLastOperationType = "Delete"
 )
@@ -1141,6 +1158,8 @@ const (
 	ShootLastOperationStateFailed ShootLastOperationState = "Failed"
 	// ShootLastOperationStatePending indicates that an operation cannot be done now, but will be tried in future.
 	ShootLastOperationStatePending ShootLastOperationState = "Pending"
+	// ShootLastOperationStateAborted indicates that an operation has been aborted.
+	ShootLastOperationStateAborted ShootLastOperationState = "Aborted"
 )
 
 // LastError indicates the last occurred error for an operation on a Shoot cluster.

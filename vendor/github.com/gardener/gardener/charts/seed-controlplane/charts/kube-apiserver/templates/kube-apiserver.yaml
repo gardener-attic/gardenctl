@@ -37,14 +37,16 @@ spec:
         - /hyperkube
         - apiserver
         {{- if semverCompare "< 1.10" .Values.kubernetesVersion }}
-        - --admission-control=NamespaceLifecycle,LimitRanger,ServiceAccount,NodeRestriction,DefaultStorageClass,PersistentVolumeLabel,DefaultTolerationSeconds,ResourceQuota
+        - --admission-control=Priority,NamespaceLifecycle,LimitRanger,ServiceAccount,NodeRestriction,DefaultStorageClass,PersistentVolumeLabel,DefaultTolerationSeconds,ResourceQuota
         {{- else }}
-        - --enable-admission-plugins=NamespaceLifecycle,LimitRanger,ServiceAccount,NodeRestriction,DefaultStorageClass,PersistentVolumeLabel,DefaultTolerationSeconds,StorageObjectInUseProtection,{{ if semverCompare ">= 1.9" .Values.kubernetesVersion }}MutatingAdmissionWebhook,{{ end }}ValidatingAdmissionWebhook,ResourceQuota
+        - --enable-admission-plugins=Priority,NamespaceLifecycle,LimitRanger,ServiceAccount,NodeRestriction,DefaultStorageClass,PersistentVolumeLabel,DefaultTolerationSeconds,StorageObjectInUseProtection,{{ if semverCompare ">= 1.9" .Values.kubernetesVersion }}MutatingAdmissionWebhook,{{ end }}ValidatingAdmissionWebhook,ResourceQuota
         {{- end }}
         - --advertise-address={{ .Values.advertiseAddress }}
         - --allow-privileged=true
         - --anonymous-auth=false
+        {{- if semverCompare "< 1.11" .Values.kubernetesVersion }}
         - --apiserver-count={{ .Values.replicas }}
+        {{- end }}
         {{- if semverCompare ">= 1.8" .Values.kubernetesVersion }}
         - --audit-log-path=/var/lib/audit.log
         - --audit-policy-file=/etc/kubernetes/audit/audit-policy.yaml
@@ -79,7 +81,7 @@ spec:
         - --requestheader-username-headers=X-Remote-User
         {{- include "kube-apiserver.runtimeConfig" . | trimSuffix "," | indent 8 }}
         - --secure-port={{ required ".securePort is required" .Values.securePort }}
-        - --service-cluster-ip-range={{ .Values.serviceNetwork }}
+        - --service-cluster-ip-range={{ .Values.shootNetworks.service }}
         - --service-account-key-file=/srv/kubernetes/service-account-key/id_rsa
         - --tls-cert-file=/srv/kubernetes/apiserver/kube-apiserver.crt
         - --tls-private-key-file=/srv/kubernetes/apiserver/kube-apiserver.key
@@ -96,11 +98,24 @@ spec:
             port: {{ required ".securePort is required" .Values.securePort }}
             httpHeaders:
             - name: Authorization
-              value: Basic {{ .Values.livenessProbeCredentials }}
+              value: Basic {{ .Values.probeCredentials }}
           successThreshold: 1
           failureThreshold: 2
           initialDelaySeconds: 30
-          periodSeconds: 10
+          periodSeconds: 30
+          timeoutSeconds: 15
+        readinessProbe:
+          httpGet:
+            scheme: HTTPS
+            path: /healthz
+            port: {{ required ".securePort is required" .Values.securePort }}
+            httpHeaders:
+            - name: Authorization
+              value: Basic {{ .Values.probeCredentials }}
+          successThreshold: 1
+          failureThreshold: 2
+          initialDelaySeconds: 10
+          periodSeconds: 30
           timeoutSeconds: 15
         terminationMessagePath: /dev/termination-log
         terminationMessagePolicy: File
@@ -111,13 +126,10 @@ spec:
         - name: local
           containerPort: 8080
           protocol: TCP
+        {{- if .Values.apiServerResources }}
         resources:
-          requests:
-            cpu: 200m
-            memory: 512Mi
-          limits:
-            cpu: 1500m
-            memory: 2500Mi
+{{ toYaml .Values.apiServerResources | indent 10 }}
+        {{- end }}
         volumeMounts:
         {{- if semverCompare ">= 1.8" .Values.kubernetesVersion }}
         - name: audit-policy-config

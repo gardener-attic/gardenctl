@@ -20,6 +20,7 @@ data:
       contentType: {{ required ".Values.controller.config.clientConnection.contentType is required" .Values.controller.config.clientConnection.contentType }}
       qps: {{ required ".Values.controller.config.clientConnection.qps is required" .Values.controller.config.clientConnection.qps }}
       burst: {{ required ".Values.controller.config.clientConnection.burst is required" .Values.controller.config.clientConnection.burst }}
+      disableTCPKeepAlive: {{ required ".Values.controller.config.clientConnection.disableTCPKeepAlive is required" .Values.controller.config.clientConnection.disableTCPKeepAlive }}
     controllers:
       {{- if .Values.controller.config.controllers.cloudProfile }}
       cloudProfile:
@@ -27,15 +28,16 @@ data:
       {{- end }}
       {{- if .Values.controller.config.controllers.secretBinding }}
       secretBinding:
-       concurrentSyncs: {{ required ".Values.controller.config.controllers.secretBinding.concurrentSyncs is required" .Values.controller.config.controllers.cloudProfile.concurrentSyncs }}
+        concurrentSyncs: {{ required ".Values.controller.config.controllers.secretBinding.concurrentSyncs is required" .Values.controller.config.controllers.secretBinding.concurrentSyncs }}
       {{- end }}
       {{- if .Values.controller.config.controllers.quota }}
       quota:
-       concurrentSyncs: {{ required ".Values.controller.config.controllers.quota.concurrentSyncs is required" .Values.controller.config.controllers.cloudProfile.concurrentSyncs }}
+        concurrentSyncs: {{ required ".Values.controller.config.controllers.quota.concurrentSyncs is required" .Values.controller.config.controllers.quota.concurrentSyncs }}
       {{- end }}
       {{- if .Values.controller.config.controllers.seed }}
       seed:
-        concurrentSyncs: {{ required ".Values.controller.config.controllers.seed.concurrentSyncs is required" .Values.controller.config.controllers.cloudProfile.concurrentSyncs }}
+        concurrentSyncs: {{ required ".Values.controller.config.controllers.seed.concurrentSyncs is required" .Values.controller.config.controllers.seed.concurrentSyncs }}
+        syncPeriod: {{ required ".Values.controller.config.controllers.seed.syncPeriod is required" .Values.controller.config.controllers.seed.syncPeriod }}
       {{- end }}
       shoot:
         concurrentSyncs: {{ required ".Values.controller.config.controllers.shoot.concurrentSyncs is required" .Values.controller.config.controllers.shoot.concurrentSyncs }}
@@ -74,4 +76,8 @@ data:
     server:
       bindAddress: {{ required ".Values.controller.config.server.bindAddress is required" .Values.controller.config.server.bindAddress }}
       port: {{ required ".Values.controller.config.server.port is required" .Values.controller.config.server.port }}
+    {{- if .Values.controller.config.featureGates }}
+    featureGates:
+{{ toYaml .Values.controller.config.featureGates | indent 6 }}
+    {{- end }}
 {{- end }}

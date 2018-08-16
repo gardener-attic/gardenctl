@@ -1,0 +1,49 @@
+---
+apiVersion: garden.sapcloud.io/v1beta1
+kind: CloudProfile
+metadata:
+  name: openstack
+spec:
+# caBundle: |
+#   -----BEGIN CERTIFICATE-----
+#   ...
+#   -----END CERTIFICATE-----
+  openstack:
+    constraints:
+      dnsProviders:
+      - name: aws-route53
+      - name: unmanaged
+      floatingPools:
+      - name: MY-FLOATING-POOL
+      kubernetes:
+        versions:
+        - 1.11.1
+        - 1.10.5
+        - 1.9.8
+        - 1.8.14
+      loadBalancerProviders:
+      - name: haproxy
+      machineImages:
+      - name: CoreOS
+        image: coreos-1745.7.0
+      machineTypes:
+      - name: medium_2_4
+        cpu: "2"
+        gpu: "0"
+        memory: 4Gi
+        volumeType: default
+        volumeSize: 20Gi
+      - name: medium_4_8
+        cpu: "4"
+        gpu: "0"
+        memory: 8Gi
+        volumeType: default
+        volumeSize: 40Gi
+      zones:
+      - region: europe-1
+        names:
+        - europe-1a
+        - europe-1b
+        - europe-1c
+    keystoneURL: https://url-to-keystone/v3/
+  # dhcpDomain: nova.local # DHCP domain of OpenStack system (only meaningful for Kubernetes 1.10.1, see https://github.com/kubernetes/kubernetes/pull/61890 for details)

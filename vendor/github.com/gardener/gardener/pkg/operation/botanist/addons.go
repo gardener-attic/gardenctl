@@ -24,7 +24,7 @@ import (
 
 // EnsureIngressDNSRecord creates the respective wildcard DNS record for the nginx-ingress-controller.
 func (b *Botanist) EnsureIngressDNSRecord() error {
-	if !b.Shoot.NginxIngressEnabled() {
+	if !b.Shoot.NginxIngressEnabled() || b.Shoot.Hibernated {
 		return b.DestroyIngressDNSRecord()
 	}
 
@@ -40,16 +40,16 @@ func (b *Botanist) DestroyIngressDNSRecord() error {
 	return b.DestroyDNSRecord("ingress", false)
 }
 
-// GenerateNginxIngressConfig generates the values which are required to render the chart of
-// the nginx-ingress-controller properly.
-func (b *Botanist) GenerateNginxIngressConfig() (map[string]interface{}, error) {
-	return common.GenerateAddonConfig(nil, b.Shoot.NginxIngressEnabled()), nil
-}
-
 // GenerateKubernetesDashboardConfig generates the values which are required to render the chart of
 // the kubernetes-dashboard properly.
 func (b *Botanist) GenerateKubernetesDashboardConfig() (map[string]interface{}, error) {
 	return common.GenerateAddonConfig(nil, b.Shoot.KubernetesDashboardEnabled()), nil
+}
+
+// GenerateClusterAutoscalerConfig generates the values which are required to render the chart of
+// the cluster-autoscaler properly.
+func (b *Botanist) GenerateClusterAutoscalerConfig() (map[string]interface{}, error) {
+	return common.GenerateAddonConfig(nil, b.Shoot.ClusterAutoscalerEnabled()), nil
 }
 
 // GenerateKubeLegoConfig generates the values which are required to render the chart of

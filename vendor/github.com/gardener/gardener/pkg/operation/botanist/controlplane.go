@@ -19,7 +19,6 @@ import (
 	"path/filepath"
 
 	"github.com/gardener/gardener/pkg/operation/common"
-	"github.com/gardener/gardener/pkg/operation/terraformer"
 	"github.com/gardener/gardener/pkg/utils"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -45,25 +44,10 @@ func (b *Botanist) DeployNamespace() error {
 	return nil
 }
 
-// DeployBackupNamespaceFromShoot creates a namespace in the Seed cluster from info in shoot object, which is used to deploy all the backup infrastructure
+// DeployBackupNamespace creates a namespace in the Seed cluster from info in shoot object, which is used to deploy all the backup infrastructure
 // realted resources for shoot cluster. Moreover, the terraform configuration and all the secrets will be
 // stored as ConfigMaps/Secrets.
-func (b *Botanist) DeployBackupNamespaceFromShoot() error {
-	_, err := b.K8sSeedClient.CreateNamespace(&corev1.Namespace{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: common.GenerateBackupNamespaceName(common.GenerateBackupInfrastructureName(b.Shoot.SeedNamespace, b.Shoot.Info.Status.UID)),
-			Labels: map[string]string{
-				common.GardenRole: common.GardenRoleBackup,
-			},
-		},
-	}, true)
-	return err
-}
-
-// DeployBackupNamespaceFromBackupInfrastructure creates a namespace in the Seed cluster from info in shoot object, which is used to deploy all the backup infrastructure
-// realted resources for shoot cluster. Moreover, the terraform configuration and all the secrets will be
-// stored as ConfigMaps/Secrets.
-func (b *Botanist) DeployBackupNamespaceFromBackupInfrastructure() error {
+func (b *Botanist) DeployBackupNamespace() error {
 	_, err := b.K8sSeedClient.CreateNamespace(&corev1.Namespace{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: common.GenerateBackupNamespaceName(b.BackupInfrastructure.Name),
@@ -79,17 +63,17 @@ func (b *Botanist) DeployBackupNamespaceFromBackupInfrastructure() error {
 // garbage collection in Kubernetes will automatically delete all resources which belong to this namespace. This
 // comprises volumes and load balancers as well.
 func (b *Botanist) DeleteNamespace() error {
-	err := b.K8sSeedClient.DeleteNamespace(b.Shoot.SeedNamespace)
-	if apierrors.IsNotFound(err) || apierrors.IsConflict(err) {
-		return nil
-	}
-	return err
+	return b.deleteNamespace(b.Shoot.SeedNamespace)
 }
 
 // DeleteBackupNamespace deletes the namespace in the Seed cluster which holds the backup infrastructure state. The built-in
 // garbage collection in Kubernetes will automatically delete all resources which belong to this namespace.
 func (b *Botanist) DeleteBackupNamespace() error {
-	err := b.K8sSeedClient.DeleteNamespace(common.GenerateBackupNamespaceName(b.BackupInfrastructure.Name))
+	return b.deleteNamespace(common.GenerateBackupNamespaceName(b.BackupInfrastructure.Name))
+}
+
+func (b *Botanist) deleteNamespace(name string) error {
+	err := b.K8sSeedClient.DeleteNamespace(name)
 	if apierrors.IsNotFound(err) || apierrors.IsConflict(err) {
 		return nil
 	}
@@ -124,73 +108,20 @@ func (b *Botanist) RefreshKubeControllerManagerChecksums() error {
 	return b.patchDeploymentCloudProviderChecksum(common.KubeControllerManagerDeploymentName)
 }
 
-// MoveBackupTerraformResources copies the terraform resources realted to backup infrastructure creation from  a shoot's main namespace
-// in the Seed cluster to Shoot's backup namespace.
-func (b *Botanist) MoveBackupTerraformResources() error {
-	t := terraformer.NewFromOperation(b.Operation, common.TerraformerPurposeBackup)
-
-	// Clean up possible existing job/pod artifacts from previous runs
-	jobPodList, err := t.ListJobPods()
-	if err != nil {
-		return err
-	}
-	if err := t.CleanupJob(jobPodList); err != nil {
-		return err
-	}
-	if err := t.WaitForCleanEnvironment(); err != nil {
-		return err
-	}
-
-	var (
-		backupInfrastructureName = common.GenerateBackupInfrastructureName(b.Shoot.SeedNamespace, b.Shoot.Info.Status.UID)
-		backupNamespace          = common.GenerateBackupNamespaceName(backupInfrastructureName)
-		oldPrefix                = fmt.Sprintf("%s.%s", b.Shoot.Info.Name, common.TerraformerPurposeBackup)
-		newPrefix                = fmt.Sprintf("%s.%s", backupInfrastructureName, common.TerraformerPurposeBackup)
-	)
-
-	if tfConfig, err := b.K8sSeedClient.GetConfigMap(b.Shoot.SeedNamespace, oldPrefix+common.TerraformerConfigSuffix); err == nil {
-		if _, err := b.K8sSeedClient.CreateConfigMap(backupNamespace, newPrefix+common.TerraformerConfigSuffix, tfConfig.Data, true); err != nil {
-			return err
-		}
-		if err = b.K8sSeedClient.DeleteConfigMap(b.Shoot.SeedNamespace, oldPrefix+common.TerraformerConfigSuffix); err != nil && !apierrors.IsNotFound(err) {
-			return err
-		}
-	} else if !apierrors.IsNotFound(err) {
-		return err
-	}
-
-	if tfState, err := b.K8sSeedClient.GetConfigMap(b.Shoot.SeedNamespace, oldPrefix+common.TerraformerStateSuffix); err == nil {
-		if _, err := b.K8sSeedClient.CreateConfigMap(backupNamespace, newPrefix+common.TerraformerStateSuffix, tfState.Data, true); err != nil {
-			return err
-		}
-		if err = b.K8sSeedClient.DeleteConfigMap(b.Shoot.SeedNamespace, oldPrefix+common.TerraformerStateSuffix); err != nil && !apierrors.IsNotFound(err) {
-			return err
-		}
-	} else if !apierrors.IsNotFound(err) {
-		return err
-	}
-
-	if tfVariables, err := b.K8sSeedClient.GetSecret(b.Shoot.SeedNamespace, oldPrefix+common.TerraformerVariablesSuffix); err == nil {
-		if _, err := b.K8sSeedClient.CreateSecret(backupNamespace, newPrefix+common.TerraformerVariablesSuffix, corev1.SecretTypeOpaque, tfVariables.Data, true); err != nil {
-			return err
-		}
-		if err = b.K8sSeedClient.DeleteSecret(b.Shoot.SeedNamespace, oldPrefix+common.TerraformerVariablesSuffix); err != nil && !apierrors.IsNotFound(err) {
-			return err
-		}
-	} else if !apierrors.IsNotFound(err) {
-		return err
-	}
-
-	return nil
-}
-
 // DeployBackupInfrastructure creates a BackupInfrastructure resource into the project namespace of shoot on garden cluster.
 // BackupInfrastructure controller acting on resource will actually create required cloud resources and updates the status.
 func (b *Botanist) DeployBackupInfrastructure() error {
 	return b.ApplyChartGarden(filepath.Join(common.ChartPath, "garden-project", "charts", "backup-infrastructure"), "backup-infrastructure", b.Operation.Shoot.Info.Namespace, nil, map[string]interface{}{
-		"name":     common.GenerateBackupInfrastructureName(b.Shoot.SeedNamespace, b.Shoot.Info.Status.UID),
-		"seed":     b.Seed.Info.Name,
-		"shootUID": b.Shoot.Info.Status.UID,
+		"backupInfrastructure": map[string]interface{}{
+			"name": common.GenerateBackupInfrastructureName(b.Shoot.SeedNamespace, b.Shoot.Info.Status.UID),
+		},
+		"seed": map[string]interface{}{
+			"name": b.Seed.Info.Name,
+		},
+		"shoot": map[string]interface{}{
+			"name": b.Shoot.Info.Name,
+			"uid":  b.Shoot.Info.Status.UID,
+		},
 	})
 }
 
@@ -235,19 +166,80 @@ func (b *Botanist) DeployMachineControllerManager() error {
 		return err
 	}
 
-	if err := b.ApplyChartShoot(filepath.Join(common.ChartPath, "shoot-machines"), name, metav1.NamespaceSystem, nil, nil); err != nil {
+	return b.ApplyChartSeed(filepath.Join(common.ChartPath, "seed-controlplane", "charts", name), name, b.Shoot.SeedNamespace, nil, values)
+}
+
+// DeployClusterAutoscaler deploys the cluster-autoscaler into the Shoot namespace in the Seed cluster. It is responsible
+// for automatically scaling the worker pools of the Shoot.
+func (b *Botanist) DeployClusterAutoscaler() error {
+	if !b.Shoot.ClusterAutoscalerEnabled() {
+		return b.DeleteClusterAutoscaler()
+	}
+
+	var (
+		name        = "cluster-autoscaler"
+		workerPools = []map[string]interface{}{}
+		replicas    = 1
+	)
+
+	for _, worker := range b.MachineDeployments {
+		// Skip worker pools for which min=max=0.
+		if worker.Minimum == 0 && worker.Maximum == 0 {
+			continue
+		}
+
+		// Cluster Autoscaler requires min>=1. We ensure that in the API server validation part, however,
+		// for backwards compatibility, we treat existing worker pools whose minimum equals 0 as min=1.
+		min := worker.Minimum
+		if worker.Minimum == 0 {
+			min = 1
+		}
+
+		workerPools = append(workerPools, map[string]interface{}{
+			"name": worker.Name,
+			"min":  min,
+			"max":  worker.Maximum,
+		})
+	}
+
+	if b.Shoot.Hibernated {
+		replicas = 0
+	}
+
+	defaultValues := map[string]interface{}{
+		"podAnnotations": map[string]interface{}{
+			"checksum/secret-cluster-autoscaler": b.CheckSums[name],
+		},
+		"namespace": map[string]interface{}{
+			"uid": b.SeedNamespaceObject.UID,
+		},
+		"replicas":    replicas,
+		"workerPools": workerPools,
+	}
+
+	values, err := b.InjectImages(defaultValues, b.K8sSeedClient.Version(), map[string]string{name: name})
+	if err != nil {
 		return err
 	}
 
 	return b.ApplyChartSeed(filepath.Join(common.ChartPath, "seed-controlplane", "charts", name), name, b.Shoot.SeedNamespace, nil, values)
 }
 
+// DeleteClusterAutoscaler deletes the cluster-autoscaler deployment in the Seed cluster which holds the Shoot's control plane.
+func (b *Botanist) DeleteClusterAutoscaler() error {
+	err := b.K8sSeedClient.DeleteDeployment(b.Shoot.SeedNamespace, common.ClusterAutoscalerDeploymentName)
+	if apierrors.IsNotFound(err) {
+		return nil
+	}
+	return err
+}
+
 // DeploySeedMonitoring will install the Helm release "seed-monitoring" in the Seed clusters. It comprises components
 // to monitor the Shoot cluster whose control plane runs in the Seed cluster.
 func (b *Botanist) DeploySeedMonitoring() error {
 	var (
-		kubecfgSecret    = b.Secrets["kubecfg"]
-		basicAuth        = utils.CreateSHA1Secret(kubecfgSecret.Data["username"], kubecfgSecret.Data["password"])
+		credentials      = b.Secrets["monitoring-ingress-credentials"]
+		basicAuth        = utils.CreateSHA1Secret(credentials.Data["username"], credentials.Data["password"])
 		alertManagerHost = b.Seed.GetIngressFQDN("a", b.Shoot.Info.Name, b.Garden.ProjectName)
 		grafanaHost      = b.Seed.GetIngressFQDN("g", b.Shoot.Info.Name, b.Garden.ProjectName)
 		prometheusHost   = b.Seed.GetIngressFQDN("p", b.Shoot.Info.Name, b.Garden.ProjectName)
@@ -294,6 +286,11 @@ func (b *Botanist) DeploySeedMonitoring() error {
 			},
 			"replicas":           replicas,
 			"apiserverServiceIP": common.ComputeClusterIP(b.Shoot.GetServiceNetwork(), 1),
+			"seed": map[string]interface{}{
+				"apiserver": b.K8sSeedClient.GetConfig().Host,
+				"region":    b.Seed.Info.Spec.Cloud.Region,
+				"profile":   b.Seed.Info.Spec.Cloud.Profile,
+			},
 		}
 		kubeStateMetricsSeedConfig = map[string]interface{}{
 			"replicas": replicas,

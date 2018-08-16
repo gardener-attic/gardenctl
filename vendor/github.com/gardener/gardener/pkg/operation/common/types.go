@@ -44,9 +44,12 @@ const (
 	// CloudPurposeSeed is a constant used while instantiating a cloud botanist for the Seed cluster.
 	CloudPurposeSeed = "seed"
 
-	// ConfirmationDeletionTimestamp is an annotation on a Shoot resource whose value must be set equal to the Shoot's
-	// '.metadata.deletionTimestamp' value to trigger the deletion process of the Shoot cluster.
-	ConfirmationDeletionTimestamp = "confirmation.garden.sapcloud.io/deletionTimestamp"
+	// ClusterAutoscalerDeploymentName is the name of the cluster-autoscaler deployment.
+	ClusterAutoscalerDeploymentName = "cluster-autoscaler"
+
+	// ConfirmationDeletion is an annotation on a Shoot resource whose value must be set to "true" in order to
+	// allow deleting the Shoot (if the annotation is not set any DELETE request will be denied).
+	ConfirmationDeletion = "confirmation.garden.sapcloud.io/deletion"
 
 	// ControllerManagerInternalConfigMapName is the name of the internal config map in which the Gardener controller
 	// manager stores its configuration.
@@ -131,6 +134,9 @@ const (
 
 	// KubeControllerManagerDeploymentName is the name of the kube-controller-manager deployment.
 	KubeControllerManagerDeploymentName = "kube-controller-manager"
+
+	// KubeSchedulerDeploymentName is the name of the kube-scheduler deployment.
+	KubeSchedulerDeploymentName = "kube-scheduler"
 
 	// KubeAddonManagerDeploymentName is the name of the kube-addon-manager deployment.
 	KubeAddonManagerDeploymentName = "kube-addon-manager"

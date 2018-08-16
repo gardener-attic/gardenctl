@@ -90,11 +90,16 @@ func List(k8sGardenClient kubernetes.Client, k8sGardenInformers gardeninformers.
 }
 
 // BootstrapCluster bootstraps a Seed cluster and deploys various required manifests.
-func BootstrapCluster(seed *Seed, k8sGardenClient kubernetes.Client, secrets map[string]*corev1.Secret, imageVector imagevector.ImageVector) error {
+func BootstrapCluster(seed *Seed, k8sGardenClient kubernetes.Client, secrets map[string]*corev1.Secret, imageVector imagevector.ImageVector, numberOfAssociatedShoots int) error {
 	const chartName = "seed-bootstrap"
 
 	k8sSeedClient, err := kubernetes.NewClientFromSecretObject(seed.Secret)
 	if err != nil {
+		return err
+	}
+
+	body := fmt.Sprintf(`[{"op": "add", "path": "/metadata/labels", "value": %s}]`, "{\"role\":\"kube-system\"}")
+	if _, err := k8sSeedClient.PatchNamespace("kube-system", []byte(body)); err != nil {
 		return err
 	}
 
@@ -115,14 +120,44 @@ func BootstrapCluster(seed *Seed, k8sGardenClient kubernetes.Client, secrets map
 	if err != nil {
 		return err
 	}
+	pauseContainer, err := imageVector.FindImage("pause-container", k8sGardenClient.Version())
+	if err != nil {
+		return err
+	}
 
 	return common.ApplyChart(k8sSeedClient, chartrenderer.New(k8sSeedClient), filepath.Join("charts", chartName), chartName, common.GardenNamespace, nil, map[string]interface{}{
 		"cloudProvider": seed.CloudProvider,
 		"images": map[string]interface{}{
 			"prometheus":         prometheusVersion.String(),
 			"configmap-reloader": configMapReloader.String(),
+			"pause-container":    pauseContainer.String(),
+		},
+		"reserveExcessCapacity": seed.reserveExcessCapacity,
+		"replicas": map[string]interface{}{
+			"reserve-excess-capacity": DesiredExcessCapacity(numberOfAssociatedShoots),
 		},
 	})
+}
+
+// DesiredExcessCapacity computes the required resources (CPU and memory) required to deploy new shoot control planes
+// (on the seed) in terms of reserve-excess-capacity deployment replicas. Each deployment replica currently
+// corresponds to resources of (request/limits) 500m of CPU and 1200Mi of Memory.
+// ReplicasRequiredToSupportSingleShoot is 4 which is 2000m of CPU and 4800Mi of RAM.
+// The logic for computation of desired excess capacity corresponds to either deploying 3 new shoot control planes
+// or 5% of existing shoot control planes of current number of shoots deployed in seed (5 if current shoots are 100),
+// whichever of the two is larger
+func DesiredExcessCapacity(numberOfAssociatedShoots int) int {
+	var (
+		replicasToSupportSingleShoot          = 4
+		effectiveExcessCapacity               = 3
+		excessCapacityBasedOnAssociatedShoots = int(float64(numberOfAssociatedShoots) * 0.05)
+	)
+
+	if excessCapacityBasedOnAssociatedShoots > effectiveExcessCapacity {
+		effectiveExcessCapacity = excessCapacityBasedOnAssociatedShoots
+	}
+
+	return effectiveExcessCapacity * replicasToSupportSingleShoot
 }
 
 // GetIngressFQDN returns the fully qualified domain name of ingress sub-resource for the Seed cluster. The
@@ -154,4 +189,9 @@ func (s *Seed) CheckMinimumK8SVersion() error {
 		return fmt.Errorf("the Kubernetes version of the Seed cluster must be at least %s", minSeedVersion)
 	}
 	return nil
+}
+
+// MustReserveExcessCapacity configures whether we have to reserve excess capacity in the Seed cluster.
+func (s *Seed) MustReserveExcessCapacity(must bool) {
+	s.reserveExcessCapacity = must
 }

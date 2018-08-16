@@ -28,7 +28,7 @@ var (
 	}
 )
 
-// Client inherits all the attributes and methods of the v1.8 client.
+// Client inherits all the attributes and methods of the v1.9 client.
 // Please see the documentation of the base client for further details.
 type Client struct {
 	*kubernetesv19.Client

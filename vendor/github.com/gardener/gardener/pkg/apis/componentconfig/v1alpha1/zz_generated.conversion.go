@@ -100,6 +100,7 @@ func autoConvert_v1alpha1_ClientConnectionConfiguration_To_componentconfig_Clien
 	out.ContentType = in.ContentType
 	out.QPS = in.QPS
 	out.Burst = in.Burst
+	out.DisableTCPKeepAlive = in.DisableTCPKeepAlive
 	return nil
 }
 
@@ -114,6 +115,7 @@ func autoConvert_componentconfig_ClientConnectionConfiguration_To_v1alpha1_Clien
 	out.ContentType = in.ContentType
 	out.QPS = in.QPS
 	out.Burst = in.Burst
+	out.DisableTCPKeepAlive = in.DisableTCPKeepAlive
 	return nil
 }
 
@@ -160,6 +162,7 @@ func autoConvert_v1alpha1_ControllerManagerConfiguration_To_componentconfig_Cont
 	if err := Convert_v1alpha1_ServerConfiguration_To_componentconfig_ServerConfiguration(&in.Server, &out.Server, s); err != nil {
 		return err
 	}
+	out.FeatureGates = *(*map[string]bool)(unsafe.Pointer(&in.FeatureGates))
 	return nil
 }
 
@@ -186,6 +189,7 @@ func autoConvert_componentconfig_ControllerManagerConfiguration_To_v1alpha1_Cont
 	if err := Convert_componentconfig_ServerConfiguration_To_v1alpha1_ServerConfiguration(&in.Server, &out.Server, s); err != nil {
 		return err
 	}
+	out.FeatureGates = *(*map[string]bool)(unsafe.Pointer(&in.FeatureGates))
 	return nil
 }
 
@@ -344,6 +348,8 @@ func Convert_componentconfig_SecretBindingControllerConfiguration_To_v1alpha1_Se
 
 func autoConvert_v1alpha1_SeedControllerConfiguration_To_componentconfig_SeedControllerConfiguration(in *SeedControllerConfiguration, out *componentconfig.SeedControllerConfiguration, s conversion.Scope) error {
 	out.ConcurrentSyncs = in.ConcurrentSyncs
+	out.ReserveExcessCapacity = (*bool)(unsafe.Pointer(in.ReserveExcessCapacity))
+	out.SyncPeriod = in.SyncPeriod
 	return nil
 }
 
@@ -354,6 +360,8 @@ func Convert_v1alpha1_SeedControllerConfiguration_To_componentconfig_SeedControl
 
 func autoConvert_componentconfig_SeedControllerConfiguration_To_v1alpha1_SeedControllerConfiguration(in *componentconfig.SeedControllerConfiguration, out *SeedControllerConfiguration, s conversion.Scope) error {
 	out.ConcurrentSyncs = in.ConcurrentSyncs
+	out.ReserveExcessCapacity = (*bool)(unsafe.Pointer(in.ReserveExcessCapacity))
+	out.SyncPeriod = in.SyncPeriod
 	return nil
 }
 

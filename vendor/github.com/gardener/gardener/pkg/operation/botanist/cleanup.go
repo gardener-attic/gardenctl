@@ -32,6 +32,7 @@ var exceptions = map[string]map[string]bool{
 		"ippools.crd.projectcalico.org":               true,
 		"clusterinformations.crd.projectcalico.org":   true,
 		"globalnetworkpolicies.crd.projectcalico.org": true,
+		"globalnetworksets.crd.projectcalico.org":     true,
 		"networkpolicies.crd.projectcalico.org":       true,
 		"hostendpoints.crd.projectcalico.org":         true,
 	},
@@ -75,6 +76,7 @@ func (b *Botanist) CleanKubernetesResources() error {
 			}
 		}(apiGroupPath, resource)
 	}
+	wg.Wait()
 
 	if len(errors) == 0 {
 		return nil
@@ -100,7 +102,7 @@ func (b *Botanist) CleanCustomResourceDefinitions() error {
 
 func (b *Botanist) waitForAPIGroupCleanedUp(apiGroupPath []string, resource string) error {
 	if err := wait.PollImmediate(5*time.Second, 10*time.Minute, func() (bool, error) {
-		return b.K8sShootClient.CheckResourceCleanup(exceptions, resource, apiGroupPath)
+		return b.K8sShootClient.CheckResourceCleanup(b.Logger, exceptions, resource, apiGroupPath)
 	}); err != nil {
 		return fmt.Errorf("Error while waiting for cleanup of '%s' resources: '%s'", resource, err.Error())
 	}

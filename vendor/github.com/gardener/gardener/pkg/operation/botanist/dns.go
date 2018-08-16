@@ -20,8 +20,10 @@ import (
 	gardenv1beta1 "github.com/gardener/gardener/pkg/apis/garden/v1beta1"
 	"github.com/gardener/gardener/pkg/operation/cloudbotanist/awsbotanist"
 	"github.com/gardener/gardener/pkg/operation/cloudbotanist/gcpbotanist"
+	"github.com/gardener/gardener/pkg/operation/cloudbotanist/openstackbotanist"
 	"github.com/gardener/gardener/pkg/operation/common"
 	"github.com/gardener/gardener/pkg/operation/terraformer"
+	"github.com/gardener/gardener/pkg/utils"
 	corev1 "k8s.io/api/core/v1"
 )
 
@@ -52,7 +54,29 @@ func (b *Botanist) DeployDNSRecord(terraformerPurpose, name, target string, purp
 		chartName         string
 		tfvarsEnvironment []map[string]interface{}
 		err               error
+		targetType, _     = common.IdentifyAddressType(target)
+		tf                = terraformer.NewFromOperation(b.Operation, terraformerPurpose)
 	)
+
+	// If the DNS record is already registered properly then we skip the reconciliation to avoid running into
+	// cloud provider rate limits.
+	switch targetType {
+	case "hostname":
+		if utils.LookupDNSHostCNAME(name) == fmt.Sprintf("%s.", target) {
+			b.Logger.Infof("Skipping DNS record registration because '%s' already points to '%s'", name, target)
+			// Clean up possible existing Terraform job/pod artifacts from previous runs
+			return tf.EnsureCleanedUp()
+		}
+	case "ip":
+		values := utils.LookupDNSHost(name)
+		for _, v := range values {
+			if v == target {
+				b.Logger.Infof("Skipping DNS record registration because '%s' already points to '%s'", name, target)
+				// Clean up possible existing Terraform job/pod artifacts from previous runs
+				return tf.EnsureCleanedUp()
+			}
+		}
+	}
 
 	switch b.determineDNSProvider(purposeInternalDomain) {
 	case gardenv1beta1.DNSAWSRoute53:
@@ -67,6 +91,12 @@ func (b *Botanist) DeployDNSRecord(terraformerPurpose, name, target string, purp
 			return err
 		}
 		chartName = "gcp-clouddns"
+	case gardenv1beta1.DNSOpenstackDesignate:
+		tfvarsEnvironment, err = b.GenerateTerraformDesignateDNSVariablesEnvironment(purposeInternalDomain)
+		if err != nil {
+			return err
+		}
+		chartName = "openstack-designate"
 	default:
 		return nil
 	}
@@ -76,10 +106,9 @@ func (b *Botanist) DeployDNSRecord(terraformerPurpose, name, target string, purp
 		return err
 	}
 
-	return terraformer.
-		NewFromOperation(b.Operation, terraformerPurpose).
+	return tf.
 		SetVariablesEnvironment(tfvarsEnvironment).
-		DefineConfig(chartName, b.GenerateTerraformDNSConfig(name, hostedZoneID, []string{target})).
+		DefineConfig(chartName, b.GenerateTerraformDNSConfig(name, hostedZoneID, targetType, []string{target})).
 		Apply()
 }
 
@@ -98,6 +127,11 @@ func (b *Botanist) DestroyDNSRecord(terraformerPurpose string, purposeInternalDo
 		}
 	case gardenv1beta1.DNSGoogleCloudDNS:
 		tfvarsEnvironment, err = b.GenerateTerraformCloudDNSVariablesEnvironment(purposeInternalDomain)
+		if err != nil {
+			return err
+		}
+	case gardenv1beta1.DNSOpenstackDesignate:
+		tfvarsEnvironment, err = b.GenerateTerraformDesignateDNSVariablesEnvironment(purposeInternalDomain)
 		if err != nil {
 			return err
 		}
@@ -154,11 +188,29 @@ func (b *Botanist) GenerateTerraformCloudDNSVariablesEnvironment(purposeInternal
 	}, nil
 }
 
+// GenerateTerraformDesignateDNSVariablesEnvironment generates the environment containing the credentials which
+// are required to validate/apply/destroy the Terraform configuration. These environment must contain
+// Terraform variables which are prefixed with TF_VAR_.
+func (b *Botanist) GenerateTerraformDesignateDNSVariablesEnvironment(purposeInternalDomain bool) ([]map[string]interface{}, error) {
+	secret, err := b.getDomainCredentials(purposeInternalDomain, openstackbotanist.AuthURL, openstackbotanist.DomainName, openstackbotanist.TenantName, openstackbotanist.UserName, openstackbotanist.UserDomainName, openstackbotanist.Password)
+	if err != nil {
+		return nil, err
+	}
+	keyValueMap := map[string]string{
+		"OS_AUTH_URL":         openstackbotanist.AuthURL,
+		"OS_DOMAIN_NAME":      openstackbotanist.DomainName,
+		"OS_TENANT_NAME":      openstackbotanist.TenantName,
+		"OS_USERNAME":         openstackbotanist.UserName,
+		"OS_USER_DOMAIN_NAME": openstackbotanist.UserDomainName,
+		"OS_PASSWORD":         openstackbotanist.Password,
+	}
+
+	return common.GenerateTerraformVariablesEnvironment(secret, keyValueMap), nil
+}
+
 // GenerateTerraformDNSConfig creates the Terraform variables and the Terraform config (for the DNS record)
 // and returns them (these values will be stored as a ConfigMap and a Secret in the Garden cluster.
-func (b *Botanist) GenerateTerraformDNSConfig(name, hostedZoneID string, values []string) map[string]interface{} {
-	targetType, _ := common.IdentifyAddressType(values[0])
-
+func (b *Botanist) GenerateTerraformDNSConfig(name, hostedZoneID, targetType string, values []string) map[string]interface{} {
 	return map[string]interface{}{
 		"record": map[string]interface{}{
 			"hostedZoneID": hostedZoneID,
