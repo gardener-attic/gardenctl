@@ -22,6 +22,8 @@ import (
 	"strings"
 
 	yaml "gopkg.in/yaml.v2"
+	restclient "k8s.io/client-go/rest"
+	"k8s.io/client-go/tools/clientcmd"
 )
 
 // checkError checks if an error during execution occurred
@@ -138,4 +140,17 @@ func ReadTarget(pathTarget string, target *Target) {
 	checkError(err)
 	err = yaml.Unmarshal(targetFile, target)
 	checkError(err)
+}
+
+func NewConfigFromBytes(kubeconfig string) *restclient.Config {
+	kubecf, err := ioutil.ReadFile(kubeconfig)
+	configObj, err := clientcmd.Load(kubecf)
+	if err != nil {
+		fmt.Println("Could not load config")
+		os.Exit(2)
+	}
+	clientConfig := clientcmd.NewDefaultClientConfig(*configObj, &clientcmd.ConfigOverrides{})
+	client, err := clientConfig.ClientConfig()
+	checkError(err)
+	return client
 }

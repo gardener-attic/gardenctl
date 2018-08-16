@@ -23,7 +23,6 @@ import (
 
 	"github.com/gardener/gardener/pkg/apis/garden/v1beta1"
 	clientset "github.com/gardener/gardener/pkg/client/garden/clientset/versioned"
-	"github.com/gardener/gardener/pkg/client/kubernetes"
 	"github.com/spf13/cobra"
 	yaml "gopkg.in/yaml.v2"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -112,12 +111,9 @@ func getProjectsWithShoots() {
 		LabelSelector: fmt.Sprintf("%s", projectLabel),
 	})
 	checkError(err)
-	k8sGardenClient, err := kubernetes.NewClientFromFile(*kubeconfig)
+	gardenClientset, err := clientset.NewForConfig(NewConfigFromBytes(*kubeconfig))
 	checkError(err)
-	gardenClientset, err := clientset.NewForConfig(k8sGardenClient.GetConfig())
-	checkError(err)
-	k8sGardenClient.SetGardenClientset(gardenClientset)
-	shootList, err := k8sGardenClient.GardenClientset().GardenV1beta1().Shoots("").List(metav1.ListOptions{})
+	shootList, err := gardenClientset.GardenV1beta1().Shoots("").List(metav1.ListOptions{})
 	checkError(err)
 	var projects Projects
 	for _, project := range projectList.Items {
@@ -171,12 +167,9 @@ func getGardens() {
 
 // getSeeds returns list of seeds
 func getSeeds() *v1beta1.SeedList {
-	k8sGardenClient, err := kubernetes.NewClientFromFile(*kubeconfig)
+	gardenClientset, err := clientset.NewForConfig(NewConfigFromBytes(*kubeconfig))
 	checkError(err)
-	gardenClientset, err := clientset.NewForConfig(k8sGardenClient.GetConfig())
-	checkError(err)
-	k8sGardenClient.SetGardenClientset(gardenClientset)
-	seedList, err := k8sGardenClient.GardenClientset().GardenV1beta1().Seeds().List(metav1.ListOptions{})
+	seedList, err := gardenClientset.GardenV1beta1().Seeds().List(metav1.ListOptions{})
 	checkError(err)
 	return seedList
 }
@@ -186,16 +179,13 @@ func getProjectsWithShootsForSeed() {
 	var target Target
 	ReadTarget(pathTarget, &target)
 	var projects Projects
-	k8sGardenClient, err := kubernetes.NewClientFromFile(*kubeconfig)
+	gardenClientset, err := clientset.NewForConfig(NewConfigFromBytes(*kubeconfig))
 	checkError(err)
-	gardenClientset, err := clientset.NewForConfig(k8sGardenClient.GetConfig())
-	checkError(err)
-	k8sGardenClient.SetGardenClientset(gardenClientset)
 	projectLabel := "garden.sapcloud.io/role=project"
 	projectList, err := Client.CoreV1().Namespaces().List(metav1.ListOptions{
 		LabelSelector: fmt.Sprintf("%s", projectLabel),
 	})
-	shootList, err := k8sGardenClient.GardenClientset().GardenV1beta1().Shoots("").List(metav1.ListOptions{})
+	shootList, err := gardenClientset.GardenV1beta1().Shoots("").List(metav1.ListOptions{})
 	checkError(err)
 	for _, project := range projectList.Items {
 		var pm ProjectMeta
@@ -228,12 +218,9 @@ func getProjectsWithShootsForSeed() {
 
 // getIssues lists broken shoot clusters
 func getIssues() {
-	k8sGardenClient, err := kubernetes.NewClientFromFile(*kubeconfig)
+	gardenClientset, err := clientset.NewForConfig(NewConfigFromBytes(*kubeconfig))
 	checkError(err)
-	gardenClientset, err := clientset.NewForConfig(k8sGardenClient.GetConfig())
-	checkError(err)
-	k8sGardenClient.SetGardenClientset(gardenClientset)
-	shootList, err := k8sGardenClient.GardenClientset().GardenV1beta1().Shoots("").List(metav1.ListOptions{})
+	shootList, err := gardenClientset.GardenV1beta1().Shoots("").List(metav1.ListOptions{})
 	checkError(err)
 	var issues Issues
 	for _, item := range shootList.Items {
@@ -316,12 +303,9 @@ func getIssues() {
 func getSeedsWithShootsForProject() {
 	var target Target
 	ReadTarget(pathTarget, &target)
-	k8sGardenClient, err := kubernetes.NewClientFromFile(*kubeconfig)
+	gardenClientset, err := clientset.NewForConfig(NewConfigFromBytes(*kubeconfig))
 	checkError(err)
-	gardenClientset, err := clientset.NewForConfig(k8sGardenClient.GetConfig())
-	checkError(err)
-	k8sGardenClient.SetGardenClientset(gardenClientset)
-	shootList, err := k8sGardenClient.GardenClientset().GardenV1beta1().Shoots(target.Target[1].Name).List(metav1.ListOptions{})
+	shootList, err := gardenClientset.GardenV1beta1().Shoots(target.Target[1].Name).List(metav1.ListOptions{})
 	checkError(err)
 	var seeds, seedsFiltered Seeds
 	seedList := getSeeds()

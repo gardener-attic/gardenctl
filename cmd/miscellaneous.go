@@ -28,7 +28,6 @@ import (
 
 	yaml "gopkg.in/yaml.v2"
 
-	"github.com/gardener/gardener/pkg/client/kubernetes"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	k8s "k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/clientcmd"
@@ -163,12 +162,9 @@ func getSeedNamespaceNameForShoot(shootName string) (namespaceSeed string) {
 	ReadTarget(pathTarget, &target)
 	Client, err = clientToTarget("garden")
 	checkError(err)
-	k8sGardenClient, err := kubernetes.NewClientFromFile(*kubeconfig)
+	gardenClientset, err := clientset.NewForConfig(NewConfigFromBytes(*kubeconfig))
 	checkError(err)
-	gardenClientset, err := clientset.NewForConfig(k8sGardenClient.GetConfig())
-	checkError(err)
-	k8sGardenClient.SetGardenClientset(gardenClientset)
-	shootList, err := k8sGardenClient.GardenClientset().GardenV1beta1().Shoots("").List(metav1.ListOptions{})
+	shootList, err := gardenClientset.GardenV1beta1().Shoots("").List(metav1.ListOptions{})
 	checkError(err)
 	var ind int
 	for index, shoot := range shootList.Items {
@@ -190,12 +186,9 @@ func getProjectForShoot() (projectName string) {
 	} else {
 		Client, err = clientToTarget("garden")
 		checkError(err)
-		k8sGardenClient, err := kubernetes.NewClientFromFile(*kubeconfig)
+		gardenClientset, err := clientset.NewForConfig(NewConfigFromBytes(*kubeconfig))
 		checkError(err)
-		gardenClientset, err := clientset.NewForConfig(k8sGardenClient.GetConfig())
-		checkError(err)
-		k8sGardenClient.SetGardenClientset(gardenClientset)
-		shootList, err := k8sGardenClient.GardenClientset().GardenV1beta1().Shoots("").List(metav1.ListOptions{})
+		shootList, err := gardenClientset.GardenV1beta1().Shoots("").List(metav1.ListOptions{})
 		checkError(err)
 		for _, shoot := range shootList.Items {
 			if shoot.Name == target.Target[2].Name && *shoot.Spec.Cloud.Seed == target.Target[1].Name {
