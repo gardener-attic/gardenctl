@@ -36,7 +36,7 @@ if [[ "${SOURCE_PATH}" != *"src/github.com/gardener/gardenctl" ]]; then
 fi
 
 DATE=$(date -u  +%Y-%m-%d)
-VERSION=$(cat $VERSION_PATH/version)
+VERSION=$(cat $SOURCE_PATH/VERSION)
 
 ###############################################################################
 
