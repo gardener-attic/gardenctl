@@ -6,11 +6,14 @@ gardenctl:
       version: ~
     steps:
       test:
-        image: 'golang:1.9.4'
+        image: 'golang:1.11.0'
       build:
-        image: 'golang:1.9.4'
+        image: 'golang:1.11.0'
   variants:
     head-update: ~
     pull-request:
       traits:
         pull-request: ~
+    release:
+      traits:
+        release: ~
