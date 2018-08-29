@@ -27,7 +27,7 @@ import (
 // openstackCmd represents the openstack command
 var openstackCmd = &cobra.Command{
 	Use:   "openstack <args>",
-	Short: "",
+	Short: "\n",
 	Long:  ``,
 	Run: func(cmd *cobra.Command, args []string) {
 		var t Target

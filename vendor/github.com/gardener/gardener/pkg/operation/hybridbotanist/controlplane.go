@@ -19,6 +19,7 @@ import (
 	"path/filepath"
 
 	"github.com/gardener/gardener/pkg/apis/garden/v1beta1/helper"
+	"github.com/gardener/gardener/pkg/client/kubernetes"
 	"github.com/gardener/gardener/pkg/operation/common"
 	"github.com/gardener/gardener/pkg/utils"
 	corev1 "k8s.io/api/core/v1"
@@ -26,6 +27,49 @@ import (
 )
 
 var chartPathControlPlane = filepath.Join(common.ChartPath, "seed-controlplane", "charts")
+
+// getResourcesForAPIServer returns the cpu and memory requirements for API server based on nodeCount
+func getResourcesForAPIServer(nodeCount int) (string, string, string, string) {
+	cpuRequest := "0m"
+	memoryRequest := "0Mi"
+	cpuLimit := "0m"
+	memoryLimit := "0Mi"
+
+	switch {
+	case nodeCount <= 2:
+		cpuRequest = "100m"
+		memoryRequest = "512Mi"
+
+		cpuLimit = "400m"
+		memoryLimit = "700Mi"
+	case nodeCount <= 10:
+		cpuRequest = "400m"
+		memoryRequest = "700Mi"
+
+		cpuLimit = "800m"
+		memoryLimit = "1000Mi"
+	case nodeCount <= 50:
+		cpuRequest = "700m"
+		memoryRequest = "1000Mi"
+
+		cpuLimit = "1300m"
+		memoryLimit = "2000Mi"
+	case nodeCount <= 100:
+		cpuRequest = "1500m"
+		memoryRequest = "3000Mi"
+
+		cpuLimit = "3000m"
+		memoryLimit = "4000Mi"
+	default:
+		cpuRequest = "2500m"
+		memoryRequest = "4000Mi"
+
+		cpuLimit = "4000m"
+		memoryLimit = "6000Mi"
+	}
+
+	return cpuRequest, memoryRequest, cpuLimit, memoryLimit
+}
 
 // DeployETCD deploys two etcd clusters via StatefulSets. The first etcd cluster (called 'main') is used for all the
 /// data the Shoot Kubernetes cluster needs to store, whereas the second etcd luster (called 'events') is only used to
@@ -155,15 +199,46 @@ func (b *HybridBotanist) DeployKubeAPIServer() error {
 
 	if shootUsedAsSeed, _, _ := helper.IsUsedAsSeed(b.Shoot.Info); shootUsedAsSeed {
 		defaultValues["replicas"] = 3
+		defaultValues["minReplicas"] = 3
+		defaultValues["maxReplicas"] = 3
 		defaultValues["apiServerResources"] = map[string]interface{}{
 			"limits": map[string]interface{}{
 				"cpu":    "1500m",
 				"memory": "4000Mi",
 			},
 		}
+	} else {
+		maxNodes := b.Shoot.GetNodeCount()
+		// Get current kube-apiserver deployment
+		existingAPIServerDeployment, err := b.K8sSeedClient.GetDeployment(b.Shoot.SeedNamespace, common.KubeAPIServerDeploymentName)
+		if err == nil {
+			// As kube-apiserver HPA manages the number of replicas in big clusters
+			// maintain current number of replicas
+			// otherwise keep the value to default
+			if maxNodes >= common.EnableHPANodeCount && existingAPIServerDeployment.Spec.Replicas != nil && *existingAPIServerDeployment.Spec.Replicas > 0 {
+				defaultValues["replicas"] = *existingAPIServerDeployment.Spec.Replicas
+				defaultValues["maxReplicas"] = 4
+			}
+		}
+
+		cpuRequest, memoryRequest, cpuLimit, memoryLimit := getResourcesForAPIServer(maxNodes)
+		defaultValues["apiServerResources"] = map[string]interface{}{
+			"limits": map[string]interface{}{
+				"cpu":    cpuLimit,
+				"memory": memoryLimit,
+			},
+			"requests": map[string]interface{}{
+				"cpu":    cpuRequest,
+				"memory": memoryRequest,
+			},
+		}
 	}
 
-	apiServerConfig := b.Shoot.Info.Spec.Kubernetes.KubeAPIServer
+	var (
+		apiServerConfig  = b.Shoot.Info.Spec.Kubernetes.KubeAPIServer
+		admissionPlugins = kubernetes.GetAdmissionPluginsForVersion(b.Shoot.Info.Spec.Kubernetes.Version)
+	)
+
 	if apiServerConfig != nil {
 		defaultValues["featureGates"] = apiServerConfig.FeatureGates
 		defaultValues["runtimeConfig"] = apiServerConfig.RuntimeConfig
@@ -171,7 +246,24 @@ func (b *HybridBotanist) DeployKubeAPIServer() error {
 		if apiServerConfig.OIDCConfig != nil {
 			defaultValues["oidcConfig"] = apiServerConfig.OIDCConfig
 		}
+
+		for _, plugin := range apiServerConfig.AdmissionPlugins {
+			pluginOverwritesDefault := false
+
+			for i, defaultPlugin := range admissionPlugins {
+				if defaultPlugin.Name == plugin.Name {
+					pluginOverwritesDefault = true
+					admissionPlugins[i] = plugin
+					break
+				}
+			}
+
+			if !pluginOverwritesDefault {
+				admissionPlugins = append(admissionPlugins, plugin)
+			}
+		}
 	}
+	defaultValues["admissionPlugins"] = admissionPlugins
 
 	values, err := b.Botanist.InjectImages(defaultValues, b.K8sSeedClient.Version(), map[string]string{
 		"hyperkube":         "hyperkube",

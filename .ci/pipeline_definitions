@@ -16,4 +16,6 @@ gardenctl:
         pull-request: ~
     release:
       traits:
+        version:
+          preprocess: 'finalize'
         release: ~

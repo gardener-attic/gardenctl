@@ -35,8 +35,11 @@ if [[ "${SOURCE_PATH}" != *"src/github.com/gardener/gardenctl" ]]; then
   export PATH="${GOBIN}:${PATH}"
 fi
 
+DATE=$(date -u  +%Y-%m-%d)
+VERSION=$(cat $VERSION_PATH/version)
+
 ###############################################################################
 
 go build \
-  -o ${BINARY_PATH}/rel/gardenctl \
-  gardenctl.go
+  -ldflags "-w -X github.com/gardener/gardenctl/cmd.version=${VERSION} -w -X github.com/gardener/gardenctl/cmd.buildDate=${DATE}"\
+  -o ${BINARY_PATH}/rel/gardenctl gardenctl.go

@@ -217,12 +217,28 @@ https://github.com/spf13/cobra.
 Copyright 2015 Steve Francia.  
 Apache 2 License (https://github.com/spf13/cobra/blob/master/LICENSE.txt).  
 
+API.  
+https://git.k8s.io/api.  
+Copyright 2017 The Kubernetes Authors.  
+Apache 2 license (https://git.k8s.io/api/LICENSE).  
+
 APIMachinery.  
 https://git.k8s.io/apimachinery.  
 Copyright 2017 The Kubernetes Authors.  
 Apache 2 license (https://git.k8s.io/apimachinery/LICENSE).  
 
+APIServer.  
+https://git.k8s.io/apiserver.  
+Copyright 2017 The Kubernetes Authors.  
+Apache 2 license (https://git.k8s.io/apiserver/LICENSE).  
+
 Client-Go.  
 https://git.k8s.io/client-go.  
 Copyright 2017 The Kubernetes Authors.  
 Apache 2 license (https://git.k8s.io/client-go/LICENSE).  
+
+
+JSON-ITERATOR.  
+https://github.com/json-iterator/go.  
+Copyright (c) 2016 json-iterator  
+MIT license (https://github.com/json-iterator/go/blob/master/LICENSE)
