@@ -3,7 +3,8 @@ gardenctl:
   base_definition:
     repo: ~
     traits:
-      version: ~
+      version: 
+        inject_effective_version: true
     steps:
       test:
         image: 'golang:1.11.0'
