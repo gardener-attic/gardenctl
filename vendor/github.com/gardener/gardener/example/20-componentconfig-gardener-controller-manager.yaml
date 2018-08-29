@@ -24,6 +24,7 @@ controllers:
   seed:
     concurrentSyncs: 5
     syncPeriod: 1m
+    reserveExcessCapacity: false
   backupInfrastructure:
     concurrentSyncs: 20
     syncPeriod: 10m
@@ -35,6 +36,7 @@ leaderElection:
   retryPeriod: 2s
   resourceLock: configmaps
 logLevel: info
+kubernetesLogLevel: 0
 metrics:
   interval: 30s
 server:
