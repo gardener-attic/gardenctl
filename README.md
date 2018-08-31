@@ -4,12 +4,24 @@
 
 [![Go Report Card](https://goreportcard.com/badge/github.com/gardener/gardenctl)](https://goreportcard.com/report/github.com/gardener/gardenctl)
 # What is gardenctl?
-`gardenctl` is a command-line client for administrative purposes for the [Gardener](https://github.com/gardener/gardener). It facilitates the administration of or one many garden, seed and shoot clusters, e.g. to check for issues which occured in one of these clusters. Details about the concept behind the Gardener are described in the [Gardener wiki](https://github.com/gardener/documentation/wiki/Architecture).
+`gardenctl` is a command-line client for administrative purposes for the [Gardener](https://github.com/gardener/gardener). It facilitates the administration of one or many garden, seed and shoot clusters, e.g. to check for issues which occured in one of these clusters. Details about the concept behind the Gardener are described in the [Gardener wiki](https://github.com/gardener/documentation/wiki/Architecture).
 
-
+# Installation
+`gardenctl` is shipped for mac and linux in a binary format. The easiest way to install it, is to download the file or curl it.
+```bash
+curl -LO https://github.com/gardener/gardenctl/releases/download/0.1.0/gardenctl-darwin-amd64
+```
+After downloading make the gardenctl binary executable.
+```bash
+chmod +x ./gardenctl-darwin-amd64
+```
+Move the binary in to your PATH.
+```bash
+sudo mv ./gardenctl-darwin-amd64 /usr/local/bin/gardenctl
+```
 
 # How to build it
-Currently, there are no binary builds available, so you need to build it from source,`go get` it or build the docker image from Dockerfile. Please keep in mind to use an up to date version of [golang](https://golang.org/doc/devel/release.html). 
+If no binary builds are available for your platform or architecture, you can build it from source,`go get` it or build the docker image from Dockerfile. Please keep in mind to use an up to date version of [golang](https://golang.org/doc/devel/release.html). 
 
 ## Prerequisites
 
@@ -59,7 +71,7 @@ echo "$GOPATH/bin/gardenctl completion && source gardenctl_completion.sh && rm g
 
 First clone the repository as described in the the build step "From source". As next step add the garden "config" file and "clusters" folder with the corresponding kubeconfig files for the garden cluster. Then build the container image via `docker build -t gardener/gardenctl:v1 .` in the cloned repository and run a shell in the image with `docker run -it gardener/gardenctl:v1 /bin/bash`.
 
-## Configure gardenctl
+# Configure gardenctl
 
 `gardenctl` requires a configuration file. The default location is in `~/.garden/config`, but it can be overwritten with the environment variable `GARDENCONFIG`.
 
@@ -95,7 +107,7 @@ source gardenctl_completion.sh
 ```
 Please keep in mind that the auto completion is bound to `gardenctl` or the alias `g`.
 
-## Use gardenctl
+# Use gardenctl
 
 `gardenctl` requires the definition of a target, e.g. garden, project, seed or shoot. The following commands, e.g. `gardenctl ls shoots` usees the target definition as a context for getting the information. 
 
