@@ -15,6 +15,9 @@
 package cmd
 
 import (
+	"fmt"
+	"os"
+	"os/exec"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -65,6 +68,11 @@ func init() {
 // kube executes a kubectl command on targeted cluster
 func kube(args string) {
 	KUBECONFIG = getKubeConfigOfCurrentTarget()
-	err := ExecCmd(nil, "/usr/local/bin/"+args, false, "KUBECONFIG="+KUBECONFIG)
+	_, err := exec.LookPath("kubectl")
+	if err != nil {
+		fmt.Println("Kubectl is not installed on your system")
+		os.Exit(2)
+	}
+	err = ExecCmd(nil, args, false, "KUBECONFIG="+KUBECONFIG)
 	checkError(err)
 }

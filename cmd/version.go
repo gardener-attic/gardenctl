@@ -32,11 +32,11 @@ var versionCmd = &cobra.Command{
 	Long:  ``,
 	Run: func(cmd *cobra.Command, args []string) {
 		fmt.Printf(`gardenctl:
-		version     : %s
-		build date  : %s
-		go version  : %s
-		go compiler : %s
-		platform    : %s/%s
+	version     : %s
+	build date  : %s
+	go version  : %s
+	go compiler : %s
+	platform    : %s/%s
 	   `, version, buildDate, runtime.Version(), runtime.Compiler, runtime.GOOS, runtime.GOARCH)
 	},
 }
