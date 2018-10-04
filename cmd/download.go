@@ -146,7 +146,7 @@ func downloadLogs(option string) {
 		os.MkdirAll(pathSeed, os.ModePerm)
 		err = ioutil.WriteFile(pathSeed+"/kubeconfig.yaml", kubeSecret.Data["kubeconfig"], 0644)
 		if err != nil {
-			fmt.Println(err)
+			fmt.Println("Could not write logs")
 			continue
 		}
 		pathToKubeconfig := pathGardenHome + "/cache/seeds" + "/" + seed.Spec.SecretRef.Name + "/" + "kubeconfig.yaml"
@@ -173,12 +173,12 @@ func downloadLogs(option string) {
 				fmt.Println("bash", "-c", "export KUBECONFIG="+KUBECONFIG+"; kubectl logs "+pod.Name+" -c "+"vpn-seed"+" -n "+shoot.Status.TechnicalID)
 				output, err := ExecCmdReturnOutput("bash", "-c", "export KUBECONFIG="+KUBECONFIG+"; kubectl logs "+pod.Name+" -c "+"vpn-seed"+" -n "+shoot.Status.TechnicalID)
 				if err != nil {
-					fmt.Println(err)
+					fmt.Println("Could not execute cmd")
 					continue
 				}
 				err = ioutil.WriteFile(pathLogsSeeds+"/vpn-seed-prometheus", []byte(output), 0644)
 				if err != nil {
-					fmt.Println(err)
+					fmt.Println("Could not write logs")
 					continue
 				}
 			}
@@ -186,12 +186,12 @@ func downloadLogs(option string) {
 				fmt.Println("bash", "-c", "export KUBECONFIG="+KUBECONFIG+"; kubectl logs "+pod.Name+" -c "+"vpn-seed"+" -n "+shoot.Status.TechnicalID)
 				output, err := ExecCmdReturnOutput("bash", "-c", "export KUBECONFIG="+KUBECONFIG+"; kubectl logs "+pod.Name+" -c "+"vpn-seed"+" -n "+shoot.Status.TechnicalID)
 				if err != nil {
-					fmt.Println(err)
+					fmt.Println("Could not execute cmd")
 					continue
 				}
 				err = ioutil.WriteFile(pathLogsSeeds+"/vpn-seed-"+pod.Name, []byte(output), 0644)
 				if err != nil {
-					fmt.Println(err)
+					fmt.Println("Could not write logs")
 					continue
 				}
 			}
@@ -205,7 +205,7 @@ func downloadLogs(option string) {
 		os.MkdirAll(pathShootKubeconfig, os.ModePerm)
 		err = ioutil.WriteFile(pathShootKubeconfig+"/kubeconfig.yaml", kubeSecretShoot.Data["kubeconfig"], 0644)
 		if err != nil {
-			fmt.Println(err)
+			fmt.Println("Could not write kubeconfig")
 			continue
 		}
 		pathToKubeconfig = pathShootKubeconfig + "/" + "kubeconfig.yaml"
@@ -227,12 +227,12 @@ func downloadLogs(option string) {
 				fmt.Println("bash", "-c", "export KUBECONFIG="+KUBECONFIG+"; kubectl logs "+pod.Name+" -n "+"kube-system")
 				output, err := ExecCmdReturnOutput("bash", "-c", "export KUBECONFIG="+KUBECONFIG+"; kubectl logs "+pod.Name+" -n "+"kube-system")
 				if err != nil {
-					fmt.Println(err)
+					fmt.Println("Could not execute cmd")
 					continue
 				}
 				err = ioutil.WriteFile(pathLogsShoots+"/"+pod.Name, []byte(output), 0644)
 				if err != nil {
-					fmt.Println(err)
+					fmt.Println("Could not write logs")
 					continue
 				}
 			}
