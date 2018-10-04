@@ -62,6 +62,15 @@ var kgCmd = &cobra.Command{
 	},
 }
 
+var knCmd = &cobra.Command{
+	Use:    "kn",
+	Hidden: true,
+	Run: func(cmd *cobra.Command, args []string) {
+		arguments := "kubectl --namespace=" + strings.Join(args[:], " ")
+		kube(arguments)
+	},
+}
+
 func init() {
 }
 

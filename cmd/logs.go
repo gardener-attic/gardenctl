@@ -194,7 +194,11 @@ func logPodGardenImproved(podName string) {
 	projectName := getProjectForShoot()
 	for _, pod := range pods.Items {
 		if strings.Contains(pod.Name, podName) {
-			output := ExecCmdReturnOutput("bash", "-c", "export KUBECONFIG="+KUBECONFIG+"; kubectl logs "+pod.Name+" -n garden")
+			output, err := ExecCmdReturnOutput("bash", "-c", "export KUBECONFIG="+KUBECONFIG+"; kubectl logs "+pod.Name+" -n garden")
+			if err != nil {
+				fmt.Println("Cmd was unsuccessful")
+				os.Exit(2)
+			}
 			lines := strings.Split("time="+output, `time=`)
 			for _, line := range lines {
 				if strings.Contains(line, ("shoot=" + projectName + "/" + target.Target[2].Name)) {

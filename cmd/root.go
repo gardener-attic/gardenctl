@@ -77,7 +77,7 @@ func init() {
 	RootCmd.AddCommand(registerCmd, unregisterCmd)
 	RootCmd.AddCommand(completionCmd)
 	RootCmd.AddCommand(shellCmd)
-	RootCmd.AddCommand(kubectlCmd, kaCmd, ksCmd, kgCmd, awsCmd, azCmd, gcloudCmd, openstackCmd)
+	RootCmd.AddCommand(kubectlCmd, kaCmd, ksCmd, kgCmd, knCmd, awsCmd, azCmd, gcloudCmd, openstackCmd)
 	RootCmd.AddCommand(versionCmd)
 	RootCmd.SuggestionsMinimumDistance = suggestionsMinimumDistance
 	RootCmd.SetUsageTemplate(`Usage:{{if .Runnable}}

@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
+	"strings"
 
 	clientset "github.com/gardener/gardener/pkg/client/garden/clientset/versioned"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -29,20 +30,21 @@ import (
 
 // downloadCmd represents the download command
 var downloadCmd = &cobra.Command{
-	Use:   "download tf (infra|internal-dns|external-dns|ingress|backup)",
-	Short: "Download terraform configuration/state for local execution for the targeted shoot",
+	Use:   "download tf + (infra|internal-dns|external-dns|ingress|backup)\n  gardenctl download logs vpn\n ",
+	Short: "Download terraform configuration/state for local execution for the targeted shoot or log files",
 	Long:  ``,
 	Run: func(cmd *cobra.Command, args []string) {
-		if len(args) != 2 || !(args[1] == "infra" || args[1] == "internal-dns" || args[1] == "external-dns" || args[1] == "ingress" || args[1] == "backup") {
-			fmt.Println("Command must be in the format: download tf + (infra|internal-dns|external-dns|ingress|backup)")
+		if len(args) != 2 || !(args[1] == "infra" || args[1] == "internal-dns" || args[1] == "external-dns" || args[1] == "ingress" || args[1] == "backup" || args[1] == "vpn") {
+			fmt.Println("Command must be in the format:\n  download tf + (infra|internal-dns|external-dns|ingress|backup)\n  download logs vpn")
 			os.Exit(2)
 		}
 		switch args[0] {
 		case "tf":
 			downloadTerraformFiles(args[1])
-			checkError(err)
+		case "logs":
+			downloadLogs(args[1])
 		default:
-			fmt.Println("Command must be in the format: download tf + (infra|internal-dns|external-dns|ingress|backup)")
+			fmt.Println("Command must be in the format:\n  download tf + (infra|internal-dns|external-dns|ingress|backup)\n  download logs vpn")
 		}
 	},
 	ValidArgs: []string{"tf"},
@@ -61,7 +63,7 @@ func downloadTerraformFiles(option string) {
 		fmt.Println("No Shoot targeted")
 		os.Exit(2)
 	} else if len(target.Target) < 3 {
-		fmt.Println("Command must be in the format: download tf + (infra|internal-dns|external-dns|ingress|backup)")
+		fmt.Println("Command must be in the format:\n  download tf + (infra|internal-dns|external-dns|ingress|backup)\n  download logs vpn")
 		os.Exit(2)
 	} else {
 		Client, err = clientToTarget("garden")
@@ -117,4 +119,123 @@ func downloadTerraformFiles(option string) {
 	err = ioutil.WriteFile(pathGardenHome+"/"+pathTerraform+"/terraform.tfvars", []byte(secret.Data["terraform.tfvars"]), 0644)
 	checkError(err)
 	fmt.Println("Downloaded to " + pathGardenHome + "/" + pathTerraform)
+}
+
+func downloadLogs(option string) {
+	dir, err := os.Getwd()
+	checkError(err)
+	var target Target
+	ReadTarget(pathTarget, &target)
+	Client, err = clientToTarget("garden")
+	checkError(err)
+	gardenClientset, err := clientset.NewForConfig(NewConfigFromBytes(*kubeconfig))
+	checkError(err)
+	shootList, err := gardenClientset.GardenV1beta1().Shoots("").List(metav1.ListOptions{})
+	for _, shoot := range shootList.Items {
+		seed, err := gardenClientset.GardenV1beta1().Seeds().Get(*shoot.Spec.Cloud.Seed, metav1.GetOptions{})
+		if err != nil {
+			fmt.Println(err)
+			continue
+		}
+		kubeSecret, err := Client.CoreV1().Secrets(seed.Spec.SecretRef.Namespace).Get(seed.Spec.SecretRef.Name, metav1.GetOptions{})
+		if err != nil {
+			fmt.Println(err)
+			continue
+		}
+		pathSeed := pathSeedCache + "/" + seed.Spec.SecretRef.Name
+		os.MkdirAll(pathSeed, os.ModePerm)
+		err = ioutil.WriteFile(pathSeed+"/kubeconfig.yaml", kubeSecret.Data["kubeconfig"], 0644)
+		if err != nil {
+			fmt.Println(err)
+			continue
+		}
+		pathToKubeconfig := pathGardenHome + "/cache/seeds" + "/" + seed.Spec.SecretRef.Name + "/" + "kubeconfig.yaml"
+		KUBECONFIG = pathToKubeconfig
+		config, err := clientcmd.BuildConfigFromFlags("", pathToKubeconfig)
+		if err != nil {
+			fmt.Println(err)
+			continue
+		}
+		ClientSeed, err := k8s.NewForConfig(config)
+		if err != nil {
+			fmt.Println(err)
+			continue
+		}
+		pods, err := ClientSeed.CoreV1().Pods(shoot.Status.TechnicalID).List(metav1.ListOptions{})
+		if err != nil {
+			fmt.Println("Shoot " + shoot.Name + " has no pods in " + shoot.Status.TechnicalID + " namespace")
+			continue
+		}
+		CreateDir(dir+"/seeds/"+*shoot.Spec.Cloud.Seed+"/"+shoot.Name+"/logs/vpn", 0751)
+		pathLogsSeeds := dir + "/seeds/" + *shoot.Spec.Cloud.Seed + "/" + shoot.Name + "/logs/vpn"
+		for _, pod := range pods.Items {
+			if strings.Contains(pod.Name, "prometheus-0") {
+				fmt.Println("bash", "-c", "export KUBECONFIG="+KUBECONFIG+"; kubectl logs "+pod.Name+" -c "+"vpn-seed"+" -n "+shoot.Status.TechnicalID)
+				output, err := ExecCmdReturnOutput("bash", "-c", "export KUBECONFIG="+KUBECONFIG+"; kubectl logs "+pod.Name+" -c "+"vpn-seed"+" -n "+shoot.Status.TechnicalID)
+				if err != nil {
+					fmt.Println(err)
+					continue
+				}
+				err = ioutil.WriteFile(pathLogsSeeds+"/vpn-seed-prometheus", []byte(output), 0644)
+				if err != nil {
+					fmt.Println(err)
+					continue
+				}
+			}
+			if strings.Contains(pod.Name, "kube-apiserver") {
+				fmt.Println("bash", "-c", "export KUBECONFIG="+KUBECONFIG+"; kubectl logs "+pod.Name+" -c "+"vpn-seed"+" -n "+shoot.Status.TechnicalID)
+				output, err := ExecCmdReturnOutput("bash", "-c", "export KUBECONFIG="+KUBECONFIG+"; kubectl logs "+pod.Name+" -c "+"vpn-seed"+" -n "+shoot.Status.TechnicalID)
+				if err != nil {
+					fmt.Println(err)
+					continue
+				}
+				err = ioutil.WriteFile(pathLogsSeeds+"/vpn-seed-"+pod.Name, []byte(output), 0644)
+				if err != nil {
+					fmt.Println(err)
+					continue
+				}
+			}
+		}
+		kubeSecretShoot, err := ClientSeed.CoreV1().Secrets(shoot.Status.TechnicalID).Get("kubecfg", metav1.GetOptions{})
+		if err != nil {
+			fmt.Println(err)
+			continue
+		}
+		pathShootKubeconfig := pathShootCache + "/" + target.Target[1].Name + "/" + shoot.Name
+		os.MkdirAll(pathShootKubeconfig, os.ModePerm)
+		err = ioutil.WriteFile(pathShootKubeconfig+"/kubeconfig.yaml", kubeSecretShoot.Data["kubeconfig"], 0644)
+		if err != nil {
+			fmt.Println(err)
+			continue
+		}
+		pathToKubeconfig = pathShootKubeconfig + "/" + "kubeconfig.yaml"
+		KUBECONFIG = pathToKubeconfig
+		config, err = clientcmd.BuildConfigFromFlags("", pathToKubeconfig)
+		if err != nil {
+			fmt.Println(err)
+			continue
+		}
+		ClientShoot, err := k8s.NewForConfig(config)
+		pods, err = ClientShoot.CoreV1().Pods("kube-system").List(metav1.ListOptions{})
+		if err != nil {
+			fmt.Println("Shoot " + shoot.Name + " has no pods in kube-system namespace")
+			continue
+		}
+		pathLogsShoots := dir + "/seeds/" + *shoot.Spec.Cloud.Seed + "/" + shoot.Name + "/logs/vpn"
+		for _, pod := range pods.Items {
+			if strings.Contains(pod.Name, "vpn-shoot-") {
+				fmt.Println("bash", "-c", "export KUBECONFIG="+KUBECONFIG+"; kubectl logs "+pod.Name+" -n "+"kube-system")
+				output, err := ExecCmdReturnOutput("bash", "-c", "export KUBECONFIG="+KUBECONFIG+"; kubectl logs "+pod.Name+" -n "+"kube-system")
+				if err != nil {
+					fmt.Println(err)
+					continue
+				}
+				err = ioutil.WriteFile(pathLogsShoots+"/"+pod.Name, []byte(output), 0644)
+				if err != nil {
+					fmt.Println(err)
+					continue
+				}
+			}
+		}
+	}
 }

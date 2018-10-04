@@ -92,7 +92,12 @@ func shellToNode(name string) {
 		fmt.Println("Nodename not found")
 		os.Exit(2)
 	}
-	podName := "rootpod-" + ExecCmdReturnOutput("whoami")
+	podName, err := ExecCmdReturnOutput("whoami")
+	if err != nil {
+		fmt.Println("Cmd was unsuccessful")
+		os.Exit(2)
+	}
+	podName = "rootpod-" + podName
 	typeOfTarget, err := getTargetType()
 	checkError(err)
 	if typeOfTarget == "shoot" {

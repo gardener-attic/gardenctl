@@ -134,7 +134,11 @@ func showOperator() {
 // showUI opens the gardener landing page
 func showUI() {
 	showPodGarden("gardener-dashboard", "garden")
-	output := ExecCmdReturnOutput("bash", "-c", "export KUBECONFIG="+KUBECONFIG+"; kubectl get ingress gardener-dashboard-ingress -n garden")
+	output, err := ExecCmdReturnOutput("bash", "-c", "export KUBECONFIG="+KUBECONFIG+"; kubectl get ingress gardener-dashboard-ingress -n garden")
+	if err != nil {
+		fmt.Println("Cmd was unsuccessful")
+		os.Exit(2)
+	}
 	list := strings.Split(output, " ")
 	url := "-"
 	for _, val := range list {
@@ -234,7 +238,11 @@ func showVpnShoot() {
 func showPrometheus() {
 	username, password = getCredentials()
 	showPod("prometheus", "seed")
-	output := ExecCmdReturnOutput("bash", "-c", "export KUBECONFIG="+KUBECONFIG+"; kubectl get ingress prometheus -n "+getShootClusterName())
+	output, err := ExecCmdReturnOutput("bash", "-c", "export KUBECONFIG="+KUBECONFIG+"; kubectl get ingress prometheus -n "+getShootClusterName())
+	if err != nil {
+		fmt.Println("Cmd was unsuccessful")
+		os.Exit(2)
+	}
 	list := strings.Split(output, " ")
 	url := "-"
 	for _, val := range list {
@@ -251,7 +259,11 @@ func showPrometheus() {
 func showAltermanager() {
 	username, password = getCredentials()
 	showPod("alertmanager", "seed")
-	output := ExecCmdReturnOutput("bash", "-c", "export KUBECONFIG="+KUBECONFIG+"; kubectl get ingress alertmanager -n "+getShootClusterName())
+	output, err := ExecCmdReturnOutput("bash", "-c", "export KUBECONFIG="+KUBECONFIG+"; kubectl get ingress alertmanager -n "+getShootClusterName())
+	if err != nil {
+		fmt.Println("Cmd was unsuccessful")
+		os.Exit(2)
+	}
 	list := strings.Split(output, " ")
 	url := "-"
 	for _, val := range list {
@@ -316,7 +328,11 @@ func showDashboard() {
 func showGrafana() {
 	username, password = getCredentials()
 	showPod("grafana", "seed")
-	output := ExecCmdReturnOutput("bash", "-c", "export KUBECONFIG="+KUBECONFIG+"; kubectl get ingress grafana -n "+getShootClusterName())
+	output, err := ExecCmdReturnOutput("bash", "-c", "export KUBECONFIG="+KUBECONFIG+"; kubectl get ingress grafana -n "+getShootClusterName())
+	if err != nil {
+		fmt.Println("Cmd was unsuccessful")
+		os.Exit(2)
+	}
 	list := strings.Split(output, " ")
 	url := "-"
 	for _, val := range list {
@@ -339,7 +355,11 @@ func showTerraform(name string) {
 	count := 0
 	for _, pod := range pods.Items {
 		if strings.Contains(pod.Name, name) && pod.Status.Phase == "Running" {
-			output = ExecCmdReturnOutput("bash", "-c", "export KUBECONFIG="+KUBECONFIG+"; kubectl get pods "+pod.Name+" -o wide -n "+pod.Namespace)
+			output, err = ExecCmdReturnOutput("bash", "-c", "export KUBECONFIG="+KUBECONFIG+"; kubectl get pods "+pod.Name+" -o wide -n "+pod.Namespace)
+			if err != nil {
+				fmt.Println("Cmd was unsuccessful")
+				os.Exit(2)
+			}
 			if count != 0 {
 				fmt.Printf("%s\n", strings.Split(output, "\n")[1])
 			} else {
