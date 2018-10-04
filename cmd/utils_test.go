@@ -1,6 +1,7 @@
 package cmd_test
 
 import (
+	"fmt"
 	"os"
 	"strings"
 
@@ -81,7 +82,11 @@ var _ = Describe("Utils", func() {
 
 	Context("After setting KUBECONFIG environment variable", func() {
 		It("ExecCmdReturnOutput should return /tmp/kubeconfig as output", func() {
-			output := strings.TrimSpace(ExecCmdReturnOutput("bash", "-c", "export KUBECONFIG=/tmp/kubeconfig; printenv KUBECONFIG"))
+			output, err := strings.TrimSpace(ExecCmdReturnOutput("bash", "-c", "export KUBECONFIG=/tmp/kubeconfig; printenv KUBECONFIG"))
+			if err != nil {
+				fmt.Println("Cmd was unsuccessful")
+				os.Exit(2)
+			}
 			Expect(output).To(Equal("/tmp/kubeconfig"))
 		})
 	})

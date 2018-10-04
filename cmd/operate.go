@@ -16,6 +16,7 @@ package cmd
 
 import (
 	"encoding/json"
+	"fmt"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -118,7 +119,11 @@ func operate(provider, arguments string) {
 			_, err = originalCredentials.WriteString(string(serviceaccount))
 			originalCredentials.Close()
 			checkError(err)
-			tmpAccount = ExecCmdReturnOutput("bash", "-c", "gcloud config list account --format json")
+			tmpAccount, err = ExecCmdReturnOutput("bash", "-c", "gcloud config list account --format json")
+			if err != nil {
+				fmt.Println("Cmd was unsuccessful")
+				os.Exit(2)
+			}
 			dec := json.NewDecoder(strings.NewReader(tmpAccount))
 			dec.Decode(&data)
 			jq := jsonq.NewQuery(data)

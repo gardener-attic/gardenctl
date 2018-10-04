@@ -125,13 +125,9 @@ func ExecCmd(input []byte, cmd string, suppressedOutput bool, environment ...str
 }
 
 // ExecCmdReturnOutput execute cmd and return output
-func ExecCmdReturnOutput(cmd string, args ...string) (output string) {
+func ExecCmdReturnOutput(cmd string, args ...string) (output string, err error) {
 	out, err := exec.Command(cmd, args...).Output()
-	if err != nil {
-		fmt.Println("Cmd was unsuccessful")
-		os.Exit(2)
-	}
-	return strings.TrimSpace(string(out[:]))
+	return strings.TrimSpace(string(out[:])), err
 }
 
 // ReadTarget file into Target

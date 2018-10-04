@@ -110,7 +110,11 @@ func clientToTarget(target string) (*k8s.Clientset, error) {
 
 // nameOfTargetedCluster returns the full clustername of the currently targeted cluster
 func nameOfTargetedCluster() (clustername string) {
-	clustername = ExecCmdReturnOutput("bash", "-c", "export KUBECONFIG="+KUBECONFIG+"; kubectl config current-context")
+	clustername, err = ExecCmdReturnOutput("bash", "-c", "export KUBECONFIG="+KUBECONFIG+"; kubectl config current-context")
+	if err != nil {
+		fmt.Println("Cmd was unsuccessful")
+		os.Exit(2)
+	}
 	return clustername
 }
 
@@ -144,7 +148,11 @@ func getShootClusterName() (clustername string) {
 func getCredentials() (username, password string) {
 	_, err := clientToTarget("shoot")
 	checkError(err)
-	output := ExecCmdReturnOutput("bash", "-c", "export KUBECONFIG="+KUBECONFIG+"; kubectl config view")
+	output, err := ExecCmdReturnOutput("bash", "-c", "export KUBECONFIG="+KUBECONFIG+"; kubectl config view")
+	if err != nil {
+		fmt.Println("Cmd was unsuccessful")
+		os.Exit(2)
+	}
 	scanner := bufio.NewScanner(strings.NewReader(output))
 	for scanner.Scan() {
 		if strings.Contains(scanner.Text(), "password:") {
@@ -225,7 +233,11 @@ func getEmail(githubURL string) string {
 	if githubURL == "" {
 		return "null"
 	}
-	res := ExecCmdReturnOutput("bash", "-c", "curl -ks "+githubURL+"/api/v3/users/"+os.Getenv("USER")+" | jq -r .email")
+	res, err := ExecCmdReturnOutput("bash", "-c", "curl -ks "+githubURL+"/api/v3/users/"+os.Getenv("USER")+" | jq -r .email")
+	if err != nil {
+		fmt.Println("Cmd was unsuccessful")
+		os.Exit(2)
+	}
 	fmt.Printf("used github email: %s\n", res)
 	return res
 }
