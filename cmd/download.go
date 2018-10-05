@@ -134,12 +134,12 @@ func downloadLogs(option string) {
 	for _, shoot := range shootList.Items {
 		seed, err := gardenClientset.GardenV1beta1().Seeds().Get(*shoot.Spec.Cloud.Seed, metav1.GetOptions{})
 		if err != nil {
-			fmt.Println(err)
+			fmt.Println("Could not get seed")
 			continue
 		}
 		kubeSecret, err := Client.CoreV1().Secrets(seed.Spec.SecretRef.Namespace).Get(seed.Spec.SecretRef.Name, metav1.GetOptions{})
 		if err != nil {
-			fmt.Println(err)
+			fmt.Println("Could not get kubeSecret")
 			continue
 		}
 		pathSeed := pathSeedCache + "/" + seed.Spec.SecretRef.Name
@@ -153,12 +153,12 @@ func downloadLogs(option string) {
 		KUBECONFIG = pathToKubeconfig
 		config, err := clientcmd.BuildConfigFromFlags("", pathToKubeconfig)
 		if err != nil {
-			fmt.Println(err)
+			fmt.Println("Could not build config")
 			continue
 		}
 		ClientSeed, err := k8s.NewForConfig(config)
 		if err != nil {
-			fmt.Println(err)
+			fmt.Println("Could not get seed client")
 			continue
 		}
 		pods, err := ClientSeed.CoreV1().Pods(shoot.Status.TechnicalID).List(metav1.ListOptions{})
@@ -198,10 +198,10 @@ func downloadLogs(option string) {
 		}
 		kubeSecretShoot, err := ClientSeed.CoreV1().Secrets(shoot.Status.TechnicalID).Get("kubecfg", metav1.GetOptions{})
 		if err != nil {
-			fmt.Println(err)
+			fmt.Println("Could not get kubeSecret")
 			continue
 		}
-		pathShootKubeconfig := pathShootCache + "/" + target.Target[1].Name + "/" + shoot.Name
+		pathShootKubeconfig := pathShootCache + "/" + seed.Name + "/" + shoot.Name
 		os.MkdirAll(pathShootKubeconfig, os.ModePerm)
 		err = ioutil.WriteFile(pathShootKubeconfig+"/kubeconfig.yaml", kubeSecretShoot.Data["kubeconfig"], 0644)
 		if err != nil {
@@ -212,7 +212,7 @@ func downloadLogs(option string) {
 		KUBECONFIG = pathToKubeconfig
 		config, err = clientcmd.BuildConfigFromFlags("", pathToKubeconfig)
 		if err != nil {
-			fmt.Println(err)
+			fmt.Println("Could not build config")
 			continue
 		}
 		ClientShoot, err := k8s.NewForConfig(config)
