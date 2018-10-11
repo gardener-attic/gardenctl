@@ -166,8 +166,8 @@ func downloadLogs(option string) {
 			fmt.Println("Shoot " + shoot.Name + " has no pods in " + shoot.Status.TechnicalID + " namespace")
 			continue
 		}
-		CreateDir(dir+"/seeds/"+*shoot.Spec.Cloud.Seed+"/"+shoot.Name+"/logs/vpn", 0751)
-		pathLogsSeeds := dir + "/seeds/" + *shoot.Spec.Cloud.Seed + "/" + shoot.Name + "/logs/vpn"
+		CreateDir(dir+"/seeds/"+*shoot.Spec.Cloud.Seed+"/"+shoot.ObjectMeta.GetNamespace()+"/"+shoot.Name+"/logs/vpn", 0751)
+		pathLogsSeeds := dir + "/seeds/" + *shoot.Spec.Cloud.Seed + "/" + shoot.ObjectMeta.GetNamespace() + "/" + shoot.Name + "/logs/vpn"
 		for _, pod := range pods.Items {
 			if strings.Contains(pod.Name, "prometheus-0") {
 				fmt.Println("bash", "-c", "export KUBECONFIG="+KUBECONFIG+"; kubectl logs "+pod.Name+" -c "+"vpn-seed"+" -n "+shoot.Status.TechnicalID)
@@ -221,7 +221,7 @@ func downloadLogs(option string) {
 			fmt.Println("Shoot " + shoot.Name + " has no pods in kube-system namespace")
 			continue
 		}
-		pathLogsShoots := dir + "/seeds/" + *shoot.Spec.Cloud.Seed + "/" + shoot.Name + "/logs/vpn"
+		pathLogsShoots := dir + "/seeds/" + *shoot.Spec.Cloud.Seed + "/" + shoot.ObjectMeta.GetNamespace() + "/" + shoot.Name + "/logs/vpn"
 		for _, pod := range pods.Items {
 			if strings.Contains(pod.Name, "vpn-shoot-") {
 				fmt.Println("bash", "-c", "export KUBECONFIG="+KUBECONFIG+"; kubectl logs "+pod.Name+" -n "+"kube-system")
