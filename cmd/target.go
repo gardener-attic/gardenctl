@@ -233,9 +233,9 @@ func init() {
 
 // resolveNameProject resolves name to project
 func resolveNameProject(name string) (matches []string) {
-	if !strings.HasPrefix(name, "garden-") {
+	/* 	if !strings.HasPrefix(name, "garden-") {
 		name = "garden-" + name
-	}
+	} */
 	tmp := KUBECONFIG
 	Client, err = clientToTarget("garden")
 	checkError(err)
