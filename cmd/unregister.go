@@ -17,6 +17,8 @@ package cmd
 import (
 	"fmt"
 	"os"
+	"path/filepath"
+	"strings"
 
 	"github.com/badoux/checkmail"
 	"github.com/spf13/cobra"
@@ -77,7 +79,11 @@ var unregisterCmd = &cobra.Command{
 			var gardenConfig GardenConfig
 			GetGardenConfig(pathGardenConfig, &gardenConfig)
 			for _, cluster := range gardenConfig.GardenClusters {
-				config, err := clientcmd.BuildConfigFromFlags("", cluster.KubeConfig)
+				gardenKubeConfig := cluster.KubeConfig
+				if strings.Contains(gardenKubeConfig, "~") {
+					gardenKubeConfig = filepath.Clean(filepath.Join(HomeDir(), strings.Replace(gardenKubeConfig, "~", "", 1)))
+				}
+				config, err := clientcmd.BuildConfigFromFlags("", gardenKubeConfig)
 				checkError(err)
 				clientset, err := k8s.NewForConfig(config)
 				checkError(err)
