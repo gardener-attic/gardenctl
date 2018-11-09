@@ -240,6 +240,14 @@
   version = "v2.0.1"
 
 [[projects]]
+  branch = "master"
+  digest = "1:f8c5b1a7be7de5bc373f5c8e30c06b593887e04a9dffd8ca5f15a939c361cdcc"
+  name = "github.com/pkg/browser"
+  packages = ["."]
+  pruneopts = ""
+  revision = "0a3d74bf9ce488f035cf5bc36f753a711bc74334"
+
+[[projects]]
   digest = "1:3fcbf733a8d810a21265a7f2fe08a3353db2407da052b233f8b204b5afc03d9b"
   name = "github.com/sirupsen/logrus"
   packages = ["."]
@@ -530,6 +538,7 @@
     "github.com/jmoiron/jsonq",
     "github.com/onsi/ginkgo",
     "github.com/onsi/gomega",
+    "github.com/pkg/browser",
     "github.com/spf13/cobra",
     "gopkg.in/yaml.v2",
     "k8s.io/api/rbac/v1",
