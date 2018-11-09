@@ -23,6 +23,7 @@ import (
 
 	yaml "gopkg.in/yaml.v2"
 
+	"github.com/pkg/browser"
 	"github.com/spf13/cobra"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
@@ -160,7 +161,7 @@ func showUI() {
 			filteredUrls = append(filteredUrls, url)
 			fmt.Println("URL-" + strconv.Itoa(index+1) + ": " + "https://" + url)
 			if !opened {
-				ExecCmd(nil, ("open " + "https://" + url), false)
+				browser.OpenURL("https://" + url)
 				opened = true
 			}
 		}
@@ -252,7 +253,7 @@ func showPrometheus() {
 	}
 	url = "https://" + username + ":" + password + "@" + url
 	fmt.Println("URL: " + url)
-	ExecCmd(nil, ("open " + url), false)
+	browser.OpenURL(url)
 }
 
 // showAltermanager shows the prometheus pods in the targeted seed cluster
@@ -273,7 +274,7 @@ func showAltermanager() {
 	}
 	url = "https://" + username + ":" + password + "@" + url
 	fmt.Println("URL: " + url)
-	ExecCmd(nil, ("open " + url), false)
+	browser.OpenURL(url)
 }
 
 // showMachineControllerManager shows the prometheus pods in the targeted seed cluster
@@ -320,7 +321,8 @@ func showDashboard() {
 		fmt.Println("No target")
 		os.Exit(2)
 	}
-	ExecCmd(nil, "open http://127.0.0.1:8002/api/v1/namespaces/kube-system/services/https:kubernetes-dashboard:/proxy/", false)
+	url := "http://127.0.0.1:8002/api/v1/namespaces/kube-system/services/https:kubernetes-dashboard:/proxy/"
+	browser.OpenURL(url)
 	ExecCmd(nil, "kubectl proxy -p 8002", false, "KUBECONFIG="+KUBECONFIG)
 }
 
@@ -342,7 +344,7 @@ func showGrafana() {
 	}
 	url = "https://" + username + ":" + password + "@" + url
 	fmt.Println("URL: " + url)
-	ExecCmd(nil, ("open " + url), false)
+	browser.OpenURL(url)
 }
 
 // showTerraform pods for specified name
