@@ -144,23 +144,19 @@ func getShootClusterName() (clustername string) {
 	return clustername
 }
 
-// getCredentials returns username and password for url login
-func getCredentials() (username, password string) {
-	_, err := clientToTarget("shoot")
+// getMonitoringCredentials returns username and password required for url login to the montiring tools
+func getMonitoringCredentials() (username, password string) {
+	var target Target
+	ReadTarget(pathTarget, &target)
+	shootName := target.Target[2].Name
+	shootNamespace := getSeedNamespaceNameForShoot(shootName)
+	Client, err = clientToTarget("seed")
 	checkError(err)
-	output, err := ExecCmdReturnOutput("bash", "-c", "export KUBECONFIG="+KUBECONFIG+"; kubectl config view")
-	if err != nil {
-		fmt.Println("Cmd was unsuccessful")
-		os.Exit(2)
-	}
-	scanner := bufio.NewScanner(strings.NewReader(output))
-	for scanner.Scan() {
-		if strings.Contains(scanner.Text(), "password:") {
-			password = strings.TrimPrefix(scanner.Text(), "    password: ")
-		} else if strings.Contains(scanner.Text(), "username:") {
-			username = strings.TrimPrefix(scanner.Text(), "    username: ")
-		}
-	}
+	secretName := "monitoring-ingress-credentials"
+	monitoringSecret, err := Client.CoreV1().Secrets(shootNamespace).Get((secretName), metav1.GetOptions{})
+	checkError(err)
+	username = string(monitoringSecret.Data["username"][:])
+	password = string(monitoringSecret.Data["password"][:])
 	return username, password
 }
 
