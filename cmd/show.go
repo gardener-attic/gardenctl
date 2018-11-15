@@ -237,7 +237,7 @@ func showVpnShoot() {
 
 // showPrometheus shows the prometheus pod in the targeted seed cluster
 func showPrometheus() {
-	username, password = getCredentials()
+	username, password = getMonitoringCredentials()
 	showPod("prometheus", "seed")
 	output, err := ExecCmdReturnOutput("bash", "-c", "export KUBECONFIG="+KUBECONFIG+"; kubectl get ingress prometheus -n "+getShootClusterName())
 	if err != nil {
@@ -258,7 +258,7 @@ func showPrometheus() {
 
 // showAltermanager shows the prometheus pods in the targeted seed cluster
 func showAltermanager() {
-	username, password = getCredentials()
+	username, password = getMonitoringCredentials()
 	showPod("alertmanager", "seed")
 	output, err := ExecCmdReturnOutput("bash", "-c", "export KUBECONFIG="+KUBECONFIG+"; kubectl get ingress alertmanager -n "+getShootClusterName())
 	if err != nil {
@@ -328,7 +328,7 @@ func showDashboard() {
 
 // showGrafana shows the grafana dashboard for the targeted cluster
 func showGrafana() {
-	username, password = getCredentials()
+	username, password = getMonitoringCredentials()
 	showPod("grafana", "seed")
 	output, err := ExecCmdReturnOutput("bash", "-c", "export KUBECONFIG="+KUBECONFIG+"; kubectl get ingress grafana -n "+getShootClusterName())
 	if err != nil {
