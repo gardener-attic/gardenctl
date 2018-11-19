@@ -19,9 +19,11 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	clientset "github.com/gardener/gardener/pkg/client/garden/clientset/versioned"
@@ -181,7 +183,7 @@ func getSeedNamespaceNameForShoot(shootName string) (namespaceSeed string) {
 
 }
 
-// returns projectName for Shoot
+// getProjectForShoot returns projectName for Shoot
 func getProjectForShoot() (projectName string) {
 	var target Target
 	ReadTarget(pathTarget, &target)
@@ -242,4 +244,49 @@ func getGithubURL() string {
 	var gardenConfig GardenConfig
 	GetGardenConfig(pathGardenConfig, &gardenConfig)
 	return gardenConfig.GithubURL
+}
+
+func capture() func() (string, error) {
+	r, w, err := os.Pipe()
+	if err != nil {
+		panic(err)
+	}
+
+	done := make(chan error, 1)
+
+	save := os.Stdout
+	os.Stdout = w
+
+	var buf strings.Builder
+
+	go func() {
+		_, err := io.Copy(&buf, r)
+		r.Close()
+		done <- err
+	}()
+
+	return func() (string, error) {
+		os.Stdout = save
+		w.Close()
+		err := <-done
+		return buf.String(), err
+	}
+}
+
+func is_ip(word string) bool {
+	parts := strings.Split(word, ".")
+	if len(parts) < 4 {
+		return false
+	}
+	for _, x := range parts {
+		if i, err := strconv.Atoi(x); err == nil {
+			if i < 0 || i > 255 {
+				return false
+			}
+		} else {
+			return false
+		}
+
+	}
+	return true
 }
