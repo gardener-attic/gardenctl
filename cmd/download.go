@@ -40,7 +40,8 @@ var downloadCmd = &cobra.Command{
 		}
 		switch args[0] {
 		case "tf":
-			downloadTerraformFiles(args[1])
+			path := downloadTerraformFiles(args[1])
+			fmt.Println("Downloaded to " + path)
 		case "logs":
 			downloadLogs(args[1])
 		default:
@@ -54,7 +55,7 @@ func init() {
 }
 
 // downloadTerraformFiles downloads the corresponding tf file
-func downloadTerraformFiles(option string) {
+func downloadTerraformFiles(option string) string {
 	namespace := ""
 	var target Target
 	ReadTarget(pathTarget, &target)
@@ -79,7 +80,6 @@ func downloadTerraformFiles(option string) {
 			}
 		}
 		namespace = shootList.Items[ind].Status.TechnicalID
-		fmt.Println(namespace)
 		seed, err := gardenClientset.GardenV1beta1().Seeds().Get(*shootList.Items[ind].Spec.Cloud.Seed, metav1.GetOptions{})
 		checkError(err)
 		kubeSecret, err := Client.CoreV1().Secrets(seed.Spec.SecretRef.Namespace).Get(seed.Spec.SecretRef.Name, metav1.GetOptions{})
@@ -118,7 +118,7 @@ func downloadTerraformFiles(option string) {
 	checkError(err)
 	err = ioutil.WriteFile(pathGardenHome+"/"+pathTerraform+"/terraform.tfvars", []byte(secret.Data["terraform.tfvars"]), 0644)
 	checkError(err)
-	fmt.Println("Downloaded to " + pathGardenHome + "/" + pathTerraform)
+	return (pathGardenHome + "/" + pathTerraform)
 }
 
 func downloadLogs(option string) {
