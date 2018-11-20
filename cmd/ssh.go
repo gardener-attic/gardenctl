@@ -31,6 +31,10 @@ var sshCmd = &cobra.Command{
 	Short: "ssh to a node\n",
 	Long:  ``,
 	Run: func(cmd *cobra.Command, args []string) {
+		if len(args) != 1 || !is_ip(args[0]) {
+			fmt.Printf("Please use a valid IP")
+			os.Exit(2)
+		}
 		path := downloadTerraformFiles("infra")
 		if path != "" {
 			path += "/terraform.tfstate"
@@ -52,17 +56,18 @@ var sshCmd = &cobra.Command{
 			}
 		}
 		infraType := shootList.Items[ind].Spec.Cloud.Profile
-		region := shootList.Items[ind].Spec.Cloud.Region
-		cloudprofile, err := gardenClientset.GardenV1beta1().CloudProfiles().Get(infraType, metav1.GetOptions{})
-		var imageID string
-		for _, v := range cloudprofile.Spec.AWS.Constraints.MachineImages[0].Regions {
-			if v.Name == region {
-				imageID = v.AMI
-			}
-		}
 		switch infraType {
 		case "aws":
-			sshToAWSNode(imageID, path)
+			region := shootList.Items[ind].Spec.Cloud.Region
+			cloudprofile, err := gardenClientset.GardenV1beta1().CloudProfiles().Get(infraType, metav1.GetOptions{})
+			checkError(err)
+			var imageID string
+			for _, v := range cloudprofile.Spec.AWS.Constraints.MachineImages[0].Regions {
+				if v.Name == region {
+					imageID = v.AMI
+				}
+			}
+			sshToAWSNode(imageID, args[0], path)
 		case "gcp":
 		case "az":
 		case "openstack":
@@ -76,7 +81,7 @@ func init() {
 	RootCmd.AddCommand(sshCmd)
 }
 
-func sshToAWSNode(imageID, path string) {
+func sshToAWSNode(imageID, nodeIP, path string) {
 	// create bastion host
 	clustername := getShootClusterName()
 	name := clustername + "-bastions"
@@ -111,7 +116,9 @@ func sshToAWSNode(imageID, path string) {
 			break
 		}
 	}
-	fmt.Printf("Run: ssh -i key core@%s\n", ip)
+	bastionNode := "core@" + ip
+	node := "core@" + nodeIP
+	fmt.Println("Run: ssh -i key -o \"ProxyCommand ssh -W %h:%p -i key " + bastionNode + "\" " + node)
 	fmt.Printf("     gardenctl aws ec2 terminate-instances -- --instance-ids %s\n", instanceID)
 }
 
