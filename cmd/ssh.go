@@ -31,8 +31,14 @@ var sshCmd = &cobra.Command{
 	Short: "ssh to a node\n",
 	Long:  ``,
 	Run: func(cmd *cobra.Command, args []string) {
-		if len(args) != 1 || !is_ip(args[0]) {
-			fmt.Printf("Please use a valid IP")
+		if len(args) == 0 {
+			fmt.Printf("Node ips:\n")
+			printNodeIPs()
+			os.Exit(2)
+		} else if len(args) != 1 || !is_ip(args[0]) {
+			fmt.Printf("Select a valid node ip\n\n")
+			fmt.Printf("Node ips:\n")
+			printNodeIPs()
 			os.Exit(2)
 		}
 		path := downloadTerraformFiles("infra")
@@ -136,4 +142,17 @@ func downloadSSHKeypair() string {
 	err = ioutil.WriteFile(pathSSKeypair+"/key", []byte(secret.Data["id_rsa"]), 0600)
 	checkError(err)
 	return "Downloaded id_rsa key\n"
+}
+
+// printNodes print all nodes in k8s cluster
+func printNodeIPs() {
+	typeName, err := getTargetType()
+	checkError(err)
+	Client, err = clientToTarget(typeName)
+	checkError(err)
+	nodes, err := Client.CoreV1().Nodes().List(metav1.ListOptions{})
+	checkError(err)
+	for _, node := range nodes.Items {
+		fmt.Println("- " + node.Status.Addresses[0].Address)
+	}
 }
