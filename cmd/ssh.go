@@ -31,24 +31,12 @@ var sshCmd = &cobra.Command{
 	Short: "ssh to a node\n",
 	Long:  ``,
 	Run: func(cmd *cobra.Command, args []string) {
-		if len(args) == 0 {
-			fmt.Printf("Node ips:\n")
-			printNodeIPs()
-			os.Exit(2)
-		} else if len(args) != 1 || !is_ip(args[0]) {
-			fmt.Printf("Select a valid node ip\n\n")
-			fmt.Printf("Node ips:\n")
-			printNodeIPs()
-			os.Exit(2)
-		}
-		path := downloadTerraformFiles("infra")
-		if path != "" {
-			path += "/terraform.tfstate"
-		}
-		pathToKey := downloadSSHKeypair()
-		fmt.Printf(pathToKey)
 		var target Target
 		ReadTarget(pathTarget, &target)
+		if len(target.Target) < 3 {
+			fmt.Println("No shoot targeted")
+			os.Exit(2)
+		}
 		Client, err = clientToTarget("garden")
 		checkError(err)
 		gardenClientset, err := clientset.NewForConfig(NewConfigFromBytes(*kubeconfig))
@@ -62,6 +50,33 @@ var sshCmd = &cobra.Command{
 			}
 		}
 		infraType := shootList.Items[ind].Spec.Cloud.Profile
+		var kind string
+		switch infraType {
+		case "aws":
+			kind = "internal"
+		case "gcp":
+			kind = "external"
+		case "az":
+		case "openstack":
+		default:
+			fmt.Printf("Infrastructure type %s not found\n", infraType)
+		}
+		if len(args) == 0 {
+			fmt.Printf("Node ips:\n")
+			printNodeIPs(kind)
+			os.Exit(2)
+		} else if len(args) != 1 || !is_ip(args[0]) {
+			fmt.Printf("Select a valid node ip\n\n")
+			fmt.Printf("Node ips:\n")
+			printNodeIPs(kind)
+			os.Exit(2)
+		}
+		path := downloadTerraformFiles("infra")
+		if path != "" {
+			path += "/terraform.tfstate"
+		}
+		pathToKey := downloadSSHKeypair()
+		fmt.Printf(pathToKey)
 		switch infraType {
 		case "aws":
 			region := shootList.Items[ind].Spec.Cloud.Region
@@ -75,6 +90,7 @@ var sshCmd = &cobra.Command{
 			}
 			sshToAWSNode(imageID, args[0], path)
 		case "gcp":
+			sshToGCPNode(args[0], path)
 		case "az":
 		case "openstack":
 		default:
@@ -85,6 +101,16 @@ var sshCmd = &cobra.Command{
 
 func init() {
 	RootCmd.AddCommand(sshCmd)
+}
+
+func sshToGCPNode(nodeIP, path string) {
+	securityGroupID, err := ExecCmdReturnOutput("bash", "-c", "cat "+path+" | jq -r '.modules[].resources[\"google_compute_firewall.rule-allow-external-access\"].primary[\"id\"]'")
+	checkError(err)
+	arguments := "gcloud " + fmt.Sprintf("compute firewall-rules update %s --allow tcp:22,tcp:80,tcp:443", securityGroupID)
+	operate("gcp", arguments)
+	node := "core@" + nodeIP
+	fmt.Println("Run: ssh -i key " + node)
+	fmt.Printf("     gardenctl gcloud compute firewall-rules update %s -- --allow tcp:80,tcp:443\n", securityGroupID)
 }
 
 func sshToAWSNode(imageID, nodeIP, path string) {
@@ -145,7 +171,7 @@ func downloadSSHKeypair() string {
 }
 
 // printNodes print all nodes in k8s cluster
-func printNodeIPs() {
+func printNodeIPs(kindIP string) {
 	typeName, err := getTargetType()
 	checkError(err)
 	Client, err = clientToTarget(typeName)
@@ -153,6 +179,10 @@ func printNodeIPs() {
 	nodes, err := Client.CoreV1().Nodes().List(metav1.ListOptions{})
 	checkError(err)
 	for _, node := range nodes.Items {
-		fmt.Println("- " + node.Status.Addresses[0].Address)
+		if kindIP == "internal" {
+			fmt.Println("- " + node.Status.Addresses[0].Address)
+		} else if kindIP == "external" {
+			fmt.Println("- " + node.Status.Addresses[1].Address)
+		}
 	}
 }
