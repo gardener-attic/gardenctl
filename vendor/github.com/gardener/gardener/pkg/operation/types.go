@@ -16,6 +16,7 @@ package operation
 
 import (
 	gardenv1beta1 "github.com/gardener/gardener/pkg/apis/garden/v1beta1"
+	"github.com/gardener/gardener/pkg/apis/garden/v1beta1/helper"
 	"github.com/gardener/gardener/pkg/chartrenderer"
 	gardeninformers "github.com/gardener/gardener/pkg/client/garden/informers/externalversions/garden/v1beta1"
 	"github.com/gardener/gardener/pkg/client/kubernetes"
@@ -25,6 +26,7 @@ import (
 	"github.com/gardener/gardener/pkg/utils/imagevector"
 	"github.com/sirupsen/logrus"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/util/intstr"
 )
 
 // Operation contains all data required to perform an operation on a Shoot cluster.
@@ -37,6 +39,7 @@ type Operation struct {
 	Garden               *garden.Garden
 	Seed                 *seed.Seed
 	Shoot                *shoot.Shoot
+	ShootedSeed          *helper.ShootedSeed
 	K8sGardenClient      kubernetes.Client
 	K8sGardenInformers   gardeninformers.Interface
 	K8sSeedClient        kubernetes.Client
@@ -54,10 +57,12 @@ type Operation struct {
 // MachineDeployment holds insformation about the name, class, replicas of a MachineDeployment
 // managed by the machine-controller-manager.
 type MachineDeployment struct {
-	Name      string
-	ClassName string
-	Minimum   int
-	Maximum   int
+	Name           string
+	ClassName      string
+	Minimum        int
+	Maximum        int
+	MaxSurge       intstr.IntOrString
+	MaxUnavailable intstr.IntOrString
 }
 
 // MachineDeployments is a list of machine deployments.

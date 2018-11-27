@@ -3,37 +3,44 @@ apiVersion: {{ include "deploymentversion" . }}
 kind: Deployment
 metadata:
   labels:
-    app: {{ template "name" . }}
+    garden.sapcloud.io/role: optional-addon
+    app: {{ template "nginx-ingress.name" . }}
     chart: {{ .Chart.Name }}-{{ .Chart.Version }}
     component: "{{ .Values.defaultBackend.name }}"
     heritage: {{ .Release.Service }}
     release: {{ .Release.Name }}
     addonmanager.kubernetes.io/mode: Reconcile
     origin: gardener
-  name: {{ template "defaultBackend.fullname" . }}
+  name: {{ template "nginx-ingress.defaultBackend.fullname" . }}
   namespace: kube-system
 spec:
   revisionHistoryLimit: 0
   replicas: {{ .Values.defaultBackend.replicaCount }}
   selector:
     matchLabels:
-      app: {{ template "name" . }}
+      app: {{ template "nginx-ingress.name" . }}
       component: "{{ .Values.defaultBackend.name }}"
       release: {{ .Release.Name }}
   template:
     metadata:
-    {{- if .Values.defaultBackend.podAnnotations }}
       annotations:
+        scheduler.alpha.kubernetes.io/critical-pod: ''
+{{- if .Values.defaultBackend.podAnnotations }}
 {{ toYaml .Values.defaultBackend.podAnnotations | indent 8 }}
     {{- end }}
       labels:
         origin: gardener
-        app: {{ template "name" . }}
+        garden.sapcloud.io/role: optional-addon
+        app: {{ template "nginx-ingress.name" . }}
         component: "{{ .Values.defaultBackend.name }}"
         release: {{ .Release.Name }}
     spec:
+      priorityClassName: system-cluster-critical
+      securityContext:
+        runAsUser: 65534
+        fsGroup: 65534
       containers:
-        - name: {{ template "name" . }}-{{ .Values.defaultBackend.name }}
+        - name: {{ template "nginx-ingress.name" . }}-{{ .Values.defaultBackend.name }}
           image: {{ index .Values.images "ingress-default-backend" }}
           imagePullPolicy: "{{ .Values.defaultBackend.image.pullPolicy }}"
           args:

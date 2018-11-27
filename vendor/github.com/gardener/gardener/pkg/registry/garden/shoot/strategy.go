@@ -63,10 +63,6 @@ func (shootStrategy) PrepareForUpdate(ctx context.Context, obj, old runtime.Obje
 	if mustIncreaseGeneration(oldShoot, newShoot) {
 		newShoot.Generation = oldShoot.Generation + 1
 	}
-
-	if newShoot.Annotations != nil {
-		delete(newShoot.Annotations, common.ShootOperation)
-	}
 }
 
 func mustIncreaseGeneration(oldShoot, newShoot *garden.Shoot) bool {
@@ -75,15 +71,29 @@ func mustIncreaseGeneration(oldShoot, newShoot *garden.Shoot) bool {
 		return true
 	}
 
-	// The deletion timestamp was set.
+	// The deletion timestamp is set.
 	if oldShoot.DeletionTimestamp == nil && newShoot.DeletionTimestamp != nil {
 		return true
 	}
 
-	// The shoot state was failed but the retry annotation was set.
-	lastOperation := newShoot.Status.LastOperation
-	if lastOperation != nil && lastOperation.State == garden.ShootLastOperationStateFailed {
-		if val, ok := newShoot.Annotations[common.ShootOperation]; ok && val == "retry" {
+	if lastOperation := newShoot.Status.LastOperation; lastOperation != nil {
+		mustIncrease := false
+
+		switch lastOperation.State {
+		case garden.ShootLastOperationStateFailed:
+			// The shoot state is failed and the retry annotation is set.
+			if val, ok := newShoot.Annotations[common.ShootOperation]; ok && val == common.ShootOperationRetry {
+				mustIncrease = true
+			}
+		default:
+			// The shoot state is not failed and the reconcile annotation is set.
+			if val, ok := newShoot.Annotations[common.ShootOperation]; ok && val == common.ShootOperationReconcile {
+				mustIncrease = true
+			}
+		}
+
+		if mustIncrease {
+			delete(newShoot.Annotations, common.ShootOperation)
 			return true
 		}
 	}

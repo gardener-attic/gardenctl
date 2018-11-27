@@ -29,8 +29,8 @@ enableDebuggingHandlers: true
 enableServer: true
 enforceNodeAllocatable:
 - pods
-eventRecordQPS: 5
-eventBurst: 10
+eventRecordQPS: 25
+eventBurst: 25
 evictionHard:
   imagefs.available: 5%
   imagefs.inodesFree: 5%
@@ -61,6 +61,8 @@ fileCheckFrequency: 20s
 imageMinimumGCAge: 2m0s
 imageGCHighThresholdPercent: 50
 imageGCLowThresholdPercent: 40
+kubeAPIBurst: 25
+kubeAPIQPS: 25
 kubeReserved:
   memory: 1Gi
 hairpinMode: promiscuous-bridge
@@ -75,7 +77,7 @@ maxOpenFiles: 1000000
 maxPods: 110
 nodeStatusUpdateFrequency: 10s
 podsPerCore: 0
-readOnlyPort: 10255
+readOnlyPort: 0
 registryPullQPS: 5
 registryBurst: 10
 resolvConf: /etc/resolv.conf

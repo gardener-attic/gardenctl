@@ -24,7 +24,7 @@ import (
 
 // EnsureIngressDNSRecord creates the respective wildcard DNS record for the nginx-ingress-controller.
 func (b *Botanist) EnsureIngressDNSRecord() error {
-	if !b.Shoot.NginxIngressEnabled() || b.Shoot.Hibernated {
+	if !b.Shoot.NginxIngressEnabled() || b.Shoot.IsHibernated {
 		return b.DestroyIngressDNSRecord()
 	}
 
@@ -44,12 +44,6 @@ func (b *Botanist) DestroyIngressDNSRecord() error {
 // the kubernetes-dashboard properly.
 func (b *Botanist) GenerateKubernetesDashboardConfig() (map[string]interface{}, error) {
 	return common.GenerateAddonConfig(nil, b.Shoot.KubernetesDashboardEnabled()), nil
-}
-
-// GenerateClusterAutoscalerConfig generates the values which are required to render the chart of
-// the cluster-autoscaler properly.
-func (b *Botanist) GenerateClusterAutoscalerConfig() (map[string]interface{}, error) {
-	return common.GenerateAddonConfig(nil, b.Shoot.ClusterAutoscalerEnabled()), nil
 }
 
 // GenerateKubeLegoConfig generates the values which are required to render the chart of
@@ -95,29 +89,6 @@ func (b *Botanist) GenerateMonocularConfig() (map[string]interface{}, error) {
 			"ingress": map[string]interface{}{
 				"basicAuthSecret": basicAuth,
 				"hosts":           []string{monocularHost},
-			},
-		}
-	}
-
-	return common.GenerateAddonConfig(values, enabled), nil
-}
-
-// GenerateHeapsterConfig generates the values which are required to render the chart of
-// heapster properly.
-func (b *Botanist) GenerateHeapsterConfig() (map[string]interface{}, error) {
-	var (
-		enabled = b.Shoot.HeapsterEnabled()
-		values  map[string]interface{}
-	)
-
-	if enabled {
-		addonManagerLabels := map[string]interface{}{
-			"addonmanager.kubernetes.io/mode": "Reconcile",
-		}
-		values = map[string]interface{}{
-			"labels": addonManagerLabels,
-			"service": map[string]interface{}{
-				"labels": addonManagerLabels,
 			},
 		}
 	}

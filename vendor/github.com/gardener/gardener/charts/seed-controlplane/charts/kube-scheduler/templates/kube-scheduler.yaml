@@ -6,17 +6,13 @@ metadata:
   labels:
     app: kubernetes
     role: scheduler
-  annotations:
-    prometheus.io/scrape: "true"
-    prometheus.io/port: "10251"
-    prometheus.io/name: kube-scheduler
 spec:
   type: ClusterIP
   clusterIP: None
   ports:
-    - name: metrics
-      port: 10251
-      protocol: TCP
+  - name: metrics
+    port: 10251
+    protocol: TCP
   selector:
     app: kubernetes
     role: scheduler
@@ -27,6 +23,7 @@ metadata:
   name: kube-scheduler
   namespace: {{ .Release.Namespace }}
   labels:
+    garden.sapcloud.io/role: controlplane
     app: kubernetes
     role: scheduler
 spec:
@@ -44,6 +41,7 @@ spec:
 {{ toYaml .Values.podAnnotations | indent 8 }}
 {{- end }}
       labels:
+        garden.sapcloud.io/role: controlplane
         app: kubernetes
         role: scheduler
     spec:
@@ -52,17 +50,12 @@ spec:
         operator: Exists
       containers:
       - name: kube-scheduler
-        image: {{ index .Values.images "hyperkube" }}:v{{ .Values.kubernetesVersion }}
+        image: {{ index .Values.images "hyperkube" }}
         imagePullPolicy: IfNotPresent
         command:
         - /hyperkube
         - scheduler
-        {{- if semverCompare ">= 1.9" .Values.kubernetesVersion }}
         - --config=/var/lib/kube-scheduler-config/config.yaml
-        {{- else }}
-        - --kubeconfig=/var/lib/kube-scheduler/kubeconfig
-        - --leader-elect=true
-        {{- end }}
         {{- include "kube-scheduler.featureGates" . | trimSuffix "," | indent 8 }}
         - --v=2
         livenessProbe:
@@ -84,10 +77,8 @@ spec:
         volumeMounts:
         - name: kube-scheduler
           mountPath: /var/lib/kube-scheduler
-        {{- if semverCompare ">= 1.9" .Values.kubernetesVersion }}
         - name: kube-scheduler-config
           mountPath: /var/lib/kube-scheduler-config
-        {{- end }}
       dnsPolicy: ClusterFirst
       restartPolicy: Always
       schedulerName: default-scheduler
@@ -96,8 +87,6 @@ spec:
       - name: kube-scheduler
         secret:
           secretName: kube-scheduler
-      {{- if semverCompare ">= 1.9" .Values.kubernetesVersion }}
       - name: kube-scheduler-config
         configMap:
           name: kube-scheduler-config
-      {{- end }}

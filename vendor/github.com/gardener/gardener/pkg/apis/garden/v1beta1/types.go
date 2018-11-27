@@ -15,12 +15,15 @@
 package v1beta1
 
 import (
+	"encoding/json"
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
+	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/intstr"
 )
 
 ////////////////////////////////////////////////////
@@ -69,6 +72,9 @@ type CloudProfileSpec struct {
 	// OpenStack is the profile specification for the OpenStack cloud.
 	// +optional
 	OpenStack *OpenStackProfile `json:"openstack,omitempty"`
+	// Alicloud is the profile specification for the Alibaba cloud.
+	// +optional
+	Alicloud *AlicloudProfile `json:"alicloud,omitempty"`
 	// Local is the profile specification for the Local provider.
 	// +optional
 	Local *LocalProfile `json:"local,omitempty"`
@@ -252,6 +258,48 @@ type OpenStackMachineImage struct {
 	Image string `json:"image"`
 }
 
+// AlicloudProfile defines constraints and definitions in Alibaba Cloud environment.
+type AlicloudProfile struct {
+	// Constraints is an object containing constraints for certain values in the Shoot specification.
+	Constraints AlicloudConstraints `json:"constraints"`
+}
+
+// AlicloudConstraints is an object containing constraints for certain values in the Shoot specification
+type AlicloudConstraints struct {
+	// DNSProviders contains constraints regarding allowed values of the 'dns.provider' block in the Shoot specification.
+	DNSProviders []DNSProviderConstraint `json:"dnsProviders"`
+	// Kubernetes contains constraints regarding allowed values of the 'kubernetes' block in the Shoot specification.
+	Kubernetes KubernetesConstraints `json:"kubernetes"`
+	// MachineImages contains constraints regarding allowed values for machine images in the Shoot specification.
+	MachineImages []AlicloudMachineImage `json:"machineImages"`
+	// MachineTypes contains constraints regarding allowed values for machine types in the 'workers' block in the Shoot specification.
+	MachineTypes []AlicloudMachineType `json:"machineTypes"`
+	// VolumeTypes contains constraints regarding allowed values for volume types in the 'workers' block in the Shoot specification.
+	VolumeTypes []AlicloudVolumeType `json:"volumeTypes"`
+	// Zones contains constraints regarding allowed values for 'zones' block in the Shoot specification.
+	Zones []Zone `json:"zones"`
+}
+
+// AlicloudMachineImage defines the machine image for Alicloud.
+type AlicloudMachineImage struct {
+	// Name is the name of the image.
+	Name MachineImageName `json:"name"`
+	// ID is the ID of the image.
+	ID string `json:"id"`
+}
+
+// AlicloudMachineType defines certain machine types and zone constraints.
+type AlicloudMachineType struct {
+	MachineType `json:",inline"`
+	Zones       []string `json:"zones"`
+}
+
+// AlicloudVolumeType defines certain volume types and zone constraints.
+type AlicloudVolumeType struct {
+	VolumeType `json:",inline"`
+	Zones      []string `json:"zones"`
+}
+
 // LocalProfile defines constraints and definitions for the local development.
 type LocalProfile struct {
 	// Constraints is an object containing constraints for certain values in the Shoot specification.
@@ -280,6 +328,9 @@ type KubernetesConstraints struct {
 type MachineType struct {
 	// Name is the name of the machine type.
 	Name string `json:"name"`
+	// Usable defines if the machine type can be used for shoot clusters.
+	// +optional
+	Usable *bool `json:"usable,omitempty"`
 	// CPU is the number of CPUs for this machine type.
 	CPU resource.Quantity `json:"cpu"`
 	// GPU is the number of GPUs for this machine type.
@@ -301,6 +352,9 @@ type OpenStackMachineType struct {
 type VolumeType struct {
 	// Name is the name of the volume type.
 	Name string `json:"name"`
+	// Usable defines if the volume type can be used for shoot clusters.
+	// +optional
+	Usable *bool `json:"usable,omitempty"`
 	// Class is the class of the volume type.
 	Class string `json:"class"`
 }
@@ -319,6 +373,89 @@ type MachineImageName string
 const (
 	// MachineImageCoreOS is a constant for the CoreOS machine image.
 	MachineImageCoreOS MachineImageName = "CoreOS"
+)
+
+////////////////////////////////////////////////////
+//                    PROJECTS                    //
+////////////////////////////////////////////////////
+
+// +genclient
+// +genclient:nonNamespaced
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+
+// Project holds certain properties about a Gardener project.
+type Project struct {
+	metav1.TypeMeta `json:",inline"`
+	// Standard object metadata.
+	// +optional
+	metav1.ObjectMeta `json:"metadata,omitempty"`
+	// Spec defines the project properties.
+	// +optional
+	Spec ProjectSpec `json:"spec,omitempty"`
+	// Most recently observed status of the Project.
+	// +optional
+	Status ProjectStatus `json:"status,omitempty"`
+}
+
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+
+// ProjectList is a collection of Projects.
+type ProjectList struct {
+	metav1.TypeMeta `json:",inline"`
+	// Standard list object metadata.
+	// +optional
+	metav1.ListMeta `json:"metadata,omitempty"`
+	// Items is the list of Projects.
+	Items []Project `json:"items"`
+}
+
+// ProjectSpec is the specification of a Project.
+type ProjectSpec struct {
+	// CreatedBy is a subject representing a user name, an email address, or any other identifier of a user
+	// who created the project.
+	// +optional
+	CreatedBy *rbacv1.Subject `json:"createdBy,omitempty"`
+	// Description is a human-readable description of what the project is used for.
+	// +optional
+	Description *string `json:"description,omitempty"`
+	// Owner is a subject representing a user name, an email address, or any other identifier of a user owning
+	// the project.
+	// +optional
+	Owner *rbacv1.Subject `json:"owner,omitempty"`
+	// Purpose is a human-readable explanation of the project's purpose.
+	// +optional
+	Purpose *string `json:"purpose,omitempty"`
+	// Members is a list of subjects representing a user name, an email address, or any other identifier of a user
+	// that should be part of this project.
+	// +optional
+	Members []rbacv1.Subject `json:"members,omitempty"`
+	// Namespace is the name of the namespace that has been created for the Project object.
+	// A nil value means that Gardener will determine the name of the namespace.
+	// +optional
+	Namespace *string `json:"namespace,omitempty"`
+}
+
+// ProjectStatus holds the most recently observed status of the project.
+type ProjectStatus struct {
+	// ObservedGeneration is the most recent generation observed for this project.
+	// +optional
+	ObservedGeneration int64 `json:"observedGeneration,omitempty"`
+	// Phase is the current phase of the project.
+	Phase ProjectPhase `json:"phase,omitempty"`
+}
+
+// ProjectPhase is a label for the condition of a project at the current time.
+type ProjectPhase string
+
+const (
+	// ProjectPending indicates that the project reconciliation is pending.
+	ProjectPending ProjectPhase = "Pending"
+	// ProjectReady indicates that the project reconciliation was successful.
+	ProjectReady ProjectPhase = "Ready"
+	// ProjectFailed indicates that the project reconciliation failed.
+	ProjectFailed ProjectPhase = "Failed"
+	// ProjectTerminating indicates that the project is in termination process.
+	ProjectTerminating ProjectPhase = "Terminating"
 )
 
 ////////////////////////////////////////////////////
@@ -368,7 +505,7 @@ type SeedSpec struct {
 	SecretRef corev1.SecretReference `json:"secretRef"`
 	// Networks defines the pod, service and worker network of the Seed cluster.
 	Networks SeedNetworks `json:"networks"`
-	// Visible labels the Seed cluster as selectable for the seedfinder admisson controller.
+	// Visible labels the Seed cluster as selectable for the seedfinder admission controller.
 	// +optional
 	Visible *bool `json:"visible,omitempty"`
 	// Protected prevent that the Seed Cluster can be used for regular Shoot cluster control planes.
@@ -527,11 +664,15 @@ type ShootSpec struct {
 	Cloud Cloud `json:"cloud"`
 	// DNS contains information about the DNS settings of the Shoot.
 	DNS DNS `json:"dns"`
+	// Hibernation contains information whether the Shoot is suspended or not.
+	// +optional
+	Hibernation *Hibernation `json:"hibernation,omitempty"`
 	// Kubernetes contains the version and configuration settings of the control plane components.
 	Kubernetes Kubernetes `json:"kubernetes"`
 	// Maintenance contains information about the time window for maintenance operations and which
 	// operations should be performed.
 	// +optional
+
 	Maintenance *Maintenance `json:"maintenance,omitempty"`
 }
 
@@ -595,6 +736,9 @@ type Cloud struct {
 	// OpenStack contains the Shoot specification for the OpenStack cloud.
 	// +optional
 	OpenStack *OpenStackCloud `json:"openstack,omitempty"`
+	// Alicloud contains the Shoot specification for the Alibaba cloud.
+	// +optional
+	Alicloud *Alicloud `json:"alicloud,omitempty"`
 	// Local contains the Shoot specification for the Local local provider.
 	// +optional
 	Local *Local `json:"local,omitempty"`
@@ -654,6 +798,49 @@ type AWSVPC struct {
 
 // AWSWorker is the definition of a worker group.
 type AWSWorker struct {
+	Worker `json:",inline"`
+	// VolumeType is the type of the root volumes.
+	VolumeType string `json:"volumeType"`
+	// VolumeSize is the size of the root volume.
+	VolumeSize string `json:"volumeSize"`
+}
+
+// Alicloud contains the Shoot specification for Alibaba cloud
+type Alicloud struct {
+	// MachineImage holds information about the machine image to use for all workers.
+	// It will default to the first image stated in the referenced CloudProfile if no
+	// value has been provided.
+	// +optional
+	MachineImage *AlicloudMachineImage `json:"machineImage,omitempty"`
+	// Networks holds information about the Kubernetes and infrastructure networks.
+	Networks AlicloudNetworks `json:"networks"`
+	// Workers is a list of worker groups.
+	Workers []AlicloudWorker `json:"workers"`
+	// Zones is a list of availability zones to deploy the Shoot cluster to, currently, only one is supported.
+	Zones []string `json:"zones"`
+}
+
+// AlicloudVPC contains either an id (of an existing VPC) or the CIDR (for a VPC to be created).
+type AlicloudVPC struct {
+	// ID is the Alicloud VPC id of an existing VPC.
+	// +optional
+	ID *string ` json:"id"`
+	// CIDR is a CIDR range for a new VPC.
+	// +optional
+	CIDR *CIDR `json:"cidr"`
+}
+
+// AlicloudNetworks holds information about the Kubernetes and infrastructure networks.
+type AlicloudNetworks struct {
+	K8SNetworks `json:",inline"`
+	// VPC indicates whether to use an existing VPC or create a new one.
+	VPC AlicloudVPC `json:"vpc"`
+	// Workers is a CIDR of a worker subnet (private) to create (used for the VMs).
+	Workers []CIDR `json:"workers"`
+}
+
+// AlicloudWorker is the definition of a worker group.
+type AlicloudWorker struct {
 	Worker `json:",inline"`
 	// VolumeType is the type of the root volumes.
 	VolumeType string `json:"volumeType"`
@@ -816,29 +1003,49 @@ type Worker struct {
 	AutoScalerMin int `json:"autoScalerMin"`
 	// AutoScalerMin is the maximum number of VMs to create.
 	AutoScalerMax int `json:"autoScalerMax"`
+	// MaxSurge is maximum number of VMs that are created during an update.
+	// +optional
+	MaxSurge *intstr.IntOrString `json:"maxSurge,omitempty"`
+	//MaxUnavailable is the maximum number of VMs that can be unavailable during an update.
+	// +optional
+	MaxUnavailable *intstr.IntOrString `json:"maxUnavailable,omitempty"`
 }
+
+var (
+	// DefaultWorkerMaxSurge is the default value for Worker MaxSurge.
+	DefaultWorkerMaxSurge = intstr.FromInt(1)
+
+	// DefaultWorkerMaxUnavailable is the default value for Worker MaxUnavailable.
+	DefaultWorkerMaxUnavailable = intstr.FromInt(0)
+)
 
 // Addons is a collection of configuration for specific addons which are managed by the Gardener.
 type Addons struct {
-	// ClusterAutoscaler holds configuration settings for the cluster autoscaler addon.
-	// +optional
-	ClusterAutoscaler *ClusterAutoscaler `json:"cluster-autoscaler,omitempty"`
-	// Heapster holds configuration settings for the heapster addon.
-	// +optional
-	Heapster *Heapster `json:"heapster,omitempty"`
-	// Kube2IAM holds configuration settings for the kube2iam addon (only AWS).
-	// +optional
-	Kube2IAM *Kube2IAM `json:"kube2iam,omitempty"`
-	// KubeLego holds configuration settings for the kube-lego addon.
-	// +optional
-	KubeLego *KubeLego `json:"kube-lego,omitempty"`
 	// KubernetesDashboard holds configuration settings for the kubernetes dashboard addon.
 	// +optional
 	KubernetesDashboard *KubernetesDashboard `json:"kubernetes-dashboard,omitempty"`
 	// NginxIngress holds configuration settings for the nginx-ingress addon.
 	// +optional
 	NginxIngress *NginxIngress `json:"nginx-ingress,omitempty"`
+
+	// ClusterAutoscaler holds configuration settings for the cluster autoscaler addon.
+	// DEPRECATED: This field will be removed in a future version.
+	// +optional
+	ClusterAutoscaler *ClusterAutoscaler `json:"cluster-autoscaler,omitempty"`
+	// Heapster holds configuration settings for the heapster addon.
+	// DEPRECATED: This field will be removed in a future version.
+	// +optional
+	Heapster *Heapster `json:"heapster,omitempty"`
+	// Kube2IAM holds configuration settings for the kube2iam addon (only AWS).
+	// DEPRECATED: This field will be removed in a future version.
+	// +optional
+	Kube2IAM *Kube2IAM `json:"kube2iam,omitempty"`
+	// KubeLego holds configuration settings for the kube-lego addon.
+	// DEPRECATED: This field will be removed in a future version.
+	// +optional
+	KubeLego *KubeLego `json:"kube-lego,omitempty"`
 	// Monocular holds configuration settings for the monocular addon.
+	// DEPRECATED: This field will be removed in a future version.
 	// +optional
 	Monocular *Monocular `json:"monocular,omitempty"`
 }
@@ -944,8 +1151,10 @@ const (
 	DNSAWSRoute53 DNSProvider = "aws-route53"
 	// DNSGoogleCloudDNS is a constant for the 'google-clouddns' DNS provider.
 	DNSGoogleCloudDNS DNSProvider = "google-clouddns"
-	//DNSOpenstackDesignate is a constance for the designate DNS provider
+	// DNSOpenstackDesignate is a constant for the designate DNS provider
 	DNSOpenstackDesignate DNSProvider = "openstack-designate"
+	// DNSAlicloud is a constant for Alicloud DNS provider
+	DNSAlicloud DNSProvider = "alicloud-dns"
 )
 
 // CloudProvider is a string alias.
@@ -960,12 +1169,20 @@ const (
 	CloudProviderGCP CloudProvider = "gcp"
 	// CloudProviderOpenStack is a constant for the OpenStack cloud provider.
 	CloudProviderOpenStack CloudProvider = "openstack"
+	// CloudProviderAlicloud is a constant for the Alibaba cloud provider.
+	CloudProviderAlicloud CloudProvider = "alicloud"
 	// CloudProviderLocal is a constant for the development provider.
 	CloudProviderLocal CloudProvider = "local"
 )
 
 // CIDR is a string alias.
 type CIDR string
+
+// Hibernation contains information whether the Shoot is suspended or not.
+type Hibernation struct {
+	// Enabled is true if Shoot is hibernated, false otherwise.
+	Enabled bool `json:"enabled"`
+}
 
 // Kubernetes contains the version and configuration variables for the Shoot control plane.
 type Kubernetes struct {
@@ -975,6 +1192,9 @@ type Kubernetes struct {
 	// KubeAPIServer contains configuration settings for the kube-apiserver.
 	// +optional
 	KubeAPIServer *KubeAPIServerConfig `json:"kubeAPIServer,omitempty"`
+	// CloudControllerManager contains configuration settings for the cloud-controller-manager.
+	// +optional
+	CloudControllerManager *CloudControllerManagerConfig `json:"cloudControllerManager,omitempty"`
 	// KubeControllerManager contains configuration settings for the kube-controller-manager.
 	// +optional
 	KubeControllerManager *KubeControllerManagerConfig `json:"kubeControllerManager,omitempty"`
@@ -1011,6 +1231,24 @@ type KubeAPIServerConfig struct {
 	// configuration.
 	// +optional
 	AdmissionPlugins []AdmissionPlugin `json:"admissionPlugins,omitempty"`
+	// AuditConfig contains configuration settings for the audit of the kube-apiserver.
+	// +optional
+	AuditConfig *AuditConfig `json:"auditConfig,omitempty"`
+}
+
+// AuditConfig contains settings for audit of the api server
+type AuditConfig struct {
+	// AuditPolicy contains configuration settings for audit policy of the kube-apiserver.
+	// +optional
+	AuditPolicy *AuditPolicy `json:"auditPolicy,omitempty"`
+}
+
+// AuditPolicy contains audit policy for kube-apiserver
+type AuditPolicy struct {
+	// ConfigMapRef is a reference to a ConfigMap object in the same namespace,
+	// which contains the audit policy for the kube-apiserver.
+	// +optional
+	ConfigMapRef *corev1.LocalObjectReference `json:"configMapRef,omitempty"`
 }
 
 // OIDCConfig contains configuration settings for the OIDC provider.
@@ -1061,10 +1299,97 @@ type AdmissionPlugin struct {
 	Config *string `json:"config,omitempty"`
 }
 
+// CloudControllerManagerConfig contains configuration settings for the cloud-controller-manager.
+type CloudControllerManagerConfig struct {
+	KubernetesConfig `json:",inline"`
+}
+
 // KubeControllerManagerConfig contains configuration settings for the kube-controller-manager.
 type KubeControllerManagerConfig struct {
 	KubernetesConfig `json:",inline"`
+	// HorizontalPodAutoscalerConfig contains horizontal pod autoscaler configuration settings for the kube-controller-manager.
+	// +optional
+	HorizontalPodAutoscalerConfig *HorizontalPodAutoscalerConfig `json:"horizontalPodAutoscaler,omitempty"`
 }
+
+// GardenerDuration is a workaround for missing OpenAPI functions on metav1.Duration struct.
+type GardenerDuration struct {
+	time.Duration `protobuf:"varint,1,opt,name=duration,casttype=time.Duration"`
+}
+
+// OpenAPISchemaType is used by the kube-openapi generator when constructing
+// the OpenAPI spec of this type.
+//
+// See: https://github.com/kubernetes/kube-openapi/tree/master/pkg/generators
+func (GardenerDuration) OpenAPISchemaType() []string { return []string{"string"} }
+
+// OpenAPISchemaFormat is used by the kube-openapi generator when constructing
+// the OpenAPI spec of this type.
+func (GardenerDuration) OpenAPISchemaFormat() string { return "date-time" }
+
+// UnmarshalJSON implements the json.Unmarshaller interface.
+func (d *GardenerDuration) UnmarshalJSON(b []byte) error {
+	var str string
+	err := json.Unmarshal(b, &str)
+	if err != nil {
+		return err
+	}
+
+	pd, err := time.ParseDuration(str)
+	if err != nil {
+		return err
+	}
+	d.Duration = pd
+	return nil
+}
+
+// MarshalJSON implements the json.Marshaler interface.
+func (d *GardenerDuration) MarshalJSON() ([]byte, error) {
+	return json.Marshal(d.Duration.String())
+}
+
+// HorizontalPodAutoscalerConfig contains horizontal pod autoscaler configuration settings for the kube-controller-manager.
+// Note: Descriptions were taken from the Kubernetes documentation.
+type HorizontalPodAutoscalerConfig struct {
+	// The period since last downscale, before another downscale can be performed in horizontal pod autoscaler.
+	// +optional
+	DownscaleDelay *GardenerDuration `json:"downscaleDelay,omitempty"`
+	// The period for syncing the number of pods in horizontal pod autoscaler.
+	// +optional
+	SyncPeriod *GardenerDuration `json:"syncPeriod,omitempty"`
+	// The minimum change (from 1.0) in the desired-to-actual metrics ratio for the horizontal pod autoscaler to consider scaling.
+	// +optional
+	Tolerance *float64 `json:"tolerance,omitempty"`
+	// The period since last upscale, before another upscale can be performed in horizontal pod autoscaler.
+	// +optional
+	UpscaleDelay *GardenerDuration `json:"upscaleDelay,omitempty"`
+	// The configurable window at which the controller will choose the highest recommendation for autoscaling.
+	// +optional
+	DownscaleStabilization *GardenerDuration `json:"downscaleStabilization,omitempty"`
+	// The configurable period at which the horizontal pod autoscaler considers a Pod “not yet ready” given that it’s unready and it has  transitioned to unready during that time.
+	// +optional
+	InitialReadinessDelay *GardenerDuration `json:"initialReadinessDelay,omitempty"`
+	// The period after which a ready pod transition is considered to be the first.
+	// +optional
+	CPUInitializationPeriod *GardenerDuration `json:"cpuInitializationPeriod,omitempty"`
+}
+
+const (
+	// DefaultHPADownscaleDelay is a constant for the default HPA downscale delay for a Shoot cluster.
+	DefaultHPADownscaleDelay = 15 * time.Minute
+	// DefaultHPASyncPeriod is a constant for the default HPA sync period for a Shoot cluster.
+	DefaultHPASyncPeriod = 30 * time.Second
+	// DefaultHPATolerance is a constant for the default HPA tolerance for a Shoot cluster.
+	DefaultHPATolerance = 0.1
+	// DefaultHPAUpscaleDelay is for the default HPA upscale delay for a Shoot cluster.
+	DefaultHPAUpscaleDelay = 1 * time.Minute
+	// DefaultDownscaleStabilization is the default HPA downscale stabilization window for a Shoot cluster
+	DefaultDownscaleStabilization = 5 * time.Minute
+	// DefaultInitialReadinessDelay is for the default HPA  ReadinessDelay value in the Shoot cluster
+	DefaultInitialReadinessDelay = 30 * time.Second
+	// DefaultCPUInitializationPeriod is the for the default value of the CPUInitializationPeriod in the Shoot cluster
+	DefaultCPUInitializationPeriod = 5 * time.Minute
+)
 
 // KubeSchedulerConfig contains configuration settings for the kube-scheduler.
 type KubeSchedulerConfig struct {
@@ -1216,10 +1541,20 @@ const (
 	EventDeleted = "Deleted"
 	// EventDeleteError indicates that the a Delete operation failed.
 	EventDeleteError = "DeleteError"
+
 	// ShootEventMaintenanceDone indicates that a maintenance operation has been performed.
 	ShootEventMaintenanceDone = "MaintenanceDone"
 	// ShootEventMaintenanceError indicates that a maintenance operation has failed.
 	ShootEventMaintenanceError = "MaintenanceError"
+
+	// ProjectEventNamespaceReconcileFailed indicates that the namespace reconciliation has failed.
+	ProjectEventNamespaceReconcileFailed = "NamespaceReconcileFailed"
+	// ProjectEventNamespaceReconcileSuccessful indicates that the namespace reconciliation has succeeded.
+	ProjectEventNamespaceReconcileSuccessful = "NamespaceReconcileSuccessful"
+	// ProjectEventNamespaceDeletionFailed indicates that the namespace deletion failed.
+	ProjectEventNamespaceDeletionFailed = "NamespaceDeletionFailed"
+	// ProjectEventNamespaceMarkedForDeletion indicates that the namespace has been successfully marked for deletion.
+	ProjectEventNamespaceMarkedForDeletion = "NamespaceMarkedForDeletion"
 )
 
 const (
@@ -1255,12 +1590,14 @@ type ConditionType string
 const (
 	// SeedAvailable is a constant for a condition type indicating the Seed cluster availability.
 	SeedAvailable ConditionType = "Available"
+
 	// ShootControlPlaneHealthy is a constant for a condition type indicating the control plane health.
 	ShootControlPlaneHealthy ConditionType = "ControlPlaneHealthy"
 	// ShootEveryNodeReady is a constant for a condition type indicating the node health.
 	ShootEveryNodeReady ConditionType = "EveryNodeReady"
 	// ShootSystemComponentsHealthy is a constant for a condition type indicating the system components health.
 	ShootSystemComponentsHealthy ConditionType = "SystemComponentsHealthy"
+
 	// ConditionCheckError is a constant for indicating that a condition could not be checked.
 	ConditionCheckError = "ConditionCheckError"
 )

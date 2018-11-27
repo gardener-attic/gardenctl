@@ -22,6 +22,15 @@ import (
 	"github.com/gardener/gardener/pkg/operation/terraformer"
 )
 
+const cloudProviderConfigTemplate = `
+[Global]
+project-id=%q
+network-name=%q
+multizone=true
+token-url=nil
+node-tags=%q
+`
+
 // GenerateCloudProviderConfig generates the GCE cloud provider config.
 // See this for more details:
 // https://github.com/kubernetes/kubernetes/blob/master/pkg/cloudprovider/providers/gce/gce.go
@@ -31,12 +40,12 @@ func (b *GCPBotanist) GenerateCloudProviderConfig() (string, error) {
 		networkName = b.Shoot.SeedNamespace
 	}
 
-	return `[Global]
-project-id="` + b.Project + `"
-network-name="` + networkName + `"
-multizone=true
-token-url=nil
-node-tags="` + b.Shoot.SeedNamespace + `"`, nil
+	return fmt.Sprintf(
+		cloudProviderConfigTemplate,
+		b.Project,
+		networkName,
+		b.Shoot.SeedNamespace,
+	), nil
 }
 
 // RefreshCloudProviderConfig refreshes the cloud provider credentials in the existing cloud
@@ -47,9 +56,29 @@ func (b *GCPBotanist) RefreshCloudProviderConfig(currentConfig map[string]string
 	return currentConfig
 }
 
+// GenerateKubeAPIServerServiceConfig generates the cloud provider specific values which are required to render the
+// Service manifest of the kube-apiserver-service properly.
+func (b *GCPBotanist) GenerateKubeAPIServerServiceConfig() (map[string]interface{}, error) {
+	return nil, nil
+}
+
+// GenerateKubeAPIServerExposeConfig defines the cloud provider specific values which configure how the kube-apiserver
+// is exposed to the public.
+func (b *GCPBotanist) GenerateKubeAPIServerExposeConfig() (map[string]interface{}, error) {
+	return map[string]interface{}{
+		"advertiseAddress": b.APIServerAddress,
+	}, nil
+}
+
 // GenerateKubeAPIServerConfig generates the cloud provider specific values which are required to render the
 // Deployment manifest of the kube-apiserver properly.
 func (b *GCPBotanist) GenerateKubeAPIServerConfig() (map[string]interface{}, error) {
+	return nil, nil
+}
+
+// GenerateCloudControllerManagerConfig generates the cloud provider specific values which are required to
+// render the Deployment manifest of the cloud-controller-manager properly.
+func (b *GCPBotanist) GenerateCloudControllerManagerConfig() (map[string]interface{}, error) {
 	return map[string]interface{}{
 		"environment": getGCPCredentialsEnvironment(),
 	}, nil
@@ -87,8 +116,11 @@ func (b *GCPBotanist) GenerateEtcdBackupConfig() (map[string][]byte, map[string]
 		backupInfrastructureName = common.GenerateBackupInfrastructureName(b.Shoot.SeedNamespace, b.Shoot.Info.Status.UID)
 		backupNamespace          = common.GenerateBackupNamespaceName(backupInfrastructureName)
 	)
-
-	stateVariables, err := terraformer.New(b.Logger, b.K8sSeedClient, common.TerraformerPurposeBackup, backupInfrastructureName, backupNamespace, b.ImageVector).GetStateOutputVariables(bucketName)
+	tf, err := terraformer.New(b.Logger, b.K8sSeedClient, common.TerraformerPurposeBackup, backupInfrastructureName, backupNamespace, b.ImageVector)
+	if err != nil {
+		return nil, nil, err
+	}
+	stateVariables, err := tf.GetStateOutputVariables(bucketName)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -117,4 +149,9 @@ func (b *GCPBotanist) GenerateEtcdBackupConfig() (map[string][]byte, map[string]
 	}
 
 	return secretData, backupConfigData, nil
+}
+
+// DeployCloudSpecificControlPlane does currently nothing for GCP.
+func (b *GCPBotanist) DeployCloudSpecificControlPlane() error {
+	return nil
 }

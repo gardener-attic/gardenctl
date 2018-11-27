@@ -23,6 +23,7 @@ import (
 
 	"github.com/gardener/gardener/pkg/operation"
 	"github.com/gardener/gardener/pkg/operation/common"
+	"github.com/gardener/gardener/pkg/utils/kubernetes/health"
 	machinev1alpha1 "github.com/gardener/machine-controller-manager/pkg/apis/machine/v1alpha1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -58,7 +59,7 @@ func (b *HybridBotanist) ReconcileMachines() error {
 
 	// During the time a rolling update happens we do not want the cluster autoscaler to interfer, hence it
 	// is removed (and later, at the end of the flow, deployed again).
-	if b.Shoot.ClusterAutoscalerEnabled() {
+	if b.Shoot.WantsClusterAutoscaler {
 		rollingUpdate := false
 		// Check whether new machine classes have been computed (resulting in a rolling update of the nodes).
 		for _, machineDeployment := range wantedMachineDeployments {
@@ -70,8 +71,11 @@ func (b *HybridBotanist) ReconcileMachines() error {
 
 		// When the Shoot gets hibernated we want to remove the cluster auto scaler so that it does not interfer
 		// with Gardeners modifications on the machine deployment's replicas fields.
-		if b.Shoot.Hibernated || rollingUpdate {
+		if b.Shoot.IsHibernated || rollingUpdate {
 			if err := b.Botanist.DeleteClusterAutoscaler(); err != nil {
+				return err
+			}
+			if err := b.Botanist.WaitUntilClusterAutoscalerDeleted(); err != nil {
 				return err
 			}
 		}
@@ -104,7 +108,7 @@ func (b *HybridBotanist) ReconcileMachines() error {
 
 	// Wait until all generated machine deployments are healthy/available.
 	if err := b.waitUntilMachineDeploymentsAvailable(wantedMachineDeployments); err != nil {
-		return common.DetermineErrorCode(fmt.Sprintf("Failed while waiting for all machine deployments to be ready: '%s'", err.Error()))
+		return common.DetermineError(fmt.Sprintf("Failed while waiting for all machine deployments to be ready: '%s'", err.Error()))
 	}
 
 	// Delete all old machine deployments (i.e. those which were not previously computed but exist in the cluster).
@@ -120,6 +124,13 @@ func (b *HybridBotanist) ReconcileMachines() error {
 	// Delete all old machine class secrets (i.e. those which were not previously computed but exist in the cluster).
 	if err := b.cleanupMachineClassSecrets(usedSecrets); err != nil {
 		return fmt.Errorf("The CloudBotanist failed to cleanup the orphaned machine class secrets: '%s'", err.Error())
+	}
+
+	// Scale down machine-controller-manager if shoot is hibernated.
+	if b.Shoot.IsHibernated {
+		if _, err := b.K8sSeedClient.ScaleDeployment(b.Shoot.SeedNamespace, common.MachineControllerManagerDeploymentName, 0); err != nil {
+			return err
+		}
 	}
 
 	return nil
@@ -171,7 +182,7 @@ func (b *HybridBotanist) DestroyMachines() error {
 
 	// Wait until all machine resources have been properly deleted.
 	if err := b.waitUntilMachineResourcesDeleted(machineClassPlural); err != nil {
-		return common.DetermineErrorCode(fmt.Sprintf("Failed while waiting for all machine resources to be deleted: '%s'", err.Error()))
+		return common.DetermineError(fmt.Sprintf("Failed while waiting for all machine resources to be deleted: '%s'", err.Error()))
 	}
 
 	return nil
@@ -213,8 +224,8 @@ func (b *HybridBotanist) generateMachineDeploymentConfig(existingMachineDeployme
 			"name":            deployment.Name,
 			"minReadySeconds": 500,
 			"rollingUpdate": map[string]interface{}{
-				"maxSurge":       1,
-				"maxUnavailable": 0,
+				"maxSurge":       deployment.MaxSurge.String(),
+				"maxUnavailable": deployment.MaxUnavailable.String(),
 			},
 			"labels": map[string]interface{}{
 				"name": deployment.Name,
@@ -228,11 +239,11 @@ func (b *HybridBotanist) generateMachineDeploymentConfig(existingMachineDeployme
 
 		switch {
 		// If the Shoot is hibernated then the machine deployment's replicas should be zero.
-		case b.Shoot.Hibernated:
+		case b.Shoot.IsHibernated:
 			replicas = 0
 		// If the cluster autoscaler is not enabled then min=max (as per API validation), hence
 		// we can use either min or max.
-		case !b.Shoot.ClusterAutoscalerEnabled():
+		case !b.Shoot.WantsClusterAutoscaler:
 			replicas = deployment.Minimum
 		// If the machine deployment does not yet exist we set replicas to min so that the cluster
 		// autoscaler can scale them as required.
@@ -240,7 +251,7 @@ func (b *HybridBotanist) generateMachineDeploymentConfig(existingMachineDeployme
 			replicas = deployment.Minimum
 		// If the Shoot was hibernated and is now woken up we set replicas to min so that the cluster
 		// autoscaler can scale them as required.
-		case shootIsWokenUp(b.Shoot.Hibernated, existingMachineDeployments):
+		case shootIsWokenUp(b.Shoot.IsHibernated, existingMachineDeployments):
 			replicas = deployment.Minimum
 		// If the shoot worker pool minimum was updated and if the current machine deployment replica
 		// count is less than minimum, we update the machine deployment replica count to updated minimum.
@@ -290,14 +301,8 @@ func (b *HybridBotanist) markMachineForcefulDeletion(machine machinev1alpha1.Mac
 // waitUntilMachineDeploymentsAvailable waits for a maximum of 30 minutes until all the desired <machineDeployments>
 // were marked as healthy/available by the machine-controller-manager. It polls the status every 5 seconds.
 func (b *HybridBotanist) waitUntilMachineDeploymentsAvailable(wantedMachineDeployments operation.MachineDeployments) error {
-	var (
-		numReady              int32
-		numDesired            int32
-		numberOfAwakeMachines int32
-	)
-
 	return wait.Poll(5*time.Second, 30*time.Minute, func() (bool, error) {
-		numReady, numDesired, numberOfAwakeMachines = 0, 0, 0
+		var numHealthyDeployments, numUpdated, numDesired, numberOfAwakeMachines int32
 
 		// Get the list of all existing machine deployments
 		existingMachineDeployments, err := b.K8sSeedClient.MachineClientset().MachineV1alpha1().MachineDeployments(b.Shoot.SeedNamespace).List(metav1.ListOptions{})
@@ -308,7 +313,7 @@ func (b *HybridBotanist) waitUntilMachineDeploymentsAvailable(wantedMachineDeplo
 		// Collect the numbers of ready and desired replicas.
 		for _, existingMachineDeployment := range existingMachineDeployments.Items {
 			// If the Shoots get hibernated we want to wait until all machine deployments have been deleted entirely.
-			if b.Shoot.Hibernated {
+			if b.Shoot.IsHibernated {
 				numberOfAwakeMachines += existingMachineDeployment.Status.Replicas
 				continue
 			}
@@ -324,16 +329,19 @@ func (b *HybridBotanist) waitUntilMachineDeploymentsAvailable(wantedMachineDeplo
 			// replicas as desired (specified in the .spec.replicas).
 			for _, machineDeployment := range wantedMachineDeployments {
 				if machineDeployment.Name == existingMachineDeployment.Name {
+					if health.CheckMachineDeployment(&existingMachineDeployment) == nil {
+						numHealthyDeployments++
+					}
 					numDesired += existingMachineDeployment.Spec.Replicas
-					numReady += existingMachineDeployment.Status.ReadyReplicas
+					numUpdated += existingMachineDeployment.Status.UpdatedReplicas
 				}
 			}
 		}
 
 		switch {
-		case !b.Shoot.Hibernated:
-			b.Logger.Infof("Waiting until all machines are healthy/ready (%d/%d OK)...", numReady, numDesired)
-			if numReady >= numDesired {
+		case !b.Shoot.IsHibernated:
+			b.Logger.Infof("Waiting until as many as desired machines are ready (%d/%d machine objects up-to-date, %d/%d machinedeployments available)...", numUpdated, numDesired, numHealthyDeployments, len(wantedMachineDeployments))
+			if numUpdated >= numDesired && int(numHealthyDeployments) == len(wantedMachineDeployments) {
 				return true, nil
 			}
 		default:

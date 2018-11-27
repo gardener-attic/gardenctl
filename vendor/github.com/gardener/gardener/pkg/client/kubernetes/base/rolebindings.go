@@ -15,12 +15,46 @@
 package kubernetesbase
 
 import (
+	kutil "github.com/gardener/gardener/pkg/utils/kubernetes"
 	rbacv1 "k8s.io/api/rbac/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 )
 
 // ListRoleBindings returns a list of rolebindings in a given <namespace>.
 // The selection can be restricted by passsing an <selector>.
 func (c *Client) ListRoleBindings(namespace string, selector metav1.ListOptions) (*rbacv1.RoleBindingList, error) {
 	return c.clientset.RbacV1().RoleBindings(namespace).List(selector)
+}
+
+// CreateOrPatchRoleBinding either creates the object or patches the existing one with the strategic merge patch type.
+func (c *Client) CreateOrPatchRoleBinding(meta metav1.ObjectMeta, transform func(*rbacv1.RoleBinding) *rbacv1.RoleBinding) (*rbacv1.RoleBinding, error) {
+	rolebinding, err := c.clientset.RbacV1().RoleBindings(meta.Namespace).Get(meta.Name, metav1.GetOptions{})
+	if err != nil {
+		if apierrors.IsNotFound(err) {
+			return c.clientset.RbacV1().RoleBindings(meta.Namespace).Create(transform(&rbacv1.RoleBinding{
+				TypeMeta: metav1.TypeMeta{
+					APIVersion: rbacv1.SchemeGroupVersion.String(),
+					Kind:       "RoleBinding",
+				},
+				ObjectMeta: meta,
+			}))
+		}
+		return nil, err
+	}
+	return c.patchRoleBinding(rolebinding, transform(rolebinding.DeepCopy()))
+}
+
+func (c *Client) patchRoleBinding(oldObj, newObj *rbacv1.RoleBinding) (*rbacv1.RoleBinding, error) {
+	patch, err := kutil.CreateTwoWayMergePatch(oldObj, newObj)
+	if err != nil {
+		return nil, err
+	}
+
+	if kutil.IsEmptyPatch(patch) {
+		return oldObj, nil
+	}
+
+	return c.clientset.RbacV1().RoleBindings(oldObj.Namespace).Patch(oldObj.Name, types.StrategicMergePatchType, patch)
 }

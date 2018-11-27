@@ -61,7 +61,11 @@ func (b *AzureBotanist) GenerateMachineConfig() ([]map[string]interface{}, opera
 		machineClasses     = []map[string]interface{}{}
 	)
 
-	stateVariables, err := terraformer.NewFromOperation(b.Operation, common.TerraformerPurposeInfra).GetStateOutputVariables(outputVariables...)
+	tf, err := terraformer.NewFromOperation(b.Operation, common.TerraformerPurposeInfra)
+	if err != nil {
+		return nil, nil, err
+	}
+	stateVariables, err := tf.GetStateOutputVariables(outputVariables...)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -105,10 +109,12 @@ func (b *AzureBotanist) GenerateMachineConfig() ([]map[string]interface{}, opera
 		)
 
 		machineDeployments = append(machineDeployments, operation.MachineDeployment{
-			Name:      deploymentName,
-			ClassName: className,
-			Minimum:   worker.AutoScalerMin,
-			Maximum:   worker.AutoScalerMax,
+			Name:           deploymentName,
+			ClassName:      className,
+			Minimum:        worker.AutoScalerMin,
+			Maximum:        worker.AutoScalerMax,
+			MaxSurge:       *worker.MaxSurge,
+			MaxUnavailable: *worker.MaxUnavailable,
 		})
 
 		machineClassSpec["name"] = className

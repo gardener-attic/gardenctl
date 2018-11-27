@@ -50,12 +50,15 @@ func New(k8sGardenClient kubernetes.Client, k8sGardenInformers gardeninformers.I
 	}
 
 	shootObj := &Shoot{
-		Info:                  shoot,
-		Secret:                secret,
-		CloudProfile:          cloudProfile,
+		Info:         shoot,
+		Secret:       secret,
+		CloudProfile: cloudProfile,
+
 		SeedNamespace:         ComputeTechnicalID(projectName, shoot),
 		InternalClusterDomain: internalDomain,
-		Hibernated:            true,
+
+		IsHibernated:           helper.IsShootHibernated(shoot),
+		WantsClusterAutoscaler: false,
 	}
 
 	// Determine the external Shoot cluster domain, i.e. the domain which will be put into the Kubeconfig handed out
@@ -79,14 +82,12 @@ func New(k8sGardenClient kubernetes.Client, k8sGardenInformers gardeninformers.I
 	}
 	shootObj.KubernetesMajorMinorVersion = fmt.Sprintf("%d.%d", v.Major(), v.Minor())
 
-	// Check whether the Shoot should be hibernated
-	workers := shootObj.GetWorkers()
-	for _, worker := range workers {
-		if worker.AutoScalerMax != 0 {
-			shootObj.Hibernated = false
-			break
-		}
+	needsAutoscaler, err := helper.ShootWantsClusterAutoscaler(shoot)
+	if err != nil {
+		return nil, err
 	}
+
+	shootObj.WantsClusterAutoscaler = needsAutoscaler
 
 	return shootObj, nil
 }
@@ -99,75 +100,24 @@ func (s *Shoot) GetIngressFQDN(subDomain string) string {
 
 // GetWorkers returns a list of worker objects of the worker groups in the Shoot manifest.
 func (s *Shoot) GetWorkers() []gardenv1beta1.Worker {
-	workers := []gardenv1beta1.Worker{}
-
-	switch s.CloudProvider {
-	case gardenv1beta1.CloudProviderAWS:
-		for _, worker := range s.Info.Spec.Cloud.AWS.Workers {
-			workers = append(workers, worker.Worker)
-		}
-	case gardenv1beta1.CloudProviderAzure:
-		for _, worker := range s.Info.Spec.Cloud.Azure.Workers {
-			workers = append(workers, worker.Worker)
-		}
-	case gardenv1beta1.CloudProviderGCP:
-		for _, worker := range s.Info.Spec.Cloud.GCP.Workers {
-			workers = append(workers, worker.Worker)
-		}
-	case gardenv1beta1.CloudProviderOpenStack:
-		for _, worker := range s.Info.Spec.Cloud.OpenStack.Workers {
-			workers = append(workers, worker.Worker)
-		}
-	case gardenv1beta1.CloudProviderLocal:
-		workers = append(workers, gardenv1beta1.Worker{
-			Name:          "local",
-			AutoScalerMax: 1,
-			AutoScalerMin: 1,
-		})
-	}
-
-	return workers
+	return helper.GetShootCloudProviderWorkers(s.CloudProvider, s.Info)
 }
 
 // GetWorkerNames returns a list of names of the worker groups in the Shoot manifest.
 func (s *Shoot) GetWorkerNames() []string {
-	var (
-		workers     = s.GetWorkers()
-		workerNames = []string{}
-	)
-
-	for _, worker := range workers {
+	workerNames := []string{}
+	for _, worker := range s.GetWorkers() {
 		workerNames = append(workerNames, worker.Name)
 	}
-
 	return workerNames
 }
 
 // GetNodeCount returns the sum of all 'autoScalerMax' fields of all worker groups of the Shoot.
 func (s *Shoot) GetNodeCount() int {
 	nodeCount := 0
-
-	switch s.CloudProvider {
-	case gardenv1beta1.CloudProviderAWS:
-		for _, worker := range s.Info.Spec.Cloud.AWS.Workers {
-			nodeCount += worker.AutoScalerMax
-		}
-	case gardenv1beta1.CloudProviderAzure:
-		for _, worker := range s.Info.Spec.Cloud.Azure.Workers {
-			nodeCount += worker.AutoScalerMax
-		}
-	case gardenv1beta1.CloudProviderGCP:
-		for _, worker := range s.Info.Spec.Cloud.GCP.Workers {
-			nodeCount += worker.AutoScalerMax
-		}
-	case gardenv1beta1.CloudProviderOpenStack:
-		for _, worker := range s.Info.Spec.Cloud.OpenStack.Workers {
-			nodeCount += worker.AutoScalerMax
-		}
-	case gardenv1beta1.CloudProviderLocal:
-		nodeCount = 1
+	for _, worker := range s.GetWorkers() {
+		nodeCount += worker.AutoScalerMax
 	}
-
 	return nodeCount
 }
 
@@ -232,11 +182,6 @@ func (s *Shoot) ClusterAutoscalerEnabled() bool {
 	return s.Info.Spec.Addons != nil && s.Info.Spec.Addons.ClusterAutoscaler != nil && s.Info.Spec.Addons.ClusterAutoscaler.Enabled
 }
 
-// HeapsterEnabled returns true if the heapster addon is enabled in the Shoot manifest.
-func (s *Shoot) HeapsterEnabled() bool {
-	return s.Info.Spec.Addons != nil && s.Info.Spec.Addons.Heapster != nil && s.Info.Spec.Addons.Heapster.Enabled
-}
-
 // Kube2IAMEnabled returns true if the kube2iam addon is enabled in the Shoot manifest.
 func (s *Shoot) Kube2IAMEnabled() bool {
 	return s.Info.Spec.Addons != nil && s.Info.Spec.Addons.Kube2IAM != nil && s.Info.Spec.Addons.Kube2IAM.Enabled
@@ -269,19 +214,22 @@ func (s *Shoot) ComputeCloudConfigSecretName(workerName string) string {
 	return fmt.Sprintf("%s-%s-%s", common.CloudConfigPrefix, workerName, utils.ComputeSHA256Hex([]byte(s.KubernetesMajorMinorVersion))[:5])
 }
 
+// GetReplicas returns the given <wokenUp> number if the shoot is not hibernated, or zero otherwise.
+func (s *Shoot) GetReplicas(wokenUp int) int {
+	if s.IsHibernated {
+		return 0
+	}
+	return wokenUp
+}
+
 // ComputeTechnicalID determines the technical id of that Shoot which is later used for the name of the
 // namespace and for tagging all the resources created in the infrastructure.
 func ComputeTechnicalID(projectName string, shoot *gardenv1beta1.Shoot) string {
 	// Use the stored technical ID in the Shoot's status field if it's there.
-	if len(shoot.Status.TechnicalID) > 0 {
-		return shoot.Status.TechnicalID
-	}
-
-	// Otherwise, existing clusters definitely have set the last operation on the Shoot status.
 	// For backwards compatibility we keep the pattern as it was before we had to change it
 	// (double hyphens).
-	if shoot.Status.LastOperation != nil {
-		return fmt.Sprintf("shoot-%s-%s", projectName, shoot.Name)
+	if len(shoot.Status.TechnicalID) > 0 {
+		return shoot.Status.TechnicalID
 	}
 
 	// New clusters shall be created with the new technical id (double hyphens).

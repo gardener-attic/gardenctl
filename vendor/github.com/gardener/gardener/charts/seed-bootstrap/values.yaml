@@ -2,18 +2,18 @@ cloudProvider: aws
 
 prometheus:
   port: 9090
-  cadvisorAllowedMetrics:
-  # container metrics without the container_
-  - last_seen
-  - fs_usage_bytes
-  - fs_inodes_total
-  - fs_limit_bytes
-  - network_receive_bytes_total
-  - network_transmit_bytes_total
-  - cpu_cfs_periods_total
-  - cpu_usage_seconds_total
-  - memory_usage_bytes
-  - memory_working_set_bytes
+
+allowedMetrics:
+  cAdvisor:
+  - container_cpu_cfs_periods_total
+  - container_cpu_usage_seconds_total
+  - container_fs_inodes_total
+  - container_fs_limit_bytes
+  - container_fs_usage_bytes
+  - container_last_seen
+  - container_memory_working_set_bytes
+  - container_network_receive_bytes_total
+  - container_network_transmit_bytes_total
 
   # object can be any object you want to scale Prometheus on:
   # - number of Pods
@@ -52,3 +52,28 @@ replicas:
 images:
   pause-container: image-repository:image-tag
   prometheus: image-repository:image-tag
+  gardener-external-admission-controller: image-repository:image-tag
+
+prometheusPort: 9090
+
+global:
+  elasticsearchPorts:
+    db: 9200
+    transport: 9300
+
+elastic-kibana-curator:
+  enabled: true
+  elasticsearchReplicas: 1
+  kibanaReplicas: 1
+  kibanaPort: 5601
+  elasticsearchVolumeSizeGB: 30
+  images:
+    elasticsearch-oss: image-repository:image-tag
+    curator-es: image-repository:image-tag
+    kibana-oss: image-repository:image-tag
+    alpine: image-repository:image-tag
+
+fluentd-es:
+  enabled: true
+  images:
+    fluentd-es: image-repository:image-tag

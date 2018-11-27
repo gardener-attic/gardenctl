@@ -36,9 +36,13 @@ type CloudBotanist interface {
 	RefreshCloudProviderConfig(map[string]string) map[string]string
 	GenerateCloudConfigUserDataConfig() *common.CloudConfigUserDataConfig
 	GenerateEtcdBackupConfig() (map[string][]byte, map[string]interface{}, error)
+	GenerateKubeAPIServerServiceConfig() (map[string]interface{}, error)
+	GenerateKubeAPIServerExposeConfig() (map[string]interface{}, error)
 	GenerateKubeAPIServerConfig() (map[string]interface{}, error)
+	GenerateCloudControllerManagerConfig() (map[string]interface{}, error)
 	GenerateKubeControllerManagerConfig() (map[string]interface{}, error)
 	GenerateKubeSchedulerConfig() (map[string]interface{}, error)
+	DeployCloudSpecificControlPlane() error
 
 	// Machines
 	GetMachineClassInfo() (string, string, string)
@@ -51,9 +55,6 @@ type CloudBotanist interface {
 	DeployKube2IAMResources() error
 	DestroyKube2IAMResources() error
 	GenerateKube2IAMConfig() (map[string]interface{}, error)
-	GenerateAdmissionControlConfig() (map[string]interface{}, error)
+	GenerateStorageClassesConfig() (map[string]interface{}, error)
 	GenerateNginxIngressConfig() (map[string]interface{}, error)
-
-	// Hooks
-	ApplyCreateHook() error
 }

@@ -17,47 +17,148 @@ package utils
 import (
 	"fmt"
 	"time"
-
-	"github.com/sirupsen/logrus"
 )
 
-// Retry tries a condition function <f> until it returns true or the timeout <maxWaitTime> is reached.
-// Retry always waits the 5 seconds before retrying <f> the next time.
-// It ensures that the function <f> is always executed at least once.
-func Retry(logger *logrus.Entry, maxWaitTime time.Duration, f func() (bool, error)) error {
-	var startTime = time.Now().UTC()
+// NeverStop is a channel that is always open. Can be used for never stopping a Retry computation.
+var NeverStop = make(chan struct{})
 
-	for {
-		success, err := f()
-		if success {
-			return nil
-		}
+// ConditionFunc is a function that reports whether it completed successfully or
+// whether it had an error. Via the additional <severe> flag, it shows whether the
+// error has been sever enough to cancel a retrying computation.
+type ConditionFunc func() (ok, severe bool, err error)
 
-		if time.Since(startTime) >= maxWaitTime {
-			if err != nil {
-				logger.Errorf("Maximum waiting time exceeded after %s waiting time, returning error", maxWaitTime)
-				return err
-			}
-			return fmt.Errorf("Maximum waiting time exceeded after %s waiting time, but no error occurred", maxWaitTime)
-		}
+func newTimedOut(waitTime time.Duration, lastError error) error {
+	if lastError != nil {
+		return &timedOutWithError{lastError, waitTime}
+	}
+	return &timedOut{waitTime}
+}
 
-		time.Sleep(5 * time.Second)
+// IsTimedOut determines whether the given error is a timed out error.
+func IsTimedOut(err error) bool {
+	switch err.(type) {
+	case *timedOut, *timedOutWithError:
+		return true
+	default:
+		return false
 	}
 }
 
-// RetryFunc is a convenience wrapper which returns a condition function that fits the requirements of
-// the Retry function.
-// The function <f> must not require any arguments and only return an error. It will be executed and if it
-// returns an error, the returned-tuple will be (false, err), whereby it will be (true, nil) if the execution
-// of <f> was successful.
-func RetryFunc(logger *logrus.Entry, f func() error) func() (bool, error) {
-	return func() (bool, error) {
-		funcName := FuncName(f)
-		if err := f(); err != nil {
-			logger.Infof("Execution of %s did not succeed... (%s)", funcName, err.Error())
-			return false, err
+// WaitTimeOfTimedOut returns the wait time of the given error if it implements the
+// waitTimer interface:
+// ```
+// type waitTimer interface {
+// 	WaitTime() time.Duration
+// }
+// If the given error does not implement the waitTimer interface, it just returns 0.
+func WaitTimeOfTimedOut(err error) time.Duration {
+	type waitTimer interface {
+		WaitTime() time.Duration
+	}
+	if w, ok := err.(waitTimer); ok {
+		return w.WaitTime()
+	}
+	return 0
+}
+
+// LastErrorOfTimedOutWithError returns the last error if the given error was a <timedOutWithError>.
+// Otherwise, it just returns nil.
+func LastErrorOfTimedOutWithError(err error) error {
+	if t, ok := err.(*timedOutWithError); ok {
+		return t.lastError
+	}
+	return nil
+}
+
+type timedOut struct {
+	waitTime time.Duration
+}
+
+func (t *timedOut) WaitTime() time.Duration {
+	return t.waitTime
+}
+
+type timedOutWithError struct {
+	lastError error
+	waitTime  time.Duration
+}
+
+func (t *timedOutWithError) WaitTime() time.Duration {
+	return t.waitTime
+}
+
+func (t *timedOutWithError) Cause() error {
+	return t.lastError
+}
+
+func (t *timedOut) Error() string {
+	return fmt.Sprintf("timed out after %s", t.waitTime)
+}
+
+func (t *timedOutWithError) Error() string {
+	return fmt.Sprintf("timed out after %s, last error: %v", t.waitTime, t.lastError)
+}
+
+func newStopCh(timeout time.Duration, done <-chan struct{}) <-chan struct{} {
+	stopCh := make(chan struct{})
+	t := time.NewTimer(timeout)
+
+	go func() {
+		defer t.Stop()
+		defer close(stopCh)
+
+		select {
+		case <-t.C:
+		case <-done:
+			return
 		}
-		logger.Debug("Successful execution of %s", funcName)
-		return true, nil
+	}()
+	return stopCh
+}
+
+// Retry retries <f> until it either succeeds, fails severely or times out.
+// Between each runs, it sleeps for <interval>.
+func Retry(interval time.Duration, timeout time.Duration, f ConditionFunc) error {
+	done := make(chan struct{})
+	defer close(done)
+
+	return RetryUntil(interval, newStopCh(timeout, done), f)
+}
+
+// RetryUntil retries <f> until it either succeeds, fails severely or the given channel <stopCh>
+// is closed. Between each tries, it sleeps for <interval>. The function f is guaranteed to
+// be executed at least once. During each execution, f can't be prematurely killed, thus an operation
+// may run considerably longer than anticipated after closing the <stopCh>.
+func RetryUntil(interval time.Duration, stopCh <-chan struct{}, f ConditionFunc) error {
+	var (
+		lastError error
+		startTime = time.Now()
+	)
+	for {
+		success, severe, err := f()
+		if err != nil {
+			if severe {
+				return err
+			}
+
+			lastError = err
+		} else if success {
+			return nil
+		}
+
+		select {
+		case <-stopCh:
+			waitTime := time.Since(startTime)
+			return newTimedOut(waitTime, lastError)
+		default:
+		}
+
+		time.Sleep(interval)
+		select {
+		case <-stopCh:
+			waitTime := time.Since(startTime)
+			return newTimedOut(waitTime, lastError)
+		default:
+		}
 	}
 }

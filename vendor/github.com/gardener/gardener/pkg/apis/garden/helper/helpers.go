@@ -44,13 +44,17 @@ func DetermineCloudProviderInProfile(spec garden.CloudProfileSpec) (garden.Cloud
 		numClouds++
 		cloud = garden.CloudProviderOpenStack
 	}
+	if spec.Alicloud != nil {
+		numClouds++
+		cloud = garden.CloudProviderAlicloud
+	}
 	if spec.Local != nil {
 		numClouds++
 		cloud = garden.CloudProviderLocal
 	}
 
 	if numClouds != 1 {
-		return "", errors.New("cloud profile must only contain exactly one field of aws/azure/gcp/openstack/local")
+		return "", errors.New("cloud profile must only contain exactly one field of alicloud/aws/azure/gcp/openstack/local")
 	}
 	return cloud, nil
 }
@@ -79,6 +83,10 @@ func DetermineCloudProviderInShoot(cloudObj garden.Cloud) (garden.CloudProvider,
 		numClouds++
 		cloud = garden.CloudProviderOpenStack
 	}
+	if cloudObj.Alicloud != nil {
+		numClouds++
+		cloud = garden.CloudProviderAlicloud
+	}
 	if cloudObj.Local != nil {
 		numClouds++
 		cloud = garden.CloudProviderLocal
@@ -88,6 +96,28 @@ func DetermineCloudProviderInShoot(cloudObj garden.Cloud) (garden.CloudProvider,
 		return "", errors.New("cloud object must only contain exactly one field of aws/azure/gcp/openstack/local")
 	}
 	return cloud, nil
+}
+
+// GetK8SNetworks returns the Kubernetes network CIDRs for the Shoot cluster.
+func GetK8SNetworks(shoot *garden.Shoot) (garden.K8SNetworks, error) {
+	cloudProvider, err := DetermineCloudProviderInShoot(shoot.Spec.Cloud)
+	if err != nil {
+		return garden.K8SNetworks{}, err
+	}
+
+	switch cloudProvider {
+	case garden.CloudProviderAWS:
+		return shoot.Spec.Cloud.AWS.Networks.K8SNetworks, nil
+	case garden.CloudProviderAzure:
+		return shoot.Spec.Cloud.Azure.Networks.K8SNetworks, nil
+	case garden.CloudProviderGCP:
+		return shoot.Spec.Cloud.GCP.Networks.K8SNetworks, nil
+	case garden.CloudProviderOpenStack:
+		return shoot.Spec.Cloud.OpenStack.Networks.K8SNetworks, nil
+	case garden.CloudProviderLocal:
+		return shoot.Spec.Cloud.Local.Networks.K8SNetworks, nil
+	}
+	return garden.K8SNetworks{}, nil
 }
 
 // GetCondition returns the condition with the given <conditionType> out of the list of <conditions>.

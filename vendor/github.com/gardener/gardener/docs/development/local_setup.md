@@ -12,7 +12,7 @@ This setup is based on [minikube](https://github.com/kubernetes/minikube), a Kub
 
 ## Installing Golang environment
 
-Install the latest version of Golang (at least `v1.9.2` is required). For Mac OS you could use [Homebrew](https://brew.sh/):
+Install the Golang `v1.11`. For Mac OS you could use [Homebrew](https://brew.sh/):
 
 ```bash
 $ brew install golang
@@ -38,7 +38,7 @@ On other OS please check the [Dep installation documentation](https://golang.git
 In order to perform linting on the Go source code, please install [Golint](https://github.com/golang/lint):
 
 ```bash
-$ go get -u github.com/golang/lint/golint
+$ go get -u golang.org/x/lint/golint
 ```
 
 ### Ginkgo and Gomega
@@ -52,7 +52,7 @@ $ go get -u github.com/onsi/gomega
 
 ## Installing `kubectl` and `helm`
 
-As already mentioned in the introduction, the communication with the Gardener happens via the Kubernetes (Garden) cluster it is targeting. To interact with that cluster, you need to install `kubectl`.
+As already mentioned in the introduction, the communication with the Gardener happens via the Kubernetes (Garden) cluster it is targeting. To interact with that cluster, you need to install `kubectl`. Please make sure that the version of `kubectl` is at least `v1.11.x`.
 
 On Mac OS run
 
@@ -92,6 +92,7 @@ Please install the `openvpn` binary. On Mac OS run
 
 ```bash
 $ brew install openvpn
+$ export PATH=$(brew --prefix openvpn)/sbin:$PATH
 ```
 
 On other OS, please check the [OpenVPN downloads page](https://openvpn.net/index.php/open-source/downloads.html).
@@ -110,9 +111,19 @@ On Mac OS run
 $ brew install iproute2mac
 ```
 
+## [Mac OS X only] Install GNU core utilities
+
+When running on Mac OS X you have to install the GNU core utilities:
+```bash
+$ brew install coreutils gnu-sed
+```
+
+This will create symlinks for the GNU utilities with `g` prefix in `/usr/local/bin`, e.g., `gsed` or `gbase64`. To allow using them without the `g` prefix please put `/usr/local/opt/coreutils/libexec/gnubin` at the beginning of your `PATH` environment variable, e.g., `export PATH=/usr/local/opt/coreutils/libexec/gnubin:$PATH`.
+
+
 ## [Optional] Installing Docker
 
-In case you want to build Docker images for the Gardener you have to install Docker itself. We recommend using [Docker for Mac OS X](https://docs.docker.com/docker-for-mac/) which can be downloaded from [here](https://download.docker.com/mac/stable/Docker.dmg).
+In case you want to use the "Docker for Mac Kubernetes" or if you want to build Docker images for the Gardener you have to install Docker itself. On Mac OS X, please use [Docker for Mac OS X](https://docs.docker.com/docker-for-mac/) which can be downloaded [here](https://download.docker.com/mac/stable/Docker.dmg).
 
 On other OS, please check the [Docker installation documentation](https://docs.docker.com/install/).
 
@@ -178,7 +189,7 @@ First, start `minikube` with at least Kubernetes v1.9.x, e.g. via `minikube --ku
 Default cpu and memory settings of minikube machine are not sufficient to host the control plane of a shoot cluster, thus use at least 4 CPUs and 8192MB memory.
 
 ```bash
-$ minikube start --cpus=4 --memory=8192 --kubernetes-version=v1.9.0
+$ minikube start --cpus=4 --memory=8192 --kubernetes-version=v1.9.0 --extra-config=apiserver.admission-control=MutatingAdmissionWebhook,ValidatingAdmissionWebhook
 Starting local Kubernetes v1.9.0 cluster...
 [...]
 kubectl is now configured to use the cluster.
@@ -186,20 +197,23 @@ kubectl is now configured to use the cluster.
 
 #### Prepare the Gardener
 
-The Gardener exposes the API servers of Shoot clusters via Kubernetes services of type `LoadBalancer`. In order to establish stable endpoints (robust against changes of the load balancer address), it creates DNS records pointing to these load balancer addresses. They are used internally and by all cluster components to communicate.
-You need to have control over a domain (or subdomain) for which these records will be created.
-Please provide an *internal domain secret* (see [this](../../example/10-secret-internal-domain.yaml) for an example) which contains credentials with the proper privileges. Further information can be found [here](../deployment/configuration.md).
-
 ```bash
 $ make dev-setup
 namespace "garden" created
 namespace "garden-dev" created
-secret "internal-domain-unmanaged" created
 deployment "etcd" created
 service "etcd" created
 service "gardener-apiserver" created
 endpoints "gardener-apiserver" created
 apiservice "v1beta1.garden.sapcloud.io" created
+```
+The Gardener exposes the API servers of Shoot clusters via Kubernetes services of type `LoadBalancer`. In order to establish stable endpoints (robust against changes of the load balancer address), it creates DNS records pointing to these load balancer addresses. They are used internally and by all cluster components to communicate.
+You need to have control over a domain (or subdomain) for which these records will be created.
+Please provide an *internal domain secret* (see [this](../../example/10-secret-internal-domain.yaml) for an example) which contains credentials with the proper privileges. Further information can be found [here](../deployment/configuration.md).
+
+```bash
+$ kubectl apply -f example/10-secret-internal-domain-unmanaged.yaml
+secret/internal-domain-unmanaged created
 ```
 
 #### Run the Gardener API Server and the Gardener Controller Manager
@@ -340,17 +354,17 @@ $ vagrant ssh
 To delete the Shoot cluster
 
 ```bash
-$ ./hack/delete-shoot local garden-dev
+$ ./hack/delete shoot local garden-dev
 shoot "local" deleted
 shoot "local" patched
 ```
 
-#### Limitations
+#### Limitations of local Shoot setup
 
 Currently, there are some limitations in the local Shoot setup which need to be considered. Please keep in mind that this setup is intended to be used by Gardener developers.
 
 - The cloud provider allows to choose from a various list of different machine types. This flexibility is not available in this setup on a single local machine. However, it is possible to specify the Shoot nodes resources (cpu and memory) used by Vagrant in this [configuration file](../../vagrant/Vagrantfile). In the Shoot creation process the Machine Controller Manager plays a central role. Due to the limitation in this setup this component is not used.
-- It is not yet possible to create Shoot clusters consisting of more than one worker node. Cluster Autoscaling therefore is not supported
+- It is not yet possible to create Shoot clusters consisting of more than one worker node. Cluster auto-scaling therefore is not supported
 - It is not yet possible to create two or more Shoot clusters in parallel
 - The Shoot API Server is exposed via a NodePort. In a cloud setup a LoadBalancer would be used
 - The communication between the Seed and the Shoot Clusters uses VPN tunnel. In this setup tunnels are not needed since all components run on localhost

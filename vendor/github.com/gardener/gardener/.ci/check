@@ -28,8 +28,23 @@ if [[ "${SOURCE_PATH}" != *"src/github.com/gardener/gardener" ]]; then
   export PATH="${GOBIN}:${PATH}"
 fi
 
-# Install Golint (linting tool).
-go get -u github.com/golang/lint/golint
+# Install Golint.
+if ! which golint 1>/dev/null; then
+  echo -n "Installing golint... "
+  go get -u golang.org/x/lint/golint
+  echo "done."
+fi
+
+# Install Helm (see https://docs.helm.sh/using_helm/#from-script).
+if ! which helm 1>/dev/null; then
+  echo -n "Installing helm... "
+  install_helm_path="./get_helm.sh"
+  curl https://raw.githubusercontent.com/helm/helm/v2.9.1/scripts/get > "${install_helm_path}"
+  chmod 700 "${install_helm_path}"
+  bash "${install_helm_path}"
+  rm ./"${install_helm_path}"
+  echo "done."
+fi
 
 ###############################################################################
 
@@ -45,4 +60,19 @@ go fmt ${PACKAGES}
 # Execute lint checks.
 for package in ${LINT_FOLDERS}; do
   golint -set_exit_status $(find $package -maxdepth 1 -name "*.go" | grep -vE 'zz_generated|_test.go')
+done
+
+# Check for chart symlink errors
+BROKEN_SYMLINKS=$(find -L ${SOURCE_PATH}/charts -type l)
+if [[ -n ${BROKEN_SYMLINKS} ]]; then
+  echo "Found broken symlinks:"
+  echo ${BROKEN_SYMLINKS}
+  exit 1
+fi
+
+# Render chart dirs
+ALL_CHART_DIRS=$(find ${SOURCE_PATH}/charts -type f -name "Chart.yaml" -exec dirname {} \; | sort -r)
+for dir in ${ALL_CHART_DIRS}
+do
+  helm template ${dir} 1> /dev/null
 done

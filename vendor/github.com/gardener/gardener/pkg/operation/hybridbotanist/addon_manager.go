@@ -20,23 +20,20 @@ import (
 	"github.com/gardener/gardener/pkg/operation/common"
 )
 
-// DeployKubeAddonManager deploys the Kubernetes Addon Manager which will use labelled Kubernetes resources in order
+// DeployKubeAddonManager deploys the Kubernetes Addon Manager which will use labeled Kubernetes resources in order
 // to ensure that they exist in a cluster/reconcile them in case somebody changed something.
 func (b *HybridBotanist) DeployKubeAddonManager() error {
-	var (
-		name     = "kube-addon-manager"
-		replicas = 1
-	)
+	var name = "kube-addon-manager"
 
 	cloudConfig, err := b.generateCloudConfigChart()
 	if err != nil {
 		return err
 	}
-	coreAddons, err := b.generateCoreAddonsChart()
+	storageClasses, err := b.generateStorageClassesChart()
 	if err != nil {
 		return err
 	}
-	admissionControls, err := b.generateAdmissionControlsChart()
+	coreAddons, err := b.generateCoreAddonsChart()
 	if err != nil {
 		return err
 	}
@@ -45,22 +42,26 @@ func (b *HybridBotanist) DeployKubeAddonManager() error {
 		return err
 	}
 
-	if b.Shoot.Hibernated {
-		replicas = 0
-	}
-
 	defaultValues := map[string]interface{}{
-		"cloudConfigContent":       cloudConfig.Files,
-		"coreAddonsContent":        coreAddons.Files,
-		"admissionControlsContent": admissionControls.Files,
-		"optionalAddonsContent":    optionalAddons.Files,
+		"cloudConfigContent":    cloudConfig.Files,
+		"storageClassesContent": storageClasses.Files,
+		"coreAddonsContent":     coreAddons.Files,
+		"optionalAddonsContent": optionalAddons.Files,
 		"podAnnotations": map[string]interface{}{
 			"checksum/secret-kube-addon-manager": b.CheckSums[name],
 		},
-		"replicas": replicas,
+		"replicas": b.Shoot.GetReplicas(1),
+		// we need to add capabilities for Shoot's API server.
+		"shootAPIServer": map[string]interface{}{
+			"Capabilities": map[string]interface{}{
+				"KubeVersion": map[string]interface{}{
+					"GitVersion": b.Shoot.Info.Spec.Kubernetes.Version,
+				},
+			},
+		},
 	}
 
-	values, err := b.Botanist.InjectImages(defaultValues, b.K8sSeedClient.Version(), map[string]string{"kube-addon-manager": "kube-addon-manager"})
+	values, err := b.Botanist.InjectImages(defaultValues, b.SeedVersion(), b.ShootVersion(), common.KubeAddonManagerImageName)
 	if err != nil {
 		return err
 	}

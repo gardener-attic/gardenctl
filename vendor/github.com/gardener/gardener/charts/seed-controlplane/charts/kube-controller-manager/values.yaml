@@ -2,7 +2,6 @@ cloudProvider: aws
 replicas: 1
 kubernetesVersion: 1.7.5
 serviceNetwork: 10.0.0.0/24
-configureRoutes: false
 podNetwork: 192.168.0.0/16
 clusterName: shoot-foo-bar
 environment: []
@@ -20,3 +19,11 @@ resources:
   limits:
     cpu: 500m
     memory: 512Mi
+horizontalPodAutoscaler:
+  downscaleDelay: 15m
+  syncPeriod: 30s
+  tolerance: 0.1
+  upscaleDelay: 1m
+  downscaleStabilization: 5m0s
+  readinessDelay: 30s
+  cpuInitializationPeriod: 5m0s

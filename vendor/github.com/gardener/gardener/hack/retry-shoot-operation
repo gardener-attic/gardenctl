@@ -14,7 +14,4 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-NAME="$1"
-NAMESPACE="${2:-$(id -u -n)}"
-
-kubectl --namespace "$NAMESPACE" annotate shoot "$NAME" shoot.garden.sapcloud.io/operation=retry
+$(dirname $0)/shoot-operation $1 $2 retry

@@ -1,9 +1,10 @@
 apiVersion: {{ include "deploymentversion" . }}
 kind: Deployment
 metadata:
-  name: {{ template "fullname" . }}-api
+  name: {{ template "monocular.fullname" . }}-api
   namespace: kube-system
   labels:
+    garden.sapcloud.io/role: optional-addon
     chart: "{{ .Chart.Name }}-{{ .Chart.Version }}"
     addonmanager.kubernetes.io/mode: Reconcile
     origin: gardener
@@ -12,22 +13,28 @@ spec:
   replicas: {{ .Values.api.replicaCount }}
   selector:
     matchLabels:
-      app: {{ template "fullname" . }}-api
+      app: {{ template "monocular.fullname" . }}-api
   template:
     metadata:
       labels:
+        garden.sapcloud.io/role: optional-addon
         origin: gardener
-        app: {{ template "fullname" . }}-api
+        app: {{ template "monocular.fullname" . }}-api
       annotations:
+        scheduler.alpha.kubernetes.io/critical-pod: ''
         checksum/config: {{ include (print $.Template.BasePath "/api-config.yaml") . | sha256sum }}
     spec:
+      priorityClassName: system-cluster-critical
+      securityContext:
+        runAsUser: 65534
+        fsGroup: 65534
       initContainers:
       - name: init-monocular
         image: {{ index .Values.images "busybox" }}
         command:
         - sh
         - -c
-        - 'until nslookup kubernetes.default.svc > /dev/null; do echo waiting for kube-dns; sleep 2; done'
+        - 'until nslookup kubernetes.default.svc > /dev/null; do echo waiting for CoreDNS; sleep 2; done'
       containers:
       - name: {{ .Chart.Name }}
         image: {{ index .Values.images "monocular-api" }}
@@ -59,6 +66,6 @@ spec:
       volumes:
       - name: config
         configMap:
-          name: {{ template "fullname" . }}-api-config
+          name: {{ template "monocular.fullname" . }}-api-config
       - name: cache
         emptyDir: {}

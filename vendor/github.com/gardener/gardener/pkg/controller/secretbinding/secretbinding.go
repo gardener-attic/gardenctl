@@ -15,6 +15,7 @@
 package secretbinding
 
 import (
+	"context"
 	"sync"
 	"time"
 
@@ -23,6 +24,8 @@ import (
 	"github.com/gardener/gardener/pkg/client/kubernetes"
 	controllerutils "github.com/gardener/gardener/pkg/controller/utils"
 	"github.com/gardener/gardener/pkg/logger"
+	gardenmetrics "github.com/gardener/gardener/pkg/metrics"
+	"github.com/prometheus/client_golang/prometheus"
 	kubeinformers "k8s.io/client-go/informers"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/tools/record"
@@ -85,10 +88,10 @@ func NewSecretBindingController(k8sGardenClient kubernetes.Client, gardenInforme
 }
 
 // Run runs the Controller until the given stop channel can be read from.
-func (c *Controller) Run(workers int, stopCh <-chan struct{}) {
+func (c *Controller) Run(ctx context.Context, workers int) {
 	var waitGroup sync.WaitGroup
 
-	if !cache.WaitForCacheSync(stopCh, c.secretBindingSynced) {
+	if !cache.WaitForCacheSync(ctx.Done(), c.secretBindingSynced) {
 		logger.Logger.Error("Timed out waiting for caches to sync")
 		return
 	}
@@ -107,11 +110,11 @@ func (c *Controller) Run(workers int, stopCh <-chan struct{}) {
 	logger.Logger.Info("SecretBinding controller initialized.")
 
 	for i := 0; i < workers; i++ {
-		controllerutils.CreateWorker(c.secretBindingQueue, "SecretBinding", c.reconcileSecretBindingKey, stopCh, &waitGroup, c.workerCh)
+		controllerutils.CreateWorker(ctx, c.secretBindingQueue, "SecretBinding", c.reconcileSecretBindingKey, &waitGroup, c.workerCh)
 	}
 
 	// Shutdown handling
-	<-stopCh
+	<-ctx.Done()
 	c.secretBindingQueue.ShutDown()
 
 	for {
@@ -129,4 +132,14 @@ func (c *Controller) Run(workers int, stopCh <-chan struct{}) {
 // RunningWorkers returns the number of running workers.
 func (c *Controller) RunningWorkers() int {
 	return c.numberOfRunningWorkers
+}
+
+// CollectMetrics implements gardenmetrics.ControllerMetricsCollector interface
+func (c *Controller) CollectMetrics(ch chan<- prometheus.Metric) {
+	metric, err := prometheus.NewConstMetric(gardenmetrics.ControllerWorkerSum, prometheus.GaugeValue, float64(c.RunningWorkers()), "secretbinding")
+	if err != nil {
+		gardenmetrics.ScrapeFailures.With(prometheus.Labels{"kind": "secretbinding-controller"}).Inc()
+		return
+	}
+	ch <- metric
 }

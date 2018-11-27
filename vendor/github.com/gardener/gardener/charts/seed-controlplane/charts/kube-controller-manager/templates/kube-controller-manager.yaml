@@ -6,10 +6,6 @@ metadata:
   labels:
     app: kubernetes
     role: controller-manager
-  annotations:
-    prometheus.io/scrape: "true"
-    prometheus.io/port: "10252"
-    prometheus.io/name: kube-controller-manager
 spec:
   type: ClusterIP
   clusterIP: None
@@ -27,6 +23,7 @@ metadata:
   name: kube-controller-manager
   namespace: {{ .Release.Namespace }}
   labels:
+    garden.sapcloud.io/role: controlplane
     app: kubernetes
     role: controller-manager
 spec:
@@ -43,6 +40,7 @@ spec:
 {{ toYaml .Values.podAnnotations | indent 8 }}
 {{- end }}
       labels:
+        garden.sapcloud.io/role: controlplane
         app: kubernetes
         role: controller-manager
     spec:
@@ -51,28 +49,55 @@ spec:
         operator: Exists
       containers:
       - name: kube-controller-manager
-        image: {{ index .Values.images "hyperkube" }}:v{{ .Values.kubernetesVersion }}
+        image: {{ index .Values.images "hyperkube" }}
         imagePullPolicy: IfNotPresent
         command:
         - /hyperkube
         - controller-manager
         - --allocate-node-cidrs=true
         - --attach-detach-reconcile-sync-period=1m0s
-        - --cloud-provider={{ .Values.cloudProvider }}
+        {{- include "kube-controller-manager.controllers" . | indent 8 }}
+        # We already have the cloud-controller-manager in place and deploy it next to every Shoot control plane.
+        # Though the kube-controller-manager should no longer require the cloud provider credentials or the cloud
+        # config after this change, the fact that we do not have a CSI plugin for the volumes in place yet, we still
+        # need to provide it with this information (config, credentials). The only thing the KCM still does with the
+        # cloud is to (de-)provisioning and de-/attaching volumes to nodes. The CSI plugins will take over this functionality,
+        # hence, once we have it we can also isolate KCM from interaction with the cloud.
+        # For the same reasons, the kubelet still needs the information and can be excluded from interacting with the cloud
+        # API once we have CSI.
+        {{- include "kube-controller-manager.cloudProviderFlags" . | indent 8 }}
         - --cloud-config=/etc/kubernetes/cloudprovider/cloudprovider.conf
         - --cluster-cidr={{ .Values.podNetwork }}
         - --cluster-name={{ .Values.clusterName }}
         - --cluster-signing-cert-file=/srv/kubernetes/ca/ca.crt
         - --cluster-signing-key-file=/srv/kubernetes/ca/ca.key
-        - --configure-cloud-routes={{ .Values.configureRoutes }}
-        - --controllers=*,bootstrapsigner,tokencleaner
+        - --concurrent-deployment-syncs=10
+        - --concurrent-replicaset-syncs=10
         {{- include "kube-controller-manager.featureGates" . | trimSuffix "," | indent 8 }}
+        {{- if semverCompare "< 1.12" .Values.kubernetesVersion }}
+        - --horizontal-pod-autoscaler-downscale-delay={{ .Values.horizontalPodAutoscaler.downscaleDelay }}
+        - --horizontal-pod-autoscaler-upscale-delay={{ .Values.horizontalPodAutoscaler.upscaleDelay }}
+        {{- end}}
+        - --horizontal-pod-autoscaler-sync-period={{ .Values.horizontalPodAutoscaler.syncPeriod }}
+        - --horizontal-pod-autoscaler-tolerance={{ .Values.horizontalPodAutoscaler.tolerance }}
         - --kubeconfig=/var/lib/kube-controller-manager/kubeconfig
         - --leader-elect=true
         - --pod-eviction-timeout=2m0s
         - --root-ca-file=/srv/kubernetes/ca/ca.crt
         - --service-account-private-key-file=/srv/kubernetes/service-account-key/id_rsa
         - --service-cluster-ip-range={{ .Values.serviceNetwork }}
+        {{- if semverCompare ">= 1.12" .Values.kubernetesVersion }}
+        - --horizontal-pod-autoscaler-downscale-stabilization={{ .Values.horizontalPodAutoscaler.downscaleStabilization }}
+        - --horizontal-pod-autoscaler-initial-readiness-delay={{ .Values.horizontalPodAutoscaler.readinessDelay }}
+        - --horizontal-pod-autoscaler-cpu-initialization-period={{ .Values.horizontalPodAutoscaler.cpuInitializationPeriod }}
+        - --authentication-kubeconfig=/var/lib/kube-controller-manager/kubeconfig
+        - --authorization-kubeconfig=/var/lib/kube-controller-manager/kubeconfig
+        - --tls-cert-file=/var/lib/kube-controller-manager-server/kube-controller-manager-server.crt
+        - --tls-private-key-file=/var/lib/kube-controller-manager-server/kube-controller-manager-server.key
+        {{- end }}
+        {{- if semverCompare ">= 1.10" .Values.kubernetesVersion }}
+        - --tls-cipher-suites={{ include "kubernetes.tlsCipherSuites" . | replace "\n" "," | trimPrefix "," }}
+        {{- end }}
         - --use-service-account-credentials=true
         - --v=2
         {{- range $index, $param := $.Values.additionalParameters }}
@@ -103,6 +128,8 @@ spec:
           mountPath: /srv/kubernetes/service-account-key
         - name: kube-controller-manager
           mountPath: /var/lib/kube-controller-manager
+        - name: kube-controller-manager-server
+          mountPath: /var/lib/kube-controller-manager-server
         - name: cloud-provider-config
           mountPath: /etc/kubernetes/cloudprovider
         - name: cloudprovider
@@ -127,6 +154,9 @@ spec:
       - name: kube-controller-manager
         secret:
           secretName: kube-controller-manager
+      - name: kube-controller-manager-server
+        secret:
+          secretName: kube-controller-manager-server
       - name: cloud-provider-config
         configMap:
           name: cloud-provider-config

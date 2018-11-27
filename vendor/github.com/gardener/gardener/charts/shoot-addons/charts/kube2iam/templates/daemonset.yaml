@@ -2,13 +2,14 @@ apiVersion: {{ include "daemonsetversion" . }}
 kind: DaemonSet
 metadata:
   labels:
-    app: {{ template "name" . }}
+    garden.sapcloud.io/role: optional-addon
+    app: {{ template "kube2iam.name" . }}
     chart: {{ .Chart.Name }}-{{ .Chart.Version }}
     heritage: {{ .Release.Service }}
     release: {{ .Release.Name }}
     addonmanager.kubernetes.io/mode: Reconcile
     origin: gardener
-  name: {{ template "fullname" . }}
+  name: {{ template "kube2iam.fullname" . }}
   namespace: {{ .Release.Namespace }}
 spec:
 {{- if and (eq .Capabilities.KubeVersion.Major "1") (gt .Capabilities.KubeVersion.Minor "5") }}
@@ -17,7 +18,7 @@ spec:
 {{- end }}
   selector:
     matchLabels:
-      app: {{ template "name" . }}
+      app: {{ template "kube2iam.name" . }}
       release: {{ .Release.Name }}
   template:
     metadata:
@@ -27,10 +28,12 @@ spec:
 {{- end }}
         scheduler.alpha.kubernetes.io/critical-pod: ''
       labels:
+        garden.sapcloud.io/role: optional-addon
         origin: gardener
-        app: {{ template "name" . }}
+        app: {{ template "kube2iam.name" . }}
         release: {{ .Release.Name }}
     spec:
+      priorityClassName: system-cluster-critical
       tolerations:
       # Mark the pod as a critical add-on for rescheduling.
       - key: CriticalAddonsOnly
@@ -69,4 +72,4 @@ spec:
       nodeSelector:
 {{ toYaml .Values.nodeSelector | indent 8 }}
     {{- end }}
-      serviceAccountName: {{ if .Values.rbac.create }}{{ template "fullname" . }}{{ else }}"{{ .Values.rbac.serviceAccountName }}"{{ end }}
+      serviceAccountName: {{ if .Values.rbac.create }}{{ template "kube2iam.fullname" . }}{{ else }}"{{ .Values.rbac.serviceAccountName }}"{{ end }}

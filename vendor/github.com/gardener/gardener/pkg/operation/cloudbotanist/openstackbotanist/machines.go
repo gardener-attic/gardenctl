@@ -16,7 +16,6 @@ package openstackbotanist
 
 import (
 	"fmt"
-
 	"github.com/gardener/gardener/pkg/operation"
 	"github.com/gardener/gardener/pkg/operation/common"
 	"github.com/gardener/gardener/pkg/operation/terraformer"
@@ -63,8 +62,11 @@ func (b *OpenStackBotanist) GenerateMachineConfig() ([]map[string]interface{}, o
 		machineDeployments = operation.MachineDeployments{}
 		machineClasses     = []map[string]interface{}{}
 	)
-
-	stateVariables, err := terraformer.NewFromOperation(b.Operation, common.TerraformerPurposeInfra).GetStateOutputVariables(outputVariables...)
+	tf, err := terraformer.NewFromOperation(b.Operation, common.TerraformerPurposeInfra)
+	if err != nil {
+		return nil, nil, err
+	}
+	stateVariables, err := tf.GetStateOutputVariables(outputVariables...)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -83,6 +85,7 @@ func (b *OpenStackBotanist) GenerateMachineConfig() ([]map[string]interface{}, o
 				"keyName":          stateVariables[keyName],
 				"imageName":        b.Shoot.Info.Spec.Cloud.OpenStack.MachineImage.Image,
 				"networkID":        stateVariables[networkID],
+				"podNetworkCidr":   b.Shoot.GetPodNetwork(),
 				"securityGroups":   []string{stateVariables[securityGroupName]},
 				"tags": map[string]string{
 					fmt.Sprintf("kubernetes.io-cluster-%s", b.Shoot.SeedNamespace): "1",
@@ -101,10 +104,12 @@ func (b *OpenStackBotanist) GenerateMachineConfig() ([]map[string]interface{}, o
 			)
 
 			machineDeployments = append(machineDeployments, operation.MachineDeployment{
-				Name:      deploymentName,
-				ClassName: className,
-				Minimum:   common.DistributeOverZones(zoneIndex, worker.AutoScalerMin, zoneLen),
-				Maximum:   common.DistributeOverZones(zoneIndex, worker.AutoScalerMax, zoneLen),
+				Name:           deploymentName,
+				ClassName:      className,
+				Minimum:        common.DistributeOverZones(zoneIndex, worker.AutoScalerMin, zoneLen),
+				Maximum:        common.DistributeOverZones(zoneIndex, worker.AutoScalerMax, zoneLen),
+				MaxSurge:       common.DistributePositiveIntOrPercent(zoneIndex, *worker.MaxSurge, zoneLen, worker.AutoScalerMax),
+				MaxUnavailable: common.DistributePositiveIntOrPercent(zoneIndex, *worker.MaxUnavailable, zoneLen, worker.AutoScalerMin),
 			})
 
 			machineClassSpec["name"] = className

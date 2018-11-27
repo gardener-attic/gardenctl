@@ -17,10 +17,10 @@ spec:
       - name: MY-FLOATING-POOL
       kubernetes:
         versions:
-        - 1.11.1
-        - 1.10.5
-        - 1.9.8
-        - 1.8.14
+        - 1.12.1
+        - 1.11.3
+        - 1.10.8
+        - 1.9.11
       loadBalancerProviders:
       - name: haproxy
       machineImages:
@@ -31,12 +31,14 @@ spec:
         cpu: "2"
         gpu: "0"
         memory: 4Gi
+        usable: true
         volumeType: default
         volumeSize: 20Gi
       - name: medium_4_8
         cpu: "4"
         gpu: "0"
         memory: 8Gi
+        usable: true
         volumeType: default
         volumeSize: 40Gi
       zones:

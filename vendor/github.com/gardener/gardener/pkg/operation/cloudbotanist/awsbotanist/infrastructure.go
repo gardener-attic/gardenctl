@@ -16,9 +16,12 @@ package awsbotanist
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/gardener/gardener/pkg/operation/common"
 	"github.com/gardener/gardener/pkg/operation/terraformer"
+	"github.com/gardener/gardener/pkg/utils/flow"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 )
 
 // DeployInfrastructure kicks off a Terraform job which deploys the infrastructure.
@@ -43,8 +46,11 @@ func (b *AWSBotanist) DeployInfrastructure() error {
 		vpcCIDR = string(*b.Shoot.Info.Spec.Cloud.AWS.Networks.VPC.CIDR)
 	}
 
-	return terraformer.
-		NewFromOperation(b.Operation, common.TerraformerPurposeInfra).
+	tf, err := terraformer.NewFromOperation(b.Operation, common.TerraformerPurposeInfra)
+	if err != nil {
+		return err
+	}
+	return tf.
 		SetVariablesEnvironment(b.generateTerraformInfraVariablesEnvironment()).
 		DefineConfig("aws-infra", b.generateTerraformInfraConfig(createVPC, vpcID, internetGatewayID, vpcCIDR)).
 		Apply()
@@ -52,10 +58,34 @@ func (b *AWSBotanist) DeployInfrastructure() error {
 
 // DestroyInfrastructure kicks off a Terraform job which destroys the infrastructure.
 func (b *AWSBotanist) DestroyInfrastructure() error {
-	return terraformer.
-		NewFromOperation(b.Operation, common.TerraformerPurposeInfra).
-		SetVariablesEnvironment(b.generateTerraformInfraVariablesEnvironment()).
-		Destroy()
+	tf, err := terraformer.NewFromOperation(b.Operation, common.TerraformerPurposeInfra)
+	if err != nil {
+		return err
+	}
+
+	configExists, err := tf.ConfigExists()
+	if err != nil {
+		return err
+	}
+
+	var (
+		g = flow.NewGraph("AWS infrastructure destruction")
+
+		destroyKubernetesLoadBalancersAndSecurityGroups = g.Add(flow.Task{
+			Name: "Destroying Kubernetes load balancers and security groups",
+			Fn:   flow.TaskFn(b.destroyKubernetesLoadBalancersAndSecurityGroups).RetryUntilTimeout(10*time.Second, 5*time.Minute).DoIf(configExists),
+		})
+
+		_ = g.Add(flow.Task{
+			Name:         "Destroying Shoot infrastructure",
+			Fn:           flow.TaskFn(tf.SetVariablesEnvironment(b.generateTerraformInfraVariablesEnvironment()).Destroy),
+			Dependencies: flow.NewTaskIDs(destroyKubernetesLoadBalancersAndSecurityGroups),
+		})
+
+		f = g.Compile()
+	)
+
+	return f.Run(flow.Opts{Logger: b.Logger})
 }
 
 // generateTerraformInfraVariablesEnvironment generates the environment containing the credentials which
@@ -98,7 +128,6 @@ func (b *AWSBotanist) generateTerraformInfraConfig(createVPC bool, vpcID, intern
 		},
 		"create": map[string]interface{}{
 			"vpc": createVPC,
-			"clusterAutoscalerPolicies": b.Shoot.ClusterAutoscalerEnabled() && !b.Shoot.Kube2IAMEnabled(),
 		},
 		"sshPublicKey": string(sshSecret.Data["id_rsa.pub"]),
 		"vpc": map[string]interface{}{
@@ -112,11 +141,63 @@ func (b *AWSBotanist) generateTerraformInfraConfig(createVPC bool, vpcID, intern
 	}
 }
 
+func (b *AWSBotanist) destroyKubernetesLoadBalancersAndSecurityGroups() error {
+	t, err := terraformer.NewFromOperation(b.Operation, common.TerraformerPurposeInfra)
+	if err != nil {
+		return err
+	}
+
+	if _, err := t.GetState(); err != nil {
+		if apierrors.IsNotFound(err) {
+			return nil
+		}
+		return err
+	}
+
+	vpcIDKey := "vpc_id"
+	stateVariables, err := t.GetStateOutputVariables(vpcIDKey)
+	if err != nil {
+		if terraformer.IsVariablesNotFoundError(err) {
+			b.Logger.Infof("Skipping explicit AWS load balancer and security group deletion because not all variables have been found in the Terraform state.")
+			return nil
+		}
+		return err
+	}
+	vpcID := stateVariables[vpcIDKey]
+
+	// Find load balancers and security groups.
+	loadBalancers, err := b.AWSClient.ListKubernetesELBs(vpcID, b.Shoot.SeedNamespace)
+	if err != nil {
+		return err
+	}
+	securityGroups, err := b.AWSClient.ListKubernetesSecurityGroups(vpcID, b.Shoot.SeedNamespace)
+	if err != nil {
+		return err
+	}
+
+	// Destroy load balancers and security groups.
+	for _, loadBalancerName := range loadBalancers {
+		if err := b.AWSClient.DeleteELB(loadBalancerName); err != nil {
+			return err
+		}
+	}
+	for _, securityGroupID := range securityGroups {
+		if err := b.AWSClient.DeleteSecurityGroup(securityGroupID); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
 // DeployBackupInfrastructure kicks off a Terraform job which deploys the infrastructure resources for backup.
 // It sets up the User and the Bucket to store the backups. Allocate permission to the User to access the bucket.
 func (b *AWSBotanist) DeployBackupInfrastructure() error {
-	return terraformer.
-		New(b.Logger, b.K8sSeedClient, common.TerraformerPurposeBackup, b.BackupInfrastructure.Name, common.GenerateBackupNamespaceName(b.BackupInfrastructure.Name), b.ImageVector).
+	tf, err := terraformer.New(b.Logger, b.K8sSeedClient, common.TerraformerPurposeBackup, b.BackupInfrastructure.Name, common.GenerateBackupNamespaceName(b.BackupInfrastructure.Name), b.ImageVector)
+	if err != nil {
+		return err
+	}
+	return tf.
 		SetVariablesEnvironment(b.generateTerraformBackupVariablesEnvironment()).
 		DefineConfig("aws-backup", b.generateTerraformBackupConfig()).
 		Apply()
@@ -124,8 +205,11 @@ func (b *AWSBotanist) DeployBackupInfrastructure() error {
 
 // DestroyBackupInfrastructure kicks off a Terraform job which destroys the infrastructure for etcd backup.
 func (b *AWSBotanist) DestroyBackupInfrastructure() error {
-	return terraformer.
-		New(b.Logger, b.K8sSeedClient, common.TerraformerPurposeBackup, b.BackupInfrastructure.Name, common.GenerateBackupNamespaceName(b.BackupInfrastructure.Name), b.ImageVector).
+	tf, err := terraformer.New(b.Logger, b.K8sSeedClient, common.TerraformerPurposeBackup, b.BackupInfrastructure.Name, common.GenerateBackupNamespaceName(b.BackupInfrastructure.Name), b.ImageVector)
+	if err != nil {
+		return err
+	}
+	return tf.
 		SetVariablesEnvironment(b.generateTerraformBackupVariablesEnvironment()).
 		Destroy()
 }

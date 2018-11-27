@@ -15,16 +15,42 @@
 package common_test
 
 import (
+	"fmt"
+	"strings"
+
 	. "github.com/gardener/gardener/pkg/operation/common"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
+	"errors"
+
 	gardenv1beta1 "github.com/gardener/gardener/pkg/apis/garden/v1beta1"
+	. "github.com/onsi/ginkgo/extensions/table"
 )
 
 var _ = Describe("common", func() {
 	Describe("utils", func() {
+		Describe("#DetermineError", func() {
+			DescribeTable("appropriate error should be determined",
+				func(msg string, expectedErr error) {
+					err := DetermineError(msg)
+					Expect(err).To(Equal(expectedErr))
+				},
+				Entry("no code to extract", "foo", errors.New("foo")),
+				Entry("unauthorized", "unauthorized",
+					NewErrorWithCode(gardenv1beta1.ErrorInfraUnauthorized, "unauthorized")),
+				Entry("quota exceeded", "limitexceeded",
+					NewErrorWithCode(gardenv1beta1.ErrorInfraQuotaExceeded, "limitexceeded")),
+				Entry("insufficient privileges", "accessdenied",
+					NewErrorWithCode(gardenv1beta1.ErrorInfraInsufficientPrivileges, "accessdenied")),
+				Entry("infrastructure dependencies", "pendingverification",
+					NewErrorWithCode(gardenv1beta1.ErrorInfraDependencies, "pendingverification")),
+			)
+		})
+
 		Describe("#IdentifyAddressType", func() {
 			It("should return a tuple with first value equals hostname", func() {
 				address := "example.com"
@@ -42,6 +68,36 @@ var _ = Describe("common", func() {
 
 				Expect(addrType).To(Equal("ip"))
 				Expect(addr).NotTo(BeNil())
+			})
+		})
+
+		Describe("#DistributePercentOverZones", func() {
+			It("should return unmodified percentage if total is evenly divisble", func() {
+				var (
+					total      = 6
+					noOfZones  = 3
+					percentage = "40%"
+				)
+
+				percentages := make([]string, 0, noOfZones)
+				for i := 0; i < noOfZones; i++ {
+					percentages = append(percentages, DistributePercentOverZones(i, percentage, noOfZones, total))
+				}
+				Expect(percentages).To(Equal([]string{percentage, percentage, percentage}))
+			})
+
+			It("should return correct percentage if total is not evenly divisble", func() {
+				var (
+					total      = 7
+					noOfZones  = 3
+					percentage = "40%"
+				)
+
+				percentages := make([]string, 0, noOfZones)
+				for i := 0; i < noOfZones; i++ {
+					percentages = append(percentages, DistributePercentOverZones(i, percentage, noOfZones, total))
+				}
+				Expect(percentages).To(Equal([]string{"52%", "35%", "35%"}))
 			})
 		})
 
@@ -161,4 +217,58 @@ var _ = Describe("common", func() {
 			})
 		})
 	})
+
+	Describe("#MergeOwnerReferences", func() {
+		It("should merge the new references into the list of existing references", func() {
+			var (
+				references = []metav1.OwnerReference{
+					{
+						UID: types.UID("1234"),
+					},
+				}
+				newReferences = []metav1.OwnerReference{
+					{
+						UID: types.UID("1234"),
+					},
+					{
+						UID: types.UID("1235"),
+					},
+				}
+			)
+
+			result := MergeOwnerReferences(references, newReferences...)
+
+			Expect(result).To(ConsistOf(newReferences))
+		})
+	})
+
+	DescribeTable("#HasInitializer",
+		func(initializers *metav1.Initializers, name string, expected bool) {
+			Expect(HasInitializer(initializers, name)).To(Equal(expected))
+		},
+
+		Entry("nil initializers", nil, "foo", false),
+		Entry("no matching initializer", &metav1.Initializers{Pending: []metav1.Initializer{{Name: "bar"}}}, "foo", false),
+		Entry("matching initializer", &metav1.Initializers{Pending: []metav1.Initializer{{Name: "foo"}}}, "foo", true),
+	)
+
+	DescribeTable("#ReplaceCloudProviderConfigKey",
+		func(key, oldValue, newValue string) {
+			var (
+				separator = ": "
+
+				configWithoutQuotes = fmt.Sprintf("%s%s%s", key, separator, oldValue)
+				configWithQuotes    = fmt.Sprintf("%s%s\"%s\"", key, separator, strings.Replace(oldValue, `"`, `\"`, -1))
+				expected            = fmt.Sprintf("%s%s\"%s\"", key, separator, strings.Replace(newValue, `"`, `\"`, -1))
+			)
+
+			Expect(ReplaceCloudProviderConfigKey(configWithoutQuotes, separator, key, newValue)).To(Equal(expected))
+			Expect(ReplaceCloudProviderConfigKey(configWithQuotes, separator, key, newValue)).To(Equal(expected))
+		},
+
+		Entry("no special characters", "foo", "bar", "baz"),
+		Entry("no special characters", "foo", "bar", "baz"),
+		Entry("with special characters", "foo", `C*ko4P++$"x`, `"$++*ab*$c4k`),
+		Entry("with special characters", "foo", "P+*4", `P*$8uOkv6+4`),
+	)
 })

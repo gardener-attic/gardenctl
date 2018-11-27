@@ -6,10 +6,6 @@ metadata:
   labels:
     component: alertmanager
     role: monitoring
-  annotations:
-    prometheus.io/scrape: "true"
-    prometheus.io/port: "9093"
-    prometheus.io/name: alertmanager
 spec:
   ports:
   - port: 9093
@@ -44,6 +40,7 @@ metadata:
   name: alertmanager
   namespace: {{ .Release.Namespace }}
   labels:
+    garden.sapcloud.io/role: monitoring
     component: alertmanager
     role: monitoring
 spec:
@@ -58,6 +55,7 @@ spec:
   template:
     metadata:
       labels:
+        garden.sapcloud.io/role: monitoring
         component: alertmanager
         role: monitoring
     spec:
@@ -69,7 +67,7 @@ spec:
         - --config.file=/etc/alertmanager/config/alertmanager.yaml
         - --web.listen-address=:9093
         - --web.external-url=https://{{ .Values.ingress.host }}
-        - --storage.path=/etc/alertmanager/data
+        - --storage.path=/var/alertmanager/data
         - --log.level=info
         env:
         - name: ALERTMANAGER_NAMESPACE

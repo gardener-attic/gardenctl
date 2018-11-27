@@ -22,6 +22,24 @@ import (
 	"github.com/gardener/gardener/pkg/utils"
 )
 
+const cloudProviderConfigTemplate = `
+[Global]
+auth-url=%q
+domain-name=%q
+tenant-name=%q
+username=%q
+password=%q
+[LoadBalancer]
+lb-version=v2
+lb-provider=%q
+floating-network-id=%q
+subnet-id=%q
+create-monitor=true
+monitor-delay=60s
+monitor-timeout=30s
+monitor-max-retries=5
+`
+
 // GenerateCloudProviderConfig generates the OpenStack cloud provider config.
 // See this for more details:
 // https://github.com/kubernetes/kubernetes/blob/master/pkg/cloudprovider/providers/openstack/openstack.go
@@ -30,28 +48,26 @@ func (b *OpenStackBotanist) GenerateCloudProviderConfig() (string, error) {
 		floatingNetworkID = "floating_network_id"
 		subnetID          = "subnet_id"
 	)
-
-	stateVariables, err := terraformer.NewFromOperation(b.Operation, common.TerraformerPurposeInfra).GetStateOutputVariables(floatingNetworkID, subnetID)
+	tf, err := terraformer.NewFromOperation(b.Operation, common.TerraformerPurposeInfra)
+	if err != nil {
+		return "", err
+	}
+	stateVariables, err := tf.GetStateOutputVariables(floatingNetworkID, subnetID)
 	if err != nil {
 		return "", err
 	}
 
-	cloudProviderConfig := `
-[Global]
-auth-url="` + b.Shoot.CloudProfile.Spec.OpenStack.KeyStoneURL + `"
-domain-name="` + string(b.Shoot.Secret.Data[DomainName]) + `"
-tenant-name="` + string(b.Shoot.Secret.Data[TenantName]) + `"
-username="` + string(b.Shoot.Secret.Data[UserName]) + `"
-password="` + string(b.Shoot.Secret.Data[Password]) + `"
-[LoadBalancer]
-lb-version=v2
-lb-provider="` + b.Shoot.Info.Spec.Cloud.OpenStack.LoadBalancerProvider + `"
-floating-network-id="` + stateVariables[floatingNetworkID] + `"
-subnet-id="` + stateVariables[subnetID] + `"
-create-monitor=true
-monitor-delay=60s
-monitor-timeout=30s
-monitor-max-retries=5`
+	cloudProviderConfig := fmt.Sprintf(
+		cloudProviderConfigTemplate,
+		b.Shoot.CloudProfile.Spec.OpenStack.KeyStoneURL,
+		string(b.Shoot.Secret.Data[DomainName]),
+		string(b.Shoot.Secret.Data[TenantName]),
+		string(b.Shoot.Secret.Data[UserName]),
+		string(b.Shoot.Secret.Data[Password]),
+		b.Shoot.Info.Spec.Cloud.OpenStack.LoadBalancerProvider,
+		stateVariables[floatingNetworkID],
+		stateVariables[subnetID],
+	)
 
 	// https://github.com/kubernetes/kubernetes/pull/63903#issue-188306465
 	needsDHCPDomain, err := utils.CheckVersionMeetsConstraint(b.Shoot.Info.Spec.Kubernetes.Version, ">= 1.10.1, < 1.10.3")
@@ -60,9 +76,9 @@ monitor-max-retries=5`
 	}
 
 	if needsDHCPDomain && b.Shoot.CloudProfile.Spec.OpenStack.DHCPDomain != nil {
-		cloudProviderConfig += `
+		cloudProviderConfig += fmt.Sprintf(`
 [Metadata]
-dhcp-domain=` + *b.Shoot.CloudProfile.Spec.OpenStack.DHCPDomain
+dhcp-domain=%q`, *b.Shoot.CloudProfile.Spec.OpenStack.DHCPDomain)
 	}
 
 	return cloudProviderConfig, nil
@@ -88,18 +104,33 @@ func (b *OpenStackBotanist) RefreshCloudProviderConfig(currentConfig map[string]
 	}
 }
 
+// GenerateKubeAPIServerServiceConfig generates the cloud provider specific values which are required to render the
+// Service manifest of the kube-apiserver-service properly.
+func (b *OpenStackBotanist) GenerateKubeAPIServerServiceConfig() (map[string]interface{}, error) {
+	return nil, nil
+}
+
+// GenerateKubeAPIServerExposeConfig defines the cloud provider specific values which configure how the kube-apiserver
+// is exposed to the public.
+func (b *OpenStackBotanist) GenerateKubeAPIServerExposeConfig() (map[string]interface{}, error) {
+	return map[string]interface{}{
+		"advertiseAddress": b.APIServerAddress,
+		"additionalParameters": []string{
+			fmt.Sprintf("--external-hostname=%s", b.APIServerAddress),
+		},
+	}, nil
+}
+
 // GenerateKubeAPIServerConfig generates the cloud provider specific values which are required to render the
 // Deployment manifest of the kube-apiserver properly.
 func (b *OpenStackBotanist) GenerateKubeAPIServerConfig() (map[string]interface{}, error) {
-	loadBalancerIP, err := utils.WaitUntilDNSNameResolvable(b.APIServerAddress)
-	if err != nil {
-		return nil, err
-	}
-	return map[string]interface{}{
-		"additionalParameters": []string{
-			fmt.Sprintf("--external-hostname=%s", loadBalancerIP),
-		},
-	}, nil
+	return nil, nil
+}
+
+// GenerateCloudControllerManagerConfig generates the cloud provider specific values which are required to
+// render the Deployment manifest of the cloud-controller-manager properly.
+func (b *OpenStackBotanist) GenerateCloudControllerManagerConfig() (map[string]interface{}, error) {
+	return nil, nil
 }
 
 // GenerateKubeControllerManagerConfig generates the cloud provider specific values which are required to
@@ -121,8 +152,11 @@ func (b *OpenStackBotanist) GenerateEtcdBackupConfig() (map[string][]byte, map[s
 		backupInfrastructureName = common.GenerateBackupInfrastructureName(b.Shoot.SeedNamespace, b.Shoot.Info.Status.UID)
 		backupNamespace          = common.GenerateBackupNamespaceName(backupInfrastructureName)
 	)
-
-	stateVariables, err := terraformer.New(b.Logger, b.K8sSeedClient, common.TerraformerPurposeBackup, backupInfrastructureName, backupNamespace, b.ImageVector).GetStateOutputVariables(containerName)
+	tf, err := terraformer.New(b.Logger, b.K8sSeedClient, common.TerraformerPurposeBackup, backupInfrastructureName, backupNamespace, b.ImageVector)
+	if err != nil {
+		return nil, nil, err
+	}
+	stateVariables, err := tf.GetStateOutputVariables(containerName)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -190,4 +224,9 @@ func (b *OpenStackBotanist) GenerateEtcdBackupConfig() (map[string][]byte, map[s
 		"volumeMount": []map[string]interface{}{},
 	}
 	return secretData, backupConfigData, nil
+}
+
+// DeployCloudSpecificControlPlane does currently nothing for OpenStack.
+func (b *OpenStackBotanist) DeployCloudSpecificControlPlane() error {
+	return nil
 }

@@ -8,6 +8,16 @@ metadata:
 
 ---
 
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: calico-typha
+  namespace: kube-system
+  labels:
+    addonmanager.kubernetes.io/mode: Reconcile
+
+---
+
 # This manifest installs the calico/node container, as well
 # as the Calico CNI plugins and network config on
 # each master and worker node in a Kubernetes cluster.
@@ -20,6 +30,7 @@ metadata:
     k8s-app: calico-node
     addonmanager.kubernetes.io/mode: Reconcile
     origin: gardener
+    garden.sapcloud.io/role: system-component
 spec:
   selector:
     matchLabels:
@@ -33,6 +44,7 @@ spec:
       labels:
         k8s-app: calico-node
         origin: gardener
+        garden.sapcloud.io/role: system-component
       annotations:
         # This, along with the CriticalAddonsOnly toleration below,
         # marks the pod as a critical add-on, ensuring it gets
@@ -41,9 +53,12 @@ spec:
         scheduler.alpha.kubernetes.io/critical-pod: ''
         checksum/configmap-calico: {{ include (print $.Template.BasePath "/config.yaml") . | sha256sum }}
     spec:
+      priorityClassName: system-cluster-critical
+      nodeSelector:
+        beta.kubernetes.io/os: linux
       hostNetwork: true
       tolerations:
-        # Make sure calico/node gets scheduled on all nodes.
+        # Make sure calico-node gets scheduled on all nodes.
         - effect: NoSchedule
           operator: Exists
         # Mark the pod as a critical add-on for rescheduling.
@@ -55,6 +70,41 @@ spec:
       # Minimize downtime during a rolling upgrade or deletion; tell Kubernetes to do a "force
       # deletion": https://kubernetes.io/docs/concepts/workloads/pods/pod/#termination-of-pods.
       terminationGracePeriodSeconds: 0
+      initContainers:
+      # This container installs the Calico CNI binaries
+      # and CNI network config file on each node.
+      - name: install-cni
+        image: {{ index .Values.images "calico-cni" }}
+        command: ["/install-cni.sh"]
+        env:
+          # Name of the CNI config file to create.
+          - name: CNI_CONF_NAME
+            value: "10-calico.conflist"
+          # The CNI network config to install on each node.
+          - name: CNI_NETWORK_CONFIG
+            valueFrom:
+              configMapKeyRef:
+                name: calico-config
+                key: cni_network_config
+          # Set the hostname based on the k8s node name.
+          - name: KUBERNETES_NODE_NAME
+            valueFrom:
+              fieldRef:
+                fieldPath: spec.nodeName
+          # CNI MTU Config variable
+          - name: CNI_MTU
+            valueFrom:
+              configMapKeyRef:
+                name: calico-config
+                key: veth_mtu
+          # Prevents the container from sleeping forever.
+          - name: SLEEP
+            value: "false"
+        volumeMounts:
+          - mountPath: /host/opt/cni/bin
+            name: cni-bin-dir
+          - mountPath: /host/etc/cni/net.d
+            name: cni-net-dir
       containers:
         # Runs calico/node container on each Kubernetes node.  This
         # container programs network policy and routes on each
@@ -82,7 +132,10 @@ spec:
               value: "false"
             # Set MTU for tunnel device used if ipip is enabled
             - name: FELIX_IPINIPMTU
-              value: "1440"
+              valueFrom:
+                configMapKeyRef:
+                  name: calico-config
+                  key: veth_mtu
             # Wait for the datastore.
             - name: WAIT_FOR_DATASTORE
               value: "true"
@@ -94,6 +147,12 @@ spec:
             # Enable IPIP
             - name: CALICO_IPV4POOL_IPIP
               value: "Always"
+            # Choose the backend to use.
+            - name: CALICO_NETWORKING_BACKEND
+              valueFrom:
+                configMapKeyRef:
+                  name: calico-config
+                  key: calico_backend
             {{- if ne .Values.cloudProvider "azure"}}
             # Enable IP-in-IP within Felix.
             - name: FELIX_IPINIPENABLED
@@ -101,8 +160,6 @@ spec:
             {{- else }}
             - name: FELIX_IPINIPENABLED
               value: "false"
-            - name: CALICO_NETWORKING_BACKEND
-              value: "none"
             {{- end }}
             # Typha support: controlled by the ConfigMap.
             - name: FELIX_TYPHAK8SSERVICENAME
@@ -120,6 +177,9 @@ spec:
               value: "autodetect"
             - name: FELIX_HEALTHENABLED
               value: "true"
+            # Limit NAT port range: https://github.com/projectcalico/felix/pull/1838
+            - name: FELIX_NATPORTRANGE
+              value: "32768:65535"
           securityContext:
             privileged: true
           resources:
@@ -133,13 +193,16 @@ spec:
             httpGet:
               path: /liveness
               port: 9099
+              host: localhost
             periodSeconds: 10
             initialDelaySeconds: 10
             failureThreshold: 6
           readinessProbe:
-            httpGet:
-              path: /readiness
-              port: 9099
+            exec:
+              command:
+              - /bin/calico-node
+              - -bird-ready
+              - -felix-ready
             periodSeconds: 10
           volumeMounts:
             - mountPath: /lib/modules
@@ -151,31 +214,6 @@ spec:
             - mountPath: /var/lib/calico
               name: var-lib-calico
               readOnly: false
-        # This container installs the Calico CNI binaries
-        # and CNI network config file on each node.
-        - name: install-cni
-          image: {{ index .Values.images "calico-cni" }}
-          command: ["/install-cni.sh"]
-          env:
-            # Name of the CNI config file to create.
-            - name: CNI_CONF_NAME
-              value: "10-calico.conflist"
-            # The CNI network config to install on each node.
-            - name: CNI_NETWORK_CONFIG
-              valueFrom:
-                configMapKeyRef:
-                  name: calico-config
-                  key: cni_network_config
-            # Set the hostname based on the k8s node name.
-            - name: KUBERNETES_NODE_NAME
-              valueFrom:
-                fieldRef:
-                  fieldPath: spec.nodeName
-          volumeMounts:
-            - mountPath: /host/opt/cni/bin
-              name: cni-bin-dir
-            - mountPath: /host/etc/cni/net.d
-              name: cni-net-dir
       volumes:
         # Used by calico/node.
         - name: lib-modules
@@ -228,6 +266,7 @@ metadata:
   labels:
     k8s-app: calico-typha
     addonmanager.kubernetes.io/mode: Reconcile
+    garden.sapcloud.io/role: system-component
 spec:
   selector:
     matchLabels:
@@ -244,6 +283,7 @@ spec:
     metadata:
       labels:
         origin: gardener
+        garden.sapcloud.io/role: system-component
         k8s-app: calico-typha
       annotations:
         # This, along with the CriticalAddonsOnly toleration below, marks the pod as a critical
@@ -251,13 +291,20 @@ spec:
         # if it ever gets evicted.
         scheduler.alpha.kubernetes.io/critical-pod: ''
     spec:
+      nodeSelector:
+        beta.kubernetes.io/os: linux
       tolerations:
+      # Mark the pod as a critical add-on for rescheduling.
       - key: CriticalAddonsOnly
         operator: Exists
       # Since Calico can't network a pod until Typha is up, we need to run Typha itself
       # as a host-networked pod.
       hostNetwork: true
-      serviceAccountName: calico-node
+      priorityClassName: system-cluster-critical
+      serviceAccountName: calico-typha
+      securityContext:
+        runAsUser: 65534
+        fsGroup: 65534
       containers:
       - image: {{ index .Values.images "calico-typha" }}
         name: calico-typha
@@ -289,15 +336,19 @@ spec:
           #- name: TYPHA_PROMETHEUSMETRICSPORT
           #  value: "9093"
         livenessProbe:
-          httpGet:
-            path: /liveness
-            port: 9098
+          exec:
+            command:
+            - calico-typha
+            - check
+            - liveness
           periodSeconds: 30
           initialDelaySeconds: 30
         readinessProbe:
-          httpGet:
-            path: /readiness
-            port: 9098
+          exec:
+            command:
+            - calico-typha
+            - check
+            - readiness
           periodSeconds: 10
 
 # Create all the CustomResourceDefinitions needed for

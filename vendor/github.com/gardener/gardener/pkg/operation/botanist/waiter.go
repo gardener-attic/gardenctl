@@ -16,21 +16,25 @@ package botanist
 
 import (
 	"errors"
+	"fmt"
+	"sync"
 	"time"
 
 	gardenv1beta1 "github.com/gardener/gardener/pkg/apis/garden/v1beta1"
 	"github.com/gardener/gardener/pkg/operation/common"
+	"github.com/gardener/gardener/pkg/utils"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
+	"k8s.io/client-go/tools/leaderelection/resourcelock"
 )
 
 // WaitUntilKubeAPIServerServiceIsReady waits until the external load balancer of the kube-apiserver has
 // been created (i.e., its ingress information has been updated in the service status).
 func (b *Botanist) WaitUntilKubeAPIServerServiceIsReady() error {
 	var e error
-	if err := wait.PollImmediate(5*time.Second, 600*time.Second, func() (bool, error) {
+	if err := wait.Poll(5*time.Second, 600*time.Second, func() (bool, error) {
 		loadBalancerIngress, serviceStatusIngress, err := common.GetLoadBalancerIngress(b.K8sSeedClient, b.Shoot.SeedNamespace, common.KubeAPIServerDeploymentName)
 		if err != nil {
 			e = err
@@ -48,20 +52,20 @@ func (b *Botanist) WaitUntilKubeAPIServerServiceIsReady() error {
 
 // WaitUntilEtcdReady waits until the etcd statefulsets indicate readiness in their statuses.
 func (b *Botanist) WaitUntilEtcdReady() error {
-	return wait.PollImmediate(5*time.Second, 300*time.Second, func() (bool, error) {
+	return wait.Poll(5*time.Second, 300*time.Second, func() (bool, error) {
 		statefulSetList, err := b.K8sSeedClient.ListStatefulSets(b.Shoot.SeedNamespace, metav1.ListOptions{
 			LabelSelector: "app=etcd-statefulset",
 		})
 		if err != nil {
 			return false, err
 		}
-		if len(statefulSetList) < 2 {
+		if len(statefulSetList.Items) < 2 {
 			b.Logger.Info("Waiting until the etcd statefulsets gets created...")
 			return false, nil
 		}
 
 		bothEtcdStatefulSetsReady := true
-		for _, statefulSet := range statefulSetList {
+		for _, statefulSet := range statefulSetList.Items {
 			if statefulSet.DeletionTimestamp != nil {
 				continue
 			}
@@ -208,5 +212,127 @@ func (b *Botanist) WaitUntilKubeAddonManagerDeleted() error {
 		}
 		b.Logger.Infof("Waiting until the %s has been deleted in the Seed cluster...", common.KubeAddonManagerDeploymentName)
 		return false, nil
+	})
+}
+
+// WaitUntilClusterAutoscalerDeleted waits until the cluster-autoscaler deployment within the Seed cluster has
+// been deleted.
+func (b *Botanist) WaitUntilClusterAutoscalerDeleted() error {
+	return wait.PollImmediate(5*time.Second, 600*time.Second, func() (bool, error) {
+		if _, err := b.K8sSeedClient.GetDeployment(b.Shoot.SeedNamespace, common.ClusterAutoscalerDeploymentName); err != nil {
+			if apierrors.IsNotFound(err) {
+				return true, nil
+			}
+			return false, err
+		}
+		b.Logger.Infof("Waiting until the %s has been deleted in the Seed cluster...", common.ClusterAutoscalerDeploymentName)
+		return false, nil
+	})
+}
+
+// WaitForControllersToBeActive checks whether the kube-controller-manager and the cloud-controller-manager have
+// recently written to the Endpoint object holding the leader information. If yes, they are active.
+func (b *Botanist) WaitForControllersToBeActive() error {
+	type controllerInfo struct {
+		name          string
+		labelSelector string
+	}
+
+	type checkOutput struct {
+		controllerName string
+		ready          bool
+		err            error
+	}
+
+	var (
+		controllers  = []controllerInfo{}
+		pollInterval = 5 * time.Second
+	)
+
+	// Check whether the cloud-controller-manager deployment exists
+	if _, err := b.K8sSeedClient.GetDeployment(b.Shoot.SeedNamespace, common.CloudControllerManagerDeploymentName); err == nil {
+		controllers = append(controllers, controllerInfo{
+			name:          common.CloudControllerManagerDeploymentName,
+			labelSelector: "app=kubernetes,role=cloud-controller-manager",
+		})
+	} else if err != nil && !apierrors.IsNotFound(err) {
+		return err
+	}
+
+	// Check whether the kube-controller-manager deployment exists
+	if _, err := b.K8sSeedClient.GetDeployment(b.Shoot.SeedNamespace, common.KubeControllerManagerDeploymentName); err == nil {
+		controllers = append(controllers, controllerInfo{
+			name:          common.KubeControllerManagerDeploymentName,
+			labelSelector: "app=kubernetes,role=controller-manager",
+		})
+	} else if err != nil && !apierrors.IsNotFound(err) {
+		return err
+	}
+
+	return utils.Retry(pollInterval, 90*time.Second, func() (bool, bool, error) {
+		var (
+			wg  sync.WaitGroup
+			out = make(chan *checkOutput)
+		)
+
+		for _, controller := range controllers {
+			wg.Add(1)
+
+			go func(controller controllerInfo) {
+				defer wg.Done()
+
+				podList, err := b.K8sSeedClient.ListPods(b.Shoot.SeedNamespace, metav1.ListOptions{
+					LabelSelector: controller.labelSelector,
+				})
+				if err != nil {
+					out <- &checkOutput{controllerName: controller.name, err: err}
+					return
+				}
+
+				// Check that only one replica of the controller exists.
+				if len(podList.Items) != 1 {
+					b.Logger.Infof("Waiting for %s to have exactly one replica", controller.name)
+					out <- &checkOutput{controllerName: controller.name}
+					return
+				}
+				// Check that the existing replica is not in getting deleted.
+				if podList.Items[0].DeletionTimestamp != nil {
+					b.Logger.Infof("Waiting for a new replica of %s", controller.name)
+					out <- &checkOutput{controllerName: controller.name}
+					return
+				}
+
+				// Check if the controller is active by reading its leader election record.
+				leaderElectionRecord, err := common.ReadLeaderElectionRecord(b.K8sShootClient, resourcelock.EndpointsResourceLock, metav1.NamespaceSystem, controller.name)
+				if err != nil {
+					out <- &checkOutput{controllerName: controller.name, err: err}
+					return
+				}
+
+				if delta := metav1.Now().Sub(leaderElectionRecord.RenewTime.Time); delta <= pollInterval-time.Second {
+					out <- &checkOutput{controllerName: controller.name, ready: true}
+					return
+				}
+
+				b.Logger.Infof("Waiting for %s to be active", controller.name)
+				out <- &checkOutput{controllerName: controller.name}
+			}(controller)
+		}
+
+		go func() {
+			wg.Wait()
+			close(out)
+		}()
+
+		for result := range out {
+			if result.err != nil {
+				return false, true, fmt.Errorf("Could not check whether controller %s is active: %+v", result.controllerName, result.err)
+			}
+			if !result.ready {
+				return false, false, fmt.Errorf("Controller %s is not active", result.controllerName)
+			}
+		}
+
+		return true, false, nil
 	})
 }

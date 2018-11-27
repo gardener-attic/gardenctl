@@ -18,7 +18,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"net"
 	"strings"
 
 	"github.com/gardener/gardener/pkg/apis/garden"
@@ -26,13 +25,13 @@ import (
 	admissioninitializer "github.com/gardener/gardener/pkg/apiserver/admission/initializer"
 	informers "github.com/gardener/gardener/pkg/client/garden/informers/internalversion"
 	listers "github.com/gardener/gardener/pkg/client/garden/listers/garden/internalversion"
-	"github.com/gardener/gardener/pkg/operation/common"
+	admissionutils "github.com/gardener/gardener/plugin/pkg/utils"
 	apiequality "k8s.io/apimachinery/pkg/api/equality"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/util/validation/field"
 	"k8s.io/apiserver/pkg/admission"
-	kubeinformers "k8s.io/client-go/informers"
-	kubecorev1listers "k8s.io/client-go/listers/core/v1"
 )
 
 const (
@@ -52,13 +51,13 @@ type ValidateShoot struct {
 	*admission.Handler
 	cloudProfileLister listers.CloudProfileLister
 	seedLister         listers.SeedLister
-	namespaceLister    kubecorev1listers.NamespaceLister
+	shootLister        listers.ShootLister
+	projectLister      listers.ProjectLister
 	readyFunc          admission.ReadyFunc
 }
 
 var (
 	_ = admissioninitializer.WantsInternalGardenInformerFactory(&ValidateShoot{})
-	_ = admissioninitializer.WantsKubeInformerFactory(&ValidateShoot{})
 
 	readyFuncs = []admission.ReadyFunc{}
 )
@@ -81,18 +80,16 @@ func (v *ValidateShoot) SetInternalGardenInformerFactory(f informers.SharedInfor
 	seedInformer := f.Garden().InternalVersion().Seeds()
 	v.seedLister = seedInformer.Lister()
 
+	shootInformer := f.Garden().InternalVersion().Shoots()
+	v.shootLister = shootInformer.Lister()
+
 	cloudProfileInformer := f.Garden().InternalVersion().CloudProfiles()
 	v.cloudProfileLister = cloudProfileInformer.Lister()
 
-	readyFuncs = append(readyFuncs, seedInformer.Informer().HasSynced, cloudProfileInformer.Informer().HasSynced)
-}
+	projectInformer := f.Garden().InternalVersion().Projects()
+	v.projectLister = projectInformer.Lister()
 
-// SetKubeInformerFactory gets Lister from SharedInformerFactory.
-func (v *ValidateShoot) SetKubeInformerFactory(f kubeinformers.SharedInformerFactory) {
-	namespaceInformer := f.Core().V1().Namespaces()
-	v.namespaceLister = namespaceInformer.Lister()
-
-	readyFuncs = append(readyFuncs, namespaceInformer.Informer().HasSynced)
+	readyFuncs = append(readyFuncs, seedInformer.Informer().HasSynced, shootInformer.Informer().HasSynced, cloudProfileInformer.Informer().HasSynced, projectInformer.Informer().HasSynced)
 }
 
 // ValidateInitialization checks whether the plugin was correctly initialized.
@@ -103,8 +100,11 @@ func (v *ValidateShoot) ValidateInitialization() error {
 	if v.seedLister == nil {
 		return errors.New("missing seed lister")
 	}
-	if v.namespaceLister == nil {
-		return errors.New("missing namespace lister")
+	if v.shootLister == nil {
+		return errors.New("missing shoot lister")
+	}
+	if v.projectLister == nil {
+		return errors.New("missing project lister")
 	}
 	return nil
 }
@@ -130,6 +130,12 @@ func (v *ValidateShoot) Admit(a admission.Attributes) error {
 	if a.GetKind().GroupKind() != garden.Kind("Shoot") {
 		return nil
 	}
+
+	// Ignore updates to shoot status or other subresources
+	if a.GetSubresource() != "" {
+		return nil
+	}
+
 	shoot, ok := a.GetObject().(*garden.Shoot)
 	if !ok {
 		return apierrors.NewInternalError(errors.New("could not convert resource into Shoot object"))
@@ -137,37 +143,49 @@ func (v *ValidateShoot) Admit(a admission.Attributes) error {
 
 	cloudProfile, err := v.cloudProfileLister.Get(shoot.Spec.Cloud.Profile)
 	if err != nil {
-		return apierrors.NewBadRequest("could not find referenced cloud profile")
-	}
-	seed, err := v.seedLister.Get(*shoot.Spec.Cloud.Seed)
-	if err != nil {
-		return apierrors.NewBadRequest("could not find referenced seed")
-	}
-	namespace, err := v.namespaceLister.Get(shoot.Namespace)
-	if err != nil {
-		return apierrors.NewBadRequest("could not find referenced namespace")
+		return apierrors.NewBadRequest(fmt.Sprintf("could not find referenced cloud profile: %+v", err.Error()))
 	}
 
-	// We currently use the identifier "shoot-<project-name>-<shoot-name> in nearly all places for old Shoots, but have
-	// changed that to "shoot--<project-name>-<shoot-name>": when creating infrastructure resources, Kubernetes resources,
-	// DNS names, etc., then this identifier is used to tag/name the resources. Some of those resources have length
-	// constraints that this identifier must not exceed 30 characters, thus we need to check whether Shoots do not exceed
-	// this limit. The project name is a label on the namespace. If it is not found, the namespace name itself is used as
-	// project name. These checks should only be performed for CREATE operations (we do not want to reject changes to existing
-	// Shoots in case the limits are changed in the future).
-	if a.GetOperation() == admission.Create {
-		var (
-			projectName = shoot.Namespace
-			lengthLimit = 21
-		)
-		if projectNameLabel, ok := namespace.Labels[common.ProjectName]; ok {
-			projectName = projectNameLabel
+	seed, err := v.seedLister.Get(*shoot.Spec.Cloud.Seed)
+	if err != nil {
+		return apierrors.NewBadRequest(fmt.Sprintf("could not find referenced seed: %+v", err.Error()))
+	}
+
+	var project *garden.Project
+	projectList, err := v.projectLister.List(labels.Everything())
+	if err != nil {
+		return apierrors.NewBadRequest(fmt.Sprintf("could not find referenced project: %+v", err.Error()))
+	}
+	for _, p := range projectList {
+		if p.Spec.Namespace != nil && *p.Spec.Namespace == shoot.Namespace {
+			project = p
+			break
 		}
-		if len(projectName+shoot.Name) > lengthLimit {
-			return apierrors.NewBadRequest(fmt.Sprintf("the length of the shoot name and the project name must not exceed %d characters (project: %s; shoot: %s)", lengthLimit, projectName, shoot.Name))
+	}
+	if project == nil {
+		return apierrors.NewBadRequest("could not find referenced project")
+	}
+
+	switch a.GetOperation() {
+	case admission.Create:
+		// We currently use the identifier "shoot-<project-name>-<shoot-name> in nearly all places for old Shoots, but have
+		// changed that to "shoot--<project-name>-<shoot-name>": when creating infrastructure resources, Kubernetes resources,
+		// DNS names, etc., then this identifier is used to tag/name the resources. Some of those resources have length
+		// constraints that this identifier must not exceed 30 characters, thus we need to check whether Shoots do not exceed
+		// this limit. The project name is a label on the namespace. If it is not found, the namespace name itself is used as
+		// project name. These checks should only be performed for CREATE operations (we do not want to reject changes to existing
+		// Shoots in case the limits are changed in the future).
+		var lengthLimit = 21
+		if len(project.Name+shoot.Name) > lengthLimit {
+			return apierrors.NewBadRequest(fmt.Sprintf("the length of the shoot name and the project name must not exceed %d characters (project: %s; shoot: %s)", lengthLimit, project.Name, shoot.Name))
 		}
-		if strings.Contains(projectName, "--") {
-			return apierrors.NewBadRequest(fmt.Sprintf("the project name must not contain two consecutive hyphens (project: %s)", projectName))
+		if strings.Contains(project.Name, "--") {
+			return apierrors.NewBadRequest(fmt.Sprintf("the project name must not contain two consecutive hyphens (project: %s)", project.Name))
+		}
+
+		// We don't want new Shoots to be created in Projects which were already marked for deletion.
+		if project.DeletionTimestamp != nil {
+			return admission.NewForbidden(a, fmt.Errorf("cannot create shoot '%s' in project '%s' already marked for deletion", shoot.Name, project.Name))
 		}
 	}
 
@@ -203,6 +221,9 @@ func (v *ValidateShoot) Admit(a admission.Attributes) error {
 					},
 					OpenStack: &garden.OpenStackCloud{
 						MachineImage: &garden.OpenStackMachineImage{},
+					},
+					Alicloud: &garden.Alicloud{
+						MachineImage: &garden.AlicloudMachineImage{},
 					},
 				},
 			},
@@ -265,26 +286,30 @@ func (v *ValidateShoot) Admit(a admission.Attributes) error {
 			shoot.Spec.Cloud.OpenStack.MachineImage = image
 		}
 		allErrs = validateOpenStack(validationContext)
+
+	case garden.CloudProviderAlicloud:
+		if shoot.Spec.Cloud.Alicloud.MachineImage == nil {
+			image, err := getAliCloudMachineImage(shoot, cloudProfile)
+			if err != nil {
+				return apierrors.NewBadRequest(err.Error())
+			}
+			shoot.Spec.Cloud.Alicloud.MachineImage = image
+		}
+		allErrs = validateAlicloud(validationContext)
 	}
+
+	dnsErrors, err := validateDNSConfiguration(v.shootLister, shoot.Name, shoot.Spec.DNS)
+	if err != nil {
+		return apierrors.NewInternalError(err)
+	}
+	allErrs = append(allErrs, dnsErrors...)
 
 	if len(allErrs) > 0 {
 		return admission.NewForbidden(a, fmt.Errorf("%+v", allErrs))
 	}
 
-	// Add createdBy annotation to Shoot
-	if a.GetOperation() == admission.Create {
-		annotations := shoot.Annotations
-		if annotations == nil {
-			annotations = map[string]string{}
-		}
-		annotations[common.GardenCreatedBy] = a.GetUserInfo().GetName()
-		shoot.Annotations = annotations
-	}
-
 	return nil
 }
-
-// Cloud specific validation
 
 type validationContext struct {
 	cloudProfile *garden.CloudProfile
@@ -299,7 +324,7 @@ func validateAWS(c *validationContext) field.ErrorList {
 		path    = field.NewPath("spec", "cloud", "aws")
 	)
 
-	allErrs = append(allErrs, validateNetworkDisjointedness(c.seed.Spec.Networks, c.shoot.Spec.Cloud.AWS.Networks.K8SNetworks, path.Child("networks"))...)
+	allErrs = append(allErrs, admissionutils.ValidateNetworkDisjointedness(c.seed.Spec.Networks, c.shoot.Spec.Cloud.AWS.Networks.K8SNetworks, path.Child("networks"))...)
 
 	if ok, validDNSProviders := validateDNSConstraints(c.cloudProfile.Spec.AWS.Constraints.DNSProviders, c.shoot.Spec.DNS.Provider, c.oldShoot.Spec.DNS.Provider); !ok {
 		allErrs = append(allErrs, field.NotSupported(field.NewPath("spec", "dns", "provider"), c.shoot.Spec.DNS.Provider, validDNSProviders))
@@ -349,7 +374,7 @@ func validateAzure(c *validationContext) field.ErrorList {
 		path    = field.NewPath("spec", "cloud", "azure")
 	)
 
-	allErrs = append(allErrs, validateNetworkDisjointedness(c.seed.Spec.Networks, c.shoot.Spec.Cloud.Azure.Networks.K8SNetworks, path.Child("networks"))...)
+	allErrs = append(allErrs, admissionutils.ValidateNetworkDisjointedness(c.seed.Spec.Networks, c.shoot.Spec.Cloud.Azure.Networks.K8SNetworks, path.Child("networks"))...)
 
 	if ok, validDNSProviders := validateDNSConstraints(c.cloudProfile.Spec.Azure.Constraints.DNSProviders, c.shoot.Spec.DNS.Provider, c.oldShoot.Spec.DNS.Provider); !ok {
 		allErrs = append(allErrs, field.NotSupported(field.NewPath("spec", "dns", "provider"), c.shoot.Spec.DNS.Provider, validDNSProviders))
@@ -395,7 +420,7 @@ func validateGCP(c *validationContext) field.ErrorList {
 		path    = field.NewPath("spec", "cloud", "gcp")
 	)
 
-	allErrs = append(allErrs, validateNetworkDisjointedness(c.seed.Spec.Networks, c.shoot.Spec.Cloud.GCP.Networks.K8SNetworks, path.Child("networks"))...)
+	allErrs = append(allErrs, admissionutils.ValidateNetworkDisjointedness(c.seed.Spec.Networks, c.shoot.Spec.Cloud.GCP.Networks.K8SNetworks, path.Child("networks"))...)
 
 	if ok, validDNSProviders := validateDNSConstraints(c.cloudProfile.Spec.GCP.Constraints.DNSProviders, c.shoot.Spec.DNS.Provider, c.oldShoot.Spec.DNS.Provider); !ok {
 		allErrs = append(allErrs, field.NotSupported(field.NewPath("spec", "dns", "provider"), c.shoot.Spec.DNS.Provider, validDNSProviders))
@@ -445,7 +470,7 @@ func validateOpenStack(c *validationContext) field.ErrorList {
 		path    = field.NewPath("spec", "cloud", "openstack")
 	)
 
-	allErrs = append(allErrs, validateNetworkDisjointedness(c.seed.Spec.Networks, c.shoot.Spec.Cloud.OpenStack.Networks.K8SNetworks, path.Child("networks"))...)
+	allErrs = append(allErrs, admissionutils.ValidateNetworkDisjointedness(c.seed.Spec.Networks, c.shoot.Spec.Cloud.OpenStack.Networks.K8SNetworks, path.Child("networks"))...)
 
 	if ok, validDNSProviders := validateDNSConstraints(c.cloudProfile.Spec.OpenStack.Constraints.DNSProviders, c.shoot.Spec.DNS.Provider, c.oldShoot.Spec.DNS.Provider); !ok {
 		allErrs = append(allErrs, field.NotSupported(field.NewPath("spec", "dns", "provider"), c.shoot.Spec.DNS.Provider, validDNSProviders))
@@ -492,12 +517,60 @@ func validateOpenStack(c *validationContext) field.ErrorList {
 	return allErrs
 }
 
-// Helper functions
+func validateAlicloud(c *validationContext) field.ErrorList {
+	var (
+		allErrs = field.ErrorList{}
+		path    = field.NewPath("spec", "cloud", "alicloud")
+	)
 
-func networksIntersect(cidr1, cidr2 garden.CIDR) bool {
-	_, net1, err1 := net.ParseCIDR(string(cidr1))
-	_, net2, err2 := net.ParseCIDR(string(cidr2))
-	return err1 != nil || err2 != nil || net2.Contains(net1.IP) || net1.Contains(net2.IP)
+	allErrs = append(allErrs, admissionutils.ValidateNetworkDisjointedness(c.seed.Spec.Networks, c.shoot.Spec.Cloud.Alicloud.Networks.K8SNetworks, path.Child("networks"))...)
+
+	if ok, validDNSProviders := validateDNSConstraints(c.cloudProfile.Spec.Alicloud.Constraints.DNSProviders, c.shoot.Spec.DNS.Provider, c.oldShoot.Spec.DNS.Provider); !ok {
+		allErrs = append(allErrs, field.NotSupported(field.NewPath("spec", "dns", "provider"), c.shoot.Spec.DNS.Provider, validDNSProviders))
+	}
+	if ok, validKubernetesVersions := validateKubernetesVersionConstraints(c.cloudProfile.Spec.Alicloud.Constraints.Kubernetes.Versions, c.shoot.Spec.Kubernetes.Version, c.oldShoot.Spec.Kubernetes.Version); !ok {
+		allErrs = append(allErrs, field.NotSupported(field.NewPath("spec", "kubernetes", "version"), c.shoot.Spec.Kubernetes.Version, validKubernetesVersions))
+	}
+	if ok, validMachineImages := validateAlicloudMachineImagesConstraints(c.cloudProfile.Spec.Alicloud.Constraints.MachineImages, c.shoot.Spec.Cloud.Alicloud.MachineImage, c.oldShoot.Spec.Cloud.Alicloud.MachineImage); !ok {
+		allErrs = append(allErrs, field.NotSupported(path.Child("machineImage"), *c.shoot.Spec.Cloud.Alicloud.MachineImage, validMachineImages))
+	}
+
+	for i, worker := range c.shoot.Spec.Cloud.Alicloud.Workers {
+		var oldWorker = garden.AlicloudWorker{}
+		for _, ow := range c.oldShoot.Spec.Cloud.Alicloud.Workers {
+			if ow.Name == worker.Name {
+				oldWorker = ow
+				break
+			}
+		}
+
+		idxPath := path.Child("workers").Index(i)
+		if ok, validMachineTypes := validateAlicloudMachineTypes(c.cloudProfile.Spec.Alicloud.Constraints.MachineTypes, worker.MachineType, oldWorker.MachineType); !ok {
+			allErrs = append(allErrs, field.NotSupported(idxPath.Child("machineType"), worker.MachineType, validMachineTypes))
+		}
+		if ok, machineType, validZones := validateAlicloudMachineTypesAvailableInZones(c.cloudProfile.Spec.Alicloud.Constraints.MachineTypes, worker.MachineType, oldWorker.MachineType, c.shoot.Spec.Cloud.Alicloud.Zones); !ok {
+			allErrs = append(allErrs, field.Invalid(idxPath.Child("machineType"), worker.MachineType, fmt.Sprintf("only zones %v define machine type %s", validZones, machineType)))
+		}
+		if ok, validateVolumeTypes := validateAlicloudVolumeTypes(c.cloudProfile.Spec.Alicloud.Constraints.VolumeTypes, worker.VolumeType, oldWorker.VolumeType); !ok {
+			allErrs = append(allErrs, field.NotSupported(idxPath.Child("volumeType"), worker.VolumeType, validateVolumeTypes))
+		}
+		if ok, volumeType, validZones := validateAlicloudVolumeTypesAvailableInZones(c.cloudProfile.Spec.Alicloud.Constraints.VolumeTypes, worker.VolumeType, oldWorker.VolumeType, c.shoot.Spec.Cloud.Alicloud.Zones); !ok {
+			allErrs = append(allErrs, field.Invalid(idxPath.Child("volumeType"), worker.VolumeType, fmt.Sprintf("only zones %v define volume type %s", validZones, volumeType)))
+		}
+	}
+
+	for i, zone := range c.shoot.Spec.Cloud.Alicloud.Zones {
+		idxPath := path.Child("zones").Index(i)
+		if ok, validZones := validateZones(c.cloudProfile.Spec.Alicloud.Constraints.Zones, c.shoot.Spec.Cloud.Region, zone); !ok {
+			if len(validZones) == 0 {
+				allErrs = append(allErrs, field.Invalid(idxPath, c.shoot.Spec.Cloud.Region, "this region is not allowed"))
+			} else {
+				allErrs = append(allErrs, field.NotSupported(idxPath, zone, validZones))
+			}
+		}
+	}
+
+	return allErrs
 }
 
 func validateDNSConstraints(constraints []garden.DNSProviderConstraint, provider, oldProvider garden.DNSProvider) (bool, []string) {
@@ -515,6 +588,35 @@ func validateDNSConstraints(constraints []garden.DNSProviderConstraint, provider
 	}
 
 	return false, validValues
+}
+
+func validateDNSConfiguration(shootLister listers.ShootLister, name string, dns garden.DNS) (field.ErrorList, error) {
+	var (
+		allErrs = field.ErrorList{}
+		dnsPath = field.NewPath("spec", "dns", "domain")
+	)
+
+	if dns.Domain == nil {
+		allErrs = append(allErrs, field.Required(dnsPath, "domain field is required"))
+		return allErrs, nil
+	}
+
+	shoots, err := shootLister.Shoots(metav1.NamespaceAll).List(labels.Everything())
+	if err != nil {
+		return allErrs, err
+	}
+
+	for _, shoot := range shoots {
+		if shoot.Name == name {
+			continue
+		}
+		if domain := shoot.Spec.DNS.Domain; domain != nil && *domain == *dns.Domain {
+			allErrs = append(allErrs, field.Duplicate(dnsPath, *dns.Domain))
+			break
+		}
+	}
+
+	return allErrs, nil
 }
 
 func validateKubernetesVersionConstraints(constraints []string, version, oldVersion string) (bool, []string) {
@@ -542,6 +644,9 @@ func validateMachineTypes(constraints []garden.MachineType, machineType, oldMach
 	validValues := []string{}
 
 	for _, t := range constraints {
+		if t.Usable != nil && !*t.Usable {
+			continue
+		}
 		validValues = append(validValues, t.Name)
 		if t.Name == machineType {
 			return true, nil
@@ -560,20 +665,54 @@ func validateOpenStackMachineTypes(constraints []garden.OpenStackMachineType, ma
 	return validateMachineTypes(machineTypes, machineType, oldMachineType)
 }
 
-func validateNetworkDisjointedness(seedNetworks garden.SeedNetworks, k8sNetworks garden.K8SNetworks, fldPath *field.Path) field.ErrorList {
-	allErrs := field.ErrorList{}
-
-	if yes := networksIntersect(seedNetworks.Nodes, *k8sNetworks.Nodes); yes {
-		allErrs = append(allErrs, field.Invalid(fldPath.Child("nodes"), *k8sNetworks.Nodes, "shoot node network intersects with seed node network"))
-	}
-	if yes := networksIntersect(seedNetworks.Pods, *k8sNetworks.Pods); yes {
-		allErrs = append(allErrs, field.Invalid(fldPath.Child("nodes"), *k8sNetworks.Pods, "shoot pod network intersects with seed pod network"))
-	}
-	if yes := networksIntersect(seedNetworks.Services, *k8sNetworks.Services); yes {
-		allErrs = append(allErrs, field.Invalid(fldPath.Child("nodes"), *k8sNetworks.Services, "shoot service network intersects with seed service network"))
+func validateAlicloudMachineTypes(constraints []garden.AlicloudMachineType, machineType, oldMachineType string) (bool, []string) {
+	machineTypes := []garden.MachineType{}
+	for _, t := range constraints {
+		machineTypes = append(machineTypes, t.MachineType)
 	}
 
-	return allErrs
+	return validateMachineTypes(machineTypes, machineType, oldMachineType)
+}
+
+// To check whether machine type of worker is available in zones of the shoot,
+// because in alicloud different zones may have different machine type
+func validateAlicloudMachineTypesAvailableInZones(constraints []garden.AlicloudMachineType, machineType, oldMachineType string, zones []string) (bool, string, []string) {
+	if machineType == oldMachineType {
+		return true, "", nil
+	}
+
+	for _, constraint := range constraints {
+		if constraint.Name == machineType {
+			ok, validValues := zonesCovered(zones, constraint.Zones)
+			if !ok {
+				return ok, machineType, validValues
+			}
+		}
+	}
+
+	return true, "", nil
+}
+
+// To check whether subzones are all covered by zones
+func zonesCovered(subzones, zones []string) (bool, []string) {
+	var (
+		covered     bool
+		validValues []string
+	)
+
+	for _, zoneS := range subzones {
+		covered = false
+		validValues = []string{}
+		for _, zoneL := range zones {
+			validValues = append(validValues, zoneL)
+			if zoneS == zoneL {
+				covered = true
+				break
+			}
+		}
+	}
+
+	return covered, validValues
 }
 
 func validateVolumeTypes(constraints []garden.VolumeType, volumeType, oldVolumeType string) (bool, []string) {
@@ -584,6 +723,9 @@ func validateVolumeTypes(constraints []garden.VolumeType, volumeType, oldVolumeT
 	validValues := []string{}
 
 	for _, v := range constraints {
+		if v.Usable != nil && !*v.Usable {
+			continue
+		}
 		validValues = append(validValues, v.Name)
 		if v.Name == volumeType {
 			return true, nil
@@ -591,6 +733,34 @@ func validateVolumeTypes(constraints []garden.VolumeType, volumeType, oldVolumeT
 	}
 
 	return false, validValues
+}
+
+func validateAlicloudVolumeTypes(constraints []garden.AlicloudVolumeType, volumeType, oldVolumeType string) (bool, []string) {
+	volumeTypes := []garden.VolumeType{}
+	for _, t := range constraints {
+		volumeTypes = append(volumeTypes, t.VolumeType)
+	}
+
+	return validateVolumeTypes(volumeTypes, volumeType, oldVolumeType)
+}
+
+//To check whether volume type of worker is available in zones of the shoot,
+//because in alicloud different zones may have different volume type
+func validateAlicloudVolumeTypesAvailableInZones(constraints []garden.AlicloudVolumeType, volumeType, oldVolumeType string, zones []string) (bool, string, []string) {
+	if volumeType == oldVolumeType {
+		return true, "", nil
+	}
+
+	for _, constraint := range constraints {
+		if constraint.Name == volumeType {
+			ok, validValues := zonesCovered(zones, constraint.Zones)
+			if !ok {
+				return ok, volumeType, validValues
+			}
+		}
+	}
+
+	return true, "", nil
 }
 
 func validateZones(constraints []garden.Zone, region, zone string) (bool, []string) {
@@ -758,6 +928,31 @@ func getOpenStackMachineImage(shoot *garden.Shoot, cloudProfile *garden.CloudPro
 }
 
 func validateOpenStackMachineImagesConstraints(constraints []garden.OpenStackMachineImage, image, oldImage *garden.OpenStackMachineImage) (bool, []string) {
+	if apiequality.Semantic.DeepEqual(*image, *oldImage) {
+		return true, nil
+	}
+
+	validValues := []string{}
+
+	for _, v := range constraints {
+		validValues = append(validValues, fmt.Sprintf("%+v", v))
+		if apiequality.Semantic.DeepEqual(v, *image) {
+			return true, nil
+		}
+	}
+
+	return false, validValues
+}
+
+func getAliCloudMachineImage(shoot *garden.Shoot, cloudProfile *garden.CloudProfile) (*garden.AlicloudMachineImage, error) {
+	machineImages := cloudProfile.Spec.Alicloud.Constraints.MachineImages
+	if len(machineImages) != 1 {
+		return nil, errors.New("must provide a value for .spec.cloud.alicloud.machineImage as the referenced cloud profile contains more than one")
+	}
+	return &machineImages[0], nil
+}
+
+func validateAlicloudMachineImagesConstraints(constraints []garden.AlicloudMachineImage, image, oldImage *garden.AlicloudMachineImage) (bool, []string) {
 	if apiequality.Semantic.DeepEqual(*image, *oldImage) {
 		return true, nil
 	}

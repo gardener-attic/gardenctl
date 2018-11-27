@@ -1,8 +1,12 @@
 #!/bin/bash -eu
 
 # install python requirements if needed
-if ! pip list 2>&1 | grep Mako &>/dev/null; then
+if ! pip list 2>&1 | grep -i Mako &>/dev/null; then
   pip install Mako
+fi
+
+if ! pip list 2>&1 | grep -i PyYaml &>/dev/null; then
+  pip install PyYaml
 fi
 
 PATH_TEMPLATES="$(dirname $0)/templates/resources"
@@ -11,7 +15,7 @@ PATH_EXAMPLES="$(dirname $0)/../example"
 mkdir -p "$PATH_EXAMPLES"
 
 # render cloud-specific templates
-for cloud in aws azure gcp openstack local; do
+for cloud in aws azure gcp alicloud openstack local; do
   echo "* Rendering manifests for cloud '$cloud':"
   for resource in 30-cloudprofile 40-secret-seed 50-seed 70-secret-cloudprovider 80-secretbinding-cloudprovider 90-shoot; do
     echo "  * Template '$resource' rendered."
@@ -21,7 +25,7 @@ for cloud in aws azure gcp openstack local; do
 done
 
 # render cloud-independent templates
-for template in 60-quota; do
+for template in 05-project-dev 60-quota 95-configmap-custom-audit-policy; do
   echo "* Template '$template' rendered."
   mako-render "$PATH_TEMPLATES/$template.yaml.tpl" > "$PATH_EXAMPLES/$template.yaml"
 done

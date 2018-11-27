@@ -22,6 +22,7 @@ import (
 
 	"github.com/gardener/gardener/pkg/apis/componentconfig"
 	gardenv1beta1 "github.com/gardener/gardener/pkg/apis/garden/v1beta1"
+	"github.com/gardener/gardener/pkg/apis/garden/v1beta1/helper"
 	gardeninformers "github.com/gardener/gardener/pkg/client/garden/informers/externalversions/garden/v1beta1"
 	"github.com/gardener/gardener/pkg/client/kubernetes"
 	controllerutils "github.com/gardener/gardener/pkg/controller/utils"
@@ -147,7 +148,7 @@ func (c *defaultControl) ReconcileBackupInfrastructure(obj *gardenv1beta1.Backup
 		backupInfrastructure       = obj.DeepCopy()
 		backupInfrastructureLogger = logger.NewFieldLogger(logger.Logger, "backupinfrastructure", fmt.Sprintf("%s/%s", backupInfrastructure.Namespace, backupInfrastructure.Name))
 		lastOperation              = backupInfrastructure.Status.LastOperation
-		operationType              = controllerutils.ComputeOperationType(lastOperation)
+		operationType              = controllerutils.ComputeOperationType(obj.ObjectMeta, lastOperation)
 	)
 
 	logger.Logger.Infof("[BACKUPINFRASTRUCTURE RECONCILE] %s", key)
@@ -166,27 +167,27 @@ func (c *defaultControl) ReconcileBackupInfrastructure(obj *gardenv1beta1.Backup
 	if backupInfrastructure.DeletionTimestamp != nil {
 		gracePeriod := time.Hour * 24 * time.Duration(*c.config.Controllers.BackupInfrastructure.DeletionGracePeriodDays)
 		if time.Now().Sub(backupInfrastructure.DeletionTimestamp.Time) > gracePeriod {
-			if updateErr := c.updateBackupInfrastructureStatus(op, gardenv1beta1.ShootLastOperationStateProcessing, gardenv1beta1.ShootLastOperationTypeDelete, "Deletion of Backup Infrastructure in progress.", 1, nil); updateErr != nil {
+			if updateErr := c.updateBackupInfrastructureStatus(op, gardenv1beta1.ShootLastOperationStateProcessing, operationType, "Deletion of Backup Infrastructure in progress.", 1, nil); updateErr != nil {
 				backupInfrastructureLogger.Errorf("Could not update the BackupInfrastructure status after deletion start: %+v", updateErr)
 				return updateErr
 			}
 
 			if deleteErr := c.deleteBackupInfrastructure(op); deleteErr != nil {
 				c.recorder.Eventf(backupInfrastructure, corev1.EventTypeWarning, gardenv1beta1.EventDeleteError, "%s", deleteErr.Description)
-				if updateErr := c.updateBackupInfrastructureStatus(op, gardenv1beta1.ShootLastOperationStateError, gardenv1beta1.ShootLastOperationTypeDelete, deleteErr.Description+" Operation will be retried.", 1, deleteErr); updateErr != nil {
+				if updateErr := c.updateBackupInfrastructureStatus(op, gardenv1beta1.ShootLastOperationStateError, operationType, deleteErr.Description+" Operation will be retried.", 1, deleteErr); updateErr != nil {
 					backupInfrastructureLogger.Errorf("Could not update the BackupInfrastructure status after deletion error: %+v", updateErr)
 					return updateErr
 				}
 				return errors.New(deleteErr.Description)
 			}
-			if updateErr := c.updateBackupInfrastructureStatus(op, gardenv1beta1.ShootLastOperationStateSucceeded, gardenv1beta1.ShootLastOperationTypeDelete, "Backup Infrastructure has been successfully deleted.", 100, nil); updateErr != nil {
+			if updateErr := c.updateBackupInfrastructureStatus(op, gardenv1beta1.ShootLastOperationStateSucceeded, operationType, "Backup Infrastructure has been successfully deleted.", 100, nil); updateErr != nil {
 				backupInfrastructureLogger.Errorf("Could not update the BackupInfrastructure status after deletion successful: %+v", updateErr)
 				return updateErr
 			}
 			return c.removeFinalizer(op)
 		}
 
-		if updateErr := c.updateBackupInfrastructureStatus(op, gardenv1beta1.ShootLastOperationStatePending, gardenv1beta1.ShootLastOperationTypeDelete, fmt.Sprintf("Deletion of backup infrastructure is scheduled for %s", backupInfrastructure.DeletionTimestamp.Time.Add(gracePeriod)), 1, nil); updateErr != nil {
+		if updateErr := c.updateBackupInfrastructureStatus(op, gardenv1beta1.ShootLastOperationStatePending, operationType, fmt.Sprintf("Deletion of backup infrastructure is scheduled for %s", backupInfrastructure.DeletionTimestamp.Time.Add(gracePeriod)), 1, nil); updateErr != nil {
 			backupInfrastructureLogger.Errorf("Could not update the BackupInfrastructure status after suspending deletion: %+v", updateErr)
 			return updateErr
 		}
@@ -227,18 +228,38 @@ func (c *defaultControl) reconcileBackupInfrastructure(o *operation.Operation) *
 	}
 
 	var (
-		defaultRetry = 30 * time.Second
+		defaultTimeout  = 30 * time.Second
+		defaultInterval = 5 * time.Second
 
-		f                     = flow.New("Backup Infrastructure creation").SetProgressReporter(o.ReportBackupInfrastructureProgress).SetLogger(o.Logger)
-		deployBackupNamespace = f.AddTask(botanist.DeployBackupNamespace, defaultRetry)
-		_                     = f.AddTask(seedCloudBotanist.DeployBackupInfrastructure, 0, deployBackupNamespace)
+		g = flow.NewGraph("Backup Infrastructure Creation")
+
+		deployBackupNamespace = g.Add(flow.Task{
+			Name: "Deploying backup namespace",
+			Fn:   flow.TaskFn(botanist.DeployBackupNamespace).RetryUntilTimeout(defaultInterval, defaultTimeout),
+		})
+
+		_ = g.Add(flow.Task{
+			Name:         "Deploying backup infrastructure",
+			Fn:           flow.TaskFn(seedCloudBotanist.DeployBackupInfrastructure),
+			Dependencies: flow.NewTaskIDs(deployBackupNamespace),
+		})
+
+		f = g.Compile()
 	)
-	if e := f.Execute(); e != nil {
-		e.Description = fmt.Sprintf("Failed to reconcile Backup Infrastructure state: %s", e.Description)
-		return e
+	err = f.Run(flow.Opts{
+		Logger:           o.Logger,
+		ProgressReporter: o.ReportBackupInfrastructureProgress,
+	})
+	if err != nil {
+		o.Logger.Errorf("Failed to reconcile backup infrastructure %q: %+v", o.BackupInfrastructure.Name, err)
+
+		return &gardenv1beta1.LastError{
+			Codes:       helper.ExtractErrorCodes(flow.Causes(err)),
+			Description: helper.FormatLastErrDescription(err),
+		}
 	}
 
-	o.Logger.Infof("Successfully reconciled Backup Infrastructure state '%s'", o.BackupInfrastructure.Name)
+	o.Logger.Infof("Successfully reconciled backup infrastructure %q", o.BackupInfrastructure.Name)
 	return nil
 }
 
@@ -271,19 +292,40 @@ func (c *defaultControl) deleteBackupInfrastructure(o *operation.Operation) *gar
 	// that would have already been done.
 	var (
 		cleanupBackupInfrastructureResources = namespace.Status.Phase != corev1.NamespaceTerminating
-		defaultRetry                         = 30 * time.Second
+		defaultInterval                      = 5 * time.Second
+		defaultTimeout                       = 30 * time.Second
 
-		f                           = flow.New("Backup infrastructure deletion").SetProgressReporter(o.ReportBackupInfrastructureProgress).SetLogger(o.Logger)
-		destroyBackupInfrastructure = f.AddTaskConditional(seedCloudBotanist.DestroyBackupInfrastructure, 0, cleanupBackupInfrastructureResources)
-		deleteBackupNamespace       = f.AddTask(botanist.DeleteBackupNamespace, defaultRetry, destroyBackupInfrastructure)
-		_                           = f.AddTask(botanist.WaitUntilBackupNamespaceDeleted, 0, deleteBackupNamespace)
+		g                           = flow.NewGraph("Backup infrastructure deletion")
+		destroyBackupInfrastructure = g.Add(flow.Task{
+			Name: "Destroying backup infrastructure",
+			Fn:   flow.TaskFn(seedCloudBotanist.DestroyBackupInfrastructure).DoIf(cleanupBackupInfrastructureResources),
+		})
+		deleteBackupNamespace = g.Add(flow.Task{
+			Name:         "Deleting backup namespace",
+			Fn:           flow.TaskFn(botanist.DeleteBackupNamespace).RetryUntilTimeout(defaultInterval, defaultTimeout),
+			Dependencies: flow.NewTaskIDs(destroyBackupInfrastructure),
+		})
+		_ = g.Add(flow.Task{
+			Name:         "Waiting until backup namespace is deleted",
+			Fn:           botanist.WaitUntilBackupNamespaceDeleted,
+			Dependencies: flow.NewTaskIDs(deleteBackupNamespace),
+		})
+		f = g.Compile()
 	)
-	if e := f.Execute(); e != nil {
-		e.Description = fmt.Sprintf("Failed to delete Backup Infrastructure: %s", e.Description)
-		return e
+	err = f.Run(flow.Opts{
+		Logger:           o.Logger,
+		ProgressReporter: o.ReportBackupInfrastructureProgress,
+	})
+	if err != nil {
+		o.Logger.Errorf("Failed to delete backup infrastructure %q: %+v", o.BackupInfrastructure.Name, err)
+
+		return &gardenv1beta1.LastError{
+			Codes:       helper.ExtractErrorCodes(err),
+			Description: err.Error(),
+		}
 	}
 
-	o.Logger.Infof("Successfully deleted Backup Infrastructure '%s'", o.BackupInfrastructure.Name)
+	o.Logger.Infof("Successfully deleted backup infrastructure %q", o.BackupInfrastructure.Name)
 	return nil
 }
 

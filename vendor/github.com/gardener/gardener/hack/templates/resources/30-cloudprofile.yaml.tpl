@@ -6,7 +6,7 @@
     values=yaml.load(open(context.get("values", "")))
 
   if context.get("cloud", "") == "":
-    raise Exception("missing --var cloud={aws,azure,gcp,openstack,local} flag")
+    raise Exception("missing --var cloud={aws,azure,gcp,alicloud,openstack,local} flag")
 
   def value(path, default):
     keys=str.split(path, ".")
@@ -28,6 +28,8 @@
     region="westeurope"
   elif cloud == "gcp":
     region="europe-west1"
+  elif cloud == "alicloud":
+    region="cn-beijing"
   elif cloud == "openstack" or cloud == "os":
     region="europe-1"
   elif cloud == "local":
@@ -67,10 +69,10 @@ spec:<% caBundle=value("spec.caBundle", "") %>
         % if kubernetesVersions != []:
         ${yaml.dump(kubernetesVersions, width=10000)}
         % else:
-        - 1.11.1
-        - 1.10.5
-        - 1.9.8
-        - 1.8.14
+        - 1.12.1
+        - 1.11.3
+        - 1.10.8
+        - 1.9.11
         % endif
       machineImages:<% machineImages=value("spec.aws.constraints.machineImages", []) %>
       % if machineImages != []:
@@ -91,26 +93,32 @@ spec:<% caBundle=value("spec.caBundle", "") %>
         cpu: "2"
         gpu: "0"
         memory: 8Gi
+        usable: true
       - name: m4.xlarge
         cpu: "4"
         gpu: "0"
         memory: 16Gi
+        usable: true
       - name: m4.2xlarge
         cpu: "8"
         gpu: "0"
         memory: 32Gi
+        usable: true
       - name: m4.4xlarge
         cpu: "16"
         gpu: "0"
         memory: 64Gi
+        usable: true
       - name: m4.10xlarge
         cpu: "40"
         gpu: "0"
         memory: 160Gi
+        usable: true
       - name: m4.16xlarge
         cpu: "64"
         gpu: "0"
         memory: 256Gi
+        usable: false
       - name: p2.xlarge
         cpu: "4"
         gpu: "1"
@@ -130,8 +138,10 @@ spec:<% caBundle=value("spec.caBundle", "") %>
       % else:
       - name: gp2
         class: standard
+        usable: true
       - name: io1
         class: premium
+        usable: false
       % endif
       zones:<% zones=value("spec.aws.constraints.zones", []) %>
       % if zones != []:
@@ -164,10 +174,10 @@ spec:<% caBundle=value("spec.caBundle", "") %>
         % if kubernetesVersions != []:
         ${yaml.dump(kubernetesVersions, width=10000)}
         % else:
-        - 1.11.1
-        - 1.10.5
-        - 1.9.8
-        - 1.8.14
+        - 1.12.1
+        - 1.11.3
+        - 1.10.8
+        - 1.9.11
         % endif
       machineImages:<% machineImages=value("spec.azure.constraints.machineImages", []) %>
         % if machineImages != []:
@@ -187,18 +197,22 @@ spec:<% caBundle=value("spec.caBundle", "") %>
         cpu: "2"
         gpu: "0"
         memory: 7Gi
+        usable: true
       - name: Standard_DS3_v2
         cpu: "4"
         gpu: "0"
         memory: 14Gi
+        usable: true
       - name: Standard_DS4_v2
         cpu: "8"
         gpu: "0"
         memory: 28Gi
+        usable: true
       - name: Standard_DS5_v2
         cpu: "16"
         gpu: "0"
         memory: 56Gi
+        usable: false
       - name: Standard_F2s
         cpu: "2"
         gpu: "0"
@@ -222,8 +236,10 @@ spec:<% caBundle=value("spec.caBundle", "") %>
       % else:
       - name: standard
         class: standard
+        usable: true
       - name: premium
         class: premium
+        usable: false
       % endif
     countUpdateDomains:<% countUpdateDomains=value("spec.azure.countUpdateDomains", []) %>
     % if countUpdateDomains != []:
@@ -259,10 +275,10 @@ spec:<% caBundle=value("spec.caBundle", "") %>
         % if kubernetesVersions != []:
         ${yaml.dump(kubernetesVersions, width=10000)}
         % else:
-        - 1.11.1
-        - 1.10.5
-        - 1.9.8
-        - 1.8.14
+        - 1.12.1
+        - 1.11.3
+        - 1.10.8
+        - 1.9.11
         % endif
       machineImages:<% machineImages=value("spec.gcp.constraints.machineImages", []) %>
       % if machineImages != []:
@@ -279,26 +295,32 @@ spec:<% caBundle=value("spec.caBundle", "") %>
         cpu: "2"
         gpu: "0"
         memory: 7500Mi
+        usable: true
       - name: n1-standard-4
         cpu: "4"
         gpu: "0"
         memory: 15Gi
+        usable: true
       - name: n1-standard-8
         cpu: "8"
         gpu: "0"
         memory: 30Gi
+        usable: true
       - name: n1-standard-16
         cpu: "16"
         gpu: "0"
         memory: 60Gi
+        usable: true
       - name: n1-standard-32
         cpu: "32"
         gpu: "0"
         memory: 120Gi
+        usable: true
       - name: n1-standard-64
         cpu: "64"
         gpu: "0"
         memory: 240Gi
+        usable: false
       % endif
       volumeTypes:<% volumeTypes=value("spec.gcp.constraints.volumeTypes", []) %>
       % if volumeTypes != []:
@@ -306,8 +328,10 @@ spec:<% caBundle=value("spec.caBundle", "") %>
       % else:
       - name: pd-standard
         class: standard
+        usable: true
       - name: pd-ssd
         class: premium
+        usable: false
       % endif
       zones:<% zones=value("spec.gcp.constraints.zones", []) %>
       % if zones != []:
@@ -324,6 +348,89 @@ spec:<% caBundle=value("spec.caBundle", "") %>
         - us-east1-c
         - us-east1-d
     % endif
+  % endif
+  % if cloud == "alicloud":
+  alicloud:
+    constraints:
+      dnsProviders:<% dnsProviders=value("spec.alicloud.constraints.dnsProviders", []) %>
+      % if dnsProviders != []:
+      ${yaml.dump(dnsProviders, width=10000)}
+      % else:
+      - name: aws-route53
+      - name: unmanaged
+      % endif
+      kubernetes:<% kubernetesVersions=value("spec.alicloud.constraints.kubernetes.versions", []) %>
+        % if kubernetesVersions != []:
+        ${yaml.dump(kubernetesVersions, width=10000)}
+        % else:
+        versions:
+        - 1.12.1
+        - 1.11.3
+        - 1.10.8
+        % endif
+      machineImages:<% machineImages=value("spec.alicloud.constraints.machineImages", []) %>
+      % if machineImages != []:
+      ${yaml.dump(machineImages, width=10000)}
+      % else:
+      - name: CoreOS
+        id: coreos_1745_7_0_64_30G_alibase_20180705.vhd
+      % endif
+      machineTypes:<% machineTypes=value("spec.alicloud.constraints.machineTypes", []) %>
+      % if machineTypes != []:
+      ${yaml.dump(machineTypes, width=10000)}
+      % else:
+      - name: ecs.sn2ne.large
+        cpu: "2"
+        gpu: "0"
+        memory: 8Gi
+        usable: true
+        zones:
+        - cn-beijing-f
+      - name: ecs.sn2ne.xlarge
+        cpu: "4"
+        gpu: "0"
+        memory: 16Gi
+        usable: true
+        zones:
+        - cn-beijing-f
+      - name: ecs.sn2ne.2xlarge
+        cpu: "8"
+        gpu: "0"
+        memory: 32Gi
+        usable: true
+        zones:
+        - cn-beijing-f
+      - name: ecs.sn2ne.3xlarge
+        cpu: "12"
+        gpu: "0"
+        memory: 48Gi
+        usable: false
+        zones:
+        - cn-beijing-f
+      % endif
+      volumeTypes:<% volumeTypes=value("spec.alicloud.constraints.volumeTypes", []) %>
+      % if volumeTypes != []:
+      ${yaml.dump(volumeTypes, width=10000)}
+      % else:
+      - name: cloud_efficiency
+        class: standard
+        usable: true
+        zones:
+        - cn-beijing-f
+      - name: ssd
+        class: premium
+        usable: false
+        zones:
+        - cn-beijing-f
+      % endif
+      zones:<% zones=value("spec.alicloud.zones", []) %> # List of availablity zones together with resource contraints in a specific region
+      % if zones != []:
+      ${yaml.dump(zones, width=10000)}
+      % else:
+      - region: cn-beijing
+        names:
+        - cn-beijing-f  # Avalibility zone
+      % endif
   % endif
   % if cloud == "openstack" or cloud == "os":
   openstack:
@@ -346,10 +453,10 @@ spec:<% caBundle=value("spec.caBundle", "") %>
         % if kubernetesVersions != []:
         ${yaml.dump(kubernetesVersions, width=10000)}
         % else:
-        - 1.11.1
-        - 1.10.5
-        - 1.9.8
-        - 1.8.14
+        - 1.12.1
+        - 1.11.3
+        - 1.10.8
+        - 1.9.11
         % endif
       loadBalancerProviders:<% loadBalancerProviders=value("spec.openstack.constraints.loadBalancerProviders", []) %>
       % if loadBalancerProviders != []:
@@ -372,12 +479,14 @@ spec:<% caBundle=value("spec.caBundle", "") %>
         cpu: "2"
         gpu: "0"
         memory: 4Gi
+        usable: true
         volumeType: default
         volumeSize: 20Gi
       - name: medium_4_8
         cpu: "4"
         gpu: "0"
         memory: 8Gi
+        usable: true
         volumeType: default
         volumeSize: 40Gi
       % endif
