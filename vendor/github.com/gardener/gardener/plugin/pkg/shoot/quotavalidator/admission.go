@@ -311,7 +311,11 @@ func (q *QuotaValidator) findShootsReferQuota(quota garden.Quota, shoot garden.S
 		secretBindings   []garden.SecretBinding
 	)
 
-	allSecretBindings, err := q.secretBindingLister.SecretBindings(v1.NamespaceAll).List(labels.Everything())
+	namespace := v1.NamespaceAll
+	if quota.Spec.Scope == garden.QuotaScopeProject {
+		namespace = shoot.Namespace
+	}
+	allSecretBindings, err := q.secretBindingLister.SecretBindings(namespace).List(labels.Everything())
 	if err != nil {
 		return nil, err
 	}
@@ -401,15 +405,15 @@ func (q *QuotaValidator) getShootResources(shoot garden.Shoot) (v1.ResourceList,
 		}
 
 		// For now we always use the max. amount of resources for quota calculation
-		resources[garden.QuotaMetricCPU] = multiplyQuantity(machineType.CPU, worker.AutoScalerMax)
-		resources[garden.QuotaMetricGPU] = multiplyQuantity(machineType.GPU, worker.AutoScalerMax)
-		resources[garden.QuotaMetricMemory] = multiplyQuantity(machineType.Memory, worker.AutoScalerMax)
+		resources[garden.QuotaMetricCPU] = sumQuantity(resources[garden.QuotaMetricCPU], multiplyQuantity(machineType.CPU, worker.AutoScalerMax))
+		resources[garden.QuotaMetricGPU] = sumQuantity(resources[garden.QuotaMetricGPU], multiplyQuantity(machineType.GPU, worker.AutoScalerMax))
+		resources[garden.QuotaMetricMemory] = sumQuantity(resources[garden.QuotaMetricMemory], multiplyQuantity(machineType.Memory, worker.AutoScalerMax))
 
 		switch volumeType.Class {
 		case garden.VolumeClassStandard:
-			resources[garden.QuotaMetricStorageStandard] = multiplyQuantity(worker.VolumeSize, worker.AutoScalerMax)
+			resources[garden.QuotaMetricStorageStandard] = sumQuantity(resources[garden.QuotaMetricStorageStandard], multiplyQuantity(worker.VolumeSize, worker.AutoScalerMax))
 		case garden.VolumeClassPremium:
-			resources[garden.QuotaMetricStoragePremium] = multiplyQuantity(worker.VolumeSize, worker.AutoScalerMax)
+			resources[garden.QuotaMetricStoragePremium] = sumQuantity(resources[garden.QuotaMetricStoragePremium], multiplyQuantity(worker.VolumeSize, worker.AutoScalerMax))
 		default:
 			return nil, fmt.Errorf("Unknown volumeType class %s", volumeType.Class)
 		}
@@ -463,6 +467,14 @@ func getShootWorkerResources(shoot garden.Shoot, cloudProvider garden.CloudProvi
 				}
 			}
 		}
+	case garden.CloudProviderAlicloud:
+		workers = make([]quotaWorker, len(shoot.Spec.Cloud.Alicloud.Workers))
+
+		for idx, aliWorker := range shoot.Spec.Cloud.Alicloud.Workers {
+			workers[idx].Worker = aliWorker.Worker
+			workers[idx].VolumeType = aliWorker.VolumeType
+			workers[idx].VolumeSize = resource.MustParse(aliWorker.VolumeSize)
+		}
 	}
 	return workers
 }
@@ -479,6 +491,11 @@ func getMachineTypes(provider garden.CloudProvider, cloudProfile garden.CloudPro
 	case garden.CloudProviderOpenStack:
 		machineTypes = make([]garden.MachineType, 0)
 		for _, element := range cloudProfile.Spec.OpenStack.Constraints.MachineTypes {
+			machineTypes = append(machineTypes, element.MachineType)
+		}
+	case garden.CloudProviderAlicloud:
+		machineTypes = make([]garden.MachineType, 0)
+		for _, element := range cloudProfile.Spec.Alicloud.Constraints.MachineTypes {
 			machineTypes = append(machineTypes, element.MachineType)
 		}
 	}
@@ -512,6 +529,11 @@ func getVolumeTypes(provider garden.CloudProvider, cloudProfile garden.CloudProf
 					Class: machineType.VolumeType,
 				})
 			}
+		}
+	case garden.CloudProviderAlicloud:
+		volumeTypes = make([]garden.VolumeType, 0)
+		for _, element := range cloudProfile.Spec.Alicloud.Constraints.VolumeTypes {
+			volumeTypes = append(volumeTypes, element.VolumeType)
 		}
 	}
 	return volumeTypes
@@ -601,6 +623,21 @@ func quotaVerificationNeeded(new, old garden.Shoot, provider garden.CloudProvide
 				if worker.Name == oldWorker.Name {
 					oldHasWorker = true
 					if hasWorkerDiff(worker.Worker, oldWorker.Worker) {
+						return true
+					}
+				}
+			}
+			if !oldHasWorker {
+				return true
+			}
+		}
+	case garden.CloudProviderAlicloud:
+		for _, worker := range new.Spec.Cloud.Alicloud.Workers {
+			oldHasWorker := false
+			for _, oldWorker := range old.Spec.Cloud.Alicloud.Workers {
+				if worker.Name == oldWorker.Name {
+					oldHasWorker = true
+					if hasWorkerDiff(worker.Worker, oldWorker.Worker) || worker.VolumeType != oldWorker.VolumeType || worker.VolumeSize != oldWorker.VolumeSize {
 						return true
 					}
 				}

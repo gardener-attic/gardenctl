@@ -17,6 +17,7 @@ package shoot
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/gardener/gardener/pkg/apis/componentconfig"
@@ -29,12 +30,17 @@ import (
 	"github.com/gardener/gardener/pkg/operation/common"
 	"github.com/gardener/gardener/pkg/utils"
 	"github.com/gardener/gardener/pkg/utils/imagevector"
+	kutil "github.com/gardener/gardener/pkg/utils/kubernetes"
+	"github.com/gardener/gardener/pkg/utils/reconcilescheduler"
+	"github.com/gardener/gardener/pkg/version"
+
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/tools/record"
+	"k8s.io/client-go/util/retry"
 )
 
 func (c *Controller) shootAdd(obj interface{}) {
@@ -78,15 +84,39 @@ func (c *Controller) shootDelete(obj interface{}) {
 	c.getShootQueue(obj).Add(key)
 }
 
+func (c *Controller) newShootElement(shoot *gardenv1beta1.Shoot) (*shootElement, error) {
+	shootedSeed, err := c.usesShootedSeed(shoot)
+	if err != nil {
+		logger.Logger.Errorf("Error while trying to identify whether shoot %q uses a shoot seed: %+v", shoot.Name, err)
+		return nil, err
+	}
+
+	var p id
+	switch {
+	case shootedSeed != nil:
+		p = newID(shootedSeed.Namespace, shootedSeed.Name)
+	case shoot.Spec.Cloud.Seed != nil:
+		p = newID("", *shoot.Spec.Cloud.Seed)
+	default:
+		return nil, fmt.Errorf("Could not identify seed for shoot %q", shoot.Name)
+	}
+
+	return &shootElement{
+		shoot: newID(shoot.Namespace, shoot.Name),
+		seed:  p,
+	}, nil
+}
+
 func (c *Controller) reconcileShootKey(key string) error {
-	namespace, name, err := cache.SplitMetaNamespaceKey(key)
+	shootID, err := newIDFromString(key)
 	if err != nil {
 		return err
 	}
 
-	shoot, err := c.shootLister.Shoots(namespace).Get(name)
+	shoot, err := c.shootLister.Shoots(shootID.GetNamespace()).Get(shootID.GetName())
 	if apierrors.IsNotFound(err) {
 		logger.Logger.Debugf("[SHOOT RECONCILE] %s - skipping because Shoot has been deleted", key)
+		c.scheduler.Delete(shootID)
 		return nil
 	}
 	if err != nil {
@@ -103,28 +133,89 @@ func (c *Controller) reconcileShootKey(key string) error {
 	// Ignore Shoots which do not have the gardener finalizer.
 	if shoot.DeletionTimestamp != nil && !sets.NewString(shoot.Finalizers...).Has(gardenv1beta1.GardenerName) {
 		shootLogger.Debug("Do not need to do anything as the Shoot does not have my finalizer")
+		c.scheduler.Delete(shootID)
 		c.getShootQueue(shoot).Forget(key)
 		return nil
 	}
 
-	// Either ignore Shoots which are marked as to-be-ignored or reconcile them.
-	if mustIgnoreShoot(shoot.Annotations, c.config.Controllers.Shoot.RespectSyncPeriodOverwrite) {
-		shootLogger.Info("Skipping reconciliation because Shoot is marked as 'to-be-ignored'.")
-	} else {
-		needsRequeue, reconcileErr = c.control.ReconcileShoot(shoot, key)
+	shootElement, err := c.newShootElement(shoot)
+	if err != nil {
+		return err
 	}
 
-	if wantsResync, durationToNextSync := scheduleNextSync(shoot.ObjectMeta, reconcileErr != nil, c.config.Controllers.Shoot); wantsResync && needsRequeue {
+	var (
+		mayReconcile bool
+		reason       *reconcilescheduler.Reason
+	)
+
+	// Check whether the shoot may be reconciled. We always allow reconciliation if the shoot shall be deleted or
+	// if the shoot shall be created.
+	switch {
+	case shoot.DeletionTimestamp != nil:
+		c.scheduler.Delete(shootID)
+		mayReconcile, reason = true, reconcilescheduler.NewReason(reconcilescheduler.CodeOther, "shoot shall be deleted")
+	case shoot.Status.LastOperation != nil && shoot.Status.LastOperation.Type == gardenv1beta1.ShootLastOperationTypeCreate:
+		mayReconcile, reason = true, reconcilescheduler.NewReason(reconcilescheduler.CodeOther, "shoot shall be created")
+	default:
+		mayReconcile, reason = c.scheduler.TestAndActivate(shootElement, shoot.Generation != shoot.Status.ObservedGeneration, shootIsSeed(shoot))
+	}
+
+	switch {
+	case mustIgnoreShoot(shoot.Annotations, c.config.Controllers.Shoot.RespectSyncPeriodOverwrite):
+		// Check whether the shoot has been marked as "never reconcile".
+		shootLogger.Info("Skipping reconciliation because Shoot is marked as 'to-be-ignored'.")
+
+	case !mayReconcile:
+		// If the shoot may not be reconciled (due to above decision) then we mark it as pending in case it was not failed
+		message := fmt.Sprintf("May not yet reconcile shoot %q: %s", shoot.Name, reason)
+		if !shootIsFailed(shoot) {
+			shootLogger.Debugf(message)
+			c.recorder.Eventf(shoot, corev1.EventTypeNormal, "OperationPending", message)
+			c.updateShootStatusPending(shoot, message)
+		}
+
+	default:
+		// Otherwise (i.e., shoot is not ignored and may be reconciled) we start the reconcile operation).
+		needsRequeue, reconcileErr = c.control.ReconcileShoot(shoot, key)
+	}
+	c.scheduler.Done(shootElement.GetID())
+
+	if durationToNextSync := scheduleNextSync(c.config.Controllers.Shoot, reconcileErr != nil, shoot.ObjectMeta, reason); durationToNextSync > 0 && needsRequeue {
 		c.getShootQueue(shoot).AddAfter(key, durationToNextSync)
-		shootLogger.Infof("Scheduled next queuing time for Shoot '%s' to %s", key, durationToNextSync)
+		message := fmt.Sprintf("Scheduled next queuing time for Shoot '%s' in %s (%s)", key, durationToNextSync, time.Now().UTC().Add(durationToNextSync))
+		shootLogger.Infof(message)
+		c.recorder.Eventf(shoot, corev1.EventTypeNormal, "ScheduledNextSync", message)
 	}
 
 	return nil
 }
 
-func scheduleNextSync(objectMeta metav1.ObjectMeta, errorOccurred bool, config componentconfig.ShootControllerConfiguration) (bool, time.Duration) {
+func (c *Controller) updateShootStatusPending(shoot *gardenv1beta1.Shoot, message string) error {
+	_, err := kutil.TryUpdateShootStatus(c.k8sGardenClient.GardenClientset(), retry.DefaultRetry, shoot.ObjectMeta,
+		func(shoot *gardenv1beta1.Shoot) (*gardenv1beta1.Shoot, error) {
+			shoot.Status.LastOperation = &gardenv1beta1.LastOperation{
+				Type:           controllerutils.ComputeOperationType(shoot.ObjectMeta, shoot.Status.LastOperation),
+				State:          gardenv1beta1.ShootLastOperationStateProcessing,
+				Progress:       0,
+				Description:    message,
+				LastUpdateTime: metav1.Now(),
+			}
+			return shoot, nil
+		})
+	return err
+}
+
+func scheduleNextSync(config componentconfig.ShootControllerConfiguration, errorOccurred bool, objectMeta metav1.ObjectMeta, reason *reconcilescheduler.Reason) time.Duration {
+	switch {
+	case reason == nil, reason.Code() == reconcilescheduler.CodeOther, reason.Code() == reconcilescheduler.CodeActivated:
+	case reason.Code() == reconcilescheduler.CodeParentUnknown:
+		return time.Second
+	default:
+		return 10 * time.Second
+	}
+
 	if errorOccurred {
-		return true, (*config.RetrySyncPeriod).Duration
+		return (*config.RetrySyncPeriod).Duration
 	}
 
 	var (
@@ -138,7 +229,7 @@ func scheduleNextSync(objectMeta metav1.ObjectMeta, errorOccurred bool, config c
 	if syncPeriodOverwrite, ok := objectMeta.Annotations[common.ShootSyncPeriod]; ok && respectSyncPeriodOverwrite {
 		if syncPeriodDuration, err := time.ParseDuration(syncPeriodOverwrite); err == nil {
 			if syncPeriodDuration.Nanoseconds() == 0 {
-				return false, 0
+				return 0
 			}
 			if syncPeriodDuration >= time.Minute {
 				syncPeriod = metav1.Duration{Duration: syncPeriodDuration}
@@ -151,7 +242,7 @@ func scheduleNextSync(objectMeta metav1.ObjectMeta, errorOccurred bool, config c
 		nextSyncNano   = currentTimeNano - (currentTimeNano-creationTimeNano)%syncPeriodNano + syncPeriodNano
 	)
 
-	return true, time.Duration(nextSyncNano - currentTimeNano)
+	return time.Duration(nextSyncNano - currentTimeNano)
 }
 
 // ControlInterface implements the control logic for updating Shoots. It is implemented as an interface to allow
@@ -169,8 +260,8 @@ type ControlInterface interface {
 // implements the documented semantics for Shoots. updater is the UpdaterInterface used
 // to update the status of Shoots. You should use an instance returned from NewDefaultControl() for any
 // scenario other than testing.
-func NewDefaultControl(k8sGardenClient kubernetes.Client, k8sGardenInformers gardeninformers.Interface, secrets map[string]*corev1.Secret, imageVector imagevector.ImageVector, identity *gardenv1beta1.Gardener, config *componentconfig.ControllerManagerConfiguration, gardenerNamespace string, recorder record.EventRecorder, updater UpdaterInterface) ControlInterface {
-	return &defaultControl{k8sGardenClient, k8sGardenInformers, secrets, imageVector, identity, config, gardenerNamespace, recorder, updater}
+func NewDefaultControl(k8sGardenClient kubernetes.Client, k8sGardenInformers gardeninformers.Interface, secrets map[string]*corev1.Secret, imageVector imagevector.ImageVector, identity *gardenv1beta1.Gardener, config *componentconfig.ControllerManagerConfiguration, gardenerNamespace string, recorder record.EventRecorder) ControlInterface {
+	return &defaultControl{k8sGardenClient, k8sGardenInformers, secrets, imageVector, identity, config, gardenerNamespace, recorder}
 }
 
 type defaultControl struct {
@@ -182,7 +273,6 @@ type defaultControl struct {
 	config             *componentconfig.ControllerManagerConfiguration
 	gardenerNamespace  string
 	recorder           record.EventRecorder
-	updater            UpdaterInterface
 }
 
 func (c *defaultControl) ReconcileShoot(shootObj *gardenv1beta1.Shoot, key string) (bool, error) {
@@ -194,11 +284,11 @@ func (c *defaultControl) ReconcileShoot(shootObj *gardenv1beta1.Shoot, key strin
 	if err != nil {
 		return true, err
 	}
+
 	var (
 		shoot         = shootObj.DeepCopy()
 		shootLogger   = logger.NewShootLogger(logger.Logger, shoot.Name, shoot.Namespace, operationID)
-		lastOperation = shoot.Status.LastOperation
-		operationType = controllerutils.ComputeOperationType(lastOperation)
+		operationType = controllerutils.ComputeOperationType(shoot.ObjectMeta, shoot.Status.LastOperation)
 	)
 
 	logger.Logger.Infof("[SHOOT RECONCILE] %s", key)
@@ -213,9 +303,18 @@ func (c *defaultControl) ReconcileShoot(shootObj *gardenv1beta1.Shoot, key strin
 
 	// We check whether the Shoot's last operation status field indicates that the last operation failed (i.e. the operation
 	// will not be retried unless the shoot generation changes).
-	if lastOperation != nil && lastOperation.State == gardenv1beta1.ShootLastOperationStateFailed && shoot.Generation == shoot.Status.ObservedGeneration {
-		shootLogger.Infof("Will not reconcile as the last operation has been set to '%s' and the generation has not changed since then.", gardenv1beta1.ShootLastOperationStateFailed)
-		return false, nil
+	if shootIsFailed(shoot) {
+		if shoot.Status.Gardener.Version == version.Version {
+			shootLogger.Infof("Will not reconcile as the last operation has been set to '%s' and the generation has not changed since then.", gardenv1beta1.ShootLastOperationStateFailed)
+			return false, nil
+		}
+
+		if updateErr := c.updateShootStatusResetRetry(operation, operationType); err != nil {
+			shootLogger.Errorf("Could not reschedule failed shoot due to Gardener version update: %+v", updateErr)
+			return true, updateErr
+		}
+
+		shootLogger.Infof("Successfully rescheduled failed shoot %q for reconciliation due to Gardener version update", shoot.Name)
 	}
 
 	// When a Shoot clusters deletion timestamp is set we need to delete the cluster and must not trigger a new reconciliation operation.
@@ -261,4 +360,40 @@ func (c *defaultControl) ReconcileShoot(shootObj *gardenv1beta1.Shoot, key strin
 		return true, updateErr
 	}
 	return true, nil
+}
+
+// usesShootedSeed checks whether the seed used by given <shoot> is a shoot cluster itself. If yes it
+// will return true and the shoot object of the shooted seed, otherwise false.
+func (c *Controller) usesShootedSeed(shoot *gardenv1beta1.Shoot) (*gardenv1beta1.Shoot, error) {
+	seed := shoot.Spec.Cloud.Seed
+	if seed == nil {
+		return nil, fmt.Errorf("shoot does not specify a seed (.spec.cloud.seed=nil)")
+	}
+
+	seedObj, err := c.seedLister.Get(*seed)
+	if err != nil {
+		return nil, err
+	}
+
+	if hasOwnerReferences, shootName := seedHasShootOwnerReference(seedObj.ObjectMeta); hasOwnerReferences {
+		shootObj, err := c.shootLister.Shoots(common.GardenNamespace).Get(shootName)
+		if err != nil {
+			return nil, err
+		}
+		return shootObj, nil
+	}
+
+	return nil, nil
+}
+
+func seedHasShootOwnerReference(meta metav1.ObjectMeta) (bool, string) {
+	gvk := gardenv1beta1.SchemeGroupVersion.WithKind("Shoot")
+
+	for _, ownerReference := range meta.OwnerReferences {
+		if ownerReference.APIVersion == gvk.GroupVersion().String() && ownerReference.Kind == gvk.Kind {
+			return true, ownerReference.Name
+		}
+	}
+
+	return false, ""
 }

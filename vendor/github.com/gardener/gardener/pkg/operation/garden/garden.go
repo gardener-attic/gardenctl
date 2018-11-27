@@ -17,31 +17,27 @@ package garden
 import (
 	"fmt"
 
+	"github.com/gardener/gardener/pkg/apis/garden"
+	gardenlisters "github.com/gardener/gardener/pkg/client/garden/listers/garden/v1beta1"
 	"github.com/gardener/gardener/pkg/client/kubernetes"
 	"github.com/gardener/gardener/pkg/logger"
 	"github.com/gardener/gardener/pkg/operation/common"
 	"github.com/gardener/gardener/pkg/utils"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	kubeinformers "k8s.io/client-go/informers"
 )
 
 // New creates a new Garden object (based on a Shoot object).
-func New(k8sGardenClient kubernetes.Client, namespace string) (*Garden, error) {
-	ns, err := k8sGardenClient.GetNamespace(namespace)
+func New(projectLister gardenlisters.ProjectLister, namespace string) (*Garden, error) {
+	project, err := common.ProjectForNamespace(projectLister, namespace)
 	if err != nil {
 		return nil, err
 	}
 
-	projectName := namespace
-	if name, ok := ns.Labels[common.ProjectName]; ok && len(name) > 0 {
-		projectName = name
-	}
-
 	return &Garden{
-		ProjectName: projectName,
+		Project: project,
 	}, nil
 }
 
@@ -72,9 +68,9 @@ func ReadGardenSecrets(k8sInformers kubeinformers.SharedInformerFactory, running
 		// Retrieving default domain secrets based on all secrets in the Garden namespace which have
 		// a label indicating the Garden role default-domain.
 		if labels[common.GardenRole] == common.GardenRoleDefaultDomain {
-			domain, domainFound := annotations[common.DNSDomain]
-			if !metav1.HasAnnotation(metadata, common.DNSHostedZoneID) || !metav1.HasAnnotation(metadata, common.DNSProvider) || !domainFound {
-				logger.Logger.Warnf("The default domain secret %s does not contain all the annotations %s and %s and %s; ignoring it.", name, common.DNSHostedZoneID, common.DNSDomain, common.DNSProvider)
+			domain, err := extractDomain(annotations)
+			if err != nil {
+				logger.Logger.Warnf("The default domain secret %s is not valid: %v; ignoring it.", name, err)
 				continue
 			}
 			defaultDomainSecret := secret
@@ -85,9 +81,9 @@ func ReadGardenSecrets(k8sInformers kubeinformers.SharedInformerFactory, running
 		// Retrieving internal domain secrets based on all secrets in the Garden namespace which have
 		// a label indicating the Garden role internal-domain.
 		if labels[common.GardenRole] == common.GardenRoleInternalDomain {
-			domain, domainFound := annotations[common.DNSDomain]
-			if !metav1.HasAnnotation(metadata, common.DNSHostedZoneID) || !metav1.HasAnnotation(metadata, common.DNSProvider) || !domainFound {
-				logger.Logger.Warnf("The internal domain secret %s does not contain all the annotations %s and %s and %s; ignoring it.", name, common.DNSHostedZoneID, common.DNSDomain, common.DNSProvider)
+			domain, err := extractDomain(annotations)
+			if err != nil {
+				logger.Logger.Warnf("The internal domain secret %s is not valid: %v; ignoring it.", name, err)
 				continue
 			}
 			internalDomainSecret := secret
@@ -181,4 +177,25 @@ func BootstrapCluster(k8sGardenClient kubernetes.Client, gardenNamespace string,
 		return fmt.Errorf("the Kubernetes version of the Garden cluster must be at least %s", minGardenVersion)
 	}
 	return nil
+}
+
+func extractDomain(annotations map[string]string) (string, error) {
+	dnsProvider, ok := annotations[common.DNSProvider]
+	if !ok {
+		return "", fmt.Errorf("no annotation %s found", common.DNSProvider)
+	}
+
+	// Alicloud DNS does not support a hosted zone ID
+	if dnsProvider != string(garden.DNSAlicloud) {
+		if _, ok = annotations[common.DNSHostedZoneID]; !ok {
+			return "", fmt.Errorf("no annotation %s found", common.DNSHostedZoneID)
+		}
+	}
+
+	domain, ok := annotations[common.DNSDomain]
+	if !ok {
+		return "", fmt.Errorf("no annotation %s found", common.DNSDomain)
+	}
+
+	return domain, nil
 }

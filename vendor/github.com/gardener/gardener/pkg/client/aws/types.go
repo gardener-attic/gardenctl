@@ -24,8 +24,12 @@ import (
 type ClientInterface interface {
 	GetAccountID() (string, error)
 	GetInternetGateway(string) (string, error)
-	GetELB(string) (*elb.DescribeLoadBalancersOutput, error)
-	UpdateELBHealthCheck(string, string) error
+
+	// The following functions are only temporary needed due to https://github.com/gardener/gardener/issues/129.
+	ListKubernetesELBs(vpcID, clusterName string) ([]string, error)
+	ListKubernetesSecurityGroups(vpcID, clusterName string) ([]string, error)
+	DeleteELB(name string) error
+	DeleteSecurityGroup(id string) error
 }
 
 // Client is a struct containing several clients for the different AWS services it needs to interact with.

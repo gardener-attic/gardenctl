@@ -21,6 +21,7 @@ import (
 	"github.com/gardener/gardener/pkg/chartrenderer"
 	"github.com/gardener/gardener/pkg/operation/common"
 	"github.com/gardener/gardener/pkg/utils"
+	"github.com/gardener/gardener/pkg/utils/secrets"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -54,11 +55,6 @@ func (b *HybridBotanist) generateCloudConfigChart() (*chartrenderer.RenderedChar
 		cloudProvider["config"] = cloudProviderConfig
 	}
 
-	hyperKube, err := b.ImageVector.FindImage("hyperkube", b.Shoot.Info.Spec.Kubernetes.Version)
-	if err != nil {
-		return nil, err
-	}
-
 	workers := []map[string]interface{}{}
 	for _, workerName := range userDataConfig.WorkerNames {
 		workers = append(workers, map[string]interface{}{
@@ -70,22 +66,24 @@ func (b *HybridBotanist) generateCloudConfigChart() (*chartrenderer.RenderedChar
 	config := map[string]interface{}{
 		"cloudProvider": cloudProvider,
 		"kubernetes": map[string]interface{}{
-			"caCert":     string(b.Secrets["ca"].Data["ca.crt"]),
 			"clusterDNS": common.ComputeClusterIP(serviceNetwork, 10),
 			// TODO: resolve conformance test issue before changing:
 			// https://github.com/kubernetes/kubernetes/blob/master/test/e2e/network/dns.go#L44
 			"domain": gardenv1beta1.DefaultDomain,
 			"kubelet": map[string]interface{}{
+				"caCert":           string(b.Secrets["ca-kubelet"].Data[secrets.DataKeyCertificateCA]),
 				"bootstrapToken":   bootstraptokenutil.TokenFromIDAndSecret(string(bootstrapTokenSecretData[bootstraptokenapi.BootstrapTokenIDKey]), string(bootstrapTokenSecretData[bootstraptokenapi.BootstrapTokenSecretKey])),
 				"parameters":       userDataConfig.KubeletParameters,
 				"hostnameOverride": userDataConfig.HostnameOverride,
 			},
 			"version": b.Shoot.Info.Spec.Kubernetes.Version,
 		},
-		"images": map[string]interface{}{
-			"hyperkube": hyperKube.String(),
-		},
 		"workers": workers,
+	}
+
+	config, err = b.InjectImages(config, b.ShootVersion(), b.ShootVersion(), common.HyperkubeImageName)
+	if err != nil {
+		return nil, err
 	}
 
 	kubeletConfig := b.Shoot.Info.Spec.Kubernetes.Kubelet

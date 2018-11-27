@@ -28,8 +28,8 @@ import (
 	gardeninformers "github.com/gardener/gardener/pkg/client/garden/informers/internalversion"
 	"github.com/gardener/gardener/pkg/openapi"
 	"github.com/gardener/gardener/pkg/version"
+	deletionconfirmation "github.com/gardener/gardener/plugin/pkg/global/deletionconfirmation"
 	resourcereferencemanager "github.com/gardener/gardener/plugin/pkg/global/resourcereferencemanager"
-	shootdeletionconfirmation "github.com/gardener/gardener/plugin/pkg/shoot/deletionconfirmation"
 	shootdnshostedzone "github.com/gardener/gardener/plugin/pkg/shoot/dnshostedzone"
 	shootquotavalidator "github.com/gardener/gardener/plugin/pkg/shoot/quotavalidator"
 	shootseedmanager "github.com/gardener/gardener/plugin/pkg/shoot/seedmanager"
@@ -114,15 +114,15 @@ func (o Options) validate(args []string) error {
 func (o *Options) complete() error {
 	// Admission plugin registration
 	resourcereferencemanager.Register(o.Recommended.Admission.Plugins)
+	deletionconfirmation.Register(o.Recommended.Admission.Plugins)
 	shootquotavalidator.Register(o.Recommended.Admission.Plugins)
 	shootseedmanager.Register(o.Recommended.Admission.Plugins)
 	shootdnshostedzone.Register(o.Recommended.Admission.Plugins)
 	shootvalidator.Register(o.Recommended.Admission.Plugins)
-	shootdeletionconfirmation.Register(o.Recommended.Admission.Plugins)
 
 	allOrderedPlugins := []string{
 		resourcereferencemanager.PluginName,
-		shootdeletionconfirmation.PluginName,
+		deletionconfirmation.PluginName,
 		shootdnshostedzone.PluginName,
 		shootquotavalidator.PluginName,
 		shootseedmanager.PluginName,
@@ -163,7 +163,7 @@ func (o *Options) config() (*apiserver.Config, error) {
 		}
 		gardenInformerFactory := gardeninformers.NewSharedInformerFactory(gardenClient, gardenerAPIServerConfig.LoopbackClientConfig.Timeout)
 		o.GardenInformerFactory = gardenInformerFactory
-		return []admission.PluginInitializer{admissioninitializer.New(gardenInformerFactory, kubeInformerFactory, kubeClient, gardenerAPIServerConfig.Authorization.Authorizer)}, nil
+		return []admission.PluginInitializer{admissioninitializer.New(gardenInformerFactory, gardenClient, kubeInformerFactory, kubeClient, gardenerAPIServerConfig.Authorization.Authorizer)}, nil
 	}
 
 	gardenerAPIServerConfig.OpenAPIConfig = genericapiserver.DefaultOpenAPIConfig(openapi.GetOpenAPIDefinitions, openapinamer.NewDefinitionNamer(api.Scheme))

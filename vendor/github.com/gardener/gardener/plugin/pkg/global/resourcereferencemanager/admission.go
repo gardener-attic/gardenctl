@@ -25,6 +25,9 @@ import (
 	admissioninitializer "github.com/gardener/gardener/pkg/apiserver/admission/initializer"
 	gardeninformers "github.com/gardener/gardener/pkg/client/garden/informers/internalversion"
 	gardenlisters "github.com/gardener/gardener/pkg/client/garden/listers/garden/internalversion"
+	"github.com/gardener/gardener/pkg/operation/common"
+
+	rbacv1 "k8s.io/api/rbac/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apiserver/pkg/admission"
@@ -52,9 +55,11 @@ type ReferenceManager struct {
 	kubeClient          kubernetes.Interface
 	authorizer          authorizer.Authorizer
 	secretLister        kubecorev1listers.SecretLister
+	configMapLister     kubecorev1listers.ConfigMapLister
 	cloudProfileLister  gardenlisters.CloudProfileLister
 	seedLister          gardenlisters.SeedLister
 	secretBindingLister gardenlisters.SecretBindingLister
+	projectLister       gardenlisters.ProjectLister
 	quotaLister         gardenlisters.QuotaLister
 	readyFunc           admission.ReadyFunc
 }
@@ -104,7 +109,10 @@ func (r *ReferenceManager) SetInternalGardenInformerFactory(f gardeninformers.Sh
 	quotaInformer := f.Garden().InternalVersion().Quotas()
 	r.quotaLister = quotaInformer.Lister()
 
-	readyFuncs = append(readyFuncs, seedInformer.Informer().HasSynced, cloudProfileInformer.Informer().HasSynced, secretBindingInformer.Informer().HasSynced, quotaInformer.Informer().HasSynced)
+	projectInformer := f.Garden().InternalVersion().Projects()
+	r.projectLister = projectInformer.Lister()
+
+	readyFuncs = append(readyFuncs, seedInformer.Informer().HasSynced, cloudProfileInformer.Informer().HasSynced, secretBindingInformer.Informer().HasSynced, quotaInformer.Informer().HasSynced, projectInformer.Informer().HasSynced)
 }
 
 // SetKubeInformerFactory gets Lister from SharedInformerFactory.
@@ -112,7 +120,10 @@ func (r *ReferenceManager) SetKubeInformerFactory(f kubeinformers.SharedInformer
 	secretInformer := f.Core().V1().Secrets()
 	r.secretLister = secretInformer.Lister()
 
-	readyFuncs = append(readyFuncs, secretInformer.Informer().HasSynced)
+	configMapInformer := f.Core().V1().ConfigMaps()
+	r.configMapLister = configMapInformer.Lister()
+
+	readyFuncs = append(readyFuncs, secretInformer.Informer().HasSynced, configMapInformer.Informer().HasSynced)
 }
 
 // SetKubeClientset gets the clientset from the Kubernetes client.
@@ -128,6 +139,9 @@ func (r *ReferenceManager) ValidateInitialization() error {
 	if r.secretLister == nil {
 		return errors.New("missing secret lister")
 	}
+	if r.configMapLister == nil {
+		return errors.New("missing configMap lister")
+	}
 	if r.cloudProfileLister == nil {
 		return errors.New("missing cloud profile lister")
 	}
@@ -139,6 +153,9 @@ func (r *ReferenceManager) ValidateInitialization() error {
 	}
 	if r.quotaLister == nil {
 		return errors.New("missing quota lister")
+	}
+	if r.projectLister == nil {
+		return errors.New("missing project lister")
 	}
 	return nil
 }
@@ -198,7 +215,58 @@ func (r *ReferenceManager) Admit(a admission.Attributes) error {
 		if skipVerification(operation, shoot.ObjectMeta) {
 			return nil
 		}
+		// Add createdBy annotation to Shoot
+		if a.GetOperation() == admission.Create {
+			annotations := shoot.Annotations
+			if annotations == nil {
+				annotations = map[string]string{}
+			}
+			annotations[common.GardenCreatedBy] = a.GetUserInfo().GetName()
+			shoot.Annotations = annotations
+		}
 		err = r.ensureShootReferences(shoot)
+
+	case garden.Kind("Project"):
+		project, ok := a.GetObject().(*garden.Project)
+		if !ok {
+			return apierrors.NewBadRequest("could not convert resource into Project object")
+		}
+		if skipVerification(operation, project.ObjectMeta) {
+			return nil
+		}
+		// Set createdBy field in Project
+		if a.GetOperation() == admission.Create {
+			project.Spec.CreatedBy = &rbacv1.Subject{
+				APIGroup: "rbac.authorization.k8s.io",
+				Kind:     rbacv1.UserKind,
+				Name:     a.GetUserInfo().GetName(),
+			}
+			if project.Spec.Owner == nil {
+				project.Spec.Owner = project.Spec.CreatedBy
+			}
+		}
+		if a.GetOperation() == admission.Update {
+			if createdBy, ok := project.Annotations[common.GardenCreatedBy]; ok {
+				project.Spec.CreatedBy = &rbacv1.Subject{
+					APIGroup: "rbac.authorization.k8s.io",
+					Kind:     rbacv1.UserKind,
+					Name:     createdBy,
+				}
+				delete(project.Annotations, common.GardenCreatedBy)
+			}
+		}
+
+		if project.Spec.Owner != nil {
+			ownerPartOfMember := false
+			for _, member := range project.Spec.Members {
+				if member == *project.Spec.Owner {
+					ownerPartOfMember = true
+				}
+			}
+			if !ownerPartOfMember {
+				project.Spec.Members = append(project.Spec.Members, *project.Spec.Owner)
+			}
+		}
 	}
 
 	if err != nil {
@@ -294,7 +362,21 @@ func (r *ReferenceManager) ensureShootReferences(shoot *garden.Shoot) error {
 		return err
 	}
 
+	if hasAuditPolicy(shoot.Spec.Kubernetes.KubeAPIServer) {
+		if _, err := r.configMapLister.ConfigMaps(shoot.Namespace).Get(shoot.Spec.Kubernetes.KubeAPIServer.AuditConfig.AuditPolicy.ConfigMapRef.Name); err != nil {
+			return err
+		}
+	}
+
 	return nil
+}
+
+func hasAuditPolicy(apiServerConfig *garden.KubeAPIServerConfig) bool {
+	return apiServerConfig != nil &&
+		apiServerConfig.AuditConfig != nil &&
+		apiServerConfig.AuditConfig.AuditPolicy != nil &&
+		apiServerConfig.AuditConfig.AuditPolicy.ConfigMapRef != nil &&
+		len(apiServerConfig.AuditConfig.AuditPolicy.ConfigMapRef.Name) != 0
 }
 
 func (r *ReferenceManager) lookupSecret(namespace, name string) error {

@@ -18,18 +18,10 @@ import (
 	"fmt"
 
 	gardenv1beta1 "github.com/gardener/gardener/pkg/apis/garden/v1beta1"
+	"github.com/gardener/gardener/pkg/apis/garden/v1beta1/helper"
 	"github.com/gardener/gardener/pkg/operation/common"
+	corev1 "k8s.io/api/core/v1"
 )
-
-// operationOngoing returns true if the .status.phase field has a value which indicates that an operation
-// is still running (like creating, updating, ...), and false otherwise.
-func operationOngoing(shoot *gardenv1beta1.Shoot) bool {
-	lastOperation := shoot.Status.LastOperation
-	if lastOperation == nil {
-		return false
-	}
-	return lastOperation.State == gardenv1beta1.ShootLastOperationStateProcessing
-}
 
 func formatError(message string, err error) *gardenv1beta1.LastError {
 	return &gardenv1beta1.LastError{
@@ -37,24 +29,77 @@ func formatError(message string, err error) *gardenv1beta1.LastError {
 	}
 }
 
-func computeLabelsWithShootHealthiness(healthy bool) func(map[string]string) map[string]string {
-	return func(existingLabels map[string]string) map[string]string {
-		labels := existingLabels
-		if labels == nil {
-			labels = map[string]string{}
+func shootHealthyLabelTransform(healthy bool) func(*gardenv1beta1.Shoot) (*gardenv1beta1.Shoot, error) {
+	return func(shoot *gardenv1beta1.Shoot) (*gardenv1beta1.Shoot, error) {
+		if shoot.Labels == nil {
+			shoot.Labels = make(map[string]string)
 		}
 
 		if !healthy {
-			labels[common.ShootUnhealthy] = "true"
+			shoot.Labels[common.ShootUnhealthy] = "true"
 		} else {
-			delete(labels, common.ShootUnhealthy)
+			delete(shoot.Labels, common.ShootUnhealthy)
 		}
 
-		return labels
+		return shoot, nil
 	}
 }
 
 func mustIgnoreShoot(annotations map[string]string, respectSyncPeriodOverwrite *bool) bool {
 	_, ignore := annotations[common.ShootIgnore]
-	return respectSyncPeriodOverwrite != nil && ignore && *respectSyncPeriodOverwrite
+	return respectSyncPeriodOverwrite != nil && *respectSyncPeriodOverwrite && ignore
+}
+
+func shootIsFailed(shoot *gardenv1beta1.Shoot) bool {
+	lastOperation := shoot.Status.LastOperation
+	return lastOperation != nil && lastOperation.State == gardenv1beta1.ShootLastOperationStateFailed && shoot.Generation == shoot.Status.ObservedGeneration
+}
+
+func shootIsHealthy(shoot *gardenv1beta1.Shoot, conditions ...*gardenv1beta1.Condition) bool {
+	var (
+		lastOperation = shoot.Status.LastOperation
+		lastError     = shoot.Status.LastError
+
+		allConditionsTrue = func() bool {
+			for _, condition := range conditions {
+				if condition.Status != corev1.ConditionTrue {
+					return false
+				}
+			}
+			return true
+		}
+	)
+
+	// Shoot has been created and not yet reconciled.
+	if lastOperation == nil {
+		return true
+	}
+
+	// If shoot is created or deleted then the last error indicates the healthiness.
+	if lastOperation.Type == gardenv1beta1.ShootLastOperationTypeCreate || lastOperation.Type == gardenv1beta1.ShootLastOperationTypeDelete {
+		return lastError == nil
+	}
+
+	// If the shoot is normally reconciled then at least one false condition indicates that something is wrong.
+	if !allConditionsTrue() {
+		return false
+	}
+
+	// If an operation is currently processing then the last error state is reported.
+	if lastOperation.State == gardenv1beta1.ShootLastOperationStateProcessing {
+		return lastError == nil
+	}
+
+	// If the last operation has succeeded then the shoot is healthy.
+	return lastOperation.State == gardenv1beta1.ShootLastOperationStateSucceeded
+}
+
+func seedIsShoot(seed *gardenv1beta1.Seed) bool {
+	hasOwnerReference, _ := seedHasShootOwnerReference(seed.ObjectMeta)
+	return hasOwnerReference
+}
+
+func shootIsSeed(shoot *gardenv1beta1.Shoot) bool {
+	shootedSeed, err := helper.ReadShootedSeed(shoot)
+	return err == nil && shootedSeed != nil
 }

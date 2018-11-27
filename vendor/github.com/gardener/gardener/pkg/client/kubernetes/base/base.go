@@ -17,31 +17,51 @@ package kubernetesbase
 import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
-	"k8s.io/client-go/tools/clientcmd"
+
+	apiextensionsclientset "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
+	apiserviceclientset "k8s.io/kube-aggregator/pkg/client/clientset_generated/clientset"
 )
 
-// New returns a new Kubernetes base client.
-func New(config *rest.Config, clientset *kubernetes.Clientset, clientConfig clientcmd.ClientConfig) (*Client, error) {
+// NewForConfig returns a new Kubernetes base client.
+func NewForConfig(config *rest.Config) (*Client, error) {
+	clientset, err := kubernetes.NewForConfig(config)
+	if err != nil {
+		return nil, err
+	}
+
+	apiregistrationClientset, err := apiserviceclientset.NewForConfig(config)
+	if err != nil {
+		return nil, err
+	}
+
+	apiextensionClientset, err := apiextensionsclientset.NewForConfig(config)
+	if err != nil {
+		return nil, err
+	}
+
 	baseClient := &Client{
-		config:          config,
-		clientConfig:    clientConfig,
-		clientset:       clientset,
-		gardenClientset: nil,
-		restClient:      clientset.Discovery().RESTClient(),
+		config: config,
+
+		clientset:                clientset,
+		apiregistrationClientset: apiregistrationClientset,
+		apiextensionClientset:    apiextensionClientset,
+
+		restClient: clientset.Discovery().RESTClient(),
+
 		resourceAPIGroups: map[string][]string{
 			CronJobs:                  {"apis", "batch", "v1beta1"},
 			CustomResourceDefinitions: {"apis", "apiextensions.k8s.io", "v1beta1"},
-			DaemonSets:                {"apis", "apps", "v1beta2"},
-			Deployments:               {"apis", "apps", "v1beta2"},
+			DaemonSets:                {"apis", "apps", "v1"},
+			Deployments:               {"apis", "apps", "v1"},
 			Ingresses:                 {"apis", "extensions", "v1beta1"},
 			Jobs:                      {"apis", "batch", "v1"},
 			Namespaces:                {"api", "v1"},
 			PersistentVolumeClaims:    {"api", "v1"},
-			Pods:                   {"api", "v1"},
-			ReplicaSets:            {"apis", "apps", "v1beta2"},
-			ReplicationControllers: {"api", "v1"},
-			Services:               {"api", "v1"},
-			StatefulSets:           {"apis", "apps", "v1beta2"},
+			Pods:                      {"api", "v1"},
+			ReplicaSets:               {"apis", "apps", "v1"},
+			ReplicationControllers:    {"api", "v1"},
+			Services:                  {"api", "v1"},
+			StatefulSets:              {"apis", "apps", "v1"},
 		},
 	}
 

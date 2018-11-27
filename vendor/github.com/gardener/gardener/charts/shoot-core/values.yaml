@@ -1,18 +1,14 @@
 global:
+  kubernetesVersion: 1.12.1
   podNetwork: 100.96.0.0/11
+cluster-autoscaler:
+  enabled: false
 kube-proxy:
   kubeconfig: dummy-add-the-data-of-a-kubernetes-secret
   featureGates: {}
   podAnnotations: {}
   images:
     hyperkube: image-repository
-kube-dns:
-  clusterDNS: 100.64.0.10
-  images:
-    kube-dns: image-repository:image-tag
-    kube-dns-dnsmasq: image-repository:image-tag
-    kube-dns-sidecar: image-repository:image-tag
-    kube-dns-autoscaler:  image-repository:image-tag
 vpn-shoot:
   serviceNetwork: 10.0.0.0/24
   podNetwork: 192.168.0.0/16
@@ -31,3 +27,8 @@ monitoring:
   node-exporter:
     images:
       node-exporter: image-repository:image-tag
+metrics-server:
+  images:
+    metrics-server: image-repository:image-tag
+podsecuritypolicies:
+  allowPrivilegedContainers: false

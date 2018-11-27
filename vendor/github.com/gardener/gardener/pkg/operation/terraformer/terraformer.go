@@ -31,11 +31,12 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/wait"
 )
 
 // NewFromOperation takes an <o> operation object and initializes the Terraformer, and a
 // string <purpose> and returns an initialized Terraformer.
-func NewFromOperation(o *operation.Operation, purpose string) *Terraformer {
+func NewFromOperation(o *operation.Operation, purpose string) (*Terraformer, error) {
 	return New(o.Logger, o.K8sSeedClient, purpose, o.Shoot.Info.Name, o.Shoot.SeedNamespace, o.ImageVector)
 }
 
@@ -44,20 +45,25 @@ func NewFromOperation(o *operation.Operation, purpose string) *Terraformer {
 // <image> name for the to-be-used Docker image. It returns a Terraformer struct with initialized
 // values for the namespace and the names which will be used for all the stored resources like
 // ConfigMaps/Secrets.
-func New(logger *logrus.Entry, k8sClient kubernetes.Client, purpose, name, namespace string, imageVector imagevector.ImageVector) *Terraformer {
+func New(logger *logrus.Entry, k8sClient kubernetes.Client, purpose, name, namespace string, imageVector imagevector.ImageVector) (*Terraformer, error) {
 	var (
 		prefix    = fmt.Sprintf("%s.%s", name, purpose)
 		podSuffix = utils.ComputeSHA256Hex([]byte(time.Now().String()))[:5]
 		image     string
 	)
-	if img, _ := imageVector.FindImage("terraformer", k8sClient.Version()); img != nil {
+	if img, _ := imageVector.FindImage(common.TerraformerImageName, k8sClient.Version(), k8sClient.Version()); img != nil {
 		image = img.String()
+	}
+
+	chartRenderer, err := chartrenderer.New(k8sClient)
+	if err != nil {
+		return nil, err
 	}
 
 	return &Terraformer{
 		logger:        logger,
 		k8sClient:     k8sClient,
-		chartRenderer: chartrenderer.New(k8sClient),
+		chartRenderer: chartRenderer,
 
 		namespace: namespace,
 		purpose:   purpose,
@@ -68,7 +74,7 @@ func New(logger *logrus.Entry, k8sClient kubernetes.Client, purpose, name, names
 		stateName:     prefix + common.TerraformerStateSuffix,
 		podName:       fmt.Sprintf("%s-%s", prefix+common.TerraformerPodSuffix, podSuffix),
 		jobName:       prefix + common.TerraformerJobSuffix,
-	}
+	}, nil
 }
 
 // Apply executes the Terraform Job by running the 'terraform apply' command.
@@ -99,7 +105,7 @@ func (t *Terraformer) execute(scriptName string) error {
 	)
 
 	// We should retry the preparation check in order to allow the kube-apiserver to actually create the ConfigMaps.
-	if err := utils.Retry(t.logger, 30*time.Second, func() (bool, error) {
+	if err := wait.PollImmediate(5*time.Second, 30*time.Second, func() (bool, error) {
 		numberOfExistingResources, err := t.prepare()
 		if err != nil {
 			return false, err
@@ -107,7 +113,7 @@ func (t *Terraformer) execute(scriptName string) error {
 		if numberOfExistingResources == 0 {
 			t.logger.Debug("All ConfigMaps/Secrets do not exist, can not execute the Terraform Job.")
 			return true, nil
-		} else if numberOfExistingResources == 3 {
+		} else if numberOfExistingResources == numberOfConfigResources {
 			t.logger.Debug("All ConfigMaps/Secrets exist, will execute the Terraform Job.")
 			execute = true
 			return true, nil
@@ -217,7 +223,7 @@ func (t *Terraformer) execute(scriptName string) error {
 		if terraformErrors := retrieveTerraformErrors(logList); terraformErrors != nil {
 			errorMessage += fmt.Sprintf(" The following issues have been found in the logs:\n\n%s", strings.Join(terraformErrors, "\n\n"))
 		}
-		return common.DetermineErrorCode(errorMessage)
+		return common.DetermineError(errorMessage)
 	}
 	return nil
 }

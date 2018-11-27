@@ -12,6 +12,10 @@ import (
 // Public to allow building arbitrary schemes.
 // All generated defaulters are covering - they call all nested defaulters.
 func RegisterDefaults(scheme *runtime.Scheme) error {
+	scheme.AddTypeDefaultingFunc(&CloudProfile{}, func(obj interface{}) { SetObjectDefaults_CloudProfile(obj.(*CloudProfile)) })
+	scheme.AddTypeDefaultingFunc(&CloudProfileList{}, func(obj interface{}) { SetObjectDefaults_CloudProfileList(obj.(*CloudProfileList)) })
+	scheme.AddTypeDefaultingFunc(&Project{}, func(obj interface{}) { SetObjectDefaults_Project(obj.(*Project)) })
+	scheme.AddTypeDefaultingFunc(&ProjectList{}, func(obj interface{}) { SetObjectDefaults_ProjectList(obj.(*ProjectList)) })
 	scheme.AddTypeDefaultingFunc(&SecretBinding{}, func(obj interface{}) { SetObjectDefaults_SecretBinding(obj.(*SecretBinding)) })
 	scheme.AddTypeDefaultingFunc(&SecretBindingList{}, func(obj interface{}) { SetObjectDefaults_SecretBindingList(obj.(*SecretBindingList)) })
 	scheme.AddTypeDefaultingFunc(&Seed{}, func(obj interface{}) { SetObjectDefaults_Seed(obj.(*Seed)) })
@@ -19,6 +23,73 @@ func RegisterDefaults(scheme *runtime.Scheme) error {
 	scheme.AddTypeDefaultingFunc(&Shoot{}, func(obj interface{}) { SetObjectDefaults_Shoot(obj.(*Shoot)) })
 	scheme.AddTypeDefaultingFunc(&ShootList{}, func(obj interface{}) { SetObjectDefaults_ShootList(obj.(*ShootList)) })
 	return nil
+}
+
+func SetObjectDefaults_CloudProfile(in *CloudProfile) {
+	if in.Spec.AWS != nil {
+		for i := range in.Spec.AWS.Constraints.MachineTypes {
+			a := &in.Spec.AWS.Constraints.MachineTypes[i]
+			SetDefaults_MachineType(a)
+		}
+		for i := range in.Spec.AWS.Constraints.VolumeTypes {
+			a := &in.Spec.AWS.Constraints.VolumeTypes[i]
+			SetDefaults_VolumeType(a)
+		}
+	}
+	if in.Spec.Azure != nil {
+		for i := range in.Spec.Azure.Constraints.MachineTypes {
+			a := &in.Spec.Azure.Constraints.MachineTypes[i]
+			SetDefaults_MachineType(a)
+		}
+		for i := range in.Spec.Azure.Constraints.VolumeTypes {
+			a := &in.Spec.Azure.Constraints.VolumeTypes[i]
+			SetDefaults_VolumeType(a)
+		}
+	}
+	if in.Spec.GCP != nil {
+		for i := range in.Spec.GCP.Constraints.MachineTypes {
+			a := &in.Spec.GCP.Constraints.MachineTypes[i]
+			SetDefaults_MachineType(a)
+		}
+		for i := range in.Spec.GCP.Constraints.VolumeTypes {
+			a := &in.Spec.GCP.Constraints.VolumeTypes[i]
+			SetDefaults_VolumeType(a)
+		}
+	}
+	if in.Spec.OpenStack != nil {
+		for i := range in.Spec.OpenStack.Constraints.MachineTypes {
+			a := &in.Spec.OpenStack.Constraints.MachineTypes[i]
+			SetDefaults_MachineType(&a.MachineType)
+		}
+	}
+	if in.Spec.Alicloud != nil {
+		for i := range in.Spec.Alicloud.Constraints.MachineTypes {
+			a := &in.Spec.Alicloud.Constraints.MachineTypes[i]
+			SetDefaults_MachineType(&a.MachineType)
+		}
+		for i := range in.Spec.Alicloud.Constraints.VolumeTypes {
+			a := &in.Spec.Alicloud.Constraints.VolumeTypes[i]
+			SetDefaults_VolumeType(&a.VolumeType)
+		}
+	}
+}
+
+func SetObjectDefaults_CloudProfileList(in *CloudProfileList) {
+	for i := range in.Items {
+		a := &in.Items[i]
+		SetObjectDefaults_CloudProfile(a)
+	}
+}
+
+func SetObjectDefaults_Project(in *Project) {
+	SetDefaults_Project(in)
+}
+
+func SetObjectDefaults_ProjectList(in *ProjectList) {
+	for i := range in.Items {
+		a := &in.Items[i]
+		SetObjectDefaults_Project(a)
+	}
 }
 
 func SetObjectDefaults_SecretBinding(in *SecretBinding) {
@@ -45,6 +116,36 @@ func SetObjectDefaults_SeedList(in *SeedList) {
 
 func SetObjectDefaults_Shoot(in *Shoot) {
 	SetDefaults_Shoot(in)
+	if in.Spec.Cloud.AWS != nil {
+		for i := range in.Spec.Cloud.AWS.Workers {
+			a := &in.Spec.Cloud.AWS.Workers[i]
+			SetDefaults_Worker(&a.Worker)
+		}
+	}
+	if in.Spec.Cloud.Azure != nil {
+		for i := range in.Spec.Cloud.Azure.Workers {
+			a := &in.Spec.Cloud.Azure.Workers[i]
+			SetDefaults_Worker(&a.Worker)
+		}
+	}
+	if in.Spec.Cloud.GCP != nil {
+		for i := range in.Spec.Cloud.GCP.Workers {
+			a := &in.Spec.Cloud.GCP.Workers[i]
+			SetDefaults_Worker(&a.Worker)
+		}
+	}
+	if in.Spec.Cloud.OpenStack != nil {
+		for i := range in.Spec.Cloud.OpenStack.Workers {
+			a := &in.Spec.Cloud.OpenStack.Workers[i]
+			SetDefaults_Worker(&a.Worker)
+		}
+	}
+	if in.Spec.Cloud.Alicloud != nil {
+		for i := range in.Spec.Cloud.Alicloud.Workers {
+			a := &in.Spec.Cloud.Alicloud.Workers[i]
+			SetDefaults_Worker(&a.Worker)
+		}
+	}
 }
 
 func SetObjectDefaults_ShootList(in *ShootList) {

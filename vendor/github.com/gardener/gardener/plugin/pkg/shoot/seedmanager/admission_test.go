@@ -53,6 +53,11 @@ var _ = Describe("seedmanager", func() {
 					},
 					Visible:   &trueVar,
 					Protected: &falseVar,
+					Networks: garden.SeedNetworks{
+						Nodes:    garden.CIDR("10.10.0.0/16"),
+						Pods:     garden.CIDR("10.20.0.0/16"),
+						Services: garden.CIDR("10.30.0.0/16"),
+					},
 				},
 				Status: garden.SeedStatus{
 					Conditions: []garden.Condition{
@@ -72,6 +77,15 @@ var _ = Describe("seedmanager", func() {
 					Cloud: garden.Cloud{
 						Profile: cloudProfileName,
 						Region:  region,
+						AWS: &garden.AWSCloud{
+							Networks: garden.AWSNetworks{
+								K8SNetworks: garden.K8SNetworks{
+									Nodes:    makeCIDRPtr("10.40.0.0/16"),
+									Pods:     makeCIDRPtr("10.50.0.0/16"),
+									Services: makeCIDRPtr("10.60.0.0/16"),
+								},
+							},
+						},
 					},
 				},
 			}
@@ -94,7 +108,7 @@ var _ = Describe("seedmanager", func() {
 
 			It("should pass because the Seed specified in shoot manifest is not protected and shoot is not in garden namespace", func() {
 				gardenInformerFactory.Garden().InternalVersion().Seeds().Informer().GetStore().Add(&seed)
-				attrs := admission.NewAttributesRecord(&shoot, nil, garden.Kind("Shoot").WithVersion("version"), shoot.Namespace, shoot.Name, garden.Resource("shoots").WithVersion("version"), "", admission.Create, nil)
+				attrs := admission.NewAttributesRecord(&shoot, nil, garden.Kind("Shoot").WithVersion("version"), shoot.Namespace, shoot.Name, garden.Resource("shoots").WithVersion("version"), "", admission.Create, false, nil)
 
 				err := admissionHandler.Admit(attrs)
 
@@ -103,7 +117,7 @@ var _ = Describe("seedmanager", func() {
 
 			It("should pass because shoot is not in garden namespace and seed is not protected", func() {
 				gardenInformerFactory.Garden().InternalVersion().Seeds().Informer().GetStore().Add(&seed)
-				attrs := admission.NewAttributesRecord(&shoot, nil, garden.Kind("Shoot").WithVersion("version"), shoot.Namespace, shoot.Name, garden.Resource("shoots").WithVersion("version"), "", admission.Create, nil)
+				attrs := admission.NewAttributesRecord(&shoot, nil, garden.Kind("Shoot").WithVersion("version"), shoot.Namespace, shoot.Name, garden.Resource("shoots").WithVersion("version"), "", admission.Create, false, nil)
 
 				err := admissionHandler.Admit(attrs)
 
@@ -114,7 +128,7 @@ var _ = Describe("seedmanager", func() {
 				seed.Spec.Protected = &trueVar
 
 				gardenInformerFactory.Garden().InternalVersion().Seeds().Informer().GetStore().Add(&seed)
-				attrs := admission.NewAttributesRecord(&shoot, nil, garden.Kind("Shoot").WithVersion("version"), shoot.Namespace, shoot.Name, garden.Resource("shoots").WithVersion("version"), "", admission.Create, nil)
+				attrs := admission.NewAttributesRecord(&shoot, nil, garden.Kind("Shoot").WithVersion("version"), shoot.Namespace, shoot.Name, garden.Resource("shoots").WithVersion("version"), "", admission.Create, false, nil)
 
 				err := admissionHandler.Admit(attrs)
 
@@ -127,7 +141,7 @@ var _ = Describe("seedmanager", func() {
 				seed.Spec.Protected = &trueVar
 
 				gardenInformerFactory.Garden().InternalVersion().Seeds().Informer().GetStore().Add(&seed)
-				attrs := admission.NewAttributesRecord(&shoot, nil, garden.Kind("Shoot").WithVersion("version"), shoot.Namespace, shoot.Name, garden.Resource("shoots").WithVersion("version"), "", admission.Create, nil)
+				attrs := admission.NewAttributesRecord(&shoot, nil, garden.Kind("Shoot").WithVersion("version"), shoot.Namespace, shoot.Name, garden.Resource("shoots").WithVersion("version"), "", admission.Create, false, nil)
 
 				err := admissionHandler.Admit(attrs)
 
@@ -138,7 +152,7 @@ var _ = Describe("seedmanager", func() {
 				shoot.Namespace = "garden"
 
 				gardenInformerFactory.Garden().InternalVersion().Seeds().Informer().GetStore().Add(&seed)
-				attrs := admission.NewAttributesRecord(&shoot, nil, garden.Kind("Shoot").WithVersion("version"), shoot.Namespace, shoot.Name, garden.Resource("shoots").WithVersion("version"), "", admission.Create, nil)
+				attrs := admission.NewAttributesRecord(&shoot, nil, garden.Kind("Shoot").WithVersion("version"), shoot.Namespace, shoot.Name, garden.Resource("shoots").WithVersion("version"), "", admission.Create, false, nil)
 
 				err := admissionHandler.Admit(attrs)
 
@@ -153,7 +167,7 @@ var _ = Describe("seedmanager", func() {
 
 			It("should find a seed cluster referencing the same profile and region and indicating availability", func() {
 				gardenInformerFactory.Garden().InternalVersion().Seeds().Informer().GetStore().Add(&seed)
-				attrs := admission.NewAttributesRecord(&shoot, nil, garden.Kind("Shoot").WithVersion("version"), shoot.Namespace, shoot.Name, garden.Resource("shoots").WithVersion("version"), "", admission.Create, nil)
+				attrs := admission.NewAttributesRecord(&shoot, nil, garden.Kind("Shoot").WithVersion("version"), shoot.Namespace, shoot.Name, garden.Resource("shoots").WithVersion("version"), "", admission.Create, false, nil)
 
 				err := admissionHandler.Admit(attrs)
 
@@ -161,11 +175,49 @@ var _ = Describe("seedmanager", func() {
 				Expect(*shoot.Spec.Cloud.Seed).To(Equal(seedName))
 			})
 
+			It("should find the best seed cluster referencing the same profile and region and indicating availability", func() {
+				secondSeed := seedBase
+				secondSeed.Name = "seed-2"
+
+				gardenInformerFactory.Garden().InternalVersion().Seeds().Informer().GetStore().Add(&seed)
+				gardenInformerFactory.Garden().InternalVersion().Seeds().Informer().GetStore().Add(&secondSeed)
+
+				secondShoot := shootBase
+				secondShoot.Name = "shoot-2"
+				secondShoot.Spec.Cloud.Seed = &seed.Name
+
+				gardenInformerFactory.Garden().InternalVersion().Shoots().Informer().GetStore().Add(&secondShoot)
+
+				attrs := admission.NewAttributesRecord(&shoot, nil, garden.Kind("Shoot").WithVersion("version"), shoot.Namespace, shoot.Name, garden.Resource("shoots").WithVersion("version"), "", admission.Create, false, nil)
+
+				err := admissionHandler.Admit(attrs)
+
+				Expect(err).NotTo(HaveOccurred())
+				Expect(*shoot.Spec.Cloud.Seed).To(Equal(secondSeed.Name))
+			})
+
+			It("should fail because it cannot find a seed cluster due to network disjointedness", func() {
+				shoot.Spec.Cloud.AWS.Networks.K8SNetworks = garden.K8SNetworks{
+					Pods:     &seed.Spec.Networks.Pods,
+					Services: &seed.Spec.Networks.Services,
+					Nodes:    &seed.Spec.Networks.Nodes,
+				}
+
+				gardenInformerFactory.Garden().InternalVersion().Seeds().Informer().GetStore().Add(&seed)
+				attrs := admission.NewAttributesRecord(&shoot, nil, garden.Kind("Shoot").WithVersion("version"), shoot.Namespace, shoot.Name, garden.Resource("shoots").WithVersion("version"), "", admission.Create, false, nil)
+
+				err := admissionHandler.Admit(attrs)
+
+				Expect(err).To(HaveOccurred())
+				Expect(apierrors.IsForbidden(err)).To(BeTrue())
+				Expect(shoot.Spec.Cloud.Seed).To(BeNil())
+			})
+
 			It("should fail because it cannot find a seed cluster due to invalid region", func() {
 				shoot.Spec.Cloud.Region = "another-region"
 
 				gardenInformerFactory.Garden().InternalVersion().Seeds().Informer().GetStore().Add(&seed)
-				attrs := admission.NewAttributesRecord(&shoot, nil, garden.Kind("Shoot").WithVersion("version"), shoot.Namespace, shoot.Name, garden.Resource("shoots").WithVersion("version"), "", admission.Create, nil)
+				attrs := admission.NewAttributesRecord(&shoot, nil, garden.Kind("Shoot").WithVersion("version"), shoot.Namespace, shoot.Name, garden.Resource("shoots").WithVersion("version"), "", admission.Create, false, nil)
 
 				err := admissionHandler.Admit(attrs)
 
@@ -178,7 +230,7 @@ var _ = Describe("seedmanager", func() {
 				shoot.Spec.Cloud.Profile = "another-profile"
 
 				gardenInformerFactory.Garden().InternalVersion().Seeds().Informer().GetStore().Add(&seed)
-				attrs := admission.NewAttributesRecord(&shoot, nil, garden.Kind("Shoot").WithVersion("version"), shoot.Namespace, shoot.Name, garden.Resource("shoots").WithVersion("version"), "", admission.Create, nil)
+				attrs := admission.NewAttributesRecord(&shoot, nil, garden.Kind("Shoot").WithVersion("version"), shoot.Namespace, shoot.Name, garden.Resource("shoots").WithVersion("version"), "", admission.Create, false, nil)
 
 				err := admissionHandler.Admit(attrs)
 
@@ -196,7 +248,7 @@ var _ = Describe("seedmanager", func() {
 				}
 
 				gardenInformerFactory.Garden().InternalVersion().Seeds().Informer().GetStore().Add(&seed)
-				attrs := admission.NewAttributesRecord(&shoot, nil, garden.Kind("Shoot").WithVersion("version"), shoot.Namespace, shoot.Name, garden.Resource("shoots").WithVersion("version"), "", admission.Create, nil)
+				attrs := admission.NewAttributesRecord(&shoot, nil, garden.Kind("Shoot").WithVersion("version"), shoot.Namespace, shoot.Name, garden.Resource("shoots").WithVersion("version"), "", admission.Create, false, nil)
 
 				err := admissionHandler.Admit(attrs)
 
@@ -209,7 +261,7 @@ var _ = Describe("seedmanager", func() {
 				seed.Spec.Visible = &falseVar
 
 				gardenInformerFactory.Garden().InternalVersion().Seeds().Informer().GetStore().Add(&seed)
-				attrs := admission.NewAttributesRecord(&shoot, nil, garden.Kind("Shoot").WithVersion("version"), shoot.Namespace, shoot.Name, garden.Resource("shoots").WithVersion("version"), "", admission.Create, nil)
+				attrs := admission.NewAttributesRecord(&shoot, nil, garden.Kind("Shoot").WithVersion("version"), shoot.Namespace, shoot.Name, garden.Resource("shoots").WithVersion("version"), "", admission.Create, false, nil)
 
 				err := admissionHandler.Admit(attrs)
 
@@ -220,3 +272,8 @@ var _ = Describe("seedmanager", func() {
 		})
 	})
 })
+
+func makeCIDRPtr(cidr string) *garden.CIDR {
+	c := garden.CIDR(cidr)
+	return &c
+}

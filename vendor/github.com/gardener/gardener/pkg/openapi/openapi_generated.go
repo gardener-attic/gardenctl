@@ -23,9 +23,11 @@ limitations under the License.
 package openapi
 
 import (
+	v1beta1 "github.com/gardener/gardener/pkg/apis/garden/v1beta1"
 	spec "github.com/go-openapi/spec"
 	resource "k8s.io/apimachinery/pkg/api/resource"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	intstr "k8s.io/apimachinery/pkg/util/intstr"
 	common "k8s.io/kube-openapi/pkg/common"
 )
 
@@ -43,6 +45,17 @@ func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenA
 		"github.com/gardener/gardener/pkg/apis/garden/v1beta1.Addon":                         schema_pkg_apis_garden_v1beta1_Addon(ref),
 		"github.com/gardener/gardener/pkg/apis/garden/v1beta1.Addons":                        schema_pkg_apis_garden_v1beta1_Addons(ref),
 		"github.com/gardener/gardener/pkg/apis/garden/v1beta1.AdmissionPlugin":               schema_pkg_apis_garden_v1beta1_AdmissionPlugin(ref),
+		"github.com/gardener/gardener/pkg/apis/garden/v1beta1.Alicloud":                      schema_pkg_apis_garden_v1beta1_Alicloud(ref),
+		"github.com/gardener/gardener/pkg/apis/garden/v1beta1.AlicloudConstraints":           schema_pkg_apis_garden_v1beta1_AlicloudConstraints(ref),
+		"github.com/gardener/gardener/pkg/apis/garden/v1beta1.AlicloudMachineImage":          schema_pkg_apis_garden_v1beta1_AlicloudMachineImage(ref),
+		"github.com/gardener/gardener/pkg/apis/garden/v1beta1.AlicloudMachineType":           schema_pkg_apis_garden_v1beta1_AlicloudMachineType(ref),
+		"github.com/gardener/gardener/pkg/apis/garden/v1beta1.AlicloudNetworks":              schema_pkg_apis_garden_v1beta1_AlicloudNetworks(ref),
+		"github.com/gardener/gardener/pkg/apis/garden/v1beta1.AlicloudProfile":               schema_pkg_apis_garden_v1beta1_AlicloudProfile(ref),
+		"github.com/gardener/gardener/pkg/apis/garden/v1beta1.AlicloudVPC":                   schema_pkg_apis_garden_v1beta1_AlicloudVPC(ref),
+		"github.com/gardener/gardener/pkg/apis/garden/v1beta1.AlicloudVolumeType":            schema_pkg_apis_garden_v1beta1_AlicloudVolumeType(ref),
+		"github.com/gardener/gardener/pkg/apis/garden/v1beta1.AlicloudWorker":                schema_pkg_apis_garden_v1beta1_AlicloudWorker(ref),
+		"github.com/gardener/gardener/pkg/apis/garden/v1beta1.AuditConfig":                   schema_pkg_apis_garden_v1beta1_AuditConfig(ref),
+		"github.com/gardener/gardener/pkg/apis/garden/v1beta1.AuditPolicy":                   schema_pkg_apis_garden_v1beta1_AuditPolicy(ref),
 		"github.com/gardener/gardener/pkg/apis/garden/v1beta1.AzureCloud":                    schema_pkg_apis_garden_v1beta1_AzureCloud(ref),
 		"github.com/gardener/gardener/pkg/apis/garden/v1beta1.AzureConstraints":              schema_pkg_apis_garden_v1beta1_AzureConstraints(ref),
 		"github.com/gardener/gardener/pkg/apis/garden/v1beta1.AzureDomainCount":              schema_pkg_apis_garden_v1beta1_AzureDomainCount(ref),
@@ -58,6 +71,7 @@ func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenA
 		"github.com/gardener/gardener/pkg/apis/garden/v1beta1.BackupInfrastructureSpec":      schema_pkg_apis_garden_v1beta1_BackupInfrastructureSpec(ref),
 		"github.com/gardener/gardener/pkg/apis/garden/v1beta1.BackupInfrastructureStatus":    schema_pkg_apis_garden_v1beta1_BackupInfrastructureStatus(ref),
 		"github.com/gardener/gardener/pkg/apis/garden/v1beta1.Cloud":                         schema_pkg_apis_garden_v1beta1_Cloud(ref),
+		"github.com/gardener/gardener/pkg/apis/garden/v1beta1.CloudControllerManagerConfig":  schema_pkg_apis_garden_v1beta1_CloudControllerManagerConfig(ref),
 		"github.com/gardener/gardener/pkg/apis/garden/v1beta1.CloudProfile":                  schema_pkg_apis_garden_v1beta1_CloudProfile(ref),
 		"github.com/gardener/gardener/pkg/apis/garden/v1beta1.CloudProfileList":              schema_pkg_apis_garden_v1beta1_CloudProfileList(ref),
 		"github.com/gardener/gardener/pkg/apis/garden/v1beta1.CloudProfileSpec":              schema_pkg_apis_garden_v1beta1_CloudProfileSpec(ref),
@@ -73,8 +87,11 @@ func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenA
 		"github.com/gardener/gardener/pkg/apis/garden/v1beta1.GCPVPC":                        schema_pkg_apis_garden_v1beta1_GCPVPC(ref),
 		"github.com/gardener/gardener/pkg/apis/garden/v1beta1.GCPWorker":                     schema_pkg_apis_garden_v1beta1_GCPWorker(ref),
 		"github.com/gardener/gardener/pkg/apis/garden/v1beta1.Gardener":                      schema_pkg_apis_garden_v1beta1_Gardener(ref),
+		"github.com/gardener/gardener/pkg/apis/garden/v1beta1.GardenerDuration":              schema_pkg_apis_garden_v1beta1_GardenerDuration(ref),
 		"github.com/gardener/gardener/pkg/apis/garden/v1beta1.Heapster":                      schema_pkg_apis_garden_v1beta1_Heapster(ref),
 		"github.com/gardener/gardener/pkg/apis/garden/v1beta1.HelmTiller":                    schema_pkg_apis_garden_v1beta1_HelmTiller(ref),
+		"github.com/gardener/gardener/pkg/apis/garden/v1beta1.Hibernation":                   schema_pkg_apis_garden_v1beta1_Hibernation(ref),
+		"github.com/gardener/gardener/pkg/apis/garden/v1beta1.HorizontalPodAutoscalerConfig": schema_pkg_apis_garden_v1beta1_HorizontalPodAutoscalerConfig(ref),
 		"github.com/gardener/gardener/pkg/apis/garden/v1beta1.K8SNetworks":                   schema_pkg_apis_garden_v1beta1_K8SNetworks(ref),
 		"github.com/gardener/gardener/pkg/apis/garden/v1beta1.Kube2IAM":                      schema_pkg_apis_garden_v1beta1_Kube2IAM(ref),
 		"github.com/gardener/gardener/pkg/apis/garden/v1beta1.Kube2IAMRole":                  schema_pkg_apis_garden_v1beta1_Kube2IAMRole(ref),
@@ -111,6 +128,10 @@ func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenA
 		"github.com/gardener/gardener/pkg/apis/garden/v1beta1.OpenStackProfile":              schema_pkg_apis_garden_v1beta1_OpenStackProfile(ref),
 		"github.com/gardener/gardener/pkg/apis/garden/v1beta1.OpenStackRouter":               schema_pkg_apis_garden_v1beta1_OpenStackRouter(ref),
 		"github.com/gardener/gardener/pkg/apis/garden/v1beta1.OpenStackWorker":               schema_pkg_apis_garden_v1beta1_OpenStackWorker(ref),
+		"github.com/gardener/gardener/pkg/apis/garden/v1beta1.Project":                       schema_pkg_apis_garden_v1beta1_Project(ref),
+		"github.com/gardener/gardener/pkg/apis/garden/v1beta1.ProjectList":                   schema_pkg_apis_garden_v1beta1_ProjectList(ref),
+		"github.com/gardener/gardener/pkg/apis/garden/v1beta1.ProjectSpec":                   schema_pkg_apis_garden_v1beta1_ProjectSpec(ref),
+		"github.com/gardener/gardener/pkg/apis/garden/v1beta1.ProjectStatus":                 schema_pkg_apis_garden_v1beta1_ProjectStatus(ref),
 		"github.com/gardener/gardener/pkg/apis/garden/v1beta1.Quota":                         schema_pkg_apis_garden_v1beta1_Quota(ref),
 		"github.com/gardener/gardener/pkg/apis/garden/v1beta1.QuotaList":                     schema_pkg_apis_garden_v1beta1_QuotaList(ref),
 		"github.com/gardener/gardener/pkg/apis/garden/v1beta1.QuotaSpec":                     schema_pkg_apis_garden_v1beta1_QuotaSpec(ref),
@@ -314,6 +335,7 @@ func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenA
 		"k8s.io/api/core/v1.Toleration":                                                      schema_k8sio_api_core_v1_Toleration(ref),
 		"k8s.io/api/core/v1.TopologySelectorLabelRequirement":                                schema_k8sio_api_core_v1_TopologySelectorLabelRequirement(ref),
 		"k8s.io/api/core/v1.TopologySelectorTerm":                                            schema_k8sio_api_core_v1_TopologySelectorTerm(ref),
+		"k8s.io/api/core/v1.TypedLocalObjectReference":                                       schema_k8sio_api_core_v1_TypedLocalObjectReference(ref),
 		"k8s.io/api/core/v1.Volume":                                                          schema_k8sio_api_core_v1_Volume(ref),
 		"k8s.io/api/core/v1.VolumeDevice":                                                    schema_k8sio_api_core_v1_VolumeDevice(ref),
 		"k8s.io/api/core/v1.VolumeMount":                                                     schema_k8sio_api_core_v1_VolumeMount(ref),
@@ -322,6 +344,18 @@ func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenA
 		"k8s.io/api/core/v1.VolumeSource":                                                    schema_k8sio_api_core_v1_VolumeSource(ref),
 		"k8s.io/api/core/v1.VsphereVirtualDiskVolumeSource":                                  schema_k8sio_api_core_v1_VsphereVirtualDiskVolumeSource(ref),
 		"k8s.io/api/core/v1.WeightedPodAffinityTerm":                                         schema_k8sio_api_core_v1_WeightedPodAffinityTerm(ref),
+		"k8s.io/api/rbac/v1.AggregationRule":                                                 schema_k8sio_api_rbac_v1_AggregationRule(ref),
+		"k8s.io/api/rbac/v1.ClusterRole":                                                     schema_k8sio_api_rbac_v1_ClusterRole(ref),
+		"k8s.io/api/rbac/v1.ClusterRoleBinding":                                              schema_k8sio_api_rbac_v1_ClusterRoleBinding(ref),
+		"k8s.io/api/rbac/v1.ClusterRoleBindingList":                                          schema_k8sio_api_rbac_v1_ClusterRoleBindingList(ref),
+		"k8s.io/api/rbac/v1.ClusterRoleList":                                                 schema_k8sio_api_rbac_v1_ClusterRoleList(ref),
+		"k8s.io/api/rbac/v1.PolicyRule":                                                      schema_k8sio_api_rbac_v1_PolicyRule(ref),
+		"k8s.io/api/rbac/v1.Role":                                                            schema_k8sio_api_rbac_v1_Role(ref),
+		"k8s.io/api/rbac/v1.RoleBinding":                                                     schema_k8sio_api_rbac_v1_RoleBinding(ref),
+		"k8s.io/api/rbac/v1.RoleBindingList":                                                 schema_k8sio_api_rbac_v1_RoleBindingList(ref),
+		"k8s.io/api/rbac/v1.RoleList":                                                        schema_k8sio_api_rbac_v1_RoleList(ref),
+		"k8s.io/api/rbac/v1.RoleRef":                                                         schema_k8sio_api_rbac_v1_RoleRef(ref),
+		"k8s.io/api/rbac/v1.Subject":                                                         schema_k8sio_api_rbac_v1_Subject(ref),
 		"k8s.io/apimachinery/pkg/api/resource.Quantity":                                      schema_apimachinery_pkg_api_resource_Quantity(ref),
 		"k8s.io/apimachinery/pkg/api/resource.int64Amount":                                   schema_apimachinery_pkg_api_resource_int64Amount(ref),
 		"k8s.io/apimachinery/pkg/apis/meta/v1.APIGroup":                                      schema_pkg_apis_meta_v1_APIGroup(ref),
@@ -329,6 +363,7 @@ func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenA
 		"k8s.io/apimachinery/pkg/apis/meta/v1.APIResource":                                   schema_pkg_apis_meta_v1_APIResource(ref),
 		"k8s.io/apimachinery/pkg/apis/meta/v1.APIResourceList":                               schema_pkg_apis_meta_v1_APIResourceList(ref),
 		"k8s.io/apimachinery/pkg/apis/meta/v1.APIVersions":                                   schema_pkg_apis_meta_v1_APIVersions(ref),
+		"k8s.io/apimachinery/pkg/apis/meta/v1.CreateOptions":                                 schema_pkg_apis_meta_v1_CreateOptions(ref),
 		"k8s.io/apimachinery/pkg/apis/meta/v1.DeleteOptions":                                 schema_pkg_apis_meta_v1_DeleteOptions(ref),
 		"k8s.io/apimachinery/pkg/apis/meta/v1.Duration":                                      schema_pkg_apis_meta_v1_Duration(ref),
 		"k8s.io/apimachinery/pkg/apis/meta/v1.ExportOptions":                                 schema_pkg_apis_meta_v1_ExportOptions(ref),
@@ -360,10 +395,12 @@ func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenA
 		"k8s.io/apimachinery/pkg/apis/meta/v1.Time":                                          schema_pkg_apis_meta_v1_Time(ref),
 		"k8s.io/apimachinery/pkg/apis/meta/v1.Timestamp":                                     schema_pkg_apis_meta_v1_Timestamp(ref),
 		"k8s.io/apimachinery/pkg/apis/meta/v1.TypeMeta":                                      schema_pkg_apis_meta_v1_TypeMeta(ref),
+		"k8s.io/apimachinery/pkg/apis/meta/v1.UpdateOptions":                                 schema_pkg_apis_meta_v1_UpdateOptions(ref),
 		"k8s.io/apimachinery/pkg/apis/meta/v1.WatchEvent":                                    schema_pkg_apis_meta_v1_WatchEvent(ref),
 		"k8s.io/apimachinery/pkg/runtime.RawExtension":                                       schema_k8sio_apimachinery_pkg_runtime_RawExtension(ref),
 		"k8s.io/apimachinery/pkg/runtime.TypeMeta":                                           schema_k8sio_apimachinery_pkg_runtime_TypeMeta(ref),
 		"k8s.io/apimachinery/pkg/runtime.Unknown":                                            schema_k8sio_apimachinery_pkg_runtime_Unknown(ref),
+		"k8s.io/apimachinery/pkg/util/intstr.IntOrString":                                    schema_apimachinery_pkg_util_intstr_IntOrString(ref),
 		"k8s.io/apimachinery/pkg/version.Info":                                               schema_k8sio_apimachinery_pkg_version_Info(ref),
 	}
 }
@@ -763,6 +800,18 @@ func schema_pkg_apis_garden_v1beta1_AWSWorker(ref common.ReferenceCallback) comm
 							Format:      "int32",
 						},
 					},
+					"maxSurge": {
+						SchemaProps: spec.SchemaProps{
+							Description: "MaxSurge is maximum number of VMs that are created during an update.",
+							Ref:         ref("k8s.io/apimachinery/pkg/util/intstr.IntOrString"),
+						},
+					},
+					"maxUnavailable": {
+						SchemaProps: spec.SchemaProps{
+							Description: "MaxUnavailable is the maximum number of VMs that can be unavailable during an update.",
+							Ref:         ref("k8s.io/apimachinery/pkg/util/intstr.IntOrString"),
+						},
+					},
 					"volumeType": {
 						SchemaProps: spec.SchemaProps{
 							Description: "VolumeType is the type of the root volumes.",
@@ -781,7 +830,8 @@ func schema_pkg_apis_garden_v1beta1_AWSWorker(ref common.ReferenceCallback) comm
 				Required: []string{"name", "machineType", "autoScalerMin", "autoScalerMax", "volumeType", "volumeSize"},
 			},
 		},
-		Dependencies: []string{},
+		Dependencies: []string{
+			"k8s.io/apimachinery/pkg/util/intstr.IntOrString"},
 	}
 }
 
@@ -812,30 +862,6 @@ func schema_pkg_apis_garden_v1beta1_Addons(ref common.ReferenceCallback) common.
 			SchemaProps: spec.SchemaProps{
 				Description: "Addons is a collection of configuration for specific addons which are managed by the Gardener.",
 				Properties: map[string]spec.Schema{
-					"cluster-autoscaler": {
-						SchemaProps: spec.SchemaProps{
-							Description: "ClusterAutoscaler holds configuration settings for the cluster autoscaler addon.",
-							Ref:         ref("github.com/gardener/gardener/pkg/apis/garden/v1beta1.ClusterAutoscaler"),
-						},
-					},
-					"heapster": {
-						SchemaProps: spec.SchemaProps{
-							Description: "Heapster holds configuration settings for the heapster addon.",
-							Ref:         ref("github.com/gardener/gardener/pkg/apis/garden/v1beta1.Heapster"),
-						},
-					},
-					"kube2iam": {
-						SchemaProps: spec.SchemaProps{
-							Description: "Kube2IAM holds configuration settings for the kube2iam addon (only AWS).",
-							Ref:         ref("github.com/gardener/gardener/pkg/apis/garden/v1beta1.Kube2IAM"),
-						},
-					},
-					"kube-lego": {
-						SchemaProps: spec.SchemaProps{
-							Description: "KubeLego holds configuration settings for the kube-lego addon.",
-							Ref:         ref("github.com/gardener/gardener/pkg/apis/garden/v1beta1.KubeLego"),
-						},
-					},
 					"kubernetes-dashboard": {
 						SchemaProps: spec.SchemaProps{
 							Description: "KubernetesDashboard holds configuration settings for the kubernetes dashboard addon.",
@@ -848,9 +874,33 @@ func schema_pkg_apis_garden_v1beta1_Addons(ref common.ReferenceCallback) common.
 							Ref:         ref("github.com/gardener/gardener/pkg/apis/garden/v1beta1.NginxIngress"),
 						},
 					},
+					"cluster-autoscaler": {
+						SchemaProps: spec.SchemaProps{
+							Description: "ClusterAutoscaler holds configuration settings for the cluster autoscaler addon. DEPRECATED: This field will be removed in a future version.",
+							Ref:         ref("github.com/gardener/gardener/pkg/apis/garden/v1beta1.ClusterAutoscaler"),
+						},
+					},
+					"heapster": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Heapster holds configuration settings for the heapster addon. DEPRECATED: This field will be removed in a future version.",
+							Ref:         ref("github.com/gardener/gardener/pkg/apis/garden/v1beta1.Heapster"),
+						},
+					},
+					"kube2iam": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Kube2IAM holds configuration settings for the kube2iam addon (only AWS). DEPRECATED: This field will be removed in a future version.",
+							Ref:         ref("github.com/gardener/gardener/pkg/apis/garden/v1beta1.Kube2IAM"),
+						},
+					},
+					"kube-lego": {
+						SchemaProps: spec.SchemaProps{
+							Description: "KubeLego holds configuration settings for the kube-lego addon. DEPRECATED: This field will be removed in a future version.",
+							Ref:         ref("github.com/gardener/gardener/pkg/apis/garden/v1beta1.KubeLego"),
+						},
+					},
 					"monocular": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Monocular holds configuration settings for the monocular addon.",
+							Description: "Monocular holds configuration settings for the monocular addon. DEPRECATED: This field will be removed in a future version.",
 							Ref:         ref("github.com/gardener/gardener/pkg/apis/garden/v1beta1.Monocular"),
 						},
 					},
@@ -887,6 +937,495 @@ func schema_pkg_apis_garden_v1beta1_AdmissionPlugin(ref common.ReferenceCallback
 			},
 		},
 		Dependencies: []string{},
+	}
+}
+
+func schema_pkg_apis_garden_v1beta1_Alicloud(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "Alicloud contains the Shoot specification for Alibaba cloud",
+				Properties: map[string]spec.Schema{
+					"machineImage": {
+						SchemaProps: spec.SchemaProps{
+							Description: "MachineImage holds information about the machine image to use for all workers. It will default to the first image stated in the referenced CloudProfile if no value has been provided.",
+							Ref:         ref("github.com/gardener/gardener/pkg/apis/garden/v1beta1.AlicloudMachineImage"),
+						},
+					},
+					"networks": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Networks holds information about the Kubernetes and infrastructure networks.",
+							Ref:         ref("github.com/gardener/gardener/pkg/apis/garden/v1beta1.AlicloudNetworks"),
+						},
+					},
+					"workers": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Workers is a list of worker groups.",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Ref: ref("github.com/gardener/gardener/pkg/apis/garden/v1beta1.AlicloudWorker"),
+									},
+								},
+							},
+						},
+					},
+					"zones": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Zones is a list of availability zones to deploy the Shoot cluster to, currently, only one is supported.",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Type:   []string{"string"},
+										Format: "",
+									},
+								},
+							},
+						},
+					},
+				},
+				Required: []string{"networks", "workers", "zones"},
+			},
+		},
+		Dependencies: []string{
+			"github.com/gardener/gardener/pkg/apis/garden/v1beta1.AlicloudMachineImage", "github.com/gardener/gardener/pkg/apis/garden/v1beta1.AlicloudNetworks", "github.com/gardener/gardener/pkg/apis/garden/v1beta1.AlicloudWorker"},
+	}
+}
+
+func schema_pkg_apis_garden_v1beta1_AlicloudConstraints(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "AlicloudConstraints is an object containing constraints for certain values in the Shoot specification",
+				Properties: map[string]spec.Schema{
+					"dnsProviders": {
+						SchemaProps: spec.SchemaProps{
+							Description: "DNSProviders contains constraints regarding allowed values of the 'dns.provider' block in the Shoot specification.",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Ref: ref("github.com/gardener/gardener/pkg/apis/garden/v1beta1.DNSProviderConstraint"),
+									},
+								},
+							},
+						},
+					},
+					"kubernetes": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Kubernetes contains constraints regarding allowed values of the 'kubernetes' block in the Shoot specification.",
+							Ref:         ref("github.com/gardener/gardener/pkg/apis/garden/v1beta1.KubernetesConstraints"),
+						},
+					},
+					"machineImages": {
+						SchemaProps: spec.SchemaProps{
+							Description: "MachineImages contains constraints regarding allowed values for machine images in the Shoot specification.",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Ref: ref("github.com/gardener/gardener/pkg/apis/garden/v1beta1.AlicloudMachineImage"),
+									},
+								},
+							},
+						},
+					},
+					"machineTypes": {
+						SchemaProps: spec.SchemaProps{
+							Description: "MachineTypes contains constraints regarding allowed values for machine types in the 'workers' block in the Shoot specification.",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Ref: ref("github.com/gardener/gardener/pkg/apis/garden/v1beta1.AlicloudMachineType"),
+									},
+								},
+							},
+						},
+					},
+					"volumeTypes": {
+						SchemaProps: spec.SchemaProps{
+							Description: "VolumeTypes contains constraints regarding allowed values for volume types in the 'workers' block in the Shoot specification.",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Ref: ref("github.com/gardener/gardener/pkg/apis/garden/v1beta1.AlicloudVolumeType"),
+									},
+								},
+							},
+						},
+					},
+					"zones": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Zones contains constraints regarding allowed values for 'zones' block in the Shoot specification.",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Ref: ref("github.com/gardener/gardener/pkg/apis/garden/v1beta1.Zone"),
+									},
+								},
+							},
+						},
+					},
+				},
+				Required: []string{"dnsProviders", "kubernetes", "machineImages", "machineTypes", "volumeTypes", "zones"},
+			},
+		},
+		Dependencies: []string{
+			"github.com/gardener/gardener/pkg/apis/garden/v1beta1.AlicloudMachineImage", "github.com/gardener/gardener/pkg/apis/garden/v1beta1.AlicloudMachineType", "github.com/gardener/gardener/pkg/apis/garden/v1beta1.AlicloudVolumeType", "github.com/gardener/gardener/pkg/apis/garden/v1beta1.DNSProviderConstraint", "github.com/gardener/gardener/pkg/apis/garden/v1beta1.KubernetesConstraints", "github.com/gardener/gardener/pkg/apis/garden/v1beta1.Zone"},
+	}
+}
+
+func schema_pkg_apis_garden_v1beta1_AlicloudMachineImage(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "AlicloudMachineImage defines the machine image for Alicloud.",
+				Properties: map[string]spec.Schema{
+					"name": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Name is the name of the image.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"id": {
+						SchemaProps: spec.SchemaProps{
+							Description: "ID is the ID of the image.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+				},
+				Required: []string{"name", "id"},
+			},
+		},
+		Dependencies: []string{},
+	}
+}
+
+func schema_pkg_apis_garden_v1beta1_AlicloudMachineType(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "AlicloudMachineType defines certain machine types and zone constraints.",
+				Properties: map[string]spec.Schema{
+					"name": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Name is the name of the machine type.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"usable": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Usable defines if the machine type can be used for shoot clusters.",
+							Type:        []string{"boolean"},
+							Format:      "",
+						},
+					},
+					"cpu": {
+						SchemaProps: spec.SchemaProps{
+							Description: "CPU is the number of CPUs for this machine type.",
+							Ref:         ref("k8s.io/apimachinery/pkg/api/resource.Quantity"),
+						},
+					},
+					"gpu": {
+						SchemaProps: spec.SchemaProps{
+							Description: "GPU is the number of GPUs for this machine type.",
+							Ref:         ref("k8s.io/apimachinery/pkg/api/resource.Quantity"),
+						},
+					},
+					"memory": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Memory is the amount of memory for this machine type.",
+							Ref:         ref("k8s.io/apimachinery/pkg/api/resource.Quantity"),
+						},
+					},
+					"zones": {
+						SchemaProps: spec.SchemaProps{
+							Type: []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Type:   []string{"string"},
+										Format: "",
+									},
+								},
+							},
+						},
+					},
+				},
+				Required: []string{"name", "cpu", "gpu", "memory", "zones"},
+			},
+		},
+		Dependencies: []string{
+			"k8s.io/apimachinery/pkg/api/resource.Quantity"},
+	}
+}
+
+func schema_pkg_apis_garden_v1beta1_AlicloudNetworks(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "AlicloudNetworks holds information about the Kubernetes and infrastructure networks.",
+				Properties: map[string]spec.Schema{
+					"nodes": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Nodes is the CIDR of the node network.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"pods": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Pods is the CIDR of the pod network.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"services": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Services is the CIDR of the service network.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"vpc": {
+						SchemaProps: spec.SchemaProps{
+							Description: "VPC indicates whether to use an existing VPC or create a new one.",
+							Ref:         ref("github.com/gardener/gardener/pkg/apis/garden/v1beta1.AlicloudVPC"),
+						},
+					},
+					"workers": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Workers is a CIDR of a worker subnet (private) to create (used for the VMs).",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Type:   []string{"string"},
+										Format: "",
+									},
+								},
+							},
+						},
+					},
+				},
+				Required: []string{"vpc", "workers"},
+			},
+		},
+		Dependencies: []string{
+			"github.com/gardener/gardener/pkg/apis/garden/v1beta1.AlicloudVPC"},
+	}
+}
+
+func schema_pkg_apis_garden_v1beta1_AlicloudProfile(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "AlicloudProfile defines constraints and definitions in Alibaba Cloud environment.",
+				Properties: map[string]spec.Schema{
+					"constraints": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Constraints is an object containing constraints for certain values in the Shoot specification.",
+							Ref:         ref("github.com/gardener/gardener/pkg/apis/garden/v1beta1.AlicloudConstraints"),
+						},
+					},
+				},
+				Required: []string{"constraints"},
+			},
+		},
+		Dependencies: []string{
+			"github.com/gardener/gardener/pkg/apis/garden/v1beta1.AlicloudConstraints"},
+	}
+}
+
+func schema_pkg_apis_garden_v1beta1_AlicloudVPC(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "AlicloudVPC contains either an id (of an existing VPC) or the CIDR (for a VPC to be created).",
+				Properties: map[string]spec.Schema{
+					"id": {
+						SchemaProps: spec.SchemaProps{
+							Description: "ID is the Alicloud VPC id of an existing VPC.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"cidr": {
+						SchemaProps: spec.SchemaProps{
+							Description: "CIDR is a CIDR range for a new VPC.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+				},
+			},
+		},
+		Dependencies: []string{},
+	}
+}
+
+func schema_pkg_apis_garden_v1beta1_AlicloudVolumeType(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "AlicloudVolumeType defines certain volume types and zone constraints.",
+				Properties: map[string]spec.Schema{
+					"name": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Name is the name of the volume type.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"usable": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Usable defines if the volume type can be used for shoot clusters.",
+							Type:        []string{"boolean"},
+							Format:      "",
+						},
+					},
+					"class": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Class is the class of the volume type.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"zones": {
+						SchemaProps: spec.SchemaProps{
+							Type: []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Type:   []string{"string"},
+										Format: "",
+									},
+								},
+							},
+						},
+					},
+				},
+				Required: []string{"name", "class", "zones"},
+			},
+		},
+		Dependencies: []string{},
+	}
+}
+
+func schema_pkg_apis_garden_v1beta1_AlicloudWorker(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "AlicloudWorker is the definition of a worker group.",
+				Properties: map[string]spec.Schema{
+					"name": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Name is the name of the worker group.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"machineType": {
+						SchemaProps: spec.SchemaProps{
+							Description: "MachineType is the machine type of the worker group.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"autoScalerMin": {
+						SchemaProps: spec.SchemaProps{
+							Description: "AutoScalerMin is the minimum number of VMs to create.",
+							Type:        []string{"integer"},
+							Format:      "int32",
+						},
+					},
+					"autoScalerMax": {
+						SchemaProps: spec.SchemaProps{
+							Description: "AutoScalerMin is the maximum number of VMs to create.",
+							Type:        []string{"integer"},
+							Format:      "int32",
+						},
+					},
+					"maxSurge": {
+						SchemaProps: spec.SchemaProps{
+							Description: "MaxSurge is maximum number of VMs that are created during an update.",
+							Ref:         ref("k8s.io/apimachinery/pkg/util/intstr.IntOrString"),
+						},
+					},
+					"maxUnavailable": {
+						SchemaProps: spec.SchemaProps{
+							Description: "MaxUnavailable is the maximum number of VMs that can be unavailable during an update.",
+							Ref:         ref("k8s.io/apimachinery/pkg/util/intstr.IntOrString"),
+						},
+					},
+					"volumeType": {
+						SchemaProps: spec.SchemaProps{
+							Description: "VolumeType is the type of the root volumes.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"volumeSize": {
+						SchemaProps: spec.SchemaProps{
+							Description: "VolumeSize is the size of the root volume.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+				},
+				Required: []string{"name", "machineType", "autoScalerMin", "autoScalerMax", "volumeType", "volumeSize"},
+			},
+		},
+		Dependencies: []string{
+			"k8s.io/apimachinery/pkg/util/intstr.IntOrString"},
+	}
+}
+
+func schema_pkg_apis_garden_v1beta1_AuditConfig(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "AuditConfig contains settings for audit of the api server",
+				Properties: map[string]spec.Schema{
+					"auditPolicy": {
+						SchemaProps: spec.SchemaProps{
+							Description: "AuditPolicy contains configuration settings for audit policy of the kube-apiserver.",
+							Ref:         ref("github.com/gardener/gardener/pkg/apis/garden/v1beta1.AuditPolicy"),
+						},
+					},
+				},
+			},
+		},
+		Dependencies: []string{
+			"github.com/gardener/gardener/pkg/apis/garden/v1beta1.AuditPolicy"},
+	}
+}
+
+func schema_pkg_apis_garden_v1beta1_AuditPolicy(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "AuditPolicy contains audit policy for kube-apiserver",
+				Properties: map[string]spec.Schema{
+					"configMapRef": {
+						SchemaProps: spec.SchemaProps{
+							Description: "ConfigMapRef is a reference to a ConfigMap object in the same namespace, which contains the audit policy for the kube-apiserver.",
+							Ref:         ref("k8s.io/api/core/v1.LocalObjectReference"),
+						},
+					},
+				},
+			},
+		},
+		Dependencies: []string{
+			"k8s.io/api/core/v1.LocalObjectReference"},
 	}
 }
 
@@ -1264,6 +1803,18 @@ func schema_pkg_apis_garden_v1beta1_AzureWorker(ref common.ReferenceCallback) co
 							Format:      "int32",
 						},
 					},
+					"maxSurge": {
+						SchemaProps: spec.SchemaProps{
+							Description: "MaxSurge is maximum number of VMs that are created during an update.",
+							Ref:         ref("k8s.io/apimachinery/pkg/util/intstr.IntOrString"),
+						},
+					},
+					"maxUnavailable": {
+						SchemaProps: spec.SchemaProps{
+							Description: "MaxUnavailable is the maximum number of VMs that can be unavailable during an update.",
+							Ref:         ref("k8s.io/apimachinery/pkg/util/intstr.IntOrString"),
+						},
+					},
 					"volumeType": {
 						SchemaProps: spec.SchemaProps{
 							Description: "VolumeType is the type of the root volumes.",
@@ -1282,7 +1833,8 @@ func schema_pkg_apis_garden_v1beta1_AzureWorker(ref common.ReferenceCallback) co
 				Required: []string{"name", "machineType", "autoScalerMin", "autoScalerMax", "volumeType", "volumeSize"},
 			},
 		},
-		Dependencies: []string{},
+		Dependencies: []string{
+			"k8s.io/apimachinery/pkg/util/intstr.IntOrString"},
 	}
 }
 
@@ -1531,6 +2083,12 @@ func schema_pkg_apis_garden_v1beta1_Cloud(ref common.ReferenceCallback) common.O
 							Ref:         ref("github.com/gardener/gardener/pkg/apis/garden/v1beta1.OpenStackCloud"),
 						},
 					},
+					"alicloud": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Alicloud contains the Shoot specification for the Alibaba cloud.",
+							Ref:         ref("github.com/gardener/gardener/pkg/apis/garden/v1beta1.Alicloud"),
+						},
+					},
 					"local": {
 						SchemaProps: spec.SchemaProps{
 							Description: "Local contains the Shoot specification for the Local local provider.",
@@ -1542,7 +2100,34 @@ func schema_pkg_apis_garden_v1beta1_Cloud(ref common.ReferenceCallback) common.O
 			},
 		},
 		Dependencies: []string{
-			"github.com/gardener/gardener/pkg/apis/garden/v1beta1.AWSCloud", "github.com/gardener/gardener/pkg/apis/garden/v1beta1.AzureCloud", "github.com/gardener/gardener/pkg/apis/garden/v1beta1.GCPCloud", "github.com/gardener/gardener/pkg/apis/garden/v1beta1.Local", "github.com/gardener/gardener/pkg/apis/garden/v1beta1.OpenStackCloud", "k8s.io/api/core/v1.LocalObjectReference"},
+			"github.com/gardener/gardener/pkg/apis/garden/v1beta1.AWSCloud", "github.com/gardener/gardener/pkg/apis/garden/v1beta1.Alicloud", "github.com/gardener/gardener/pkg/apis/garden/v1beta1.AzureCloud", "github.com/gardener/gardener/pkg/apis/garden/v1beta1.GCPCloud", "github.com/gardener/gardener/pkg/apis/garden/v1beta1.Local", "github.com/gardener/gardener/pkg/apis/garden/v1beta1.OpenStackCloud", "k8s.io/api/core/v1.LocalObjectReference"},
+	}
+}
+
+func schema_pkg_apis_garden_v1beta1_CloudControllerManagerConfig(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "CloudControllerManagerConfig contains configuration settings for the cloud-controller-manager.",
+				Properties: map[string]spec.Schema{
+					"featureGates": {
+						SchemaProps: spec.SchemaProps{
+							Description: "FeatureGates contains information about enabled feature gates.",
+							Type:        []string{"object"},
+							AdditionalProperties: &spec.SchemaOrBool{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Type:   []string{"boolean"},
+										Format: "",
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		Dependencies: []string{},
 	}
 }
 
@@ -1664,6 +2249,12 @@ func schema_pkg_apis_garden_v1beta1_CloudProfileSpec(ref common.ReferenceCallbac
 							Ref:         ref("github.com/gardener/gardener/pkg/apis/garden/v1beta1.OpenStackProfile"),
 						},
 					},
+					"alicloud": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Alicloud is the profile specification for the Alibaba cloud.",
+							Ref:         ref("github.com/gardener/gardener/pkg/apis/garden/v1beta1.AlicloudProfile"),
+						},
+					},
 					"local": {
 						SchemaProps: spec.SchemaProps{
 							Description: "Local is the profile specification for the Local provider.",
@@ -1681,7 +2272,7 @@ func schema_pkg_apis_garden_v1beta1_CloudProfileSpec(ref common.ReferenceCallbac
 			},
 		},
 		Dependencies: []string{
-			"github.com/gardener/gardener/pkg/apis/garden/v1beta1.AWSProfile", "github.com/gardener/gardener/pkg/apis/garden/v1beta1.AzureProfile", "github.com/gardener/gardener/pkg/apis/garden/v1beta1.GCPProfile", "github.com/gardener/gardener/pkg/apis/garden/v1beta1.LocalProfile", "github.com/gardener/gardener/pkg/apis/garden/v1beta1.OpenStackProfile"},
+			"github.com/gardener/gardener/pkg/apis/garden/v1beta1.AWSProfile", "github.com/gardener/gardener/pkg/apis/garden/v1beta1.AlicloudProfile", "github.com/gardener/gardener/pkg/apis/garden/v1beta1.AzureProfile", "github.com/gardener/gardener/pkg/apis/garden/v1beta1.GCPProfile", "github.com/gardener/gardener/pkg/apis/garden/v1beta1.LocalProfile", "github.com/gardener/gardener/pkg/apis/garden/v1beta1.OpenStackProfile"},
 	}
 }
 
@@ -2118,6 +2709,18 @@ func schema_pkg_apis_garden_v1beta1_GCPWorker(ref common.ReferenceCallback) comm
 							Format:      "int32",
 						},
 					},
+					"maxSurge": {
+						SchemaProps: spec.SchemaProps{
+							Description: "MaxSurge is maximum number of VMs that are created during an update.",
+							Ref:         ref("k8s.io/apimachinery/pkg/util/intstr.IntOrString"),
+						},
+					},
+					"maxUnavailable": {
+						SchemaProps: spec.SchemaProps{
+							Description: "MaxUnavailable is the maximum number of VMs that can be unavailable during an update.",
+							Ref:         ref("k8s.io/apimachinery/pkg/util/intstr.IntOrString"),
+						},
+					},
 					"volumeType": {
 						SchemaProps: spec.SchemaProps{
 							Description: "VolumeType is the type of the root volumes.",
@@ -2136,7 +2739,8 @@ func schema_pkg_apis_garden_v1beta1_GCPWorker(ref common.ReferenceCallback) comm
 				Required: []string{"name", "machineType", "autoScalerMin", "autoScalerMax", "volumeType", "volumeSize"},
 			},
 		},
-		Dependencies: []string{},
+		Dependencies: []string{
+			"k8s.io/apimachinery/pkg/util/intstr.IntOrString"},
 	}
 }
 
@@ -2172,6 +2776,18 @@ func schema_pkg_apis_garden_v1beta1_Gardener(ref common.ReferenceCallback) commo
 			},
 		},
 		Dependencies: []string{},
+	}
+}
+
+func schema_pkg_apis_garden_v1beta1_GardenerDuration(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "GardenerDuration is a workaround for missing OpenAPI functions on metav1.Duration struct.",
+				Type:        v1beta1.GardenerDuration{}.OpenAPISchemaType(),
+				Format:      v1beta1.GardenerDuration{}.OpenAPISchemaFormat(),
+			},
+		},
 	}
 }
 
@@ -2214,6 +2830,84 @@ func schema_pkg_apis_garden_v1beta1_HelmTiller(ref common.ReferenceCallback) com
 			},
 		},
 		Dependencies: []string{},
+	}
+}
+
+func schema_pkg_apis_garden_v1beta1_Hibernation(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "Hibernation contains information whether the Shoot is suspended or not.",
+				Properties: map[string]spec.Schema{
+					"enabled": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Enabled is true if Shoot is hibernated, false otherwise.",
+							Type:        []string{"boolean"},
+							Format:      "",
+						},
+					},
+				},
+				Required: []string{"enabled"},
+			},
+		},
+		Dependencies: []string{},
+	}
+}
+
+func schema_pkg_apis_garden_v1beta1_HorizontalPodAutoscalerConfig(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "HorizontalPodAutoscalerConfig contains horizontal pod autoscaler configuration settings for the kube-controller-manager. Note: Descriptions were taken from the Kubernetes documentation.",
+				Properties: map[string]spec.Schema{
+					"downscaleDelay": {
+						SchemaProps: spec.SchemaProps{
+							Description: "The period since last downscale, before another downscale can be performed in horizontal pod autoscaler.",
+							Ref:         ref("github.com/gardener/gardener/pkg/apis/garden/v1beta1.GardenerDuration"),
+						},
+					},
+					"syncPeriod": {
+						SchemaProps: spec.SchemaProps{
+							Description: "The period for syncing the number of pods in horizontal pod autoscaler.",
+							Ref:         ref("github.com/gardener/gardener/pkg/apis/garden/v1beta1.GardenerDuration"),
+						},
+					},
+					"tolerance": {
+						SchemaProps: spec.SchemaProps{
+							Description: "The minimum change (from 1.0) in the desired-to-actual metrics ratio for the horizontal pod autoscaler to consider scaling.",
+							Type:        []string{"number"},
+							Format:      "double",
+						},
+					},
+					"upscaleDelay": {
+						SchemaProps: spec.SchemaProps{
+							Description: "The period since last upscale, before another upscale can be performed in horizontal pod autoscaler.",
+							Ref:         ref("github.com/gardener/gardener/pkg/apis/garden/v1beta1.GardenerDuration"),
+						},
+					},
+					"downscaleStabilization": {
+						SchemaProps: spec.SchemaProps{
+							Description: "The configurable window at which the controller will choose the highest recommendation for autoscaling.",
+							Ref:         ref("github.com/gardener/gardener/pkg/apis/garden/v1beta1.GardenerDuration"),
+						},
+					},
+					"initialReadinessDelay": {
+						SchemaProps: spec.SchemaProps{
+							Description: "The configurable period at which the horizontal pod autoscaler considers a Pod “not yet ready” given that it’s unready and it has  transitioned to unready during that time.",
+							Ref:         ref("github.com/gardener/gardener/pkg/apis/garden/v1beta1.GardenerDuration"),
+						},
+					},
+					"cpuInitializationPeriod": {
+						SchemaProps: spec.SchemaProps{
+							Description: "The period after which a ready pod transition is considered to be the first.",
+							Ref:         ref("github.com/gardener/gardener/pkg/apis/garden/v1beta1.GardenerDuration"),
+						},
+					},
+				},
+			},
+		},
+		Dependencies: []string{
+			"github.com/gardener/gardener/pkg/apis/garden/v1beta1.GardenerDuration"},
 	}
 }
 
@@ -2374,11 +3068,17 @@ func schema_pkg_apis_garden_v1beta1_KubeAPIServerConfig(ref common.ReferenceCall
 							},
 						},
 					},
+					"auditConfig": {
+						SchemaProps: spec.SchemaProps{
+							Description: "AuditConfig contains configuration settings for the audit of the kube-apiserver.",
+							Ref:         ref("github.com/gardener/gardener/pkg/apis/garden/v1beta1.AuditConfig"),
+						},
+					},
 				},
 			},
 		},
 		Dependencies: []string{
-			"github.com/gardener/gardener/pkg/apis/garden/v1beta1.AdmissionPlugin", "github.com/gardener/gardener/pkg/apis/garden/v1beta1.OIDCConfig"},
+			"github.com/gardener/gardener/pkg/apis/garden/v1beta1.AdmissionPlugin", "github.com/gardener/gardener/pkg/apis/garden/v1beta1.AuditConfig", "github.com/gardener/gardener/pkg/apis/garden/v1beta1.OIDCConfig"},
 	}
 }
 
@@ -2402,10 +3102,17 @@ func schema_pkg_apis_garden_v1beta1_KubeControllerManagerConfig(ref common.Refer
 							},
 						},
 					},
+					"horizontalPodAutoscaler": {
+						SchemaProps: spec.SchemaProps{
+							Description: "HorizontalPodAutoscalerConfig contains horizontal pod autoscaler configuration settings for the kube-controller-manager.",
+							Ref:         ref("github.com/gardener/gardener/pkg/apis/garden/v1beta1.HorizontalPodAutoscalerConfig"),
+						},
+					},
 				},
 			},
 		},
-		Dependencies: []string{},
+		Dependencies: []string{
+			"github.com/gardener/gardener/pkg/apis/garden/v1beta1.HorizontalPodAutoscalerConfig"},
 	}
 }
 
@@ -2537,6 +3244,12 @@ func schema_pkg_apis_garden_v1beta1_Kubernetes(ref common.ReferenceCallback) com
 							Ref:         ref("github.com/gardener/gardener/pkg/apis/garden/v1beta1.KubeAPIServerConfig"),
 						},
 					},
+					"cloudControllerManager": {
+						SchemaProps: spec.SchemaProps{
+							Description: "CloudControllerManager contains configuration settings for the cloud-controller-manager.",
+							Ref:         ref("github.com/gardener/gardener/pkg/apis/garden/v1beta1.CloudControllerManagerConfig"),
+						},
+					},
 					"kubeControllerManager": {
 						SchemaProps: spec.SchemaProps{
 							Description: "KubeControllerManager contains configuration settings for the kube-controller-manager.",
@@ -2573,7 +3286,7 @@ func schema_pkg_apis_garden_v1beta1_Kubernetes(ref common.ReferenceCallback) com
 			},
 		},
 		Dependencies: []string{
-			"github.com/gardener/gardener/pkg/apis/garden/v1beta1.KubeAPIServerConfig", "github.com/gardener/gardener/pkg/apis/garden/v1beta1.KubeControllerManagerConfig", "github.com/gardener/gardener/pkg/apis/garden/v1beta1.KubeProxyConfig", "github.com/gardener/gardener/pkg/apis/garden/v1beta1.KubeSchedulerConfig", "github.com/gardener/gardener/pkg/apis/garden/v1beta1.KubeletConfig"},
+			"github.com/gardener/gardener/pkg/apis/garden/v1beta1.CloudControllerManagerConfig", "github.com/gardener/gardener/pkg/apis/garden/v1beta1.KubeAPIServerConfig", "github.com/gardener/gardener/pkg/apis/garden/v1beta1.KubeControllerManagerConfig", "github.com/gardener/gardener/pkg/apis/garden/v1beta1.KubeProxyConfig", "github.com/gardener/gardener/pkg/apis/garden/v1beta1.KubeSchedulerConfig", "github.com/gardener/gardener/pkg/apis/garden/v1beta1.KubeletConfig"},
 	}
 }
 
@@ -2873,6 +3586,13 @@ func schema_pkg_apis_garden_v1beta1_MachineType(ref common.ReferenceCallback) co
 						SchemaProps: spec.SchemaProps{
 							Description: "Name is the name of the machine type.",
 							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"usable": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Usable defines if the machine type can be used for shoot clusters.",
+							Type:        []string{"boolean"},
 							Format:      "",
 						},
 					},
@@ -3374,6 +4094,13 @@ func schema_pkg_apis_garden_v1beta1_OpenStackMachineType(ref common.ReferenceCal
 							Format:      "",
 						},
 					},
+					"usable": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Usable defines if the machine type can be used for shoot clusters.",
+							Type:        []string{"boolean"},
+							Format:      "",
+						},
+					},
 					"cpu": {
 						SchemaProps: spec.SchemaProps{
 							Description: "CPU is the number of CPUs for this machine type.",
@@ -3574,8 +4301,202 @@ func schema_pkg_apis_garden_v1beta1_OpenStackWorker(ref common.ReferenceCallback
 							Format:      "int32",
 						},
 					},
+					"maxSurge": {
+						SchemaProps: spec.SchemaProps{
+							Description: "MaxSurge is maximum number of VMs that are created during an update.",
+							Ref:         ref("k8s.io/apimachinery/pkg/util/intstr.IntOrString"),
+						},
+					},
+					"maxUnavailable": {
+						SchemaProps: spec.SchemaProps{
+							Description: "MaxUnavailable is the maximum number of VMs that can be unavailable during an update.",
+							Ref:         ref("k8s.io/apimachinery/pkg/util/intstr.IntOrString"),
+						},
+					},
 				},
 				Required: []string{"name", "machineType", "autoScalerMin", "autoScalerMax"},
+			},
+		},
+		Dependencies: []string{
+			"k8s.io/apimachinery/pkg/util/intstr.IntOrString"},
+	}
+}
+
+func schema_pkg_apis_garden_v1beta1_Project(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "Project holds certain properties about a Gardener project.",
+				Properties: map[string]spec.Schema{
+					"kind": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/api-conventions.md#types-kinds",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"apiVersion": {
+						SchemaProps: spec.SchemaProps{
+							Description: "APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/api-conventions.md#resources",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"metadata": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Standard object metadata.",
+							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"),
+						},
+					},
+					"spec": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Spec defines the project properties.",
+							Ref:         ref("github.com/gardener/gardener/pkg/apis/garden/v1beta1.ProjectSpec"),
+						},
+					},
+					"status": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Most recently observed status of the Project.",
+							Ref:         ref("github.com/gardener/gardener/pkg/apis/garden/v1beta1.ProjectStatus"),
+						},
+					},
+				},
+			},
+		},
+		Dependencies: []string{
+			"github.com/gardener/gardener/pkg/apis/garden/v1beta1.ProjectSpec", "github.com/gardener/gardener/pkg/apis/garden/v1beta1.ProjectStatus", "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"},
+	}
+}
+
+func schema_pkg_apis_garden_v1beta1_ProjectList(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "ProjectList is a collection of Projects.",
+				Properties: map[string]spec.Schema{
+					"kind": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/api-conventions.md#types-kinds",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"apiVersion": {
+						SchemaProps: spec.SchemaProps{
+							Description: "APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/api-conventions.md#resources",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"metadata": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Standard list object metadata.",
+							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"),
+						},
+					},
+					"items": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Items is the list of Projects.",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Ref: ref("github.com/gardener/gardener/pkg/apis/garden/v1beta1.Project"),
+									},
+								},
+							},
+						},
+					},
+				},
+				Required: []string{"items"},
+			},
+		},
+		Dependencies: []string{
+			"github.com/gardener/gardener/pkg/apis/garden/v1beta1.Project", "k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"},
+	}
+}
+
+func schema_pkg_apis_garden_v1beta1_ProjectSpec(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "ProjectSpec is the specification of a Project.",
+				Properties: map[string]spec.Schema{
+					"createdBy": {
+						SchemaProps: spec.SchemaProps{
+							Description: "CreatedBy is a subject representing a user name, an email address, or any other identifier of a user who created the project.",
+							Ref:         ref("k8s.io/api/rbac/v1.Subject"),
+						},
+					},
+					"description": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Description is a human-readable description of what the project is used for.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"owner": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Owner is a subject representing a user name, an email address, or any other identifier of a user owning the project.",
+							Ref:         ref("k8s.io/api/rbac/v1.Subject"),
+						},
+					},
+					"purpose": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Purpose is a human-readable explanation of the project's purpose.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"members": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Members is a list of subjects representing a user name, an email address, or any other identifier of a user that should be part of this project.",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Ref: ref("k8s.io/api/rbac/v1.Subject"),
+									},
+								},
+							},
+						},
+					},
+					"namespace": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Namespace is the name of the namespace that has been created for the Project object. A nil value means that Gardener will determine the name of the namespace.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+				},
+			},
+		},
+		Dependencies: []string{
+			"k8s.io/api/rbac/v1.Subject"},
+	}
+}
+
+func schema_pkg_apis_garden_v1beta1_ProjectStatus(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "ProjectStatus holds the most recently observed status of the project.",
+				Properties: map[string]spec.Schema{
+					"observedGeneration": {
+						SchemaProps: spec.SchemaProps{
+							Description: "ObservedGeneration is the most recent generation observed for this project.",
+							Type:        []string{"integer"},
+							Format:      "int64",
+						},
+					},
+					"phase": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Phase is the current phase of the project.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+				},
 			},
 		},
 		Dependencies: []string{},
@@ -4007,7 +4928,7 @@ func schema_pkg_apis_garden_v1beta1_SeedSpec(ref common.ReferenceCallback) commo
 					},
 					"visible": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Visible labels the Seed cluster as selectable for the seedfinder admisson controller.",
+							Description: "Visible labels the Seed cluster as selectable for the seedfinder admission controller.",
 							Type:        []string{"boolean"},
 							Format:      "",
 						},
@@ -4183,6 +5104,12 @@ func schema_pkg_apis_garden_v1beta1_ShootSpec(ref common.ReferenceCallback) comm
 							Ref:         ref("github.com/gardener/gardener/pkg/apis/garden/v1beta1.DNS"),
 						},
 					},
+					"hibernation": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Hibernation contains information whether the Shoot is suspended or not.",
+							Ref:         ref("github.com/gardener/gardener/pkg/apis/garden/v1beta1.Hibernation"),
+						},
+					},
 					"kubernetes": {
 						SchemaProps: spec.SchemaProps{
 							Description: "Kubernetes contains the version and configuration settings of the control plane components.",
@@ -4191,8 +5118,7 @@ func schema_pkg_apis_garden_v1beta1_ShootSpec(ref common.ReferenceCallback) comm
 					},
 					"maintenance": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Maintenance contains information about the time window for maintenance operations and which operations should be performed.",
-							Ref:         ref("github.com/gardener/gardener/pkg/apis/garden/v1beta1.Maintenance"),
+							Ref: ref("github.com/gardener/gardener/pkg/apis/garden/v1beta1.Maintenance"),
 						},
 					},
 				},
@@ -4200,7 +5126,7 @@ func schema_pkg_apis_garden_v1beta1_ShootSpec(ref common.ReferenceCallback) comm
 			},
 		},
 		Dependencies: []string{
-			"github.com/gardener/gardener/pkg/apis/garden/v1beta1.Addons", "github.com/gardener/gardener/pkg/apis/garden/v1beta1.Backup", "github.com/gardener/gardener/pkg/apis/garden/v1beta1.Cloud", "github.com/gardener/gardener/pkg/apis/garden/v1beta1.DNS", "github.com/gardener/gardener/pkg/apis/garden/v1beta1.Kubernetes", "github.com/gardener/gardener/pkg/apis/garden/v1beta1.Maintenance"},
+			"github.com/gardener/gardener/pkg/apis/garden/v1beta1.Addons", "github.com/gardener/gardener/pkg/apis/garden/v1beta1.Backup", "github.com/gardener/gardener/pkg/apis/garden/v1beta1.Cloud", "github.com/gardener/gardener/pkg/apis/garden/v1beta1.DNS", "github.com/gardener/gardener/pkg/apis/garden/v1beta1.Hibernation", "github.com/gardener/gardener/pkg/apis/garden/v1beta1.Kubernetes", "github.com/gardener/gardener/pkg/apis/garden/v1beta1.Maintenance"},
 	}
 }
 
@@ -4297,6 +5223,13 @@ func schema_pkg_apis_garden_v1beta1_VolumeType(ref common.ReferenceCallback) com
 							Format:      "",
 						},
 					},
+					"usable": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Usable defines if the volume type can be used for shoot clusters.",
+							Type:        []string{"boolean"},
+							Format:      "",
+						},
+					},
 					"class": {
 						SchemaProps: spec.SchemaProps{
 							Description: "Class is the class of the volume type.",
@@ -4346,11 +5279,24 @@ func schema_pkg_apis_garden_v1beta1_Worker(ref common.ReferenceCallback) common.
 							Format:      "int32",
 						},
 					},
+					"maxSurge": {
+						SchemaProps: spec.SchemaProps{
+							Description: "MaxSurge is maximum number of VMs that are created during an update.",
+							Ref:         ref("k8s.io/apimachinery/pkg/util/intstr.IntOrString"),
+						},
+					},
+					"maxUnavailable": {
+						SchemaProps: spec.SchemaProps{
+							Description: "MaxUnavailable is the maximum number of VMs that can be unavailable during an update.",
+							Ref:         ref("k8s.io/apimachinery/pkg/util/intstr.IntOrString"),
+						},
+					},
 				},
 				Required: []string{"name", "machineType", "autoScalerMin", "autoScalerMax"},
 			},
 		},
-		Dependencies: []string{},
+		Dependencies: []string{
+			"k8s.io/apimachinery/pkg/util/intstr.IntOrString"},
 	}
 }
 
@@ -4721,7 +5667,7 @@ func schema_k8sio_api_core_v1_CSIPersistentVolumeSource(ref common.ReferenceCall
 					},
 					"fsType": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Filesystem type to mount. Must be a filesystem type supported by the host operating system. Ex. \"ext4\", \"xfs\", \"ntfs\". Implicitly inferred to be \"ext4\" if unspecified.",
+							Description: "Filesystem type to mount. Must be a filesystem type supported by the host operating system. Ex. \"ext4\", \"xfs\", \"ntfs\".",
 							Type:        []string{"string"},
 							Format:      "",
 						},
@@ -5599,7 +6545,7 @@ func schema_k8sio_api_core_v1_Container(ref common.ReferenceCallback) common.Ope
 					},
 					"resources": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Compute Resources required by this container. Cannot be updated. More info: https://kubernetes.io/docs/concepts/storage/persistent-volumes#resources",
+							Description: "Compute Resources required by this container. Cannot be updated. More info: https://kubernetes.io/docs/concepts/configuration/manage-compute-resources-container/",
 							Ref:         ref("k8s.io/api/core/v1.ResourceRequirements"),
 						},
 					},
@@ -5780,7 +6726,7 @@ func schema_k8sio_api_core_v1_ContainerPort(ref common.ReferenceCallback) common
 					},
 					"protocol": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Protocol for port. Must be UDP or TCP. Defaults to \"TCP\".",
+							Description: "Protocol for port. Must be UDP, TCP, or SCTP. Defaults to \"TCP\".",
 							Type:        []string{"string"},
 							Format:      "",
 						},
@@ -6224,7 +7170,7 @@ func schema_k8sio_api_core_v1_EndpointPort(ref common.ReferenceCallback) common.
 					},
 					"protocol": {
 						SchemaProps: spec.SchemaProps{
-							Description: "The IP protocol for this port. Must be UDP or TCP. Default is TCP.",
+							Description: "The IP protocol for this port. Must be UDP, TCP, or SCTP. Default is TCP.",
 							Type:        []string{"string"},
 							Format:      "",
 						},
@@ -7832,7 +8778,14 @@ func schema_k8sio_api_core_v1_LocalVolumeSource(ref common.ReferenceCallback) co
 				Properties: map[string]spec.Schema{
 					"path": {
 						SchemaProps: spec.SchemaProps{
-							Description: "The full path to the volume on the node. It can be either a directory or block device (disk, partition, ...). Directories can be represented only by PersistentVolume with VolumeMode=Filesystem. Block devices can be represented only by VolumeMode=Block, which also requires the BlockVolume alpha feature gate to be enabled.",
+							Description: "The full path to the volume on the node. It can be either a directory or block device (disk, partition, ...).",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"fsType": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Filesystem type to mount. It applies only when the Path is a block device. Must be a filesystem type supported by the host operating system. Ex. \"ext4\", \"xfs\", \"ntfs\". The default value is to auto-select a fileystem if unspecified.",
 							Type:        []string{"string"},
 							Format:      "",
 						},
@@ -9106,11 +10059,17 @@ func schema_k8sio_api_core_v1_PersistentVolumeClaimSpec(ref common.ReferenceCall
 							Format:      "",
 						},
 					},
+					"dataSource": {
+						SchemaProps: spec.SchemaProps{
+							Description: "This field requires the VolumeSnapshotDataSource alpha feature gate to be enabled and currently VolumeSnapshot is the only supported data source. If the provisioner can support VolumeSnapshot data source, it will create a new volume and data will be restored to the volume at the same time. If the provisioner does not support VolumeSnapshot data source, volume will not be created and the failure will be reported as an event. In the future, we plan to support more data source types and the behavior of the provisioner may change.",
+							Ref:         ref("k8s.io/api/core/v1.TypedLocalObjectReference"),
+						},
+					},
 				},
 			},
 		},
 		Dependencies: []string{
-			"k8s.io/api/core/v1.ResourceRequirements", "k8s.io/apimachinery/pkg/apis/meta/v1.LabelSelector"},
+			"k8s.io/api/core/v1.ResourceRequirements", "k8s.io/api/core/v1.TypedLocalObjectReference", "k8s.io/apimachinery/pkg/apis/meta/v1.LabelSelector"},
 	}
 }
 
@@ -10606,7 +11565,7 @@ func schema_k8sio_api_core_v1_PodSpec(ref common.ReferenceCallback) common.OpenA
 					},
 					"shareProcessNamespace": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Share a single process namespace between all of the containers in a pod. When this is set containers will be able to view and signal processes from other containers in the same pod, and the first process in each container will not be assigned PID 1. HostPID and ShareProcessNamespace cannot both be set. Optional: Default to false. This field is alpha-level and is honored only by servers that enable the PodShareProcessNamespace feature.",
+							Description: "Share a single process namespace between all of the containers in a pod. When this is set containers will be able to view and signal processes from other containers in the same pod, and the first process in each container will not be assigned PID 1. HostPID and ShareProcessNamespace cannot both be set. Optional: Default to false. This field is beta-level and may be disabled with the PodShareProcessNamespace feature.",
 							Type:        []string{"boolean"},
 							Format:      "",
 						},
@@ -10726,6 +11685,13 @@ func schema_k8sio_api_core_v1_PodSpec(ref common.ReferenceCallback) common.OpenA
 									},
 								},
 							},
+						},
+					},
+					"runtimeClassName": {
+						SchemaProps: spec.SchemaProps{
+							Description: "RuntimeClassName refers to a RuntimeClass object in the node.k8s.io group, which should be used to run this pod.  If no RuntimeClass resource matches the named class, the pod will not be run. If unset or empty, the \"legacy\" RuntimeClass will be used, which is an implicit class with an empty definition that uses the default runtime handler. More info: https://github.com/kubernetes/community/blob/master/keps/sig-node/0014-runtime-class.md This is an alpha feature and may change in the future.",
+							Type:        []string{"string"},
+							Format:      "",
 						},
 					},
 				},
@@ -12069,7 +13035,7 @@ func schema_k8sio_api_core_v1_ScaleIOPersistentVolumeSource(ref common.Reference
 					},
 					"storageMode": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Indicates whether the storage for a volume should be ThickProvisioned or ThinProvisioned.",
+							Description: "Indicates whether the storage for a volume should be ThickProvisioned or ThinProvisioned. Default is ThinProvisioned.",
 							Type:        []string{"string"},
 							Format:      "",
 						},
@@ -12083,7 +13049,7 @@ func schema_k8sio_api_core_v1_ScaleIOPersistentVolumeSource(ref common.Reference
 					},
 					"fsType": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Filesystem type to mount. Must be a filesystem type supported by the host operating system. Ex. \"ext4\", \"xfs\", \"ntfs\". Implicitly inferred to be \"ext4\" if unspecified.",
+							Description: "Filesystem type to mount. Must be a filesystem type supported by the host operating system. Ex. \"ext4\", \"xfs\", \"ntfs\". Default is \"xfs\"",
 							Type:        []string{"string"},
 							Format:      "",
 						},
@@ -12153,7 +13119,7 @@ func schema_k8sio_api_core_v1_ScaleIOVolumeSource(ref common.ReferenceCallback) 
 					},
 					"storageMode": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Indicates whether the storage for a volume should be ThickProvisioned or ThinProvisioned.",
+							Description: "Indicates whether the storage for a volume should be ThickProvisioned or ThinProvisioned. Default is ThinProvisioned.",
 							Type:        []string{"string"},
 							Format:      "",
 						},
@@ -12167,7 +13133,7 @@ func schema_k8sio_api_core_v1_ScaleIOVolumeSource(ref common.ReferenceCallback) 
 					},
 					"fsType": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Filesystem type to mount. Must be a filesystem type supported by the host operating system. Ex. \"ext4\", \"xfs\", \"ntfs\". Implicitly inferred to be \"ext4\" if unspecified.",
+							Description: "Filesystem type to mount. Must be a filesystem type supported by the host operating system. Ex. \"ext4\", \"xfs\", \"ntfs\". Default is \"xfs\".",
 							Type:        []string{"string"},
 							Format:      "",
 						},
@@ -12612,6 +13578,13 @@ func schema_k8sio_api_core_v1_SecurityContext(ref common.ReferenceCallback) comm
 							Format:      "",
 						},
 					},
+					"procMount": {
+						SchemaProps: spec.SchemaProps{
+							Description: "procMount denotes the type of proc mount to use for the containers. The default is DefaultProcMount which uses the container runtime defaults for readonly paths and masked paths. This requires the ProcMountType feature flag to be enabled.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
 				},
 			},
 		},
@@ -12919,7 +13892,7 @@ func schema_k8sio_api_core_v1_ServicePort(ref common.ReferenceCallback) common.O
 					},
 					"protocol": {
 						SchemaProps: spec.SchemaProps{
-							Description: "The IP protocol for this port. Supports \"TCP\" and \"UDP\". Default is TCP.",
+							Description: "The IP protocol for this port. Supports \"TCP\", \"UDP\", and \"SCTP\". Default is TCP.",
 							Type:        []string{"string"},
 							Format:      "",
 						},
@@ -13468,6 +14441,41 @@ func schema_k8sio_api_core_v1_TopologySelectorTerm(ref common.ReferenceCallback)
 	}
 }
 
+func schema_k8sio_api_core_v1_TypedLocalObjectReference(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "TypedLocalObjectReference contains enough information to let you locate the typed referenced object inside the same namespace.",
+				Properties: map[string]spec.Schema{
+					"apiGroup": {
+						SchemaProps: spec.SchemaProps{
+							Description: "APIGroup is the group for the resource being referenced. If APIGroup is not specified, the specified Kind must be in the core API group. For any other third-party types, APIGroup is required.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"kind": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Kind is the type of resource being referenced",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"name": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Name is the name of resource being referenced",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+				},
+				Required: []string{"kind", "name"},
+			},
+		},
+		Dependencies: []string{},
+	}
+}
+
 func schema_k8sio_api_core_v1_Volume(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
@@ -13716,7 +14724,7 @@ func schema_k8sio_api_core_v1_VolumeMount(ref common.ReferenceCallback) common.O
 					},
 					"mountPropagation": {
 						SchemaProps: spec.SchemaProps{
-							Description: "mountPropagation determines how mounts are propagated from the host to container and the other way around. When not set, MountPropagationHostToContainer is used. This field is beta in 1.10.",
+							Description: "mountPropagation determines how mounts are propagated from the host to container and the other way around. When not set, MountPropagationNone is used. This field is beta in 1.10.",
 							Type:        []string{"string"},
 							Format:      "",
 						},
@@ -14033,11 +15041,601 @@ func schema_k8sio_api_core_v1_WeightedPodAffinityTerm(ref common.ReferenceCallba
 	}
 }
 
+func schema_k8sio_api_rbac_v1_AggregationRule(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "AggregationRule describes how to locate ClusterRoles to aggregate into the ClusterRole",
+				Properties: map[string]spec.Schema{
+					"clusterRoleSelectors": {
+						SchemaProps: spec.SchemaProps{
+							Description: "ClusterRoleSelectors holds a list of selectors which will be used to find ClusterRoles and create the rules. If any of the selectors match, then the ClusterRole's permissions will be added",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Ref: ref("k8s.io/apimachinery/pkg/apis/meta/v1.LabelSelector"),
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		Dependencies: []string{
+			"k8s.io/apimachinery/pkg/apis/meta/v1.LabelSelector"},
+	}
+}
+
+func schema_k8sio_api_rbac_v1_ClusterRole(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "ClusterRole is a cluster level, logical grouping of PolicyRules that can be referenced as a unit by a RoleBinding or ClusterRoleBinding.",
+				Properties: map[string]spec.Schema{
+					"kind": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/api-conventions.md#types-kinds",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"apiVersion": {
+						SchemaProps: spec.SchemaProps{
+							Description: "APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/api-conventions.md#resources",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"metadata": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Standard object's metadata.",
+							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"),
+						},
+					},
+					"rules": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Rules holds all the PolicyRules for this ClusterRole",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Ref: ref("k8s.io/api/rbac/v1.PolicyRule"),
+									},
+								},
+							},
+						},
+					},
+					"aggregationRule": {
+						SchemaProps: spec.SchemaProps{
+							Description: "AggregationRule is an optional field that describes how to build the Rules for this ClusterRole. If AggregationRule is set, then the Rules are controller managed and direct changes to Rules will be stomped by the controller.",
+							Ref:         ref("k8s.io/api/rbac/v1.AggregationRule"),
+						},
+					},
+				},
+				Required: []string{"rules"},
+			},
+		},
+		Dependencies: []string{
+			"k8s.io/api/rbac/v1.AggregationRule", "k8s.io/api/rbac/v1.PolicyRule", "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"},
+	}
+}
+
+func schema_k8sio_api_rbac_v1_ClusterRoleBinding(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "ClusterRoleBinding references a ClusterRole, but not contain it.  It can reference a ClusterRole in the global namespace, and adds who information via Subject.",
+				Properties: map[string]spec.Schema{
+					"kind": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/api-conventions.md#types-kinds",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"apiVersion": {
+						SchemaProps: spec.SchemaProps{
+							Description: "APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/api-conventions.md#resources",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"metadata": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Standard object's metadata.",
+							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"),
+						},
+					},
+					"subjects": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Subjects holds references to the objects the role applies to.",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Ref: ref("k8s.io/api/rbac/v1.Subject"),
+									},
+								},
+							},
+						},
+					},
+					"roleRef": {
+						SchemaProps: spec.SchemaProps{
+							Description: "RoleRef can only reference a ClusterRole in the global namespace. If the RoleRef cannot be resolved, the Authorizer must return an error.",
+							Ref:         ref("k8s.io/api/rbac/v1.RoleRef"),
+						},
+					},
+				},
+				Required: []string{"roleRef"},
+			},
+		},
+		Dependencies: []string{
+			"k8s.io/api/rbac/v1.RoleRef", "k8s.io/api/rbac/v1.Subject", "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"},
+	}
+}
+
+func schema_k8sio_api_rbac_v1_ClusterRoleBindingList(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "ClusterRoleBindingList is a collection of ClusterRoleBindings",
+				Properties: map[string]spec.Schema{
+					"kind": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/api-conventions.md#types-kinds",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"apiVersion": {
+						SchemaProps: spec.SchemaProps{
+							Description: "APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/api-conventions.md#resources",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"metadata": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Standard object's metadata.",
+							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"),
+						},
+					},
+					"items": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Items is a list of ClusterRoleBindings",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Ref: ref("k8s.io/api/rbac/v1.ClusterRoleBinding"),
+									},
+								},
+							},
+						},
+					},
+				},
+				Required: []string{"items"},
+			},
+		},
+		Dependencies: []string{
+			"k8s.io/api/rbac/v1.ClusterRoleBinding", "k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"},
+	}
+}
+
+func schema_k8sio_api_rbac_v1_ClusterRoleList(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "ClusterRoleList is a collection of ClusterRoles",
+				Properties: map[string]spec.Schema{
+					"kind": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/api-conventions.md#types-kinds",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"apiVersion": {
+						SchemaProps: spec.SchemaProps{
+							Description: "APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/api-conventions.md#resources",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"metadata": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Standard object's metadata.",
+							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"),
+						},
+					},
+					"items": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Items is a list of ClusterRoles",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Ref: ref("k8s.io/api/rbac/v1.ClusterRole"),
+									},
+								},
+							},
+						},
+					},
+				},
+				Required: []string{"items"},
+			},
+		},
+		Dependencies: []string{
+			"k8s.io/api/rbac/v1.ClusterRole", "k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"},
+	}
+}
+
+func schema_k8sio_api_rbac_v1_PolicyRule(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "PolicyRule holds information that describes a policy rule, but does not contain information about who the rule applies to or which namespace the rule applies to.",
+				Properties: map[string]spec.Schema{
+					"verbs": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Verbs is a list of Verbs that apply to ALL the ResourceKinds and AttributeRestrictions contained in this rule.  VerbAll represents all kinds.",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Type:   []string{"string"},
+										Format: "",
+									},
+								},
+							},
+						},
+					},
+					"apiGroups": {
+						SchemaProps: spec.SchemaProps{
+							Description: "APIGroups is the name of the APIGroup that contains the resources.  If multiple API groups are specified, any action requested against one of the enumerated resources in any API group will be allowed.",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Type:   []string{"string"},
+										Format: "",
+									},
+								},
+							},
+						},
+					},
+					"resources": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Resources is a list of resources this rule applies to.  ResourceAll represents all resources.",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Type:   []string{"string"},
+										Format: "",
+									},
+								},
+							},
+						},
+					},
+					"resourceNames": {
+						SchemaProps: spec.SchemaProps{
+							Description: "ResourceNames is an optional white list of names that the rule applies to.  An empty set means that everything is allowed.",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Type:   []string{"string"},
+										Format: "",
+									},
+								},
+							},
+						},
+					},
+					"nonResourceURLs": {
+						SchemaProps: spec.SchemaProps{
+							Description: "NonResourceURLs is a set of partial urls that a user should have access to.  *s are allowed, but only as the full, final step in the path Since non-resource URLs are not namespaced, this field is only applicable for ClusterRoles referenced from a ClusterRoleBinding. Rules can either apply to API resources (such as \"pods\" or \"secrets\") or non-resource URL paths (such as \"/api\"),  but not both.",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Type:   []string{"string"},
+										Format: "",
+									},
+								},
+							},
+						},
+					},
+				},
+				Required: []string{"verbs"},
+			},
+		},
+		Dependencies: []string{},
+	}
+}
+
+func schema_k8sio_api_rbac_v1_Role(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "Role is a namespaced, logical grouping of PolicyRules that can be referenced as a unit by a RoleBinding.",
+				Properties: map[string]spec.Schema{
+					"kind": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/api-conventions.md#types-kinds",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"apiVersion": {
+						SchemaProps: spec.SchemaProps{
+							Description: "APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/api-conventions.md#resources",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"metadata": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Standard object's metadata.",
+							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"),
+						},
+					},
+					"rules": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Rules holds all the PolicyRules for this Role",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Ref: ref("k8s.io/api/rbac/v1.PolicyRule"),
+									},
+								},
+							},
+						},
+					},
+				},
+				Required: []string{"rules"},
+			},
+		},
+		Dependencies: []string{
+			"k8s.io/api/rbac/v1.PolicyRule", "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"},
+	}
+}
+
+func schema_k8sio_api_rbac_v1_RoleBinding(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "RoleBinding references a role, but does not contain it.  It can reference a Role in the same namespace or a ClusterRole in the global namespace. It adds who information via Subjects and namespace information by which namespace it exists in.  RoleBindings in a given namespace only have effect in that namespace.",
+				Properties: map[string]spec.Schema{
+					"kind": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/api-conventions.md#types-kinds",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"apiVersion": {
+						SchemaProps: spec.SchemaProps{
+							Description: "APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/api-conventions.md#resources",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"metadata": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Standard object's metadata.",
+							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"),
+						},
+					},
+					"subjects": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Subjects holds references to the objects the role applies to.",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Ref: ref("k8s.io/api/rbac/v1.Subject"),
+									},
+								},
+							},
+						},
+					},
+					"roleRef": {
+						SchemaProps: spec.SchemaProps{
+							Description: "RoleRef can reference a Role in the current namespace or a ClusterRole in the global namespace. If the RoleRef cannot be resolved, the Authorizer must return an error.",
+							Ref:         ref("k8s.io/api/rbac/v1.RoleRef"),
+						},
+					},
+				},
+				Required: []string{"roleRef"},
+			},
+		},
+		Dependencies: []string{
+			"k8s.io/api/rbac/v1.RoleRef", "k8s.io/api/rbac/v1.Subject", "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"},
+	}
+}
+
+func schema_k8sio_api_rbac_v1_RoleBindingList(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "RoleBindingList is a collection of RoleBindings",
+				Properties: map[string]spec.Schema{
+					"kind": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/api-conventions.md#types-kinds",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"apiVersion": {
+						SchemaProps: spec.SchemaProps{
+							Description: "APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/api-conventions.md#resources",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"metadata": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Standard object's metadata.",
+							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"),
+						},
+					},
+					"items": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Items is a list of RoleBindings",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Ref: ref("k8s.io/api/rbac/v1.RoleBinding"),
+									},
+								},
+							},
+						},
+					},
+				},
+				Required: []string{"items"},
+			},
+		},
+		Dependencies: []string{
+			"k8s.io/api/rbac/v1.RoleBinding", "k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"},
+	}
+}
+
+func schema_k8sio_api_rbac_v1_RoleList(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "RoleList is a collection of Roles",
+				Properties: map[string]spec.Schema{
+					"kind": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/api-conventions.md#types-kinds",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"apiVersion": {
+						SchemaProps: spec.SchemaProps{
+							Description: "APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/api-conventions.md#resources",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"metadata": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Standard object's metadata.",
+							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"),
+						},
+					},
+					"items": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Items is a list of Roles",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Ref: ref("k8s.io/api/rbac/v1.Role"),
+									},
+								},
+							},
+						},
+					},
+				},
+				Required: []string{"items"},
+			},
+		},
+		Dependencies: []string{
+			"k8s.io/api/rbac/v1.Role", "k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"},
+	}
+}
+
+func schema_k8sio_api_rbac_v1_RoleRef(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "RoleRef contains information that points to the role being used",
+				Properties: map[string]spec.Schema{
+					"apiGroup": {
+						SchemaProps: spec.SchemaProps{
+							Description: "APIGroup is the group for the resource being referenced",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"kind": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Kind is the type of resource being referenced",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"name": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Name is the name of resource being referenced",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+				},
+				Required: []string{"apiGroup", "kind", "name"},
+			},
+		},
+		Dependencies: []string{},
+	}
+}
+
+func schema_k8sio_api_rbac_v1_Subject(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "Subject contains a reference to the object or user identities a role binding applies to.  This can either hold a direct API object reference, or a value for non-objects such as user and group names.",
+				Properties: map[string]spec.Schema{
+					"kind": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Kind of object being referenced. Values defined by this API group are \"User\", \"Group\", and \"ServiceAccount\". If the Authorizer does not recognized the kind value, the Authorizer should report an error.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"apiGroup": {
+						SchemaProps: spec.SchemaProps{
+							Description: "APIGroup holds the API group of the referenced subject. Defaults to \"\" for ServiceAccount subjects. Defaults to \"rbac.authorization.k8s.io\" for User and Group subjects.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"name": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Name of the object being referenced.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"namespace": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Namespace of the referenced object.  If the object kind is non-namespace, such as \"User\" or \"Group\", and this value is not empty the Authorizer should report an error.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+				},
+				Required: []string{"kind", "name"},
+			},
+		},
+		Dependencies: []string{},
+	}
+}
+
 func schema_apimachinery_pkg_api_resource_Quantity(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
-				Description: "Quantity is a fixed-point representation of a number. It provides convenient marshaling/unmarshaling in JSON and YAML, in addition to String() and Int64() accessors.\n\nThe serialization format is:\n\n<quantity>        ::= <signedNumber><suffix>\n  (Note that <suffix> may be empty, from the \"\" case in <decimalSI>.)\n<digit>           ::= 0 | 1 | ... | 9 <digits>          ::= <digit> | <digit><digits> <number>          ::= <digits> | <digits>.<digits> | <digits>. | .<digits> <sign>            ::= \"+\" | \"-\" <signedNumber>    ::= <number> | <sign><number> <suffix>          ::= <binarySI> | <decimalExponent> | <decimalSI> <binarySI>        ::= Ki | Mi | Gi | Ti | Pi | Ei\n  (International System of units; See: http://physics.nist.gov/cuu/Units/binary.html)\n<decimalSI>       ::= m | \"\" | k | M | G | T | P | E\n  (Note that 1024 = 1Ki but 1000 = 1k; I didn't choose the capitalization.)\n<decimalExponent> ::= \"e\" <signedNumber> | \"E\" <signedNumber>\n\nNo matter which of the three exponent forms is used, no quantity may represent a number greater than 2^63-1 in magnitude, nor may it have more than 3 decimal places. Numbers larger or more precise will be capped or rounded up. (E.g.: 0.1m will rounded up to 1m.) This may be extended in the future if we require larger or smaller quantities.\n\nWhen a Quantity is parsed from a string, it will remember the type of suffix it had, and will use the same type again when it is serialized.\n\nBefore serializing, Quantity will be put in \"canonical form\". This means that Exponent/suffix will be adjusted up or down (with a corresponding increase or decrease in Mantissa) such that:\n  a. No precision is lost\n  b. No fractional digits will be emitted\n  c. The exponent (or suffix) is as large as possible.\nThe sign will be omitted unless the number is negative.\n\nExamples:\n  1.5 will be serialized as \"1500m\"\n  1.5Gi will be serialized as \"1536Mi\"\n\nNOTE: We reserve the right to amend this canonical format, perhaps to\n  allow 1.5 to be canonical.\n  or after March 2015.\n\nNote that the quantity will NEVER be internally represented by a floating point number. That is the whole point of this exercise.\n\nNon-canonical values will still parse as long as they are well formed, but will be re-emitted in their canonical form. (So always use canonical form, or don't diff.)\n\nThis format is intended to make it difficult to use these numbers without writing some sort of special handling code in the hopes that that will cause implementors to also use a fixed point implementation.",
+				Description: "Quantity is a fixed-point representation of a number. It provides convenient marshaling/unmarshaling in JSON and YAML, in addition to String() and Int64() accessors.\n\nThe serialization format is:\n\n<quantity>        ::= <signedNumber><suffix>\n  (Note that <suffix> may be empty, from the \"\" case in <decimalSI>.)\n<digit>           ::= 0 | 1 | ... | 9 <digits>          ::= <digit> | <digit><digits> <number>          ::= <digits> | <digits>.<digits> | <digits>. | .<digits> <sign>            ::= \"+\" | \"-\" <signedNumber>    ::= <number> | <sign><number> <suffix>          ::= <binarySI> | <decimalExponent> | <decimalSI> <binarySI>        ::= Ki | Mi | Gi | Ti | Pi | Ei\n  (International System of units; See: http://physics.nist.gov/cuu/Units/binary.html)\n<decimalSI>       ::= m | \"\" | k | M | G | T | P | E\n  (Note that 1024 = 1Ki but 1000 = 1k; I didn't choose the capitalization.)\n<decimalExponent> ::= \"e\" <signedNumber> | \"E\" <signedNumber>\n\nNo matter which of the three exponent forms is used, no quantity may represent a number greater than 2^63-1 in magnitude, nor may it have more than 3 decimal places. Numbers larger or more precise will be capped or rounded up. (E.g.: 0.1m will rounded up to 1m.) This may be extended in the future if we require larger or smaller quantities.\n\nWhen a Quantity is parsed from a string, it will remember the type of suffix it had, and will use the same type again when it is serialized.\n\nBefore serializing, Quantity will be put in \"canonical form\". This means that Exponent/suffix will be adjusted up or down (with a corresponding increase or decrease in Mantissa) such that:\n  a. No precision is lost\n  b. No fractional digits will be emitted\n  c. The exponent (or suffix) is as large as possible.\nThe sign will be omitted unless the number is negative.\n\nExamples:\n  1.5 will be serialized as \"1500m\"\n  1.5Gi will be serialized as \"1536Mi\"\n\nNote that the quantity will NEVER be internally represented by a floating point number. That is the whole point of this exercise.\n\nNon-canonical values will still parse as long as they are well formed, but will be re-emitted in their canonical form. (So always use canonical form, or don't diff.)\n\nThis format is intended to make it difficult to use these numbers without writing some sort of special handling code in the hopes that that will cause implementors to also use a fixed point implementation.",
 				Type:        resource.Quantity{}.OpenAPISchemaType(),
 				Format:      resource.Quantity{}.OpenAPISchemaFormat(),
 			},
@@ -14384,6 +15982,54 @@ func schema_pkg_apis_meta_v1_APIVersions(ref common.ReferenceCallback) common.Op
 	}
 }
 
+func schema_pkg_apis_meta_v1_CreateOptions(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "CreateOptions may be provided when creating an API object.",
+				Properties: map[string]spec.Schema{
+					"kind": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/api-conventions.md#types-kinds",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"apiVersion": {
+						SchemaProps: spec.SchemaProps{
+							Description: "APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/api-conventions.md#resources",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"dryRun": {
+						SchemaProps: spec.SchemaProps{
+							Description: "When present, indicates that modifications should not be persisted. An invalid or unrecognized dryRun directive will result in an error response and no further processing of the request. Valid values are: - All: all dry run stages will be processed",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Type:   []string{"string"},
+										Format: "",
+									},
+								},
+							},
+						},
+					},
+					"includeUninitialized": {
+						SchemaProps: spec.SchemaProps{
+							Description: "If IncludeUninitialized is specified, the object may be returned without completing initialization.",
+							Type:        []string{"boolean"},
+							Format:      "",
+						},
+					},
+				},
+			},
+		},
+		Dependencies: []string{},
+	}
+}
+
 func schema_pkg_apis_meta_v1_DeleteOptions(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
@@ -14429,6 +16075,20 @@ func schema_pkg_apis_meta_v1_DeleteOptions(ref common.ReferenceCallback) common.
 							Description: "Whether and how garbage collection will be performed. Either this field or OrphanDependents may be set, but not both. The default policy is decided by the existing finalizer set in the metadata.finalizers and the resource-specific default policy. Acceptable values are: 'Orphan' - orphan the dependents; 'Background' - allow the garbage collector to delete the dependents in the background; 'Foreground' - a cascading policy that deletes all dependents in the foreground.",
 							Type:        []string{"string"},
 							Format:      "",
+						},
+					},
+					"dryRun": {
+						SchemaProps: spec.SchemaProps{
+							Description: "When present, indicates that modifications should not be persisted. An invalid or unrecognized dryRun directive will result in an error response and no further processing of the request. Valid values are: - All: all dry run stages will be processed",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Type:   []string{"string"},
+										Format: "",
+									},
+								},
+							},
 						},
 					},
 				},
@@ -14959,7 +16619,7 @@ func schema_pkg_apis_meta_v1_ListMeta(ref common.ReferenceCallback) common.OpenA
 					},
 					"continue": {
 						SchemaProps: spec.SchemaProps{
-							Description: "continue may be set if the user set a limit on the number of items returned, and indicates that the server has more data available. The value is opaque and may be used to issue another request to the endpoint that served this list to retrieve the next set of available objects. Continuing a list may not be possible if the server configuration has changed or more than a few minutes have passed. The resourceVersion field returned when using this continue value will be identical to the value in the first response.",
+							Description: "continue may be set if the user set a limit on the number of items returned, and indicates that the server has more data available. The value is opaque and may be used to issue another request to the endpoint that served this list to retrieve the next set of available objects. Continuing a consistent list may not be possible if the server configuration has changed or more than a few minutes have passed. The resourceVersion field returned when using this continue value will be identical to the value in the first response, unless you have received this token from an error message.",
 							Type:        []string{"string"},
 							Format:      "",
 						},
@@ -15042,7 +16702,7 @@ func schema_pkg_apis_meta_v1_ListOptions(ref common.ReferenceCallback) common.Op
 					},
 					"continue": {
 						SchemaProps: spec.SchemaProps{
-							Description: "The continue option should be set when retrieving more results from the server. Since this value is server defined, clients may only use the continue value from a previous query result with identical query parameters (except for the value of continue) and the server may reject a continue value it does not recognize. If the specified continue value is no longer valid whether due to expiration (generally five to fifteen minutes) or a configuration change on the server the server will respond with a 410 ResourceExpired error indicating the client must restart their list without the continue field. This field is not supported when watch is true. Clients may start a watch from the last resourceVersion value returned by the server and not miss any modifications.",
+							Description: "The continue option should be set when retrieving more results from the server. Since this value is server defined, clients may only use the continue value from a previous query result with identical query parameters (except for the value of continue) and the server may reject a continue value it does not recognize. If the specified continue value is no longer valid whether due to expiration (generally five to fifteen minutes) or a configuration change on the server, the server will respond with a 410 ResourceExpired error together with a continue token. If the client needs a consistent list, it must restart their list without the continue field. Otherwise, the client may send another list request with the token received with the 410 error, the server will respond with a list starting from the next key, but from the latest snapshot, which is inconsistent from the previous list results - objects that are created, modified, or deleted after the first list request will be included in the response, as long as their keys are after the \"next key\".\n\nThis field is not supported when watch is true. Clients may start a watch from the last resourceVersion value returned by the server and not miss any modifications.",
 							Type:        []string{"string"},
 							Format:      "",
 						},
@@ -15602,6 +17262,47 @@ func schema_pkg_apis_meta_v1_TypeMeta(ref common.ReferenceCallback) common.OpenA
 	}
 }
 
+func schema_pkg_apis_meta_v1_UpdateOptions(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "UpdateOptions may be provided when updating an API object.",
+				Properties: map[string]spec.Schema{
+					"kind": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/api-conventions.md#types-kinds",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"apiVersion": {
+						SchemaProps: spec.SchemaProps{
+							Description: "APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/api-conventions.md#resources",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"dryRun": {
+						SchemaProps: spec.SchemaProps{
+							Description: "When present, indicates that modifications should not be persisted. An invalid or unrecognized dryRun directive will result in an error response and no further processing of the request. Valid values are: - All: all dry run stages will be processed",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Type:   []string{"string"},
+										Format: "",
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		Dependencies: []string{},
+	}
+}
+
 func schema_pkg_apis_meta_v1_WatchEvent(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
@@ -15719,6 +17420,18 @@ func schema_k8sio_apimachinery_pkg_runtime_Unknown(ref common.ReferenceCallback)
 			},
 		},
 		Dependencies: []string{},
+	}
+}
+
+func schema_apimachinery_pkg_util_intstr_IntOrString(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "IntOrString is a type that can hold an int32 or a string.  When used in JSON or YAML marshalling and unmarshalling, it produces or consumes the inner type.  This allows you to have, for example, a JSON field that can accept a name or number.",
+				Type:        intstr.IntOrString{}.OpenAPISchemaType(),
+				Format:      intstr.IntOrString{}.OpenAPISchemaFormat(),
+			},
+		},
 	}
 }
 

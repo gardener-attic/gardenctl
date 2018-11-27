@@ -7,17 +7,17 @@
 # images:
 #   hyperkube: image-repository
 # kubernetes:
-#   caCert: abcd
 #   clusterDNS: 100.64.0.10
 #   domain: cluster.local
 #   kubelet:
+#     caCert: abcd
 #     bootstrapToken: hugo
 #     hostnameOverride: false
 #     parameters: []
 #     featureGates: {}
 #       #  CustomResourceValidation: true
 #       #  RotateKubeletServerCertificate: false
-#   version: 1.8.4
+#   version: 1.11.2
 # workers:
 # - name: cpu-worker
 #   secretName: cloud-config-cpu-worker-ab234

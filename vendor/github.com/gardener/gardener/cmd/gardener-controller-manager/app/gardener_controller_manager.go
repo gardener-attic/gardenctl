@@ -15,14 +15,15 @@
 package app
 
 import (
+	"context"
 	"errors"
+	"flag"
 	"fmt"
 	"io/ioutil"
-	"net"
-	"net/http"
 	"os"
 	"strings"
-	"time"
+
+	"k8s.io/client-go/informers"
 
 	"github.com/gardener/gardener/pkg/apis/componentconfig"
 	componentconfigv1alpha1 "github.com/gardener/gardener/pkg/apis/componentconfig/v1alpha1"
@@ -38,9 +39,11 @@ import (
 	"github.com/gardener/gardener/pkg/server/handlers"
 	"github.com/gardener/gardener/pkg/utils"
 	"github.com/gardener/gardener/pkg/version"
+
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
+
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
@@ -52,7 +55,6 @@ import (
 	"k8s.io/client-go/tools/leaderelection"
 	"k8s.io/client-go/tools/leaderelection/resourcelock"
 	"k8s.io/client-go/tools/record"
-	"flag"
 )
 
 // Options has all the context and parameters needed to run a Gardener controller manager.
@@ -65,8 +67,8 @@ type Options struct {
 }
 
 // AddFlags adds flags for a specific Gardener controller manager to the specified FlagSet.
-func AddFlags(options *Options, fs *pflag.FlagSet) {
-	fs.StringVar(&options.ConfigFile, "config", options.ConfigFile, "The path to the configuration file.")
+func (o *Options) AddFlags(fs *pflag.FlagSet) {
+	fs.StringVar(&o.ConfigFile, "config", o.ConfigFile, "The path to the configuration file.")
 }
 
 // NewOptions returns a new Options object.
@@ -146,29 +148,13 @@ func (o *Options) applyDefaults(in *componentconfig.ControllerManagerConfigurati
 	return out, nil
 }
 
-func (o *Options) run(stopCh chan struct{}) error {
+func (o *Options) run(ctx context.Context, cancel context.CancelFunc) error {
 	if len(o.ConfigFile) > 0 {
 		c, err := o.loadConfigFromFile(o.ConfigFile)
 		if err != nil {
 			return err
 		}
 		o.config = c
-	}
-
-	if o.config.ClientConnection.DisableTCPKeepAlive {
-		http.DefaultTransport = &http.Transport{
-			Proxy: http.ProxyFromEnvironment,
-			DialContext: (&net.Dialer{
-				Timeout:   30 * time.Second,
-				KeepAlive: 30 * time.Second,
-				DualStack: true,
-			}).DialContext,
-			MaxIdleConns:          100,
-			IdleConnTimeout:       90 * time.Second,
-			TLSHandshakeTimeout:   10 * time.Second,
-			ExpectContinueTimeout: 1 * time.Second,
-			DisableKeepAlives:     true,
-		}
 	}
 
 	// Add feature flags
@@ -181,11 +167,11 @@ func (o *Options) run(stopCh chan struct{}) error {
 		return err
 	}
 
-	return gardener.Run(stopCh)
+	return gardener.Run(ctx, cancel)
 }
 
 // NewCommandStartGardenerControllerManager creates a *cobra.Command object with default parameters
-func NewCommandStartGardenerControllerManager(stopCh chan struct{}) *cobra.Command {
+func NewCommandStartGardenerControllerManager(ctx context.Context, cancel context.CancelFunc) *cobra.Command {
 	opts, err := NewOptions()
 	if err != nil {
 		panic(err)
@@ -209,7 +195,7 @@ These so-called control plane components are hosted in Kubernetes clusters thems
 			if err := opts.validate(args); err != nil {
 				panic(err)
 			}
-			if err := opts.run(stopCh); err != nil {
+			if err := opts.run(ctx, cancel); err != nil {
 				panic(err)
 			}
 		},
@@ -219,20 +205,22 @@ These so-called control plane components are hosted in Kubernetes clusters thems
 	if err != nil {
 		panic(err)
 	}
-	AddFlags(opts, cmd.Flags())
+	opts.AddFlags(cmd.Flags())
 	return cmd
 }
 
 // Gardener represents all the parameters required to start the
 // Gardener controller manager.
 type Gardener struct {
-	Config            *componentconfig.ControllerManagerConfiguration
-	Identity          *gardenv1beta1.Gardener
-	GardenerNamespace string
-	K8sGardenClient   kubernetes.Client
-	Logger            *logrus.Logger
-	Recorder          record.EventRecorder
-	LeaderElection    *leaderelection.LeaderElectionConfig
+	Config              *componentconfig.ControllerManagerConfiguration
+	Identity            *gardenv1beta1.Gardener
+	GardenerNamespace   string
+	K8sGardenClient     kubernetes.Client
+	K8sGardenInformers  gardeninformers.SharedInformerFactory
+	KubeInformerFactory informers.SharedInformerFactory
+	Logger              *logrus.Logger
+	Recorder            record.EventRecorder
+	LeaderElection      *leaderelection.LeaderElectionConfig
 }
 
 // NewGardener is the main entry point of instantiating a new Gardener controller manager.
@@ -249,34 +237,33 @@ func NewGardener(config *componentconfig.ControllerManagerConfiguration) (*Garde
 	if err := flag.Lookup("v").Value.Set(fmt.Sprintf("%d", config.KubernetesLogLevel)); err != nil {
 		return nil, err
 	}
+
 	// Prepare a Kubernetes client object for the Garden cluster which contains all the Clientsets
 	// that can be used to access the Kubernetes API.
 	var (
 		kubeconfig         = config.ClientConnection.KubeConfigFile
 		gardenerKubeConfig = config.GardenerClientConnection.KubeConfigFile
+
+		gardenerClient = clientcmd.NewNonInteractiveDeferredLoadingClientConfig(
+			&clientcmd.ClientConfigLoadingRules{ExplicitPath: gardenerKubeConfig},
+			&clientcmd.ConfigOverrides{},
+		)
 	)
 
-	k8sGardenClient, err := kubernetes.NewClientFromFile(kubeconfig)
+	k8sGardenClient, err := kubernetes.NewClientFromFile(kubeconfig, &config.ClientConnection)
 	if err != nil {
 		return nil, err
 	}
-
-	gardenerClient := clientcmd.NewNonInteractiveDeferredLoadingClientConfig(
-		&clientcmd.ClientConfigLoadingRules{ExplicitPath: gardenerKubeConfig},
-		&clientcmd.ConfigOverrides{},
-	)
-
-	gardenerClientConfig, err := gardenerClient.ClientConfig()
-	if err != nil {
-		return nil, err
-	}
-
-	k8sGardenClientLeaderElection, err := kubernetes.NewClientFromFile(kubeconfig)
+	k8sGardenClientLeaderElection, err := kubernetes.NewClientFromFile(kubeconfig, nil)
 	if err != nil {
 		return nil, err
 	}
 
 	// Create a GardenV1beta1Client and the respective API group scheme for the Garden API group.
+	gardenerClientConfig, err := kubernetes.CreateRestConfig(gardenerClient, &config.ClientConnection)
+	if err != nil {
+		return nil, err
+	}
 	gardenClientset, err := gardenclientset.NewForConfig(gardenerClientConfig)
 	if err != nil {
 		return nil, err
@@ -295,78 +282,74 @@ func NewGardener(config *componentconfig.ControllerManagerConfiguration) (*Garde
 		}
 	}
 
-	identity, gardenerNamespace, err := determineGardenerIdentity(config.Controllers.Shoot.WatchNamespace)
+	identity, gardenerNamespace, err := determineGardenerIdentity()
 	if err != nil {
 		return nil, err
 	}
 
 	return &Gardener{
-		Identity:          identity,
-		GardenerNamespace: gardenerNamespace,
-		Config:            config,
-		Logger:            logger,
-		Recorder:          recorder,
-		K8sGardenClient:   k8sGardenClient,
-		LeaderElection:    leaderElectionConfig,
+		Identity:            identity,
+		GardenerNamespace:   gardenerNamespace,
+		Config:              config,
+		Logger:              logger,
+		Recorder:            recorder,
+		K8sGardenClient:     k8sGardenClient,
+		K8sGardenInformers:  gardeninformers.NewSharedInformerFactory(k8sGardenClient.GardenClientset(), 0),
+		KubeInformerFactory: kubeinformers.NewSharedInformerFactory(k8sGardenClient.Clientset(), 0),
+		LeaderElection:      leaderElectionConfig,
 	}, nil
 }
 
 // Run runs the Gardener. This should never exit.
-func (g *Gardener) Run(stopCh chan struct{}) error {
+func (g *Gardener) Run(ctx context.Context, cancel context.CancelFunc) error {
+	leaderElectionCtx, leaderElectionCancel := context.WithCancel(context.Background())
+
 	// Prepare a reusable run function.
-	run := func(stop <-chan struct{}) {
-		go startControllers(g, stopCh)
-		<-stop
-		select {
-		case <-stopCh:
-			// can only happen if stopCh is already closed because it's never written to it
-		default:
-			close(stopCh)
-		}
+	run := func(ctx context.Context) {
+		g.startControllers(ctx)
 	}
 
 	// Start HTTP server
-	go server.Serve(g.K8sGardenClient, g.Config.Server.BindAddress, g.Config.Server.Port, g.Config.Metrics.Interval.Duration, stopCh)
+	go server.Serve(ctx, g.K8sGardenClient, g.K8sGardenInformers, g.Config.Server)
 	handlers.UpdateHealth(true)
 
 	// If leader election is enabled, run via LeaderElector until done and exit.
 	if g.LeaderElection != nil {
 		g.LeaderElection.Callbacks = leaderelection.LeaderCallbacks{
-			OnStartedLeading: func(stop <-chan struct{}) {
+			OnStartedLeading: func(_ context.Context) {
 				g.Logger.Info("Acquired leadership, starting controllers.")
-				run(stop)
+				run(ctx)
+				leaderElectionCancel()
 			},
 			OnStoppedLeading: func() {
-				g.Logger.Info("Lost leadership, cleaning up.")
-				close(stopCh)
+				g.Logger.Info("Lost leadership, terminating.")
+				cancel()
 			},
 		}
 		leaderElector, err := leaderelection.NewLeaderElector(*g.LeaderElection)
 		if err != nil {
 			return fmt.Errorf("couldn't create leader elector: %v", err)
 		}
-		leaderElector.Run()
-		return fmt.Errorf("lost lease")
+		leaderElector.Run(leaderElectionCtx)
+		return nil
 	}
 
 	// Leader election is disabled, thus run directly until done.
-	run(stopCh)
-	panic("unreachable")
+	leaderElectionCancel()
+	run(ctx)
+	return nil
 }
 
-func startControllers(g *Gardener, stopCh <-chan struct{}) {
-	gardenInformerFactory := gardeninformers.NewSharedInformerFactory(g.K8sGardenClient.GardenClientset(), 0)
-	kubeInformerFactory := kubeinformers.NewSharedInformerFactory(g.K8sGardenClient.Clientset(), 30*time.Second)
-
+func (g *Gardener) startControllers(ctx context.Context) {
 	controller.NewGardenControllerFactory(
 		g.K8sGardenClient,
-		gardenInformerFactory,
-		kubeInformerFactory,
+		g.K8sGardenInformers,
+		g.KubeInformerFactory,
 		g.Config,
 		g.Identity,
 		g.GardenerNamespace,
 		g.Recorder,
-	).Run(stopCh)
+	).Run(ctx)
 }
 
 func createRecorder(kubeClient *k8s.Clientset) record.EventRecorder {
@@ -407,7 +390,7 @@ func makeLeaderElectionConfig(config componentconfig.LeaderElectionConfiguration
 // we need to identify for still ongoing operations whether another Gardener controller manager instance is
 // still operating the respective Shoots. When running locally, we generate a random string because
 // there is no container id.
-func determineGardenerIdentity(watchNamespace *string) (*gardenv1beta1.Gardener, string, error) {
+func determineGardenerIdentity() (*gardenv1beta1.Gardener, string, error) {
 	var (
 		gardenerID        string
 		gardenerName      string
@@ -436,8 +419,6 @@ func determineGardenerIdentity(watchNamespace *string) (*gardenv1beta1.Gardener,
 	// If running inside a Kubernetes cluster we will have a service account mount.
 	if ns, err := ioutil.ReadFile("/var/run/secrets/kubernetes.io/serviceaccount/namespace"); err == nil {
 		gardenerNamespace = string(ns)
-	} else if watchNamespace != nil {
-		gardenerNamespace = *watchNamespace
 	}
 
 	return &gardenv1beta1.Gardener{

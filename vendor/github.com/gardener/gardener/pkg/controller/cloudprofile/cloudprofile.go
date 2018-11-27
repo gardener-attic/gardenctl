@@ -15,16 +15,19 @@
 package cloudprofile
 
 import (
+	"context"
 	"sync"
 	"time"
 
 	gardeninformers "github.com/gardener/gardener/pkg/client/garden/informers/externalversions"
 	gardenlisters "github.com/gardener/gardener/pkg/client/garden/listers/garden/v1beta1"
+	"github.com/prometheus/client_golang/prometheus"
 
 	"github.com/gardener/gardener/pkg/client/kubernetes"
 	controllerutils "github.com/gardener/gardener/pkg/controller/utils"
 	"github.com/gardener/gardener/pkg/logger"
 
+	gardenmetrics "github.com/gardener/gardener/pkg/metrics"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/util/workqueue"
 )
@@ -79,11 +82,11 @@ func NewCloudProfileController(k8sGardenClient kubernetes.Client, k8sGardenInfor
 }
 
 // Run runs the Controller until the given stop channel can be read from.
-func (c *Controller) Run(workers int, stopCh <-chan struct{}) {
+func (c *Controller) Run(ctx context.Context, workers int) {
 	var waitGroup sync.WaitGroup
 
 	// Check if informers cache has been populated
-	if !cache.WaitForCacheSync(stopCh, c.cloudprofileSynced) {
+	if !cache.WaitForCacheSync(ctx.Done(), c.cloudprofileSynced) {
 		logger.Logger.Error("Time out waiting for caches to sync")
 		return
 	}
@@ -102,10 +105,10 @@ func (c *Controller) Run(workers int, stopCh <-chan struct{}) {
 
 	// Start the workers
 	for i := 0; i < workers; i++ {
-		controllerutils.CreateWorker(c.cloudProfileQueue, "cloudprofile", c.reconcileCloudProfileKey, stopCh, &waitGroup, c.workerCh)
+		controllerutils.CreateWorker(ctx, c.cloudProfileQueue, "cloudprofile", c.reconcileCloudProfileKey, &waitGroup, c.workerCh)
 	}
 
-	<-stopCh
+	<-ctx.Done()
 	c.cloudProfileQueue.ShutDown()
 
 	for {
@@ -123,4 +126,14 @@ func (c *Controller) Run(workers int, stopCh <-chan struct{}) {
 // RunningWorkers returns the number of running workers.
 func (c *Controller) RunningWorkers() int {
 	return c.numberOfRunningWorkers
+}
+
+// CollectMetrics implements gardenmetrics.ControllerMetricsCollector interface
+func (c *Controller) CollectMetrics(ch chan<- prometheus.Metric) {
+	metric, err := prometheus.NewConstMetric(gardenmetrics.ControllerWorkerSum, prometheus.GaugeValue, float64(c.RunningWorkers()), "cloudprofile")
+	if err != nil {
+		gardenmetrics.ScrapeFailures.With(prometheus.Labels{"kind": "cloudprofile-controller"}).Inc()
+		return
+	}
+	ch <- metric
 }

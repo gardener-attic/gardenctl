@@ -4,6 +4,7 @@ metadata:
   name: kube-apiserver
   namespace: {{ .Release.Namespace }}
   labels:
+    garden.sapcloud.io/role: controlplane
     app: kubernetes
     role: apiserver
 spec:
@@ -24,15 +25,17 @@ spec:
 {{ toYaml .Values.podAnnotations | indent 8 }}
 {{- end }}
       labels:
+        garden.sapcloud.io/role: controlplane
         app: kubernetes
         role: apiserver
     spec:
+      priorityClassName: gardener-shoot-controlplane
       tolerations:
       - effect: NoExecute
         operator: Exists
       containers:
       - name: kube-apiserver
-        image: {{ index .Values.images "hyperkube" }}:v{{ .Values.kubernetesVersion }}
+        image: {{ index .Values.images "hyperkube" }}
         imagePullPolicy: IfNotPresent
         command:
         - /hyperkube
@@ -41,32 +44,29 @@ spec:
         - --admission-control={{ include "kube-apiserver.admissionPlugins" . | trimSuffix "," }}
         {{- else }}
         - --enable-admission-plugins={{ include "kube-apiserver.admissionPlugins" . | trimSuffix "," }}
+        - --disable-admission-plugins=PersistentVolumeLabel
         {{- end }}
         - --admission-control-config-file={{ include "kube-apiserver.admissionPluginConfigFileDir" . }}/admission-configuration.yaml
+        {{- if .Values.advertiseAddress }}
         - --advertise-address={{ .Values.advertiseAddress }}
+        {{- end }}
         - --allow-privileged=true
         - --anonymous-auth=false
-        {{- if semverCompare "< 1.11" .Values.kubernetesVersion }}
-        - --apiserver-count={{ .Values.replicas }}
-        {{- end }}
-        {{- if semverCompare ">= 1.8" .Values.kubernetesVersion }}
         - --audit-log-path=/var/lib/audit.log
         - --audit-policy-file=/etc/kubernetes/audit/audit-policy.yaml
         - --audit-log-maxsize=100
         - --audit-log-maxbackup=5
-        {{- end }}
         - --authorization-mode=Node,RBAC
         - --basic-auth-file=/srv/kubernetes/auth/basic_auth.csv
         - --client-ca-file=/srv/kubernetes/ca/ca.crt
-        {{- if semverCompare "< 1.9" .Values.kubernetesVersion }}
-        - --cloud-provider={{ .Values.cloudProvider }}
-        {{- end }}
-        - --cloud-config=/etc/kubernetes/cloudprovider/cloudprovider.conf
         - --enable-aggregator-routing=true
         - --enable-bootstrap-token-auth=true
-        - --etcd-cafile=/srv/kubernetes/ca/ca.crt
-        - --etcd-certfile=/srv/kubernetes/etcd/tls.crt
-        - --etcd-keyfile=/srv/kubernetes/etcd/tls.key
+        {{- if .Values.endpointReconcilerType }}
+        - --endpoint-reconciler-type={{ .Values.endpointReconcilerType }}
+        {{- end }}
+        - --etcd-cafile=/srv/kubernetes/etcd/ca/ca.crt
+        - --etcd-certfile=/srv/kubernetes/etcd/client/tls.crt
+        - --etcd-keyfile=/srv/kubernetes/etcd/client/tls.key
         - --etcd-servers=https://{{ .Values.etcdMainServiceFqdn }}:{{ .Values.etcdServicePort }}
         - --etcd-servers-overrides=/events#https://{{ .Values.etcdEventsServiceFqdn }}:{{ .Values.etcdServicePort }}
         {{- include "kube-apiserver.featureGates" . | trimSuffix "," | indent 8 }}
@@ -75,9 +75,10 @@ spec:
         - --kubelet-client-key=/srv/kubernetes/apiserver-kubelet/kube-apiserver-kubelet.key
         - --insecure-port=0
         {{- include "kube-apiserver.oidcConfig" . | indent 8 }}
+        - --profiling=false
         - --proxy-client-cert-file=/srv/kubernetes/aggregator/kube-aggregator.crt
         - --proxy-client-key-file=/srv/kubernetes/aggregator/kube-aggregator.key
-        - --requestheader-client-ca-file=/srv/kubernetes/ca/ca.crt
+        - --requestheader-client-ca-file=/srv/kubernetes/ca-front-proxy/ca.crt
         - --requestheader-extra-headers-prefix=X-Remote-Extra-
         - --requestheader-group-headers=X-Remote-Group
         - --requestheader-username-headers=X-Remote-User
@@ -87,12 +88,13 @@ spec:
         - --service-account-key-file=/srv/kubernetes/service-account-key/id_rsa
         - --tls-cert-file=/srv/kubernetes/apiserver/kube-apiserver.crt
         - --tls-private-key-file=/srv/kubernetes/apiserver/kube-apiserver.key
+        {{- if semverCompare ">= 1.10" .Values.kubernetesVersion }}
+        - --tls-cipher-suites={{ include "kubernetes.tlsCipherSuites" . | replace "\n" "," | trimPrefix "," }}
+        {{- end }}
         - --v=2
 {{- range $index, $param := $.Values.additionalParameters }}
-        - {{$param}}
+        - {{ $param }}
 {{- end }}
-        env:
-{{ toYaml .Values.environment | indent 10 }}
         livenessProbe:
           httpGet:
             scheme: HTTPS
@@ -102,8 +104,8 @@ spec:
             - name: Authorization
               value: Basic {{ .Values.probeCredentials }}
           successThreshold: 1
-          failureThreshold: 2
-          initialDelaySeconds: 30
+          failureThreshold: 3
+          initialDelaySeconds: 15
           periodSeconds: 30
           timeoutSeconds: 15
         readinessProbe:
@@ -115,7 +117,7 @@ spec:
             - name: Authorization
               value: Basic {{ .Values.probeCredentials }}
           successThreshold: 1
-          failureThreshold: 2
+          failureThreshold: 3
           initialDelaySeconds: 10
           periodSeconds: 30
           timeoutSeconds: 15
@@ -133,14 +135,16 @@ spec:
 {{ toYaml .Values.apiServerResources | indent 10 }}
         {{- end }}
         volumeMounts:
-        {{- if semverCompare ">= 1.8" .Values.kubernetesVersion }}
         - name: audit-policy-config
           mountPath: /etc/kubernetes/audit
-        {{- end }}
         - name: ca
           mountPath: /srv/kubernetes/ca
+        - name: ca-etcd
+          mountPath: /srv/kubernetes/etcd/ca
+        - name: ca-front-proxy
+          mountPath: /srv/kubernetes/ca-front-proxy
         - name: etcd-client-tls
-          mountPath: /srv/kubernetes/etcd
+          mountPath: /srv/kubernetes/etcd/client
         - name: kube-apiserver
           mountPath: /srv/kubernetes/apiserver
         - name: service-account-key
@@ -157,10 +161,6 @@ spec:
         {{- end }}
         - name: kube-apiserver-admission-config
           mountPath: {{ include "kube-apiserver.admissionPluginConfigFileDir" . }}
-        - name: cloud-provider-config
-          mountPath: /etc/kubernetes/cloudprovider
-        - name: cloudprovider
-          mountPath: /srv/cloudprovider
         - name: etcssl
           mountPath: /etc/ssl
           readOnly: true
@@ -224,14 +224,18 @@ spec:
       schedulerName: default-scheduler
       terminationGracePeriodSeconds: 30
       volumes:
-      {{- if semverCompare ">= 1.8" .Values.kubernetesVersion }}
       - name: audit-policy-config
         configMap:
           name: audit-policy-config
-      {{- end }}
       - name: ca
         secret:
           secretName: ca
+      - name: ca-etcd
+        secret:
+          secretName: ca-etcd
+      - name: ca-front-proxy
+        secret:
+          secretName: ca-front-proxy
       - name: kube-apiserver
         secret:
           secretName: kube-apiserver
@@ -264,12 +268,6 @@ spec:
       - name: vpn-seed-tlsauth
         secret:
           secretName: vpn-seed-tlsauth
-      - name: cloud-provider-config
-        configMap:
-          name: cloud-provider-config
-      - name: cloudprovider
-        secret:
-          secretName: cloudprovider
       - name: etcssl
         hostPath:
           path: /etc/ssl

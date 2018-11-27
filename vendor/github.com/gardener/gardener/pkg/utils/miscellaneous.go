@@ -16,28 +16,11 @@ package utils
 
 import (
 	"net"
-	"reflect"
 	"regexp"
-	"runtime"
 	"time"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/util/rand"
 )
-
-const maintenanceTimeLayout = "150405-0700"
-
-// FuncName takes a function <f> as input and returns its name as a string. If the function is a method
-// of a struct, the struct will be also prefixed, e.g. 'Botanist.CreateNamespace'.
-func FuncName(f interface{}) string {
-	funcName := runtime.FuncForPC(reflect.ValueOf(f).Pointer()).Name()
-	re := regexp.MustCompile(`^.*\.(\(.*)\-.*$`)
-	match := re.FindStringSubmatch(funcName)
-	if len(match) > 1 {
-		return match[1]
-	}
-	return funcName
-}
 
 // ValueExists returns true or false, depending on whether the given string <value>
 // is part of the given []string list <list>.
@@ -80,6 +63,31 @@ func MergeMaps(a, b map[string]interface{}) map[string]interface{} {
 	return values
 }
 
+// MergeStringMaps merges the content of the newMaps with the oldMap. If a key already exists then
+// it gets overwritten by the last value with the same key.
+func MergeStringMaps(oldMap map[string]string, newMaps ...map[string]string) map[string]string {
+	var out map[string]string
+
+	if oldMap != nil {
+		out = make(map[string]string)
+	}
+	for k, v := range oldMap {
+		out[k] = v
+	}
+
+	for _, newMap := range newMaps {
+		if newMap != nil && out == nil {
+			out = make(map[string]string)
+		}
+
+		for k, v := range newMap {
+			out[k] = v
+		}
+	}
+
+	return out
+}
+
 // TimeElapsed takes a <timestamp> and a <duration> checks whether the elapsed time until now is less than the <duration>.
 // If yes, it returns true, otherwise it returns false.
 func TimeElapsed(timestamp *metav1.Time, duration time.Duration) bool {
@@ -108,27 +116,4 @@ func FindFreePort() (int, error) {
 func TestEmail(email string) bool {
 	match, _ := regexp.MatchString(`^[^@]+@(?:[a-zA-Z-0-9]+\.)+[a-zA-Z]{2,}$`, email)
 	return match
-}
-
-// ComputeRandomTimeWindow computes a random time window and returns both in the format HHMMSS+ZONE.
-func ComputeRandomTimeWindow() (string, string) {
-	t := time.Date(1970, 1, 1, rand.IntnRange(0, 23), 0, 0, 0, time.UTC)
-	return FormatMaintenanceTime(t), FormatMaintenanceTime(t.Add(time.Hour))
-}
-
-// FormatMaintenanceTime formats a time object to the maintenance time format.
-func FormatMaintenanceTime(t time.Time) string {
-	return t.Format(maintenanceTimeLayout)
-}
-
-// ParseMaintenanceTime parses the maintenance time and returns it as Time object. In case the parse fails, an
-// error is returned. The time object is converted to UTC zone.
-func ParseMaintenanceTime(value string) (time.Time, error) {
-	timeInZone, err := time.Parse(maintenanceTimeLayout, value)
-	if err != nil {
-		return timeInZone, err
-	}
-
-	timeInUTC := timeInZone.UTC()
-	return time.Date(0, time.January, 1, timeInUTC.Hour(), timeInUTC.Minute(), timeInUTC.Second(), timeInUTC.Nanosecond(), timeInUTC.Location()), nil
 }

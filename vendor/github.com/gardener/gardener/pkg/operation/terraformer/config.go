@@ -47,12 +47,12 @@ func (t *Terraformer) DefineConfig(chartName string, values map[string]interface
 	}
 	values["initializeEmptyState"] = t.IsStateEmpty()
 
-	if err := utils.Retry(t.logger, 30*time.Second, func() (bool, error) {
+	if err := utils.Retry(5*time.Second, 30*time.Second, func() (bool, bool, error) {
 		if err := common.ApplyChart(t.k8sClient, t.chartRenderer, filepath.Join(chartPath, chartName), chartName, t.namespace, nil, values); err != nil {
 			t.logger.Errorf("could not create Terraform ConfigMaps/Secrets: %s", err.Error())
-			return false, nil
+			return false, false, nil
 		}
-		return true, nil
+		return true, false, nil
 	}); err != nil {
 		t.logger.Errorf("Could not create the Terraform ConfigMaps/Secrets: %s", err.Error())
 	} else {
@@ -65,39 +65,51 @@ func (t *Terraformer) DefineConfig(chartName string, values map[string]interface
 // prepare checks whether all required ConfigMaps and Secrets exist. It returns the number of
 // existing ConfigMaps/Secrets, or the error in case something unexpected happens.
 func (t *Terraformer) prepare() (int, error) {
-	// Check whether the required ConfigMaps and the Secret exist
-	numberOfExistingResources := 3
+	numberOfExistingResources, err := t.verifyConfigExists()
+	if err != nil {
+		return -1, err
+	}
 
-	_, err := t.k8sClient.GetConfigMap(t.namespace, t.stateName)
-	if err != nil {
-		if !apierrors.IsNotFound(err) {
-			return -1, err
-		}
-		numberOfExistingResources--
-	}
-	_, err = t.k8sClient.GetSecret(t.namespace, t.variablesName)
-	if err != nil {
-		if !apierrors.IsNotFound(err) {
-			return -1, err
-		}
-		numberOfExistingResources--
-	}
-	_, err = t.k8sClient.GetConfigMap(t.namespace, t.configName)
-	if err != nil {
-		if !apierrors.IsNotFound(err) {
-			return -1, err
-		}
-		numberOfExistingResources--
-	}
 	if t.variablesEnvironment == nil {
-		return -1, errors.New("no Terraform variable environment provided")
+		return -1, errors.New("no Terraform variables environment provided")
 	}
 
 	// Clean up possible existing job/pod artifacts from previous runs
 	if err := t.EnsureCleanedUp(); err != nil {
 		return -1, err
 	}
+
 	return numberOfExistingResources, nil
+}
+
+func (t *Terraformer) verifyConfigExists() (int, error) {
+	numberOfExistingResources := 0
+
+	if _, err := t.k8sClient.GetConfigMap(t.namespace, t.stateName); err == nil {
+		numberOfExistingResources++
+	} else if err != nil && !apierrors.IsNotFound(err) {
+		return -1, err
+	}
+
+	if _, err := t.k8sClient.GetSecret(t.namespace, t.variablesName); err == nil {
+		numberOfExistingResources++
+	} else if err != nil && !apierrors.IsNotFound(err) {
+		return -1, err
+	}
+
+	if _, err := t.k8sClient.GetConfigMap(t.namespace, t.configName); err == nil {
+		numberOfExistingResources++
+	} else if err != nil && !apierrors.IsNotFound(err) {
+		return -1, err
+	}
+
+	return numberOfExistingResources, nil
+}
+
+// ConfigExists returns true if all three Terraform configuration secrets/configmaps exist, and false otherwise.
+func (t *Terraformer) ConfigExists() (bool, error) {
+	numberOfExistingResources, err := t.verifyConfigExists()
+	return numberOfExistingResources == numberOfConfigResources, err
 }
 
 // cleanupConfiguration deletes the two ConfigMaps which store the Terraform configuration and state. It also deletes

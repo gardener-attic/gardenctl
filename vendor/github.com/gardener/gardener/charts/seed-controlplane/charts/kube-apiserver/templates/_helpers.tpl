@@ -14,6 +14,7 @@
 {{- if semverCompare "< 1.11" .Values.kubernetesVersion }}
 - --runtime-config=scheduling.k8s.io/v1alpha1=true
 {{- end }}
+- --runtime-config=admissionregistration.k8s.io/v1alpha1
 {{- end -}}
 
 {{- define "kube-apiserver.oidcConfig" }}
@@ -33,7 +34,6 @@
 {{- if .Values.oidcConfig.groupsClaim }}
 - --oidc-groups-claim={{ .Values.oidcConfig.groupsClaim }}
 {{- end }}
-{{- if semverCompare ">= 1.8" .Values.kubernetesVersion }}
 {{- if .Values.oidcConfig.usernamePrefix }}
 - --oidc-username-prefix={{ .Values.oidcConfig.usernamePrefix }}
 {{- end }}
@@ -46,7 +46,6 @@
 {{- if .Values.oidcConfig.requiredClaims }}
 {{- range $key, $val := .Values.oidcConfig.requiredClaims }}
 - --oidc-required-claim={{ $key }}={{ $val }}
-{{- end }}
 {{- end }}
 {{- end }}
 {{- end }}
@@ -69,4 +68,23 @@
   path: {{ include "kube-apiserver.admissionPluginConfigFileDir" . }}/{{ lower $plugin.name }}.yaml
 {{- end }}
 {{- end }}
+{{- end -}}
+
+{{- define "kube-apiserver.auditversion" -}}
+{{- if semverCompare ">= 1.12" .Values.kubernetesVersion -}}
+audit.k8s.io/v1
+{{- else -}}
+audit.k8s.io/v1beta1
+{{- end -}}
+{{- end -}}
+
+{{- define "kube-apiserver.auditConfigAuditPolicy" -}}
+{{- if .Values.auditConfig.auditPolicy }}
+{{- .Values.auditConfig.auditPolicy -}}
+{{- else -}}
+apiVersion: {{ include "kube-apiserver.auditversion" . }}
+kind: Policy
+rules:
+- level: None
+{{- end -}}
 {{- end -}}

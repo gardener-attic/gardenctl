@@ -27,12 +27,34 @@ func (b *LocalBotanist) RefreshCloudProviderConfig(currentConfig map[string]stri
 	return currentConfig
 }
 
-// GenerateKubeAPIServerConfig generates the cloud provider specific values which are required to render the
-// Deployment manifest of the kube-apiserver properly.
-func (b *LocalBotanist) GenerateKubeAPIServerConfig() (map[string]interface{}, error) {
+// GenerateKubeAPIServerServiceConfig generates the cloud provider specific values which are required to render the
+// Service manifest of the kube-apiserver-service properly.
+func (b *LocalBotanist) GenerateKubeAPIServerServiceConfig() (map[string]interface{}, error) {
+	return map[string]interface{}{
+		"type":       "NodePort",
+		"targetPort": 31443,
+		"nodePort":   31443,
+	}, nil
+}
+
+// GenerateKubeAPIServerExposeConfig defines the cloud provider specific values which configure how the kube-apiserver
+// is exposed to the public.
+func (b *LocalBotanist) GenerateKubeAPIServerExposeConfig() (map[string]interface{}, error) {
 	return map[string]interface{}{
 		"securePort": 31443,
 	}, nil
+}
+
+// GenerateKubeAPIServerConfig generates the cloud provider specific values which are required to render the
+// Deployment manifest of the kube-apiserver properly.
+func (b *LocalBotanist) GenerateKubeAPIServerConfig() (map[string]interface{}, error) {
+	return nil, nil
+}
+
+// GenerateCloudControllerManagerConfig generates the cloud provider specific values which are required to
+// render the Deployment manifest of the cloud-controller-manager properly.
+func (b *LocalBotanist) GenerateCloudControllerManagerConfig() (map[string]interface{}, error) {
+	return nil, nil
 }
 
 // GenerateKubeControllerManagerConfig generates the cloud provider specific values which are required to
@@ -59,4 +81,9 @@ func (b *LocalBotanist) GenerateEtcdBackupConfig() (map[string][]byte, map[strin
 	}
 
 	return nil, backupConfigData, nil
+}
+
+// DeployCloudSpecificControlPlane does currently nothing for Local.
+func (b *LocalBotanist) DeployCloudSpecificControlPlane() error {
+	return nil
 }

@@ -40,7 +40,7 @@
 
       while [ 1 ]; do
         # Check whether the kubelet's /healthz endpoint reports unhealthiness
-        if ! output=$(curl -m $max_seconds -f -s -S http://127.0.0.1:10255/healthz 2>&1); then
+        if ! output=$(curl -m $max_seconds -f -s -S http://127.0.0.1:10248/healthz 2>&1); then
           echo $output
           echo "Kubelet is unhealthy!"
           restart_kubelet
@@ -49,6 +49,13 @@
         fi
 
         node_status="$(kubectl get nodes -l kubernetes.io/hostname=$(hostname) -o json | jq -r '.items[0].status')"
+        if [[ -z "$node_status" ]] || [[ "$node_status" == "null" ]]; then
+          echo "Node object for this hostname not found in the system, waiting."
+          sleep 20
+          count_kubelet_alternating_between_ready_and_not_ready_within_timeframe=0
+          time_kubelet_not_ready_first_occurrence=0
+          continue
+        fi
 
         # Check whether the kubelet does report an InternalIP node address
         if node_ip_addresses="$(echo $node_status | jq -r '.addresses[] | select(.type=="InternalIP" or .type=="ExternalIP") | .address')"; then

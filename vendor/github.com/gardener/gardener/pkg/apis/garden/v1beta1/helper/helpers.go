@@ -20,12 +20,15 @@ import (
 	"sort"
 	"strings"
 
+	"strconv"
+
 	gardenv1beta1 "github.com/gardener/gardener/pkg/apis/garden/v1beta1"
 	"github.com/gardener/gardener/pkg/operation/common"
 	"github.com/gardener/gardener/pkg/utils"
 	corev1 "k8s.io/api/core/v1"
 	apiequality "k8s.io/apimachinery/pkg/api/equality"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/validation/field"
 )
 
 // DetermineCloudProviderInProfile takes a CloudProfile specification and returns the cloud provider this profile is used for.
@@ -52,15 +55,82 @@ func DetermineCloudProviderInProfile(spec gardenv1beta1.CloudProfileSpec) (garde
 		numClouds++
 		cloud = gardenv1beta1.CloudProviderOpenStack
 	}
+	if spec.Alicloud != nil {
+		numClouds++
+		cloud = gardenv1beta1.CloudProviderAlicloud
+	}
 	if spec.Local != nil {
 		numClouds++
 		cloud = gardenv1beta1.CloudProviderLocal
 	}
 
 	if numClouds != 1 {
-		return "", errors.New("cloud profile must only contain exactly one field of aws/azure/gcp/openstack/local")
+		return "", errors.New("cloud profile must only contain exactly one field of alicloud/aws/azure/gcp/openstack/local")
 	}
 	return cloud, nil
+}
+
+// GetShootCloudProvider retrieves the cloud provider used for the given Shoot.
+func GetShootCloudProvider(shoot *gardenv1beta1.Shoot) (gardenv1beta1.CloudProvider, error) {
+	return DetermineCloudProviderInShoot(shoot.Spec.Cloud)
+}
+
+// IsShootHibernated checks if the given shoot is hibernated.
+func IsShootHibernated(shoot *gardenv1beta1.Shoot) bool {
+	return shoot.Spec.Hibernation != nil && shoot.Spec.Hibernation.Enabled
+}
+
+// ShootWantsClusterAutoscaler checks if the given Shoot needs a cluster autoscaler.
+// This is determined by checking whether one of the Shoot workers has a different
+// AutoScalerMax than AutoScalerMin.
+func ShootWantsClusterAutoscaler(shoot *gardenv1beta1.Shoot) (bool, error) {
+	cloudProvider, err := GetShootCloudProvider(shoot)
+	if err != nil {
+		return false, err
+	}
+
+	workers := GetShootCloudProviderWorkers(cloudProvider, shoot)
+	for _, worker := range workers {
+		if worker.AutoScalerMax > worker.AutoScalerMin {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+// GetShootCloudProviderWorkers retrieves the cloud-specific workers of the given Shoot.
+func GetShootCloudProviderWorkers(cloudProvider gardenv1beta1.CloudProvider, shoot *gardenv1beta1.Shoot) []gardenv1beta1.Worker {
+	var (
+		cloud   = shoot.Spec.Cloud
+		workers []gardenv1beta1.Worker
+	)
+
+	switch cloudProvider {
+	case gardenv1beta1.CloudProviderAWS:
+		for _, worker := range cloud.AWS.Workers {
+			workers = append(workers, worker.Worker)
+		}
+	case gardenv1beta1.CloudProviderAzure:
+		for _, worker := range cloud.Azure.Workers {
+			workers = append(workers, worker.Worker)
+		}
+	case gardenv1beta1.CloudProviderGCP:
+		for _, worker := range cloud.GCP.Workers {
+			workers = append(workers, worker.Worker)
+		}
+	case gardenv1beta1.CloudProviderOpenStack:
+		for _, worker := range cloud.OpenStack.Workers {
+			workers = append(workers, worker.Worker)
+		}
+	case gardenv1beta1.CloudProviderLocal:
+		workers = append(workers, gardenv1beta1.Worker{
+			Name:          "local",
+			AutoScalerMax: 1,
+			AutoScalerMin: 1,
+		})
+	}
+
+	return workers
 }
 
 // DetermineCloudProviderInShoot takes a Shoot cloud object and returns the cloud provider this profile is used for.
@@ -86,6 +156,10 @@ func DetermineCloudProviderInShoot(cloudObj gardenv1beta1.Cloud) (gardenv1beta1.
 	if cloudObj.OpenStack != nil {
 		numClouds++
 		cloud = gardenv1beta1.CloudProviderOpenStack
+	}
+	if cloudObj.Alicloud != nil {
+		numClouds++
+		cloud = gardenv1beta1.CloudProviderAlicloud
 	}
 	if cloudObj.Local != nil {
 		numClouds++
@@ -115,25 +189,28 @@ func InitCondition(conditionType gardenv1beta1.ConditionType, reason, message st
 	}
 }
 
-// ModifyCondition updates the properties of one specific condition.
-func ModifyCondition(condition *gardenv1beta1.Condition, status corev1.ConditionStatus, reason, message string) *gardenv1beta1.Condition {
-	var update = false
-	if status != (*condition).Status {
-		update = true
-		(*condition).Status = status
+// UpdatedCondition updates the properties of one specific condition.
+func UpdatedCondition(condition *gardenv1beta1.Condition, status corev1.ConditionStatus, reason, message string) *gardenv1beta1.Condition {
+	newCondition := &gardenv1beta1.Condition{
+		Type:               condition.Type,
+		Status:             status,
+		Reason:             reason,
+		Message:            message,
+		LastTransitionTime: condition.LastTransitionTime,
 	}
-	if reason != (*condition).Reason {
-		update = true
-		(*condition).Reason = reason
+
+	if !apiequality.Semantic.DeepEqual(condition, newCondition) {
+		newCondition.LastTransitionTime = metav1.Now()
 	}
-	if message != (*condition).Message {
-		update = true
-		(*condition).Message = message
-	}
-	if update {
-		(*condition).LastTransitionTime = metav1.Now()
-	}
-	return condition
+	return newCondition
+}
+
+func UpdatedConditionUnknownError(condition *gardenv1beta1.Condition, err error) *gardenv1beta1.Condition {
+	return UpdatedConditionUnknownErrorMessage(condition, err.Error())
+}
+
+func UpdatedConditionUnknownErrorMessage(condition *gardenv1beta1.Condition, message string) *gardenv1beta1.Condition {
+	return UpdatedCondition(condition, corev1.ConditionUnknown, gardenv1beta1.ConditionCheckError, message)
 }
 
 // NewConditions initializes the provided conditions based on an existing list. If a condition type does not exist
@@ -214,6 +291,13 @@ func DetermineMachineImage(cloudProfile gardenv1beta1.CloudProfile, name gardenv
 				return true, &ptr, nil
 			}
 		}
+	case gardenv1beta1.CloudProviderAlicloud:
+		for _, image := range cloudProfile.Spec.Alicloud.Constraints.MachineImages {
+			if image.Name == name {
+				ptr := image
+				return true, &ptr, nil
+			}
+		}
 	default:
 		return false, nil, fmt.Errorf("unknown cloud provider %s", cloudProvider)
 	}
@@ -252,6 +336,10 @@ func DetermineLatestKubernetesVersion(cloudProfile gardenv1beta1.CloudProfile, c
 		for _, version := range cloudProfile.Spec.OpenStack.Constraints.Kubernetes.Versions {
 			versions = append(versions, version)
 		}
+	case gardenv1beta1.CloudProviderAlicloud:
+		for _, version := range cloudProfile.Spec.Alicloud.Constraints.Kubernetes.Versions {
+			versions = append(versions, version)
+		}
 	default:
 		return false, "", fmt.Errorf("unknown cloud provider %s", cloudProvider)
 	}
@@ -274,50 +362,257 @@ func DetermineLatestKubernetesVersion(cloudProfile gardenv1beta1.CloudProfile, c
 	return false, "", nil
 }
 
-// IsUsedAsSeed determines whether the Shoot has been marked to be registered automatically as a Seed cluster.
-// The first return value indicates whether it has been marked at all.
-// The second return value indicates whether the Shoot should be registered as "protected" Seed.
-// The third return value indicates whether the Shoot should be registered as "visible" Seed.
-func IsUsedAsSeed(shoot *gardenv1beta1.Shoot) (bool, *bool, *bool) {
-	if shoot.Namespace != common.GardenNamespace {
-		return false, nil, nil
+type ShootedSeed struct {
+	Protected *bool
+	Visible   *bool
+	APIServer *ShootedSeedAPIServer
+}
+
+type ShootedSeedAPIServer struct {
+	Replicas   *int32
+	Autoscaler *ShootedSeedAPIServerAutoscaler
+}
+
+type ShootedSeedAPIServerAutoscaler struct {
+	MinReplicas *int32
+	MaxReplicas int32
+}
+
+func parseInt32(s string) (int32, error) {
+	i64, err := strconv.ParseInt(s, 10, 32)
+	if err != nil {
+		return 0, err
+	}
+	return int32(i64), nil
+}
+
+func parseShootedSeed(annotation string) (*ShootedSeed, error) {
+	var (
+		flags    = make(map[string]struct{})
+		settings = make(map[string]string)
+
+		trueVar  = true
+		falseVar = false
+
+		shootedSeed ShootedSeed
+	)
+
+	for _, fragment := range strings.Split(annotation, ",") {
+		parts := strings.SplitN(fragment, "=", 2)
+		if len(parts) == 1 {
+			flags[fragment] = struct{}{}
+			continue
+		}
+
+		settings[parts[0]] = parts[1]
+	}
+
+	if _, ok := flags["true"]; !ok {
+		return nil, nil
+	}
+
+	apiServer, err := parseShootedSeedAPIServer(settings)
+	if err != nil {
+		return nil, err
+	}
+
+	shootedSeed.APIServer = apiServer
+
+	if _, ok := flags["protected"]; ok {
+		shootedSeed.Protected = &trueVar
+	}
+	if _, ok := flags["unprotected"]; ok {
+		shootedSeed.Protected = &falseVar
+	}
+	if _, ok := flags["visible"]; ok {
+		shootedSeed.Visible = &trueVar
+	}
+	if _, ok := flags["invisible"]; ok {
+		shootedSeed.Visible = &falseVar
+	}
+
+	return &shootedSeed, nil
+}
+
+func parseShootedSeedAPIServer(settings map[string]string) (*ShootedSeedAPIServer, error) {
+	apiServerAutoscaler, err := parseShootedSeedAPIServerAutoscaler(settings)
+	if err != nil {
+		return nil, err
+	}
+
+	replicasString, ok := settings["apiServer.replicas"]
+	if !ok && apiServerAutoscaler == nil {
+		return nil, nil
+	}
+
+	var apiServer ShootedSeedAPIServer
+
+	apiServer.Autoscaler = apiServerAutoscaler
+
+	if ok {
+		replicas, err := parseInt32(replicasString)
+		if err != nil {
+			return nil, err
+		}
+
+		apiServer.Replicas = &replicas
+	}
+
+	return &apiServer, nil
+}
+
+func parseShootedSeedAPIServerAutoscaler(settings map[string]string) (*ShootedSeedAPIServerAutoscaler, error) {
+	minReplicasString, ok1 := settings["apiServer.autoscaler.minReplicas"]
+	maxReplicasString, ok2 := settings["apiServer.autoscaler.maxReplicas"]
+	if !ok1 && !ok2 {
+		return nil, nil
+	}
+	if !ok2 {
+		return nil, fmt.Errorf("apiSrvMaxReplicas has to be specified for shooted seed API server autoscaler")
+	}
+
+	var apiServerAutoscaler ShootedSeedAPIServerAutoscaler
+
+	if ok1 {
+		minReplicas, err := parseInt32(minReplicasString)
+		if err != nil {
+			return nil, err
+		}
+		apiServerAutoscaler.MinReplicas = &minReplicas
+	}
+
+	maxReplicas, err := parseInt32(maxReplicasString)
+	if err != nil {
+		return nil, err
+	}
+	apiServerAutoscaler.MaxReplicas = maxReplicas
+
+	return &apiServerAutoscaler, nil
+}
+
+func validateShootedSeed(shootedSeed *ShootedSeed, fldPath *field.Path) field.ErrorList {
+	allErrs := field.ErrorList{}
+
+	if shootedSeed.APIServer != nil {
+		allErrs = append(validateShootedSeedAPIServer(shootedSeed.APIServer, fldPath.Child("apiServer")))
+	}
+
+	return allErrs
+}
+
+func validateShootedSeedAPIServer(apiServer *ShootedSeedAPIServer, fldPath *field.Path) field.ErrorList {
+	allErrs := field.ErrorList{}
+
+	if apiServer.Replicas != nil && *apiServer.Replicas < 1 {
+		allErrs = append(allErrs, field.Invalid(fldPath.Child("replicas"), *apiServer.Replicas, "must be greater than 0"))
+	}
+	if apiServer.Autoscaler != nil {
+		allErrs = append(allErrs, validateShootedSeedAPIServerAutoscaler(apiServer.Autoscaler, fldPath.Child("autoscaler"))...)
+	}
+
+	return allErrs
+}
+
+func validateShootedSeedAPIServerAutoscaler(autoscaler *ShootedSeedAPIServerAutoscaler, fldPath *field.Path) field.ErrorList {
+	allErrs := field.ErrorList{}
+
+	if autoscaler.MinReplicas != nil && *autoscaler.MinReplicas < 1 {
+		allErrs = append(allErrs, field.Invalid(fldPath.Child("minReplicas"), *autoscaler.MinReplicas, "must be greater than 0"))
+	}
+	if autoscaler.MaxReplicas < 1 {
+		allErrs = append(allErrs, field.Invalid(fldPath.Child("maxReplicas"), autoscaler.MaxReplicas, "must be greater than 0"))
+	}
+	if autoscaler.MinReplicas != nil && autoscaler.MaxReplicas < *autoscaler.MinReplicas {
+		allErrs = append(allErrs, field.Invalid(fldPath.Child("maxReplicas"), autoscaler.MaxReplicas, "must be greater than or equal to `minReplicas`"))
+	}
+
+	return allErrs
+}
+
+func setDefaults_ShootedSeed(shootedSeed *ShootedSeed) {
+	if shootedSeed.APIServer == nil {
+		shootedSeed.APIServer = &ShootedSeedAPIServer{}
+	}
+	setDefaults_ShootedSeedAPIServer(shootedSeed.APIServer)
+}
+
+func setDefaults_ShootedSeedAPIServer(apiServer *ShootedSeedAPIServer) {
+	if apiServer.Replicas == nil {
+		three := int32(3)
+		apiServer.Replicas = &three
+	}
+	if apiServer.Autoscaler == nil {
+		apiServer.Autoscaler = &ShootedSeedAPIServerAutoscaler{
+			MaxReplicas: 3,
+		}
+	}
+	setDefaults_ShootedSeedAPIServerAutoscaler(apiServer.Autoscaler)
+}
+
+func minInt32(a int32, b int32) int32 {
+	if a < b {
+		return a
+	}
+	return b
+}
+
+func setDefaults_ShootedSeedAPIServerAutoscaler(autoscaler *ShootedSeedAPIServerAutoscaler) {
+	if autoscaler.MinReplicas == nil {
+		minReplicas := minInt32(3, autoscaler.MaxReplicas)
+		autoscaler.MinReplicas = &minReplicas
+	}
+}
+
+// ReadShootedSeed determines whether the Shoot has been marked to be registered automatically as a Seed cluster.
+func ReadShootedSeed(shoot *gardenv1beta1.Shoot) (*ShootedSeed, error) {
+	if shoot.Namespace != common.GardenNamespace || shoot.Annotations == nil {
+		return nil, nil
 	}
 
 	val, ok := shoot.Annotations[common.ShootUseAsSeed]
 	if !ok {
-		return false, nil, nil
+		return nil, nil
 	}
 
-	var (
-		trueVar  = true
-		falseVar = false
-
-		usages = map[string]bool{}
-
-		useAsSeed bool
-		protected *bool
-		visible   *bool
-	)
-
-	for _, u := range strings.Split(val, ",") {
-		usages[u] = true
+	shootedSeed, err := parseShootedSeed(val)
+	if err != nil {
+		return nil, err
 	}
 
-	if _, ok := usages["true"]; ok {
-		useAsSeed = true
-	}
-	if _, ok := usages["protected"]; ok {
-		protected = &trueVar
-	}
-	if _, ok := usages["unprotected"]; ok {
-		protected = &falseVar
-	}
-	if _, ok := usages["visible"]; ok {
-		visible = &trueVar
-	}
-	if _, ok := usages["invisible"]; ok {
-		visible = &falseVar
+	if shootedSeed == nil {
+		return nil, nil
 	}
 
-	return useAsSeed, protected, visible
+	setDefaults_ShootedSeed(shootedSeed)
+
+	if errs := validateShootedSeed(shootedSeed, nil); len(errs) > 0 {
+		return nil, errs.ToAggregate()
+	}
+
+	return shootedSeed, nil
+}
+
+// Coder is an error that may produce an ErrorCode visible to the outside.
+type Coder interface {
+	error
+	Code() gardenv1beta1.ErrorCode
+}
+
+// ExtractErrorCodes extracts all error codes from the given error by using utils.Errors
+func ExtractErrorCodes(err error) []gardenv1beta1.ErrorCode {
+	var codes []gardenv1beta1.ErrorCode
+	for _, err := range utils.Errors(err) {
+		if coder, ok := err.(Coder); ok {
+			codes = append(codes, coder.Code())
+		}
+	}
+	return codes
+}
+
+func FormatLastErrDescription(err error) string {
+	errString := err.Error()
+	if len(errString) > 0 {
+		errString = strings.ToUpper(string(errString[0])) + errString[1:]
+	}
+	return errString
 }

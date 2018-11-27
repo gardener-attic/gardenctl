@@ -14,9 +14,15 @@
 
 package common
 
+import (
+	"fmt"
+
+	"k8s.io/apimachinery/pkg/util/sets"
+)
+
 const (
-	// AlertManagerDeploymentName is the name of the AlertManager deployment.
-	AlertManagerDeploymentName = "alertmanager"
+	// AlertManagerStatefulSetName is the name of the alertmanager stateful set.
+	AlertManagerStatefulSetName = "alertmanager"
 
 	// BackupSecretName defines the name of the secret containing the credentials which are required to
 	// authenticate against the respective cloud provider (required to store the backups of Shoot clusters).
@@ -87,6 +93,21 @@ const (
 	// GardenRoleSeed is the value of the GardenRole key indicating type 'seed'.
 	GardenRoleSeed = "seed"
 
+	// GardenRoleControlPlane is the value of the GardenRole key indicating type 'controlplane'.
+	GardenRoleControlPlane = "controlplane"
+
+	// GardenRoleSystemComponent is the value of the GardenRole key indicating type 'system-component'.
+	GardenRoleSystemComponent = "system-component"
+
+	// GardenRoleMonitoring is the value of the GardenRole key indicating type 'monitoring'.
+	GardenRoleMonitoring = "monitoring"
+
+	// GardenRoleOptionalAddon is the value of the GardenRole key indicating type 'optional-addon'.
+	GardenRoleOptionalAddon = "optional-addon"
+
+	// GardenRoleLogging is the value of the GardenRole key indicating type 'logging'.
+	GardenRoleLogging = "logging"
+
 	// GardenRoleDefaultDomain is the value of the GardenRole key indicating type 'default-domain'.
 	GardenRoleDefaultDomain = "default-domain"
 
@@ -132,11 +153,26 @@ const (
 	// KubeAPIServerDeploymentName is the name of the kube-apiserver deployment.
 	KubeAPIServerDeploymentName = "kube-apiserver"
 
+	// AWSLBReadvertiserDeploymentName is the name for the aws-lb-readvertiser
+	AWSLBReadvertiserDeploymentName = "aws-lb-readvertiser"
+
 	// EnableHPANodeCount is the number of nodes in shoot cluster after which HPA is deployed to autoscale kube-apiserver.
 	EnableHPANodeCount = 5
 
+	// CloudControllerManagerDeploymentName is the name of the cloud-controller-manager deployment.
+	CloudControllerManagerDeploymentName = "cloud-controller-manager"
+
+	// CloudControllerManagerServerName is the name of the cloud-controller-manager server.
+	CloudControllerManagerServerName = "cloud-controller-manager-server"
+
 	// KubeControllerManagerDeploymentName is the name of the kube-controller-manager deployment.
 	KubeControllerManagerDeploymentName = "kube-controller-manager"
+
+	// KubeControllerManagerServerName is the name of the kube-controller-manager server.
+	KubeControllerManagerServerName = "kube-controller-manager-server"
+
+	// MachineControllerManagerDeploymentName is the name of the machine-controller-manager deployment.
+	MachineControllerManagerDeploymentName = "machine-controller-manager"
 
 	// KubeSchedulerDeploymentName is the name of the kube-scheduler deployment.
 	KubeSchedulerDeploymentName = "kube-scheduler"
@@ -144,12 +180,79 @@ const (
 	// KubeAddonManagerDeploymentName is the name of the kube-addon-manager deployment.
 	KubeAddonManagerDeploymentName = "kube-addon-manager"
 
+	// CalicoTyphaDeploymentName is the name of the calico-typha deployment.
+	CalicoTyphaDeploymentName = "calico-typha"
+
+	// CoreDNSDeploymentName is the name of the coredns deployment.
+	CoreDNSDeploymentName = "coredns"
+
+	// VPNShootDeploymentName is the name of the vpn-shoot deployment.
+	VPNShootDeploymentName = "vpn-shoot"
+
+	// MetricsServerDeploymentName is the name of the metrics-server deployment.
+	MetricsServerDeploymentName = "metrics-server"
+
+	// CalicoNodeDaemonSetName is the name of the calico-node daemon set.
+	CalicoNodeDaemonSetName = "calico-node"
+
+	// KubeProxyDaemonSetName is the name of the kube-proxy daemon set.
+	KubeProxyDaemonSetName = "kube-proxy"
+
+	// GrafanaDeploymentName is the name of the grafana deployment.
+	GrafanaDeploymentName = "grafana"
+
+	// KubeStateMetricsShootDeploymentName is the name of the kube-state-metrics deployment.
+	KubeStateMetricsShootDeploymentName = "kube-state-metrics"
+
+	// KubeStateMetricsSeedDeploymentName is the name of the kube-state-metrics-shoot deployment.
+	KubeStateMetricsSeedDeploymentName = "kube-state-metrics-seed"
+
+	// NodeExporterDaemonSetName is the name of the node-exporter daemon set.
+	NodeExporterDaemonSetName = "node-exporter"
+
+	// ElasticSearchStatefulSetName is the name of the elasticsearch-logging stateful set.
+	ElasticSearchStatefulSetName = "elasticsearch-logging"
+
+	// KibanaDeploymentName is the name of the kibana-logging deployment.
+	KibanaDeploymentName = "kibana-logging"
+
+	// FluentBitDaemonSetName is the name of the fluent-bit daemon set.
+	FluentBitDaemonSetName = "fluent-bit"
+
+	// FluentdEsStatefulSetName is the name of the fluentd-es stateful set.
+	FluentdEsStatefulSetName = "fluentd-es"
+
+	// ProjectPrefix is the prefix of namespaces representing projects.
+	ProjectPrefix = "garden-"
+
 	// ProjectName is they key of a label on namespaces whose value holds the project name. Usually, the label is set
 	// by the Gardener Dashboard.
 	ProjectName = "project.garden.sapcloud.io/name"
 
-	// PrometheusDeploymentName is the name of the Prometheus deployment.
-	PrometheusDeploymentName = "prometheus"
+	// ProjectNamespace is they key of a label on projects whose value holds the namespace name. Usually, the label is set
+	// by the Gardener Dashboard.
+	ProjectNamespace = "project.garden.sapcloud.io/namespace"
+
+	// NamespaceProject is they key of a label on namespace whose value holds the project uid.
+	NamespaceProject = "namespace.garden.sapcloud.io/project"
+
+	// ProjectOwner is they key of a label on namespaces whose value holds the project owner. Usually, the label is set
+	// by the Gardener Dashboard.
+	ProjectOwner = "project.garden.sapcloud.io/owner"
+
+	// ProjectDescription is they key of a label on namespaces whose value holds the project description. Usually, the label is set
+	// by the Gardener Dashboard.
+	ProjectDescription = "project.garden.sapcloud.io/description"
+
+	// ProjectPurpose is they key of a label on namespaces whose value holds the project purpose. Usually, the label is set
+	// by the Gardener Dashboard.
+	ProjectPurpose = "project.garden.sapcloud.io/purpose"
+
+	// ProjectMemberClusterRole is the name of the cluster role defining the permissions for project members.
+	ProjectMemberClusterRole = "garden.sapcloud.io:system:project-member"
+
+	// PrometheusStatefulSetName is the name of the Prometheus stateful set.
+	PrometheusStatefulSetName = "prometheus"
 
 	// TerraformerConfigSuffix is the suffix used for the ConfigMap which stores the Terraform configuration and variables declaration.
 	TerraformerConfigSuffix = ".tf-config"
@@ -197,8 +300,27 @@ const (
 	// Shoot Care controller and can be used to easily identify Shoot clusters with issues.
 	ShootUnhealthy = "shoot.garden.sapcloud.io/unhealthy"
 
-	// ShootOperation is a constant for an annotation on a Shoot in a failed state indicating that the operation should be retried.
+	// ShootOperation is a constant for an annotation on a Shoot in a failed state indicating that an operation shall be performed.
 	ShootOperation = "shoot.garden.sapcloud.io/operation"
+
+	// ShootOperationMaintain is a constant for an annotation on a Shoot indicating that the Shoot maintenance shall be executed as soon as
+	// possible.
+	ShootOperationMaintain = "maintain"
+
+	// ShootTasks is a constant for an annotation on a Shoot which states that certain tasks should be done.
+	ShootTasks = "shoot.garden.sapcloud.io/tasks"
+
+	// ShootTaskDeployInfrastructure is a name for a Shoot's infrastructure deployment task.
+	ShootTaskDeployInfrastructure = "deployInfrastructure"
+
+	// ShootTaskDeployKube2IAMResource is a name for a Shoot's Kube2IAM Resource deployment task.
+	ShootTaskDeployKube2IAMResource = "deployKube2IAMResource"
+
+	// ShootOperationRetry is a constant for an annotation on a Shoot indicating that a failed Shoot reconciliation shall be retried.
+	ShootOperationRetry = "retry"
+
+	// ShootOperationReconcile is a constant for an annotation on a Shoot indicating that a Shoot reconciliation shall be triggered.
+	ShootOperationReconcile = "reconcile"
 
 	// ShootSyncPeriod is a constant for an annotation on a Shoot which may be used to overwrite the global Shoot controller sync period.
 	// The value must be a duration. It can also be used to disable the reconciliation at all by setting it to 0m. Disabling the reconciliation
@@ -213,6 +335,193 @@ const (
 
 	// BackupNamespacePrefix is a constant for backup namespace created for shoot's backup infrastructure related resources.
 	BackupNamespacePrefix = "backup"
+
+	// KubeAddonManagerImageName is the name of the KubeAddonManager image.
+	KubeAddonManagerImageName = "kube-addon-manager"
+
+	// CalicoNodeImageName is the name of the CalicoNode image.
+	CalicoNodeImageName = "calico-node"
+
+	// CalicoCNIImageName is the name of the CalicoCNI image.
+	CalicoCNIImageName = "calico-cni"
+
+	// CalicoTyphaImageName is the name of the CalicoTypha image.
+	CalicoTyphaImageName = "calico-typha"
+
+	// CoreDNSImageName is the name of the CoreDNS image.
+	CoreDNSImageName = "coredns"
+
+	// HyperkubeImageName is the name of the Hyperkube image.
+	HyperkubeImageName = "hyperkube"
+
+	// MetricsServerImageName is the name of the MetricsServer image.
+	MetricsServerImageName = "metrics-server"
+
+	// VPNShootImageName is the name of the VPNShoot image.
+	VPNShootImageName = "vpn-shoot"
+
+	// VPNSeedImageName is the name of the VPNSeed image.
+	VPNSeedImageName = "vpn-seed"
+
+	// NodeExporterImageName is the name of the NodeExporter image.
+	NodeExporterImageName = "node-exporter"
+
+	// HelmTillerImageName is the name of the HelmTiller image.
+	HelmTillerImageName = "helm-tiller"
+
+	// KubeLegoImageName is the name of the KubeLego image.
+	KubeLegoImageName = "kube-lego"
+
+	// Kube2IAMImageName is the name of the Kube2IAM image.
+	Kube2IAMImageName = "kube2iam"
+
+	// KubernetesDashboardImageName is the name of the KubernetesDashboard image.
+	KubernetesDashboardImageName = "kubernetes-dashboard"
+
+	// MonocularAPIImageName is the name of the MonocularAPI image.
+	MonocularAPIImageName = "monocular-api"
+
+	// MonocularUIImageName is the name of the MonocularUI image.
+	MonocularUIImageName = "monocular-ui"
+
+	// BusyboxImageName is the name of the Busybox image.
+	BusyboxImageName = "busybox"
+
+	// NginxIngressControllerImageName is the name of the NginxIngressController image.
+	NginxIngressControllerImageName = "nginx-ingress-controller"
+
+	// IngressDefaultBackendImageName is the name of the IngressDefaultBackend image.
+	IngressDefaultBackendImageName = "ingress-default-backend"
+
+	// MachineControllerManagerImageName is the name of the MachineControllerManager image.
+	MachineControllerManagerImageName = "machine-controller-manager"
+
+	// ClusterAutoscalerImageName is the name of the ClusterAutoscaler image.
+	ClusterAutoscalerImageName = "cluster-autoscaler"
+
+	// AlertManagerImageName is the name of the AlertManager image.
+	AlertManagerImageName = "alertmanager"
+
+	// ConfigMapReloaderImageName is the name of the ConfigMapReloader image.
+	ConfigMapReloaderImageName = "configmap-reloader"
+
+	// GrafanaImageName is the name of the Grafana image.
+	GrafanaImageName = "grafana"
+
+	// PrometheusImageName is the name of the Prometheus image.
+	PrometheusImageName = "prometheus"
+
+	// BlackboxExporterImageName is the name of the BlackboxExporter image.
+	BlackboxExporterImageName = "blackbox-exporter"
+
+	// KubeStateMetricsImageName is the name of the KubeStateMetrics image.
+	KubeStateMetricsImageName = "kube-state-metrics"
+
+	// ETCDImageName is the name of the ETCD image.
+	ETCDImageName = "etcd"
+
+	// ETCDBackupRestoreImageName is the name of the ETCDBackupRestore image.
+	ETCDBackupRestoreImageName = "etcd-backup-restore"
+
+	// RubyImageName is the name of the Ruby image.
+	RubyImageName = "ruby"
+
+	// AWSLBReadvertiserImageName is the name of the AWSLBReadvertiser image.
+	AWSLBReadvertiserImageName = "aws-lb-readvertiser"
+
+	// PauseContainerImageName is the name of the PauseContainer image.
+	PauseContainerImageName = "pause-container"
+
+	// GardenerExternalAdmissionControllerImageName is the name of the GardenerExternalAdmissionController image.
+	GardenerExternalAdmissionControllerImageName = "gardener-external-admission-controller"
+
+	// TerraformerImageName is the name of the Terraformer image.
+	TerraformerImageName = "terraformer"
+
+	// ElasticsearchImageName is the name of the Elastic-Search image used for logging
+	ElasticsearchImageName = "elasticsearch-oss"
+
+	// CuratorImageName is the name of the curator image used to alter the Elastic-search logs
+	CuratorImageName = "curator-es"
+
+	// KibanaImageName is the name of the Kibana image used for logging  UI
+	KibanaImageName = "kibana-oss"
+
+	// FluentdEsImageName is the image of the Fluentd image used for logging
+	FluentdEsImageName = "fluentd-es"
+
+	// FluentBitImageName is the image of Fluent-bit image
+	FluentBitImageName = "fluent-bit"
+
+	// AlpineImageName is the name of alpine image
+	AlpineImageName = "alpine"
+)
+
+var (
+	// ETCDMainStatefulSetName is the name of the etcd-main stateful set.
+	ETCDMainStatefulSetName = fmt.Sprintf("etcd-%s", EtcdRoleMain)
+	// ETCDEventsStatefulSetName is the name of the etcd-events stateful set.
+	ETCDEventsStatefulSetName = fmt.Sprintf("etcd-%s", EtcdRoleEvents)
+
+	// RequiredControlPlaneDeployments is a set of the required shoot control plane deployments
+	// running in the seed.
+	RequiredControlPlaneDeployments = sets.NewString(
+		CloudControllerManagerDeploymentName,
+		KubeAddonManagerDeploymentName,
+		KubeAPIServerDeploymentName,
+		KubeControllerManagerDeploymentName,
+		KubeSchedulerDeploymentName,
+		MachineControllerManagerDeploymentName,
+	)
+
+	// RequiredControlPlaneStatefulSets is a set of the required shoot control plane stateful
+	// sets running in the seed.
+	RequiredControlPlaneStatefulSets = sets.NewString(
+		ETCDMainStatefulSetName,
+		ETCDEventsStatefulSetName,
+	)
+
+	// RequiredSystemComponentDeployments is a set of the required system components.
+	RequiredSystemComponentDeployments = sets.NewString(
+		CalicoTyphaDeploymentName,
+		CoreDNSDeploymentName,
+		VPNShootDeploymentName,
+		MetricsServerDeploymentName,
+	)
+
+	// RequiredSystemComponentDaemonSets is a set of the required shoot control plane daemon sets.
+	RequiredSystemComponentDaemonSets = sets.NewString(
+		CalicoNodeDaemonSetName,
+		KubeProxyDaemonSetName,
+	)
+
+	// RequiredMonitoringSeedDeployments is a set of the required seed monitoring deployments.
+	RequiredMonitoringSeedDeployments = sets.NewString(
+		GrafanaDeploymentName,
+		KubeStateMetricsSeedDeploymentName,
+		KubeStateMetricsShootDeploymentName,
+	)
+
+	// RequiredMonitoringSeedStatefulSets is a set of the required seed monitoring stateful sets.
+	RequiredMonitoringSeedStatefulSets = sets.NewString(
+		AlertManagerStatefulSetName,
+		PrometheusStatefulSetName,
+	)
+
+	// RequiredMonitoringShootDaemonSets is a set of the required shoot monitoring daemon sets.
+	RequiredMonitoringShootDaemonSets = sets.NewString(
+		NodeExporterDaemonSetName,
+	)
+
+	// RequiredLoggingStatefulSets is a set of the required logging stateful sets.
+	RequiredLoggingStatefulSets = sets.NewString(
+		ElasticSearchStatefulSetName,
+	)
+
+	// RequiredLoggingDeployments is a set of the required logging deployments.
+	RequiredLoggingDeployments = sets.NewString(
+		KibanaDeploymentName,
+	)
 )
 
 // CloudConfigUserDataConfig is a struct containing cloud-specific configuration required to

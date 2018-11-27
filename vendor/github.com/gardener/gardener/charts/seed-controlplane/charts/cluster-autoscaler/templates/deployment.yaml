@@ -5,6 +5,7 @@ metadata:
   name: cluster-autoscaler
   namespace: {{ .Release.Namespace }}
   labels:
+    garden.sapcloud.io/role: controlplane
     app: kubernetes
     role: cluster-autoscaler
 spec:
@@ -22,6 +23,7 @@ spec:
 {{ toYaml .Values.podAnnotations | indent 8 }}
 {{- end }}
       labels:
+        garden.sapcloud.io/role: controlplane
         app: kubernetes
         role: cluster-autoscaler
     spec:
@@ -33,6 +35,7 @@ spec:
         imagePullPolicy: IfNotPresent
         command:
         - ./cluster-autoscaler
+        - --address=:{{ .Values.metricsPort }}
         - --kubeconfig=/var/lib/cluster-autoscaler/kubeconfig
         - --cloud-provider=mcm
         {{- range $key, $pool := .Values.workerPools }}
@@ -51,8 +54,8 @@ spec:
           value: "/var/lib/cluster-autoscaler/kubeconfig"
         resources:
           limits:
-            cpu: 100m
-            memory: 300Mi
+            cpu: 150m
+            memory: 500Mi
           requests:
             cpu: 100m
             memory: 300Mi

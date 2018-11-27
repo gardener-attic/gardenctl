@@ -16,11 +16,13 @@ package operation
 
 import (
 	"fmt"
+	kutil "github.com/gardener/gardener/pkg/utils/kubernetes"
+	"k8s.io/client-go/util/retry"
 	"path/filepath"
-	"regexp"
 	"strings"
 
 	gardenv1beta1 "github.com/gardener/gardener/pkg/apis/garden/v1beta1"
+	"github.com/gardener/gardener/pkg/apis/garden/v1beta1/helper"
 	"github.com/gardener/gardener/pkg/chartrenderer"
 	gardeninformers "github.com/gardener/gardener/pkg/client/garden/informers/externalversions/garden/v1beta1"
 	"github.com/gardener/gardener/pkg/client/kubernetes"
@@ -29,6 +31,7 @@ import (
 	"github.com/gardener/gardener/pkg/operation/garden"
 	"github.com/gardener/gardener/pkg/operation/seed"
 	shootpkg "github.com/gardener/gardener/pkg/operation/shoot"
+	"github.com/gardener/gardener/pkg/utils/flow"
 	"github.com/gardener/gardener/pkg/utils/imagevector"
 	"github.com/sirupsen/logrus"
 	corev1 "k8s.io/api/core/v1"
@@ -45,17 +48,34 @@ func NewWithBackupInfrastructure(backupInfrastructure *gardenv1beta1.BackupInfra
 	return newOperation(logger, k8sGardenClient, k8sGardenInformers, gardenerInfo, secretsMap, imageVector, backupInfrastructure.Namespace, backupInfrastructure.Spec.Seed, nil, backupInfrastructure)
 }
 
-func newOperation(logger *logrus.Entry, k8sGardenClient kubernetes.Client, k8sGardenInformers gardeninformers.Interface, gardenerInfo *gardenv1beta1.Gardener, secretsMap map[string]*corev1.Secret, imageVector imagevector.ImageVector, namespace, seedName string, shoot *gardenv1beta1.Shoot, backupInfrastructure *gardenv1beta1.BackupInfrastructure) (*Operation, error) {
+func newOperation(
+	logger *logrus.Entry,
+	k8sGardenClient kubernetes.Client,
+	k8sGardenInformers gardeninformers.Interface,
+	gardenerInfo *gardenv1beta1.Gardener,
+	secretsMap map[string]*corev1.Secret,
+	imageVector imagevector.ImageVector,
+	namespace,
+	seedName string,
+	shoot *gardenv1beta1.Shoot,
+	backupInfrastructure *gardenv1beta1.BackupInfrastructure,
+) (*Operation, error) {
+
 	secrets := make(map[string]*corev1.Secret)
 	for k, v := range secretsMap {
 		secrets[k] = v
 	}
 
-	gardenObj, err := garden.New(k8sGardenClient, namespace)
+	gardenObj, err := garden.New(k8sGardenInformers.Projects().Lister(), namespace)
 	if err != nil {
 		return nil, err
 	}
 	seedObj, err := seed.NewFromName(k8sGardenClient, k8sGardenInformers, seedName)
+	if err != nil {
+		return nil, err
+	}
+
+	chartRenderer, err := chartrenderer.New(k8sGardenClient)
 	if err != nil {
 		return nil, err
 	}
@@ -70,18 +90,25 @@ func newOperation(logger *logrus.Entry, k8sGardenClient kubernetes.Client, k8sGa
 		Seed:                 seedObj,
 		K8sGardenClient:      k8sGardenClient,
 		K8sGardenInformers:   k8sGardenInformers,
-		ChartGardenRenderer:  chartrenderer.New(k8sGardenClient),
+		ChartGardenRenderer:  chartRenderer,
 		BackupInfrastructure: backupInfrastructure,
 		MachineDeployments:   MachineDeployments{},
 	}
 
 	if shoot != nil {
-		internalDomain := constructInternalDomain(shoot.Name, gardenObj.ProjectName, secretsMap[common.GardenRoleInternalDomain].Annotations[common.DNSDomain])
-		shootObj, err := shootpkg.New(k8sGardenClient, k8sGardenInformers, shoot, gardenObj.ProjectName, internalDomain)
+		internalDomain := constructInternalDomain(shoot.Name, gardenObj.Project.Name, secretsMap[common.GardenRoleInternalDomain].Annotations[common.DNSDomain])
+		shootObj, err := shootpkg.New(k8sGardenClient, k8sGardenInformers, shoot, gardenObj.Project.Name, internalDomain)
 		if err != nil {
 			return nil, err
 		}
 		operation.Shoot = shootObj
+
+		shootedSeed, err := helper.ReadShootedSeed(shoot)
+		if err != nil {
+			logger.Warnf("Cannot use shoot %s/%s as shooted seed: %+v", shoot.Namespace, shoot.Name, err)
+		} else {
+			operation.ShootedSeed = shootedSeed
+		}
 	}
 
 	return operation, nil
@@ -108,7 +135,10 @@ func (o *Operation) InitializeSeedClients() error {
 	k8sSeedClient.SetMachineClientset(machineClientset)
 
 	o.K8sSeedClient = k8sSeedClient
-	o.ChartSeedRenderer = chartrenderer.New(k8sSeedClient)
+	o.ChartSeedRenderer, err = chartrenderer.New(k8sSeedClient)
+	if err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -127,7 +157,10 @@ func (o *Operation) InitializeShootClients() error {
 	}
 
 	o.K8sShootClient = k8sShootClient
-	o.ChartShootRenderer = chartrenderer.New(k8sShootClient)
+	o.ChartShootRenderer, err = chartrenderer.New(k8sShootClient)
+	if err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -158,33 +191,48 @@ func (o *Operation) GetSecretKeysOfRole(kind string) []string {
 	return common.GetSecretKeysWithPrefix(kind, o.Secrets)
 }
 
+func makeDescription(stats *flow.Stats) string {
+	if stats.ProgressPercent() == 100 {
+		return "Execution finished"
+	}
+	return strings.Join(stats.Running.StringList(), ", ")
+}
+
 // ReportShootProgress will update the last operation object in the Shoot manifest `status` section
 // by the current progress of the Flow execution.
-func (o *Operation) ReportShootProgress(progress int, currentFunctions string) {
-	description := fmt.Sprintf("Executing %s.", sanitizeFunctionNames(currentFunctions))
-	if progress == 100 {
-		description = "Execution finished."
+func (o *Operation) ReportShootProgress(stats *flow.Stats) {
+	var (
+		description    = makeDescription(stats)
+		progress       = stats.ProgressPercent()
+		lastUpdateTime = metav1.Now()
+	)
+
+	newShoot, err := kutil.TryUpdateShootStatus(o.K8sGardenClient.GardenClientset(), retry.DefaultRetry, o.Shoot.Info.ObjectMeta,
+		func(shoot *gardenv1beta1.Shoot) (*gardenv1beta1.Shoot, error) {
+			if shoot.Status.LastOperation == nil {
+				return nil, fmt.Errorf("last operation of Shoot %s/%s is unset", shoot.Namespace, shoot.Name)
+			}
+			if shoot.Status.LastOperation.LastUpdateTime.After(lastUpdateTime.Time) {
+				return nil, fmt.Errorf("last operation of Shoot %s/%s was updated mid-air", shoot.Namespace, shoot.Name)
+			}
+			shoot.Status.LastOperation.Description = description
+			shoot.Status.LastOperation.Progress = progress
+			shoot.Status.LastOperation.LastUpdateTime = lastUpdateTime
+			return shoot, nil
+		})
+	if err != nil {
+		o.Logger.Errorf("Could not report shoot progress: %v", err)
+		return
 	}
 
-	o.Shoot.Info.Status.LastOperation.Description = description
-	o.Shoot.Info.Status.LastOperation.Progress = progress
-	o.Shoot.Info.Status.LastOperation.LastUpdateTime = metav1.Now()
-
-	if newShoot, err := o.K8sGardenClient.GardenClientset().GardenV1beta1().Shoots(o.Shoot.Info.Namespace).UpdateStatus(o.Shoot.Info); err == nil {
-		o.Shoot.Info = newShoot
-	}
+	o.Shoot.Info = newShoot
 }
 
 // ReportBackupInfrastructureProgress will update the phase and error in the BackupInfrastructure manifest `status` section
 // by the current progress of the Flow execution.
-func (o *Operation) ReportBackupInfrastructureProgress(progress int, currentFunctions string) {
-	description := fmt.Sprintf("Executing %s.", sanitizeFunctionNames(currentFunctions))
-	if progress == 100 {
-		description = "Execution finished."
-	}
-
-	o.BackupInfrastructure.Status.LastOperation.Description = description
-	o.BackupInfrastructure.Status.LastOperation.Progress = progress
+func (o *Operation) ReportBackupInfrastructureProgress(stats *flow.Stats) {
+	o.BackupInfrastructure.Status.LastOperation.Description = makeDescription(stats)
+	o.BackupInfrastructure.Status.LastOperation.Progress = stats.ProgressPercent()
 	o.BackupInfrastructure.Status.LastOperation.LastUpdateTime = metav1.Now()
 
 	if newBackupInfrastructure, err := o.K8sGardenClient.GardenClientset().GardenV1beta1().BackupInfrastructures(o.BackupInfrastructure.Namespace).UpdateStatus(o.BackupInfrastructure); err == nil {
@@ -192,13 +240,8 @@ func (o *Operation) ReportBackupInfrastructureProgress(progress int, currentFunc
 	}
 }
 
-func sanitizeFunctionNames(functions string) string {
-	re := regexp.MustCompile(`\([^)]*\)\.`)
-	return re.ReplaceAllString(functions, "")
-}
-
 // InjectImages injects images from the image vector into the provided <values> map.
-func (o *Operation) InjectImages(values map[string]interface{}, version string, imageMap map[string]string) (map[string]interface{}, error) {
+func (o *Operation) InjectImages(values map[string]interface{}, k8sVersionRuntime, k8sVersionTarget string, images ...string) (map[string]interface{}, error) {
 	var (
 		copy = make(map[string]interface{})
 		i    = make(map[string]interface{})
@@ -208,12 +251,12 @@ func (o *Operation) InjectImages(values map[string]interface{}, version string, 
 		copy[k] = v
 	}
 
-	for keyInChart, imageName := range imageMap {
-		image, err := o.ImageVector.FindImage(imageName, version)
+	for _, imageName := range images {
+		image, err := o.ImageVector.FindImage(imageName, k8sVersionRuntime, k8sVersionTarget)
 		if err != nil {
 			return nil, err
 		}
-		i[keyInChart] = image.String()
+		i[imageName] = image.String()
 	}
 
 	copy["images"] = i
@@ -229,7 +272,7 @@ func (o *Operation) ComputeDownloaderCloudConfig(workerName string) (*chartrende
 		"secretName": o.Shoot.ComputeCloudConfigSecretName(workerName),
 	}
 
-	values, err := o.InjectImages(config, o.K8sShootClient.Version(), map[string]string{"ruby": "ruby"})
+	values, err := o.InjectImages(config, o.ShootVersion(), o.ShootVersion(), common.RubyImageName)
 	if err != nil {
 		return nil, err
 	}
@@ -242,6 +285,16 @@ func (o *Operation) ComputeDownloaderCloudConfig(workerName string) (*chartrende
 // units once it finds a newer state.
 func (o *Operation) ComputeOriginalCloudConfig(config map[string]interface{}) (*chartrenderer.RenderedChart, error) {
 	return o.ChartShootRenderer.Render(filepath.Join(common.ChartPath, "shoot-cloud-config", "charts", "original"), "shoot-cloud-config-original", metav1.NamespaceSystem, config)
+}
+
+// SeedVersion is a shorthand for the kubernetes version of the K8sSeedClient.
+func (o *Operation) SeedVersion() string {
+	return o.K8sSeedClient.Version()
+}
+
+// ShootVersion is a shorthand for the desired kubernetes version of the operation's shoot.
+func (o *Operation) ShootVersion() string {
+	return o.Shoot.Info.Spec.Kubernetes.Version
 }
 
 // constructInternalDomain constructs the domain pointing to the kube-apiserver of a Shoot cluster

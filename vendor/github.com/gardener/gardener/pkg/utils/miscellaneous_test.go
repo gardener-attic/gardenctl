@@ -14,8 +14,6 @@
 package utils_test
 
 import (
-	"time"
-
 	. "github.com/gardener/gardener/pkg/utils"
 
 	. "github.com/onsi/ginkgo"
@@ -23,29 +21,40 @@ import (
 )
 
 var _ = Describe("utils", func() {
-	Describe("#ParseMaintenanceTime", func() {
-		It("should return the time object in UTC", func() {
-			time, err := ParseMaintenanceTime("222200+0100")
+	Describe("#MergeStringMaps", func() {
+		It("should return nil", func() {
+			result := MergeStringMaps(nil, nil)
 
-			Expect(err).NotTo(HaveOccurred())
-			Expect(time.String()).To(ContainSubstring("21:22:00 +0000"))
+			Expect(result).To(BeNil())
 		})
 
-		It("should return an error", func() {
-			_, err := ParseMaintenanceTime("abcinvalidformat")
+		It("should return an empty map", func() {
+			emptyMap := map[string]string{}
 
-			Expect(err).To(HaveOccurred())
+			result := MergeStringMaps(emptyMap, nil)
+
+			Expect(result).To(Equal(emptyMap))
 		})
-	})
 
-	Describe("#FormatMaintenanceTime", func() {
-		It("should return the formatted time", func() {
-			cet, _ := time.LoadLocation("CET")
-			t := time.Date(1970, 1, 1, 14, 0, 0, 0, cet)
+		It("should return a merged map", func() {
+			var (
+				oldMap = map[string]string{
+					"a": "1",
+					"b": "2",
+				}
+				newMap = map[string]string{
+					"b": "20",
+					"c": "3",
+				}
+			)
 
-			val := FormatMaintenanceTime(t)
+			result := MergeStringMaps(oldMap, newMap)
 
-			Expect(val).To(Equal("140000+0100"))
+			Expect(result).To(Equal(map[string]string{
+				"a": "1",
+				"b": "20",
+				"c": "3",
+			}))
 		})
 	})
 })

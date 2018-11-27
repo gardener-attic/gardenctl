@@ -20,7 +20,6 @@ data:
       contentType: {{ required ".Values.controller.config.clientConnection.contentType is required" .Values.controller.config.clientConnection.contentType }}
       qps: {{ required ".Values.controller.config.clientConnection.qps is required" .Values.controller.config.clientConnection.qps }}
       burst: {{ required ".Values.controller.config.clientConnection.burst is required" .Values.controller.config.clientConnection.burst }}
-      disableTCPKeepAlive: {{ required ".Values.controller.config.clientConnection.disableTCPKeepAlive is required" .Values.controller.config.clientConnection.disableTCPKeepAlive }}
     controllers:
       {{- if .Values.controller.config.controllers.cloudProfile }}
       cloudProfile:
@@ -29,6 +28,10 @@ data:
       {{- if .Values.controller.config.controllers.secretBinding }}
       secretBinding:
         concurrentSyncs: {{ required ".Values.controller.config.controllers.secretBinding.concurrentSyncs is required" .Values.controller.config.controllers.secretBinding.concurrentSyncs }}
+      {{- end }}
+      {{- if .Values.controller.config.controllers.project }}
+      project:
+        concurrentSyncs: {{ required ".Values.controller.config.controllers.project.concurrentSyncs is required" .Values.controller.config.controllers.project.concurrentSyncs }}
       {{- end }}
       {{- if .Values.controller.config.controllers.quota }}
       quota:
@@ -55,7 +58,6 @@ data:
         syncPeriod: {{ required ".Values.controller.config.controllers.shootCare.syncPeriod is required" .Values.controller.config.controllers.shootCare.syncPeriod }}
       shootMaintenance:
         concurrentSyncs: {{ required ".Values.controller.config.controllers.shootMaintenance.concurrentSyncs is required" .Values.controller.config.controllers.shootMaintenance.concurrentSyncs }}
-        syncPeriod: {{ required ".Values.controller.config.controllers.shootMaintenance.syncPeriod is required" .Values.controller.config.controllers.shootMaintenance.syncPeriod }}
       shootQuota:
         concurrentSyncs: {{ required ".Values.controller.config.controllers.shootQuota.concurrentSyncs is required" .Values.controller.config.controllers.shootQuota.concurrentSyncs }}
         syncPeriod: {{ required ".Values.controller.config.controllers.shootQuota.syncPeriod is required" .Values.controller.config.controllers.shootQuota.syncPeriod }}
@@ -72,11 +74,16 @@ data:
       retryPeriod: {{ required ".Values.controller.config.leaderElection.retryPeriod is required" .Values.controller.config.leaderElection.retryPeriod }}
       resourceLock: {{ required ".Values.controller.config.leaderElection.resourceLock is required" .Values.controller.config.leaderElection.resourceLock }}
     logLevel: {{ required ".Values.controller.config.logLevel is required" .Values.controller.config.logLevel }}
-    metrics:
-      interval: {{ required ".Values.controller.config.metrics.interval is required" .Values.controller.config.metrics.interval }}
     server:
-      bindAddress: {{ required ".Values.controller.config.server.bindAddress is required" .Values.controller.config.server.bindAddress }}
-      port: {{ required ".Values.controller.config.server.port is required" .Values.controller.config.server.port }}
+      http:
+        bindAddress: {{ required ".Values.controller.config.server.http.bindAddress is required" .Values.controller.config.server.http.bindAddress }}
+        port: {{ required ".Values.controller.config.server.http.port is required" .Values.controller.config.server.http.port }}
+      https:
+        bindAddress: {{ required ".Values.controller.config.server.https.bindAddress is required" .Values.controller.config.server.https.bindAddress }}
+        port: {{ required ".Values.controller.config.server.https.port is required" .Values.controller.config.server.https.port }}
+        tls:
+          serverCertPath: /etc/gardener-controller-manager/srv/gardener-controller-manager.crt
+          serverKeyPath: /etc/gardener-controller-manager/srv/gardener-controller-manager.key
     {{- if .Values.controller.config.featureGates }}
     featureGates:
 {{ toYaml .Values.controller.config.featureGates | indent 6 }}

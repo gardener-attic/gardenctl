@@ -1,0 +1,26 @@
+{
+  "publicIp": {
+    "dnsSettings": null,
+    "etag": "W/\"d0c6de8f-0ed5-4977-a150-295570c73101\"",
+    "id": "/subscriptions/00d2caa5-cd29-46f7-845a-2f8ee0360ef5/resourceGroups/shoot--core--qklddht9sf/providers/Microsoft.Network/publicIPAddresses/sshIP",
+    "idleTimeoutInMinutes": 4,
+    "ipAddress": "40.68.73.111",
+    "ipConfiguration": null,
+    "ipTags": [],
+    "location": "westeurope",
+    "name": "sshIP",
+    "provisioningState": "Succeeded",
+    "publicIpAddressVersion": "IPv4",
+    "publicIpAllocationMethod": "Static",
+    "publicIpPrefix": null,
+    "resourceGroup": "shoot--core--qklddht9sf",
+    "resourceGuid": "1a37e50e-8c0c-49ed-a572-afb45969a3e7",
+    "sku": {
+      "name": "Basic",
+      "tier": "Regional"
+    },
+    "tags": null,
+    "type": "Microsoft.Network/publicIPAddresses",
+    "zones": null
+  }
+}

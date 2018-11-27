@@ -17,18 +17,30 @@ package common
 import (
 	"errors"
 	"fmt"
+	"math"
 	"net"
 	"regexp"
 	"strconv"
 	"strings"
 
+	"time"
+
 	gardenv1beta1 "github.com/gardener/gardener/pkg/apis/garden/v1beta1"
 	"github.com/gardener/gardener/pkg/chartrenderer"
+	gardenlisters "github.com/gardener/gardener/pkg/client/garden/listers/garden/v1beta1"
 	"github.com/gardener/gardener/pkg/client/kubernetes"
 	"github.com/gardener/gardener/pkg/utils"
+	"github.com/json-iterator/go"
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/intstr"
+	"k8s.io/client-go/tools/leaderelection/resourcelock"
 )
+
+var json = jsoniter.ConfigFastest
 
 // ApplyChart takes a Kubernetes client <k8sClient>, chartRender <renderer>, path to a chart <chartPath>, name of the release <name>,
 // release's namespace <namespace> and two maps <defaultValues>, <additionalValues>, and renders the template
@@ -67,6 +79,46 @@ func DistributeOverZones(zoneIndex, size, zoneSize int) int {
 		second = 1
 	}
 	return first + second
+}
+
+// DistributePercentOverZones distributes a given percentage value over zones in relation to
+// the given total value. In case the total value is evenly divisible over the zones, this
+// always just returns the initial percentage. Otherwise, the total value is used to determine
+// the weight of a specific zone in relation to the other zones and adapt the given percentage
+// accordingly.
+func DistributePercentOverZones(zoneIndex int, percent string, zoneSize int, total int) string {
+	percents, err := strconv.Atoi(percent[:len(percent)-1])
+	if err != nil {
+		panic(fmt.Sprintf("given value %q is not a percent value", percent))
+	}
+
+	var weightedPercents int
+	if total%zoneSize == 0 {
+		// Zones are evenly sized, we don't need to adapt the percentage per zone
+		weightedPercents = percents
+	} else {
+		// Zones are not evenly sized, we need to calculate the ratio of each zone
+		// and modify the percentage depending on that ratio.
+		zoneTotal := DistributeOverZones(zoneIndex, total, zoneSize)
+		absoluteTotalRatio := float64(total) / float64(zoneSize)
+		ratio := 100.0 / absoluteTotalRatio * float64(zoneTotal)
+		// Optimistic rounding up, this will cause an actual max surge / max unavailable percentage to be a bit higher.
+		weightedPercents = int(math.Ceil(ratio * float64(percents) / 100.0))
+	}
+
+	return fmt.Sprintf("%d%%", weightedPercents)
+}
+
+// DistributePositiveIntOrPercent distributes a given int or percentage value over zones in relation to
+// the given total value. In case the total value is evenly divisible over the zones, this
+// always just returns the initial percentage. Otherwise, the total value is used to determine
+// the weight of a specific zone in relation to the other zones and adapt the given percentage
+// accordingly.
+func DistributePositiveIntOrPercent(zoneIndex int, intOrPercent intstr.IntOrString, zoneSize int, total int) intstr.IntOrString {
+	if intOrPercent.Type == intstr.String {
+		return intstr.FromString(DistributePercentOverZones(zoneIndex, intOrPercent.StrVal, zoneSize, total))
+	}
+	return intstr.FromInt(DistributeOverZones(zoneIndex, int(intOrPercent.IntVal), zoneSize))
 }
 
 // IdentifyAddressType takes a string containing an address (hostname or IP) and tries to parse it
@@ -195,33 +247,177 @@ func IsFollowingNewNamingConvention(seedNamespace string) bool {
 
 // ReplaceCloudProviderConfigKey replaces a key with the new value in the given cloud provider config.
 func ReplaceCloudProviderConfigKey(cloudProviderConfig, separator, key, value string) string {
-	return regexp.MustCompile(fmt.Sprintf("%s%s(.*)\n", key, separator)).ReplaceAllString(cloudProviderConfig, fmt.Sprintf("%s%s%s\n", key, separator, value))
+	keyValueRegexp := regexp.MustCompile(fmt.Sprintf(`(\Q%s\E%s)([^\n]*)`, key, separator))
+	return keyValueRegexp.ReplaceAllString(cloudProviderConfig, fmt.Sprintf(`${1}%q`, strings.Replace(value, `$`, `$$`, -1)))
 }
 
-// DetermineErrorCode determines the Garden error code for the given error message.
-func DetermineErrorCode(message string) error {
-	var (
-		code                         gardenv1beta1.ErrorCode
-		unauthorizedRegexp           = regexp.MustCompile(`(?i)(Unauthorized|InvalidClientTokenId|SignatureDoesNotMatch|Authentication failed|AuthFailure|invalid character|invalid_grant|invalid_client|Authorization Profile was not found|cannot fetch token)`)
-		quotaExceededRegexp          = regexp.MustCompile(`(?i)(LimitExceeded|Quota)`)
-		insufficientPrivilegesRegexp = regexp.MustCompile(`(?i)(AccessDenied|Forbidden)`)
-		dependenciesRegexp           = regexp.MustCompile(`(?i)(PendingVerification|Access Not Configured|accessNotConfigured|DependencyViolation|OptInRequired)`)
-	)
+type errorWithCode struct {
+	code    gardenv1beta1.ErrorCode
+	message string
+}
 
+// NewErrorWithCode creates a new error that additionally exposes the given code via the Coder interface.
+func NewErrorWithCode(code gardenv1beta1.ErrorCode, message string) error {
+	return &errorWithCode{code, message}
+}
+
+func (e *errorWithCode) Code() gardenv1beta1.ErrorCode {
+	return e.code
+}
+
+func (e *errorWithCode) Error() string {
+	return e.message
+}
+
+var (
+	unauthorizedRegexp           = regexp.MustCompile(`(?i)(Unauthorized|InvalidClientTokenId|SignatureDoesNotMatch|Authentication failed|AuthFailure|AuthorizationFailed|invalid character|invalid_grant|invalid_client|Authorization Profile was not found|cannot fetch token)`)
+	quotaExceededRegexp          = regexp.MustCompile(`(?i)(LimitExceeded|Quota)`)
+	insufficientPrivilegesRegexp = regexp.MustCompile(`(?i)(AccessDenied|Forbidden|deny|denied)`)
+	dependenciesRegexp           = regexp.MustCompile(`(?i)(PendingVerification|Access Not Configured|accessNotConfigured|DependencyViolation|OptInRequired|DeleteConflict|Conflict)`)
+)
+
+func determineErrorCode(message string) gardenv1beta1.ErrorCode {
 	switch {
 	case unauthorizedRegexp.MatchString(message):
-		code = gardenv1beta1.ErrorInfraUnauthorized
+		return gardenv1beta1.ErrorInfraUnauthorized
 	case quotaExceededRegexp.MatchString(message):
-		code = gardenv1beta1.ErrorInfraQuotaExceeded
+		return gardenv1beta1.ErrorInfraQuotaExceeded
 	case insufficientPrivilegesRegexp.MatchString(message):
-		code = gardenv1beta1.ErrorInfraInsufficientPrivileges
+		return gardenv1beta1.ErrorInfraInsufficientPrivileges
 	case dependenciesRegexp.MatchString(message):
-		code = gardenv1beta1.ErrorInfraDependencies
+		return gardenv1beta1.ErrorInfraDependencies
+	default:
+		return ""
+	}
+}
+
+// DetermineError determines the Garden error code for the given error message.
+func DetermineError(message string) error {
+	code := determineErrorCode(message)
+	if code == "" {
+		return errors.New(message)
 	}
 
-	if len(code) != 0 {
-		message = fmt.Sprintf("CODE:%s %s", code, message)
+	return &errorWithCode{code, message}
+}
+
+// ProjectForNamespace returns the project object responsible for a given <namespace>. It tries to identify the project object by looking for the namespace
+// name in the project statuses.
+func ProjectForNamespace(projectLister gardenlisters.ProjectLister, namespaceName string) (*gardenv1beta1.Project, error) {
+	projectList, err := projectLister.List(labels.Everything())
+	if err != nil {
+		return nil, err
 	}
 
-	return errors.New(message)
+	for _, project := range projectList {
+		if project.Spec.Namespace != nil && *project.Spec.Namespace == namespaceName {
+			return project, nil
+		}
+	}
+
+	return nil, apierrors.NewNotFound(gardenv1beta1.Resource("Project"), fmt.Sprintf("for namespace %s", namespaceName))
+}
+
+// ProjectNameForNamespace determines the project name for a given <namespace>. It tries to identify it first per the namespace's ownerReferences.
+// If it doesn't help then it will check whether the project name is a label on the namespace object. If it doesn't help then the name can be inferred
+// from the namespace name in case it is prefixed with the project prefix. If none of those approaches the namespace name itself is returned as project
+// name.
+func ProjectNameForNamespace(namespace *corev1.Namespace) string {
+	for _, ownerReference := range namespace.OwnerReferences {
+		if ownerReference.Kind == "Project" {
+			return ownerReference.Name
+		}
+	}
+
+	if name, ok := namespace.Labels[ProjectName]; ok {
+		return name
+	}
+
+	if nameSplit := strings.Split(namespace.Name, ProjectPrefix); len(nameSplit) > 1 {
+		return nameSplit[1]
+	}
+
+	return namespace.Name
+}
+
+// MergeOwnerReferences merges the newReferences with the list of existing references.
+func MergeOwnerReferences(references []metav1.OwnerReference, newReferences ...metav1.OwnerReference) []metav1.OwnerReference {
+	uids := make(map[types.UID]struct{})
+	for _, reference := range references {
+		uids[reference.UID] = struct{}{}
+	}
+
+	for _, newReference := range newReferences {
+		if _, ok := uids[newReference.UID]; !ok {
+			references = append(references, newReference)
+		}
+	}
+
+	return references
+}
+
+// HasInitializer checks whether the passed name is part of the pending initializers.
+func HasInitializer(initializers *metav1.Initializers, name string) bool {
+	if initializers == nil {
+		return false
+	}
+	for _, initializer := range initializers.Pending {
+		if initializer.Name == name {
+			return true
+		}
+	}
+	return false
+}
+
+// ReadLeaderElectionRecord returns the leader election record for a given lock type and a namespace/name combination.
+func ReadLeaderElectionRecord(k8sClient kubernetes.Client, lock, namespace, name string) (*resourcelock.LeaderElectionRecord, error) {
+	var (
+		leaderElectionRecord resourcelock.LeaderElectionRecord
+		annotations          map[string]string
+	)
+
+	switch lock {
+	case resourcelock.EndpointsResourceLock:
+		endpoint, err := k8sClient.Clientset().CoreV1().Endpoints(namespace).Get(name, metav1.GetOptions{})
+		if err != nil {
+			return nil, err
+		}
+		annotations = endpoint.Annotations
+	case resourcelock.ConfigMapsResourceLock:
+		configmap, err := k8sClient.Clientset().CoreV1().ConfigMaps(namespace).Get(name, metav1.GetOptions{})
+		if err != nil {
+			return nil, err
+		}
+		annotations = configmap.Annotations
+	default:
+		return nil, fmt.Errorf("Unknown lock type: %s", lock)
+	}
+
+	leaderElection, ok := annotations[resourcelock.LeaderElectionRecordAnnotationKey]
+	if !ok {
+		return nil, fmt.Errorf("Could not find key %s in annotations", resourcelock.LeaderElectionRecordAnnotationKey)
+	}
+
+	if err := json.Unmarshal([]byte(leaderElection), &leaderElectionRecord); err != nil {
+		return nil, fmt.Errorf("Failed to unmarshal leader election record: %+v", err)
+	}
+
+	return &leaderElectionRecord, nil
+}
+
+// GardenerDeletionGracePeriod is the default grace period for Gardener's force deletion methods.
+var GardenerDeletionGracePeriod = 1 * time.Minute
+
+// ShouldObjectBeRemoved determines whether the given object should be gone now.
+// This is calculated by first checking the deletion timestamp of an object: If the deletion timestamp
+// is unset, the object should not be removed - i.e. this returns false.
+// Otherwise, it is checked whether the deletionTimestamp is before the current time minus the
+// grace period.
+func ShouldObjectBeRemoved(obj metav1.Object, gracePeriod time.Duration) bool {
+	deletionTimestamp := obj.GetDeletionTimestamp()
+	if deletionTimestamp == nil {
+		return false
+	}
+
+	return deletionTimestamp.Time.Before(time.Now().Add(-gracePeriod))
 }

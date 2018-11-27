@@ -4,23 +4,23 @@
 
 [[constraint]]
   name = "github.com/gardener/gardener"
-  version = "^0.10.0"
+  version = "^0.13.0"
 
 [[override]]
   name = "k8s.io/api"
-  version = "kubernetes-1.11.3"
+  version = "kubernetes-1.12.1"
 
 [[override]]
   name = "k8s.io/apimachinery"
-  version = "kubernetes-1.11.3"
+  version = "kubernetes-1.12.1"
 
 [[override]]
   name = "k8s.io/apiserver"
-  version = "kubernetes-1.11.3"
+  version = "kubernetes-1.12.1"
 
 [[override]]
   name = "k8s.io/client-go"
-  version = "kubernetes-1.11.3"
+  version = "kubernetes-1.12.1"
 
 [[override]]
   name = "github.com/json-iterator/go"

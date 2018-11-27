@@ -22,6 +22,29 @@ import (
 	"github.com/gardener/gardener/pkg/utils"
 )
 
+const cloudProviderConfigTemplate = `
+cloud: AZUREPUBLICCLOUD
+tenantId: %q
+subscriptionId: %q
+resourceGroup: %q
+location: %q
+vnetName: %q
+subnetName: %q
+securityGroupName: %q
+routeTableName: %q
+primaryAvailabilitySetName: %q
+aadClientId: %q
+aadClientSecret: %q
+cloudProviderBackoff: true
+cloudProviderBackoffRetries: 6
+cloudProviderBackoffExponent: 1.5
+cloudProviderBackoffDuration: 5
+cloudProviderBackoffJitter: 1.0
+cloudProviderRateLimit: true
+cloudProviderRateLimitQPS: 10.0
+cloudProviderRateLimitBucket: 100
+`
+
 // GenerateCloudProviderConfig returns a cloud provider config for the Azure cloud provider
 // See this for more details:
 // https://github.com/kubernetes/kubernetes/blob/master/pkg/cloudprovider/providers/azure/azure.go
@@ -34,32 +57,29 @@ func (b *AzureBotanist) GenerateCloudProviderConfig() (string, error) {
 		routeTableName      = "routeTableName"
 		securityGroupName   = "securityGroupName"
 	)
-
-	stateVariables, err := terraformer.NewFromOperation(b.Operation, common.TerraformerPurposeInfra).GetStateOutputVariables(resourceGroupName, vnetName, subnetName, routeTableName, availabilitySetName, securityGroupName)
+	tf, err := terraformer.NewFromOperation(b.Operation, common.TerraformerPurposeInfra)
+	if err != nil {
+		return "", err
+	}
+	stateVariables, err := tf.GetStateOutputVariables(resourceGroupName, vnetName, subnetName, routeTableName, availabilitySetName, securityGroupName)
 	if err != nil {
 		return "", err
 	}
 
-	cloudProviderConfig := `cloud: AZUREPUBLICCLOUD
-tenantId: "` + string(b.Shoot.Secret.Data[TenantID]) + `"
-subscriptionId: "` + string(b.Shoot.Secret.Data[SubscriptionID]) + `"
-resourceGroup: "` + stateVariables[resourceGroupName] + `"
-location: "` + b.Shoot.Info.Spec.Cloud.Region + `"
-vnetName: "` + stateVariables[vnetName] + `"
-subnetName: "` + stateVariables[subnetName] + `"
-securityGroupName: "` + stateVariables[securityGroupName] + `"
-routeTableName: "` + stateVariables[routeTableName] + `"
-primaryAvailabilitySetName: "` + stateVariables[availabilitySetName] + `"
-aadClientId: "` + string(b.Shoot.Secret.Data[ClientID]) + `"
-aadClientSecret: "` + string(b.Shoot.Secret.Data[ClientSecret]) + `"
-cloudProviderBackoff: true
-cloudProviderBackoffRetries: 6
-cloudProviderBackoffExponent: 1.5
-cloudProviderBackoffDuration: 5
-cloudProviderBackoffJitter: 1.0
-cloudProviderRateLimit: true
-cloudProviderRateLimitQPS: 10.0
-cloudProviderRateLimitBucket: 100`
+	cloudProviderConfig := fmt.Sprintf(
+		cloudProviderConfigTemplate,
+		string(b.Shoot.Secret.Data[TenantID]),
+		string(b.Shoot.Secret.Data[SubscriptionID]),
+		stateVariables[resourceGroupName],
+		b.Shoot.Info.Spec.Cloud.Region,
+		stateVariables[vnetName],
+		stateVariables[subnetName],
+		stateVariables[securityGroupName],
+		stateVariables[routeTableName],
+		stateVariables[availabilitySetName],
+		string(b.Shoot.Secret.Data[ClientID]),
+		string(b.Shoot.Secret.Data[ClientSecret]),
+	)
 
 	configHasWriteRateLimits, err := utils.CheckVersionMeetsConstraint(b.Shoot.Info.Spec.Kubernetes.Version, ">= 1.10")
 	if err != nil {
@@ -94,18 +114,48 @@ func (b *AzureBotanist) RefreshCloudProviderConfig(currentConfig map[string]stri
 	}
 }
 
-// GenerateKubeAPIServerConfig generates the cloud provider specific values which are required to render the
-// Deployment manifest of the kube-apiserver properly.
-func (b *AzureBotanist) GenerateKubeAPIServerConfig() (map[string]interface{}, error) {
-	loadBalancerIP, err := utils.WaitUntilDNSNameResolvable(b.APIServerAddress)
+// GenerateKubeAPIServerServiceConfig generates the cloud provider specific values which are required to render the
+// Service manifest of the kube-apiserver-service properly.
+func (b *AzureBotanist) GenerateKubeAPIServerServiceConfig() (map[string]interface{}, error) {
+	var values map[string]interface{}
+
+	seedK8s112, err := utils.CompareVersions(b.K8sSeedClient.Version(), ">=", "1.12")
 	if err != nil {
 		return nil, err
 	}
+
+	if seedK8s112 {
+		values = map[string]interface{}{
+			"annotations": map[string]interface{}{
+				"service.beta.kubernetes.io/azure-load-balancer-tcp-idle-timeout": "60",
+			},
+		}
+	}
+
+	return values, nil
+}
+
+// GenerateKubeAPIServerExposeConfig defines the cloud provider specific values which configure how the kube-apiserver
+// is exposed to the public.
+func (b *AzureBotanist) GenerateKubeAPIServerExposeConfig() (map[string]interface{}, error) {
 	return map[string]interface{}{
+		"advertiseAddress": b.APIServerAddress,
 		"additionalParameters": []string{
-			fmt.Sprintf("--external-hostname=%s", loadBalancerIP),
+			fmt.Sprintf("--external-hostname=%s", b.APIServerAddress),
 		},
 	}, nil
+}
+
+// GenerateKubeAPIServerConfig generates the cloud provider specific values which are required to render the
+// Deployment manifest of the kube-apiserver properly.
+func (b *AzureBotanist) GenerateKubeAPIServerConfig() (map[string]interface{}, error) {
+	return nil, nil
+}
+
+// GenerateCloudControllerManagerConfig generates the cloud provider specific values which are required to
+// render the Deployment manifest of the cloud-controller-manager properly.
+func (b *AzureBotanist) GenerateCloudControllerManagerConfig() (map[string]interface{}, error) {
+	return nil, nil
 }
 
 // GenerateKubeControllerManagerConfig generates the cloud provider specific values which are required to
@@ -129,8 +179,11 @@ func (b *AzureBotanist) GenerateEtcdBackupConfig() (map[string][]byte, map[strin
 		backupInfrastructureName = common.GenerateBackupInfrastructureName(b.Shoot.SeedNamespace, b.Shoot.Info.Status.UID)
 		backupNamespace          = common.GenerateBackupNamespaceName(backupInfrastructureName)
 	)
-
-	stateVariables, err := terraformer.New(b.Logger, b.K8sSeedClient, common.TerraformerPurposeBackup, backupInfrastructureName, backupNamespace, b.ImageVector).GetStateOutputVariables(storageAccountName, storageAccessKey, containerName)
+	tf, err := terraformer.New(b.Logger, b.K8sSeedClient, common.TerraformerPurposeBackup, backupInfrastructureName, backupNamespace, b.ImageVector)
+	if err != nil {
+		return nil, nil, err
+	}
+	stateVariables, err := tf.GetStateOutputVariables(storageAccountName, storageAccessKey, containerName)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -170,4 +223,9 @@ func (b *AzureBotanist) GenerateEtcdBackupConfig() (map[string][]byte, map[strin
 	}
 
 	return secretData, backupConfigData, nil
+}
+
+// DeployCloudSpecificControlPlane does currently nothing for Azure.
+func (b *AzureBotanist) DeployCloudSpecificControlPlane() error {
+	return nil
 }

@@ -15,9 +15,25 @@
 package awsbotanist
 
 import (
+	"fmt"
+	"path/filepath"
+
+	kutil "github.com/gardener/gardener/pkg/utils/kubernetes"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
+
 	"github.com/gardener/gardener/pkg/operation/common"
 	"github.com/gardener/gardener/pkg/operation/terraformer"
 )
+
+const cloudProviderConfigTemplate = `
+[Global]
+VPC=%q
+SubnetID=%q
+DisableSecurityGroupIngress=true
+KubernetesClusterTag=%q
+KubernetesClusterID=%q
+Zone=%q
+`
 
 // GenerateCloudProviderConfig generates the AWS cloud provider config.
 // See this for more details:
@@ -27,19 +43,23 @@ func (b *AWSBotanist) GenerateCloudProviderConfig() (string, error) {
 		vpcID    = "vpc_id"
 		subnetID = "subnet_public_utility_z0"
 	)
-
-	stateVariables, err := terraformer.NewFromOperation(b.Operation, common.TerraformerPurposeInfra).GetStateOutputVariables(vpcID, subnetID)
+	tf, err := terraformer.NewFromOperation(b.Operation, common.TerraformerPurposeInfra)
+	if err != nil {
+		return "", err
+	}
+	stateVariables, err := tf.GetStateOutputVariables(vpcID, subnetID)
 	if err != nil {
 		return "", err
 	}
 
-	return `[Global]
-VPC="` + stateVariables[vpcID] + `"
-SubnetID="` + stateVariables[subnetID] + `"
-DisableSecurityGroupIngress=true
-KubernetesClusterTag="` + b.Shoot.SeedNamespace + `"
-KubernetesClusterID="` + b.Shoot.SeedNamespace + `"
-Zone="` + b.Shoot.Info.Spec.Cloud.AWS.Zones[0] + `"`, nil
+	return fmt.Sprintf(
+		cloudProviderConfigTemplate,
+		stateVariables[vpcID],
+		stateVariables[subnetID],
+		b.Shoot.SeedNamespace,
+		b.Shoot.SeedNamespace,
+		b.Shoot.Info.Spec.Cloud.AWS.Zones[0],
+	), nil
 }
 
 // RefreshCloudProviderConfig refreshes the cloud provider credentials in the existing cloud
@@ -50,11 +70,68 @@ func (b *AWSBotanist) RefreshCloudProviderConfig(currentConfig map[string]string
 	return currentConfig
 }
 
+// GenerateKubeAPIServerServiceConfig generates the cloud provider specific values which are required to render the
+// Service manifest of the kube-apiserver-service properly.
+func (b *AWSBotanist) GenerateKubeAPIServerServiceConfig() (map[string]interface{}, error) {
+	return map[string]interface{}{
+		"annotations": map[string]interface{}{
+			"service.beta.kubernetes.io/aws-load-balancer-connection-idle-timeout":         "3600",
+			"service.beta.kubernetes.io/aws-load-balancer-backend-protocol":                "ssl",
+			"service.beta.kubernetes.io/aws-load-balancer-ssl-ports":                       "443",
+			"service.beta.kubernetes.io/aws-load-balancer-healthcheck-timeout":             "5",
+			"service.beta.kubernetes.io/aws-load-balancer-healthcheck-interval":            "30",
+			"service.beta.kubernetes.io/aws-load-balancer-healthcheck-healthy-threshold":   "2",
+			"service.beta.kubernetes.io/aws-load-balancer-healthcheck-unhealthy-threshold": "2",
+			"service.beta.kubernetes.io/aws-load-balancer-ssl-negotiation-policy":          "ELBSecurityPolicy-TLS-1-2-2017-01",
+		},
+	}, nil
+}
+
+// GenerateKubeAPIServerExposeConfig defines the cloud provider specific values which configure how the kube-apiserver
+// is exposed to the public.
+func (b *AWSBotanist) GenerateKubeAPIServerExposeConfig() (map[string]interface{}, error) {
+	// For older versions of Gardener the old readvertiser would be deployed which is incompatible with the way we
+	// configure the kube-apiserver now, therefore, we need to check if the version is < 0.4.0.
+	mustDeleteOldReadvertiser := false
+	readvertiserDeployment, err := b.K8sSeedClient.GetDeployment(b.Shoot.SeedNamespace, common.AWSLBReadvertiserDeploymentName)
+	if err == nil {
+		mustDeleteOldReadvertiser = true
+	} else if !apierrors.IsNotFound(err) {
+		return nil, err
+	}
+
+	if mustDeleteOldReadvertiser {
+		validDeploymentVersion, err := kutil.ValidDeploymentContainerImageVersion(readvertiserDeployment, "aws-lb-readvertiser", "0.4.0")
+		if err != nil {
+			return nil, err
+		}
+
+		// If the version is less than the 0.4.0, delete the old readvertiser deployment to prevent modifications of the kube-apiserver deployment.
+		if !validDeploymentVersion {
+			b.Logger.Info("Detected an old version of the aws-lb-readvertiser, deleting it")
+			if err := b.K8sSeedClient.DeleteDeployment(b.Shoot.SeedNamespace, common.AWSLBReadvertiserDeploymentName); err != nil && !apierrors.IsNotFound(err) {
+				return nil, err
+			}
+		}
+	}
+
+	return map[string]interface{}{
+		"endpointReconcilerType": "none",
+	}, nil
+}
+
 // GenerateKubeAPIServerConfig generates the cloud provider specific values which are required to render the
 // Deployment manifest of the kube-apiserver properly.
 func (b *AWSBotanist) GenerateKubeAPIServerConfig() (map[string]interface{}, error) {
+	return nil, nil
+}
+
+// GenerateCloudControllerManagerConfig generates the cloud provider specific values which are required to
+// render the Deployment manifest of the cloud-controller-manager properly.
+func (b *AWSBotanist) GenerateCloudControllerManagerConfig() (map[string]interface{}, error) {
 	return map[string]interface{}{
-		"environment": getAWSCredentialsEnvironment(),
+		"configureRoutes": false,
+		"environment":     getAWSCredentialsEnvironment(),
 	}, nil
 }
 
@@ -62,8 +139,7 @@ func (b *AWSBotanist) GenerateKubeAPIServerConfig() (map[string]interface{}, err
 // render the Deployment manifest of the kube-controller-manager properly.
 func (b *AWSBotanist) GenerateKubeControllerManagerConfig() (map[string]interface{}, error) {
 	return map[string]interface{}{
-		"configureRoutes": false,
-		"environment":     getAWSCredentialsEnvironment(),
+		"environment": getAWSCredentialsEnvironment(),
 	}, nil
 }
 
@@ -104,8 +180,11 @@ func (b *AWSBotanist) GenerateEtcdBackupConfig() (map[string][]byte, map[string]
 		backupInfrastructureName = common.GenerateBackupInfrastructureName(b.Shoot.SeedNamespace, b.Shoot.Info.Status.UID)
 		backupNamespace          = common.GenerateBackupNamespaceName(backupInfrastructureName)
 	)
-
-	stateVariables, err := terraformer.New(b.Logger, b.K8sSeedClient, common.TerraformerPurposeBackup, backupInfrastructureName, backupNamespace, b.ImageVector).GetStateOutputVariables(bucketName)
+	tf, err := terraformer.New(b.Logger, b.K8sSeedClient, common.TerraformerPurposeBackup, backupInfrastructureName, backupNamespace, b.ImageVector)
+	if err != nil {
+		return nil, nil, err
+	}
+	stateVariables, err := tf.GetStateOutputVariables(bucketName)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -155,4 +234,26 @@ func (b *AWSBotanist) GenerateEtcdBackupConfig() (map[string][]byte, map[string]
 	}
 
 	return secretData, backupConfigData, nil
+}
+
+// DeployCloudSpecificControlPlane updates the AWS ELB health check to SSL and deploys the aws-lb-readvertiser.
+// https://github.com/gardener/aws-lb-readvertiser
+func (b *AWSBotanist) DeployCloudSpecificControlPlane() error {
+	var (
+		name          = "aws-lb-readvertiser"
+		defaultValues = map[string]interface{}{
+			"domain":   b.APIServerAddress,
+			"replicas": b.Shoot.GetReplicas(1),
+			"podAnnotations": map[string]interface{}{
+				"checksum/secret-aws-lb-readvertiser": b.CheckSums[name],
+			},
+		}
+	)
+
+	values, err := b.InjectImages(defaultValues, b.SeedVersion(), b.ShootVersion(), common.AWSLBReadvertiserImageName)
+	if err != nil {
+		return err
+	}
+
+	return b.ApplyChartSeed(filepath.Join(common.ChartPath, "seed-controlplane", "charts", name), name, b.Shoot.SeedNamespace, nil, values)
 }

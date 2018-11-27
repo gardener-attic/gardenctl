@@ -1,7 +1,7 @@
-cloudProvider: aws
 replicas: 1
-kubernetesVersion: 1.8.5
-advertiseAddress: 127.0.0.1
+kubernetesVersion: 1.11.2
+# advertiseAddress: 127.0.0.1
+# endpointReconcilerType: none
 securePort: 443
 probeCredentials: base64(user:pass)
 shootNetworks:
@@ -10,7 +10,6 @@ seedNetworks:
   service: 10.0.0.0/24
   pod: 192.168.0.0/1
   node: 172.16.0.0/20
-environment: []
 additionalParameters: []
 podAnnotations: {}
 featureGates: {}
@@ -40,6 +39,7 @@ admissionPlugins:
 - name: Priority
 - name: NamespaceLifecycle
 - name: LimitRanger
+- name: PodSecurityPolicy
 - name: ServiceAccount
 - name: NodeRestriction
 - name: DefaultStorageClass
@@ -75,4 +75,7 @@ apiServerResources:
 
 maxReplicas: 1
 minReplicas: 1
-targetAverageUtilization: 60
+targetAverageUtilization: 80
+
+auditConfig:
+  auditPolicy: ""

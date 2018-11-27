@@ -2,7 +2,6 @@
 apiVersion: componentconfig.sapcloud.io/v1alpha1
 kind: ControllerManagerConfiguration
 clientConnection:
-  disableTCPKeepAlive: false
   acceptContentTypes: application/json
   contentType: application/json
   qps: 100
@@ -10,14 +9,13 @@ clientConnection:
 controllers:
   shoot:
     concurrentSyncs: 20
-    syncPeriod: 10m
-    retryDuration: 1440m
+    syncPeriod: 1h
+    retryDuration: 24h
   shootCare:
     concurrentSyncs: 5
     syncPeriod: 30s
   shootMaintenance:
     concurrentSyncs: 5
-    syncPeriod: 15m
   shootQuota:
     concurrentSyncs: 5
     syncPeriod: 60m
@@ -27,7 +25,7 @@ controllers:
     reserveExcessCapacity: false
   backupInfrastructure:
     concurrentSyncs: 20
-    syncPeriod: 10m
+    syncPeriod: 24h
     deletionGracePeriodDays: 0
 leaderElection:
   leaderElect: true
@@ -37,8 +35,15 @@ leaderElection:
   resourceLock: configmaps
 logLevel: info
 kubernetesLogLevel: 0
-metrics:
-  interval: 30s
 server:
-  bindAddress: 0.0.0.0
-  port: 2718
+  http:
+    bindAddress: 0.0.0.0
+    port: 2718
+  https:
+    bindAddress: 0.0.0.0
+    port: 2719
+    tls:
+      serverCertPath: dev/tls/gardener-controller-manager.crt
+      serverKeyPath: dev/tls/gardener-controller-manager.key
+featureGates:
+  Logging: true

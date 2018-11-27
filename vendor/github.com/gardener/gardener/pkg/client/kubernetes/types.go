@@ -18,16 +18,20 @@ import (
 	"bytes"
 
 	gardenclientset "github.com/gardener/gardener/pkg/client/garden/clientset/versioned"
-	"github.com/gardener/gardener/pkg/client/kubernetes/mapping"
 	machineclientset "github.com/gardener/gardener/pkg/client/machine/clientset/versioned"
 	"github.com/sirupsen/logrus"
+	appsv1 "k8s.io/api/apps/v1"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
+	apiextensionsv1beta1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"
+	apiextensionsclientset "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
+	apiregistrationv1beta1 "k8s.io/kube-aggregator/pkg/apis/apiregistration/v1beta1"
+	apiregistrationclientset "k8s.io/kube-aggregator/pkg/client/clientset_generated/clientset"
 )
 
 // Client is an interface which is used to wrap the interactions with a Kubernetes cluster
@@ -40,16 +44,18 @@ type Client interface {
 	Clientset() *kubernetes.Clientset
 	GardenClientset() *gardenclientset.Clientset
 	MachineClientset() *machineclientset.Clientset
+	APIExtensionsClientset() *apiextensionsclientset.Clientset
+	APIRegistrationClientset() *apiregistrationclientset.Clientset
 	GetAPIResourceList() []*metav1.APIResourceList
 	GetConfig() *rest.Config
 	GetResourceAPIGroups() map[string][]string
 	RESTClient() rest.Interface
-	SetConfig(*rest.Config)
 	SetClientset(*kubernetes.Clientset)
 	SetGardenClientset(*gardenclientset.Clientset)
 	SetMachineClientset(*machineclientset.Clientset)
 	SetRESTClient(rest.Interface)
 	SetResourceAPIGroups(map[string][]string)
+	SetResourceAPIGroup(string, []string)
 
 	// Cleanup
 	ListResources(...string) (unstructured.Unstructured, error)
@@ -88,21 +94,26 @@ type Client interface {
 	DeleteService(string, string) error
 
 	// Deployments
-	GetDeployment(string, string) (*mapping.Deployment, error)
-	ListDeployments(string, metav1.ListOptions) ([]*mapping.Deployment, error)
-	PatchDeployment(string, string, []byte) (*mapping.Deployment, error)
+	GetDeployment(string, string) (*appsv1.Deployment, error)
+	ListDeployments(string, metav1.ListOptions) (*appsv1.DeploymentList, error)
+	PatchDeployment(string, string, []byte) (*appsv1.Deployment, error)
+	StrategicMergePatchDeployment(*appsv1.Deployment, *appsv1.Deployment) (*appsv1.Deployment, error)
+	ScaleDeployment(string, string, int32) (*appsv1.Deployment, error)
 	DeleteDeployment(string, string) error
 
 	// StatefulSets
-	ListStatefulSets(string, metav1.ListOptions) ([]*mapping.StatefulSet, error)
+	ListStatefulSets(string, metav1.ListOptions) (*appsv1.StatefulSetList, error)
 	DeleteStatefulSet(string, string) error
+
+	// DaemonSets
+	ListDaemonSets(string, metav1.ListOptions) (*appsv1.DaemonSetList, error)
 
 	// Jobs
 	GetJob(string, string) (*batchv1.Job, error)
 	DeleteJob(string, string) error
 
 	// ReplicaSets
-	ListReplicaSets(string, metav1.ListOptions) ([]*mapping.ReplicaSet, error)
+	ListReplicaSets(string, metav1.ListOptions) (*appsv1.ReplicaSetList, error)
 	DeleteReplicaSet(string, string) error
 
 	// Pods
@@ -112,12 +123,23 @@ type Client interface {
 	ForwardPodPort(string, string, int, int) (chan struct{}, error)
 	CheckForwardPodPort(string, string, int, int) (bool, error)
 	DeletePod(string, string) error
+	DeletePodForcefully(string, string) error
 
 	// Nodes
 	ListNodes(metav1.ListOptions) (*corev1.NodeList, error)
 
 	// RoleBindings
 	ListRoleBindings(string, metav1.ListOptions) (*rbacv1.RoleBindingList, error)
+	CreateOrPatchRoleBinding(metav1.ObjectMeta, func(*rbacv1.RoleBinding) *rbacv1.RoleBinding) (*rbacv1.RoleBinding, error)
+
+	// CustomResourceDefinitions
+	ListCRDs(metav1.ListOptions) (*apiextensionsv1beta1.CustomResourceDefinitionList, error)
+	DeleteCRDForcefully(name string) error
+
+	// APIServices
+	ListAPIServices(metav1.ListOptions) (*apiregistrationv1beta1.APIServiceList, error)
+	DeleteAPIService(name string) error
+	DeleteAPIServiceForcefully(name string) error
 
 	// Arbitrary manifests
 	Apply([]byte) error

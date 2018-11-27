@@ -28,7 +28,7 @@ func NewSmtpError(err error) SmtpError {
 	}
 }
 
-const forceDisconnectAfter = time.Second * 10
+const forceDisconnectAfter = time.Second * 5
 
 var (
 	ErrBadFormat        = errors.New("invalid format")
@@ -51,15 +51,15 @@ func ValidateHost(email string) error {
 		return ErrUnresolvableHost
 	}
 
-	client, err := smtp.Dial(fmt.Sprintf("%s:%d", mx[0].Host, 25))
-	defer client.Close()
+	client, err := DialTimeout(fmt.Sprintf("%s:%d", mx[0].Host, 25), forceDisconnectAfter)
 	if err != nil {
 		return NewSmtpError(err)
 	}
+	defer client.Close()
 
 	t := time.AfterFunc(forceDisconnectAfter, func() { client.Close() })
 	defer t.Stop()
-  
+
 	err = client.Hello("checkmail.me")
 	if err != nil {
 		return NewSmtpError(err)
@@ -73,6 +73,21 @@ func ValidateHost(email string) error {
 		return NewSmtpError(err)
 	}
 	return nil
+}
+
+// DialTimeout returns a new Client connected to an SMTP server at addr.
+// The addr must include a port, as in "mail.example.com:smtp".
+func DialTimeout(addr string, timeout time.Duration) (*smtp.Client, error) {
+	conn, err := net.DialTimeout("tcp", addr, timeout)
+	if err != nil {
+		return nil, err
+	}
+
+	t := time.AfterFunc(timeout, func() { conn.Close() })
+	defer t.Stop()
+
+	host, _, _ := net.SplitHostPort(addr)
+	return smtp.NewClient(conn, host)
 }
 
 func split(email string) (account, host string) {

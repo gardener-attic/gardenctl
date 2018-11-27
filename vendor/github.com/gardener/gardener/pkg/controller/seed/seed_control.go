@@ -185,14 +185,15 @@ func (c *defaultControl) ReconcileSeed(obj *gardenv1beta1.Seed, key string) erro
 			}
 			return nil
 		}
-		seedLogger.Infof("Can't delete Seed, because the following objects are still referencing it:")
+
+		parentLogMessage := "Can't delete Seed, because the following objects are still referencing it: "
 		if len(associatedShoots) != 0 {
-			seedLogger.Infof("Shoots: %v", associatedShoots)
+			seedLogger.Infof("%s Shoots=%v", parentLogMessage, associatedShoots)
 		}
 		if len(associatedBackupInfrastructures) != 0 {
-			seedLogger.Infof("BackupInfrastructures: %v", associatedBackupInfrastructures)
+			seedLogger.Infof("%s BackupInfrastructures=%v", parentLogMessage, associatedBackupInfrastructures)
 		}
-		return errors.New("Seed still has references")
+		return errors.New("seed still has references")
 	}
 
 	seedLogger.Infof("[SEED RECONCILE] %s", key)
@@ -222,7 +223,7 @@ func (c *defaultControl) ReconcileSeed(obj *gardenv1beta1.Seed, key string) erro
 	seedObj, err := seedpkg.New(c.k8sGardenClient, c.k8sGardenInformers.Garden().V1beta1(), seed)
 	if err != nil {
 		message := fmt.Sprintf("Failed to create a Seed object (%s).", err.Error())
-		conditionSeedAvailable = helper.ModifyCondition(conditionSeedAvailable, corev1.ConditionUnknown, gardenv1beta1.ConditionCheckError, message)
+		conditionSeedAvailable = helper.UpdatedCondition(conditionSeedAvailable, corev1.ConditionUnknown, gardenv1beta1.ConditionCheckError, message)
 		seedLogger.Error(message)
 		c.updateSeedStatus(seed, *conditionSeedAvailable)
 		return err
@@ -240,7 +241,7 @@ func (c *defaultControl) ReconcileSeed(obj *gardenv1beta1.Seed, key string) erro
 		seedObj.MustReserveExcessCapacity(*c.config.Controllers.Seed.ReserveExcessCapacity)
 	}
 	if err := seedpkg.BootstrapCluster(seedObj, c.k8sGardenClient, c.secrets, c.imageVector, len(associatedShoots)); err != nil {
-		conditionSeedAvailable = helper.ModifyCondition(conditionSeedAvailable, corev1.ConditionFalse, "BootstrappingFailed", err.Error())
+		conditionSeedAvailable = helper.UpdatedCondition(conditionSeedAvailable, corev1.ConditionFalse, "BootstrappingFailed", err.Error())
 		c.updateSeedStatus(seed, *conditionSeedAvailable)
 		seedLogger.Error(err.Error())
 		return err
@@ -248,12 +249,12 @@ func (c *defaultControl) ReconcileSeed(obj *gardenv1beta1.Seed, key string) erro
 
 	// Check whether the Kubernetes version of the Seed cluster fulfills the minimal requirements.
 	if err := seedObj.CheckMinimumK8SVersion(); err != nil {
-		conditionSeedAvailable = helper.ModifyCondition(conditionSeedAvailable, corev1.ConditionFalse, "K8SVersionTooOld", err.Error())
+		conditionSeedAvailable = helper.UpdatedCondition(conditionSeedAvailable, corev1.ConditionFalse, "K8SVersionTooOld", err.Error())
 		c.updateSeedStatus(seed, *conditionSeedAvailable)
 		seedLogger.Error(err.Error())
 		return err
 	}
-	conditionSeedAvailable = helper.ModifyCondition(conditionSeedAvailable, corev1.ConditionTrue, "Passed", "all checks passed")
+	conditionSeedAvailable = helper.UpdatedCondition(conditionSeedAvailable, corev1.ConditionTrue, "Passed", "all checks passed")
 	c.updateSeedStatus(seed, *conditionSeedAvailable)
 
 	return nil

@@ -31,8 +31,8 @@ func (b *AzureBotanist) GenerateKube2IAMConfig() (map[string]interface{}, error)
 	return common.GenerateAddonConfig(nil, false), nil
 }
 
-// GenerateAdmissionControlConfig generates values which are required to render the chart admissions-controls properly.
-func (b *AzureBotanist) GenerateAdmissionControlConfig() (map[string]interface{}, error) {
+// GenerateStorageClassesConfig generates values which are required to render the chart shoot-storageclasses properly.
+func (b *AzureBotanist) GenerateStorageClassesConfig() (map[string]interface{}, error) {
 	return map[string]interface{}{
 		"StorageClasses": []map[string]interface{}{
 			{
@@ -60,6 +60,14 @@ func (b *AzureBotanist) GenerateAdmissionControlConfig() (map[string]interface{}
 				"Parameters": map[string]interface{}{
 					"storageaccounttype": "Premium_LRS",
 					"kind":               "managed",
+				},
+			},
+			{
+				"Name":           "files",
+				"IsDefaultClass": false,
+				"Provisioner":    "kubernetes.io/azure-file",
+				"Parameters": map[string]interface{}{
+					"skuName": "Standard_LRS",
 				},
 			},
 		},
