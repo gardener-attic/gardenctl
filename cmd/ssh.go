@@ -30,7 +30,7 @@ import (
 // sshCmd represents the ssh command
 var sshCmd = &cobra.Command{
 	Use:   "ssh",
-	Short: "ssh to a node\n",
+	Short: "SSH to a node\n",
 	Long:  ``,
 	Run: func(cmd *cobra.Command, args []string) {
 		var target Target
@@ -105,7 +105,6 @@ var sshCmd = &cobra.Command{
 }
 
 func init() {
-	RootCmd.AddCommand(sshCmd)
 }
 
 // sshToAWSNode provides cmds to ssh to aws via a bastions host and clean it up afterwards
