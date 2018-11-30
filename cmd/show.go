@@ -88,6 +88,8 @@ var showCmd = &cobra.Command{
 			showGrafana()
 		case "alertmanager":
 			showAltermanager()
+		case "kibana":
+			showKibana()
 		case "tf":
 			if len(args) == 1 {
 				showTf()
@@ -339,6 +341,27 @@ func showGrafana() {
 	url := "-"
 	for _, val := range list {
 		if strings.HasPrefix(val, "g.") {
+			url = val
+		}
+	}
+	url = "https://" + username + ":" + password + "@" + url
+	fmt.Println("URL: " + url)
+	browser.OpenURL(url)
+}
+
+// showKibana shows the kibana dashboard for the targeted cluster
+func showKibana() {
+	username, password = getLoggingCredentials()
+	showPod("kibana", "seed")
+	output, err := ExecCmdReturnOutput("bash", "-c", "export KUBECONFIG="+KUBECONFIG+"; kubectl get ingress kibana -n "+getShootClusterName())
+	if err != nil {
+		fmt.Println("Cmd was unsuccessful")
+		os.Exit(2)
+	}
+	list := strings.Split(output, " ")
+	url := "-"
+	for _, val := range list {
+		if strings.HasPrefix(val, "k.") {
 			url = val
 		}
 	}

@@ -162,6 +162,22 @@ func getMonitoringCredentials() (username, password string) {
 	return username, password
 }
 
+// getLoggingCredentials returns username and password required for url login to the kibana dashboard
+func getLoggingCredentials() (username, password string) {
+	var target Target
+	ReadTarget(pathTarget, &target)
+	shootName := target.Target[2].Name
+	shootNamespace := getSeedNamespaceNameForShoot(shootName)
+	Client, err = clientToTarget("seed")
+	checkError(err)
+	secretName := "logging-ingress-credentials"
+	monitoringSecret, err := Client.CoreV1().Secrets(shootNamespace).Get((secretName), metav1.GetOptions{})
+	checkError(err)
+	username = string(monitoringSecret.Data["username"][:])
+	password = string(monitoringSecret.Data["password"][:])
+	return username, password
+}
+
 // getSeedNamespaceNameForShoot returns namespace name
 func getSeedNamespaceNameForShoot(shootName string) (namespaceSeed string) {
 	var target Target
