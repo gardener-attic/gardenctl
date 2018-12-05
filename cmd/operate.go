@@ -56,10 +56,14 @@ func operate(provider, arguments string) {
 	shootList, err := gardenClientset.GardenV1beta1().Shoots("").List(metav1.ListOptions{})
 	for _, shoot := range shootList.Items {
 		if shoot.Name == target.Target[2].Name {
-			secretName = shoot.Spec.Cloud.SecretBindingRef.Name
+			secretBindingName := shoot.Spec.Cloud.SecretBindingRef.Name
 			region = shoot.Spec.Cloud.Region
-			namespaceSecret = shoot.Namespace
+			namespaceSecretBinding := shoot.Namespace
 			profile = shoot.Spec.Cloud.Profile
+			secretBinding, err := gardenClientset.GardenV1beta1().SecretBindings(namespaceSecretBinding).Get((secretBindingName), metav1.GetOptions{})
+			checkError(err)
+			secretName = secretBinding.SecretRef.Name
+			namespaceSecret = secretBinding.SecretRef.Namespace
 		}
 	}
 	secret, err := Client.CoreV1().Secrets(namespaceSecret).Get((secretName), metav1.GetOptions{})
