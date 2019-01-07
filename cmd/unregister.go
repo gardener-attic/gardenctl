@@ -16,6 +16,7 @@ package cmd
 
 import (
 	"fmt"
+	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strings"
@@ -63,8 +64,24 @@ var unregisterCmd = &cobra.Command{
 			checkError(err)
 			clientset, err := k8s.NewForConfig(config)
 			checkError(err)
-			clusterRoleBinding, err := clientset.RbacV1().ClusterRoleBindings().Get("garden-administrators", metav1.GetOptions{})
-			checkError(err)
+			clusterRoleBinding, err := clientset.RbacV1().ClusterRoleBindings().Get("garden.sapcloud.io:system:administrators", metav1.GetOptions{})
+			if err != nil && strings.Contains(fmt.Sprintln(err.Error()), "garden.sapcloud.io:system:administrators") {
+				kubeSecret, err := clientset.CoreV1().Secrets("garden").Get("virtual-garden-kubeconfig-for-admin", metav1.GetOptions{})
+				checkError(err)
+				virtualPath := pathDefault + "/virtual"
+				os.MkdirAll(virtualPath, os.ModePerm)
+				virtualPathKubeConfig := virtualPath + "/virtualKubeConfig.yaml"
+				err = ioutil.WriteFile(virtualPathKubeConfig, kubeSecret.Data["kubeconfig"], 0644)
+				checkError(err)
+				config, err := clientcmd.BuildConfigFromFlags("", virtualPathKubeConfig)
+				checkError(err)
+				clientset, err = k8s.NewForConfig(config)
+				checkError(err)
+				clusterRoleBinding, err = clientset.RbacV1().ClusterRoleBindings().Get("garden.sapcloud.io:system:administrators", metav1.GetOptions{})
+				checkError(err)
+			} else {
+				checkError(err)
+			}
 			for k, subject := range clusterRoleBinding.Subjects {
 				if subject.Kind == "User" && subject.Name == email {
 					clusterRoleBinding.Subjects = append(clusterRoleBinding.Subjects[:k], clusterRoleBinding.Subjects[k+1:]...)
@@ -87,8 +104,24 @@ var unregisterCmd = &cobra.Command{
 				checkError(err)
 				clientset, err := k8s.NewForConfig(config)
 				checkError(err)
-				clusterRoleBinding, err := clientset.RbacV1().ClusterRoleBindings().Get("garden-administrators", metav1.GetOptions{})
-				checkError(err)
+				clusterRoleBinding, err := clientset.RbacV1().ClusterRoleBindings().Get("garden.sapcloud.io:system:administrators", metav1.GetOptions{})
+				if err != nil && strings.Contains(fmt.Sprintln(err.Error()), "garden.sapcloud.io:system:administrators") {
+					kubeSecret, err := clientset.CoreV1().Secrets("garden").Get("virtual-garden-kubeconfig-for-admin", metav1.GetOptions{})
+					checkError(err)
+					virtualPath := pathDefault + "/virtual"
+					os.MkdirAll(virtualPath, os.ModePerm)
+					virtualPathKubeConfig := virtualPath + "/virtualKubeConfig.yaml"
+					err = ioutil.WriteFile(virtualPathKubeConfig, kubeSecret.Data["kubeconfig"], 0644)
+					checkError(err)
+					config, err = clientcmd.BuildConfigFromFlags("", virtualPathKubeConfig)
+					checkError(err)
+					clientset, err = k8s.NewForConfig(config)
+					checkError(err)
+					clusterRoleBinding, err = clientset.RbacV1().ClusterRoleBindings().Get("garden.sapcloud.io:system:administrators", metav1.GetOptions{})
+					checkError(err)
+				} else {
+					checkError(err)
+				}
 				for k, subject := range clusterRoleBinding.Subjects {
 					if subject.Kind == "User" && subject.Name == email {
 						clusterRoleBinding.Subjects = append(clusterRoleBinding.Subjects[:k], clusterRoleBinding.Subjects[k+1:]...)
