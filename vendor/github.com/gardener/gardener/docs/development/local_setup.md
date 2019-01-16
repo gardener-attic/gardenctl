@@ -185,14 +185,13 @@ The commands below will configure your `minikube` with the absolute minimum reso
 
 #### Start `minikube`
 
-First, start `minikube` with at least Kubernetes v1.9.x, e.g. via `minikube --kubernetes-version=v1.9.0`.
-Default cpu and memory settings of minikube machine are not sufficient to host the control plane of a shoot cluster, thus use at least 4 CPUs and 8192MB memory.
+First, start `minikube` with at least Kubernetes v1.11.x. Default cpu and memory settings of minikube machine are not sufficient to host the control plane of a shoot cluster, thus use at least 4 CPUs and 8192MB memory.
 
 ```bash
-$ minikube start --cpus=4 --memory=8192 --kubernetes-version=v1.9.0 --extra-config=apiserver.admission-control=MutatingAdmissionWebhook,ValidatingAdmissionWebhook
-Starting local Kubernetes v1.9.0 cluster...
+$ minikube start --cpus=4 --memory=8192 --kubernetes-version=v1.11.0
+Starting local Kubernetes v1.11.0 cluster...
 [...]
-kubectl is now configured to use the cluster.
+Kubectl is now configured to use the cluster.
 ```
 
 #### Prepare the Gardener
@@ -339,7 +338,7 @@ $ kubectl --namespace shoot--dev--local get secret kubecfg -o jsonpath="{.data.k
 # Depending on your Internet speed, it can take some time, before your node reports a READY status.
 $ kubectl --kubeconfig dev/shoot-kubeconfig get nodes
 NAME                    STATUS    ROLES     AGE       VERSION
-192.168.99.201.nip.io   Ready     node      1m        v1.9.1
+192.168.99.201.nip.io   Ready     node      1m        v1.12.4
 ```
 
 > Note: It is required that your minikube has network connectivity to the nodes created by Vagrant.

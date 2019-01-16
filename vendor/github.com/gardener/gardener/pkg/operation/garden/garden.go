@@ -45,9 +45,10 @@ func New(projectLister gardenlisters.ProjectLister, namespace string) (*Garden, 
 // The Secret objects are stored on the Controller in order to pass them to created Garden objects later.
 func ReadGardenSecrets(k8sInformers kubeinformers.SharedInformerFactory, runningInCluster bool) (map[string]*corev1.Secret, error) {
 	var (
-		secretsMap                          = make(map[string]*corev1.Secret)
-		numberOfInternalDomainSecrets       = 0
-		numberOfOpenVPNDiffieHellmanSecrets = 0
+		secretsMap                                  = make(map[string]*corev1.Secret)
+		numberOfInternalDomainSecrets               = 0
+		numberOfOpenVPNDiffieHellmanSecrets         = 0
+		numberOfCertificateManagementConfigurations = 0
 	)
 
 	selector, err := labels.Parse(common.GardenRole)
@@ -113,6 +114,12 @@ func ReadGardenSecrets(k8sInformers kubeinformers.SharedInformerFactory, running
 			logger.Logger.Infof("Found OpenVPN Diffie Hellman secret %s.", name)
 			numberOfOpenVPNDiffieHellmanSecrets++
 		}
+
+		if labels[common.GardenRole] == common.GardenRoleCertificateManagement {
+			secretsMap[common.GardenRoleCertificateManagement] = secret
+			logger.Logger.Infof("Found certificate management configuration %s.", name)
+			numberOfCertificateManagementConfigurations++
+		}
 	}
 
 	// For each Shoot we create a LoadBalancer(LB) pointing to the API server of the Shoot. Because the technical address
@@ -136,12 +143,18 @@ func ReadGardenSecrets(k8sInformers kubeinformers.SharedInformerFactory, running
 		return nil, fmt.Errorf("can only accept at most one OpenVPN Diffie Hellman secret, but found %d", numberOfOpenVPNDiffieHellmanSecrets)
 	}
 
+	// For certificate management an instance of Cert-Manager will be deployed to the Seed cluster which requires a certain configuration.
+	// This configuration is placed in the Garden cluster and must not be exist more than one time.
+	if numberOfCertificateManagementConfigurations > 1 {
+		return nil, fmt.Errorf("can only accept at most one certificate management configuration secret, but found %d", numberOfCertificateManagementConfigurations)
+	}
+
 	return secretsMap, nil
 }
 
 // VerifyInternalDomainSecret verifies that the internal domain secret matches to the internal domain secret used for
 // existing Shoot clusters. It is not allowed to change the internal domain secret if there are existing Shoot clusters.
-func VerifyInternalDomainSecret(k8sGardenClient kubernetes.Client, numberOfShoots int, internalDomainSecret *corev1.Secret) error {
+func VerifyInternalDomainSecret(k8sGardenClient kubernetes.Interface, numberOfShoots int, internalDomainSecret *corev1.Secret) error {
 	currentDomain := internalDomainSecret.Annotations[common.DNSDomain]
 
 	internalConfigMap, err := k8sGardenClient.GetConfigMap(common.GardenNamespace, common.ControllerManagerInternalConfigMapName)
@@ -166,7 +179,7 @@ func VerifyInternalDomainSecret(k8sGardenClient kubernetes.Client, numberOfShoot
 }
 
 // BootstrapCluster bootstraps the Garden cluster and deploys various required manifests.
-func BootstrapCluster(k8sGardenClient kubernetes.Client, gardenNamespace string, secrets map[string]*corev1.Secret) error {
+func BootstrapCluster(k8sGardenClient kubernetes.Interface, gardenNamespace string, secrets map[string]*corev1.Secret) error {
 	// Check whether the Kubernetes version of the Garden cluster is at least 1.8.
 	minGardenVersion := "1.8"
 	gardenVersionOK, err := utils.CompareVersions(k8sGardenClient.Version(), ">=", minGardenVersion)

@@ -23,18 +23,18 @@ import (
 	"strings"
 	"time"
 
-	"k8s.io/apimachinery/pkg/util/intstr"
-
 	"github.com/Masterminds/semver"
 	"github.com/gardener/gardener/pkg/apis/garden"
 	"github.com/gardener/gardener/pkg/apis/garden/helper"
 	"github.com/gardener/gardener/pkg/utils"
+	cidrvalidation "github.com/gardener/gardener/pkg/utils/validation/cidr"
 	"github.com/robfig/cron"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	apiequality "k8s.io/apimachinery/pkg/api/equality"
 	"k8s.io/apimachinery/pkg/api/resource"
 	apivalidation "k8s.io/apimachinery/pkg/api/validation"
+	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/validation"
 	"k8s.io/apimachinery/pkg/util/validation/field"
@@ -206,6 +206,13 @@ func ValidateCloudProfileSpec(spec *garden.CloudProfileSpec, fldPath *field.Path
 		if spec.OpenStack.DHCPDomain != nil && len(*spec.OpenStack.DHCPDomain) == 0 {
 			allErrs = append(allErrs, field.Required(fldPath.Child("openstack", "dhcpDomain"), "must provide a dhcp domain when the key is specified"))
 		}
+
+		if spec.OpenStack.RequestTimeout != nil {
+			_, err := time.ParseDuration(*spec.OpenStack.RequestTimeout)
+			if err != nil {
+				allErrs = append(allErrs, field.Invalid(fldPath.Child("openstack", "requestTimeout"), *spec.OpenStack.RequestTimeout, fmt.Sprintf("invalid duration: %v", err)))
+			}
+		}
 	}
 
 	if spec.CABundle != nil {
@@ -260,6 +267,8 @@ func validateMachineTypeConstraints(machineTypes []garden.MachineType, fldPath *
 		allErrs = append(allErrs, field.Required(fldPath, "must provide at least one machine type"))
 	}
 
+	names := make(map[string]struct{}, len(machineTypes))
+
 	for i, machineType := range machineTypes {
 		idxPath := fldPath.Index(i)
 		namePath := idxPath.Child("name")
@@ -270,6 +279,13 @@ func validateMachineTypeConstraints(machineTypes []garden.MachineType, fldPath *
 		if len(machineType.Name) == 0 {
 			allErrs = append(allErrs, field.Required(namePath, "must provide a name"))
 		}
+
+		if _, ok := names[machineType.Name]; ok {
+			allErrs = append(allErrs, field.Duplicate(namePath, machineType.Name))
+			break
+		}
+		names[machineType.Name] = struct{}{}
+
 		allErrs = append(allErrs, validateResourceQuantityValue("cpu", machineType.CPU, cpuPath)...)
 		allErrs = append(allErrs, validateResourceQuantityValue("gpu", machineType.GPU, gpuPath)...)
 		allErrs = append(allErrs, validateResourceQuantityValue("memory", machineType.Memory, memoryPath)...)
@@ -281,24 +297,12 @@ func validateMachineTypeConstraints(machineTypes []garden.MachineType, fldPath *
 func validateAlicloudMachineTypeConstraints(machineTypes []garden.AlicloudMachineType, zones []garden.Zone, fldPath *field.Path) field.ErrorList {
 	allErrs := field.ErrorList{}
 
-	if len(machineTypes) == 0 {
-		allErrs = append(allErrs, field.Required(fldPath, "must provide at least one machine type"))
-	}
-
+	types := []garden.MachineType{}
 	for i, machineType := range machineTypes {
-		idxPath := fldPath.Index(i)
-		namePath := idxPath.Child("name")
-		cpuPath := idxPath.Child("cpu")
-		gpuPath := idxPath.Child("gpu")
-		memoryPath := idxPath.Child("memory")
-		zonesPath := idxPath.Child("zones")
+		types = append(types, machineType.MachineType)
 
-		if len(machineType.Name) == 0 {
-			allErrs = append(allErrs, field.Required(namePath, "must provide a name"))
-		}
-		allErrs = append(allErrs, validateResourceQuantityValue("cpu", machineType.CPU, cpuPath)...)
-		allErrs = append(allErrs, validateResourceQuantityValue("gpu", machineType.GPU, gpuPath)...)
-		allErrs = append(allErrs, validateResourceQuantityValue("memory", machineType.Memory, memoryPath)...)
+		idxPath := fldPath.Index(i)
+		zonesPath := idxPath.Child("zones")
 
 	foundInZones:
 		for idx, zoneName := range machineType.Zones {
@@ -309,10 +313,12 @@ func validateAlicloudMachineTypeConstraints(machineTypes []garden.AlicloudMachin
 					}
 				}
 			}
-			//Can't find zoneName in zones
-			allErrs = append(allErrs, field.Invalid(zonesPath.Index(idx), zoneName, fmt.Sprintf("Zone name [%s] is not in defined zones list", zoneName)))
+			// Can't find zoneName in zones
+			allErrs = append(allErrs, field.Invalid(zonesPath.Index(idx), zoneName, fmt.Sprintf("zone name %q is not in defined zones list", zoneName)))
 		}
 	}
+
+	allErrs = append(allErrs, validateMachineTypeConstraints(types, fldPath)...)
 
 	return allErrs
 }
@@ -485,6 +491,8 @@ func validateVolumeTypeConstraints(volumeTypes []garden.VolumeType, fldPath *fie
 		allErrs = append(allErrs, field.Required(fldPath, "must provide at least one volume type"))
 	}
 
+	names := make(map[string]struct{}, len(volumeTypes))
+
 	for i, volumeType := range volumeTypes {
 		idxPath := fldPath.Index(i)
 		namePath := idxPath.Child("name")
@@ -493,6 +501,13 @@ func validateVolumeTypeConstraints(volumeTypes []garden.VolumeType, fldPath *fie
 		if len(volumeType.Name) == 0 {
 			allErrs = append(allErrs, field.Required(namePath, "must provide a name"))
 		}
+
+		if _, ok := names[volumeType.Name]; ok {
+			allErrs = append(allErrs, field.Duplicate(namePath, volumeType.Name))
+			break
+		}
+		names[volumeType.Name] = struct{}{}
+
 		if len(volumeType.Class) == 0 {
 			allErrs = append(allErrs, field.Required(classPath, "must provide a class"))
 		}
@@ -504,22 +519,13 @@ func validateVolumeTypeConstraints(volumeTypes []garden.VolumeType, fldPath *fie
 func validateAlicloudVolumeTypeConstraints(volumeTypes []garden.AlicloudVolumeType, zones []garden.Zone, fldPath *field.Path) field.ErrorList {
 	allErrs := field.ErrorList{}
 
-	if len(volumeTypes) == 0 {
-		allErrs = append(allErrs, field.Required(fldPath, "must provide at least one volume type"))
-	}
-
+	types := []garden.VolumeType{}
 	for i, volumeType := range volumeTypes {
+		types = append(types, volumeType.VolumeType)
+
 		idxPath := fldPath.Index(i)
-		namePath := idxPath.Child("name")
-		classPath := idxPath.Child("class")
 		zonesPath := idxPath.Child("zones")
 
-		if len(volumeType.Name) == 0 {
-			allErrs = append(allErrs, field.Required(namePath, "must provide a name"))
-		}
-		if len(volumeType.Class) == 0 {
-			allErrs = append(allErrs, field.Required(classPath, "must provide a class"))
-		}
 	foundInZones:
 		for idx, zoneName := range volumeType.Zones {
 			for _, zone := range zones {
@@ -529,10 +535,12 @@ func validateAlicloudVolumeTypeConstraints(volumeTypes []garden.AlicloudVolumeTy
 					}
 				}
 			}
-			//Can't find zoneName in zones
+			// Can't find zoneName in zones
 			allErrs = append(allErrs, field.Invalid(zonesPath.Index(idx), zoneName, fmt.Sprintf("Zone name [%s] is not in defined zones list", zoneName)))
 		}
 	}
+
+	allErrs = append(allErrs, validateVolumeTypeConstraints(types, fldPath)...)
 
 	return allErrs
 }
@@ -739,9 +747,14 @@ func ValidateSeedSpec(seedSpec *garden.SeedSpec, fldPath *field.Path) field.Erro
 	allErrs = append(allErrs, validateSecretReference(seedSpec.SecretRef, fldPath.Child("secretRef"))...)
 
 	networksPath := fldPath.Child("networks")
-	allErrs = append(allErrs, validateCIDR(seedSpec.Networks.Nodes, networksPath.Child("nodes"))...)
-	allErrs = append(allErrs, validateCIDR(seedSpec.Networks.Pods, networksPath.Child("pods"))...)
-	allErrs = append(allErrs, validateCIDR(seedSpec.Networks.Services, networksPath.Child("services"))...)
+
+	networks := []cidrvalidation.CIDR{
+		cidrvalidation.NewCIDR(seedSpec.Networks.Nodes, networksPath.Child("nodes")),
+		cidrvalidation.NewCIDR(seedSpec.Networks.Pods, networksPath.Child("pods")),
+		cidrvalidation.NewCIDR(seedSpec.Networks.Services, networksPath.Child("services")),
+	}
+	allErrs = append(allErrs, validateCIDRParse(networks...)...)
+	allErrs = append(allErrs, validateCIDROVerlap(networks, networks, false)...)
 
 	return allErrs
 }
@@ -965,6 +978,7 @@ func ValidateShootSpec(spec *garden.ShootSpec, fldPath *field.Path) field.ErrorL
 	allErrs = append(allErrs, validateDNS(spec.DNS, fldPath.Child("dns"))...)
 	allErrs = append(allErrs, validateKubernetes(spec.Kubernetes, fldPath.Child("kubernetes"))...)
 	allErrs = append(allErrs, validateMaintenance(spec.Maintenance, fldPath.Child("maintenance"))...)
+	allErrs = append(allErrs, ValidateHibernation(spec.Hibernation, fldPath.Child("hibernation"))...)
 
 	if spec.DNS.Provider == garden.DNSUnmanaged {
 		if spec.Addons != nil && spec.Addons.Monocular != nil && spec.Addons.Monocular.Enabled {
@@ -1087,34 +1101,58 @@ func validateCloud(cloud garden.Cloud, hibernation *garden.Hibernation, fldPath 
 			return allErrs
 		}
 
-		allErrs = append(allErrs, validateK8SNetworks(aws.Networks.K8SNetworks, awsPath.Child("networks"))...)
+		nodes, pods, services, networkErrors := transformK8SNetworks(aws.Networks.K8SNetworks, awsPath.Child("networks"))
+		allErrs = append(allErrs, networkErrors...)
 
 		if len(aws.Networks.Internal) != zoneCount {
 			allErrs = append(allErrs, field.Invalid(awsPath.Child("networks", "internal"), aws.Networks.Internal, "must specify as many internal networks as zones"))
 		}
+
+		allVPCCIDRs := make([]cidrvalidation.CIDR, 0, len(aws.Networks.Internal)+len(aws.Networks.Public)+len(aws.Networks.Workers))
 		for i, cidr := range aws.Networks.Internal {
-			allErrs = append(allErrs, validateCIDR(cidr, awsPath.Child("networks", "internal").Index(i))...)
+			allVPCCIDRs = append(allVPCCIDRs, cidrvalidation.NewCIDR(cidr, awsPath.Child("networks", "internal").Index(i)))
 		}
 
 		if len(aws.Networks.Public) != zoneCount {
 			allErrs = append(allErrs, field.Invalid(awsPath.Child("networks", "public"), aws.Networks.Public, "must specify as many public networks as zones"))
 		}
+
 		for i, cidr := range aws.Networks.Public {
-			allErrs = append(allErrs, validateCIDR(cidr, awsPath.Child("networks", "public").Index(i))...)
+			allVPCCIDRs = append(allVPCCIDRs, cidrvalidation.NewCIDR(cidr, awsPath.Child("networks", "public").Index(i)))
 		}
 
 		if len(aws.Networks.Workers) != zoneCount {
 			allErrs = append(allErrs, field.Invalid(awsPath.Child("networks", "workers"), aws.Networks.Workers, "must specify as many workers networks as zones"))
 		}
+
+		// validate before appending
+		allErrs = append(allErrs, validateCIDRParse(allVPCCIDRs...)...)
+
+		workerCIDRs := make([]cidrvalidation.CIDR, 0, len(aws.Networks.Workers))
 		for i, cidr := range aws.Networks.Workers {
-			allErrs = append(allErrs, validateCIDR(cidr, awsPath.Child("networks", "workers").Index(i))...)
+			workerCIDRs = append(workerCIDRs, cidrvalidation.NewCIDR(cidr, awsPath.Child("networks", "workers").Index(i)))
+			allVPCCIDRs = append(allVPCCIDRs, cidrvalidation.NewCIDR(cidr, awsPath.Child("networks", "workers").Index(i)))
+		}
+		allErrs = append(allErrs, validateCIDRParse(workerCIDRs...)...)
+
+		if nodes != nil {
+			allErrs = append(allErrs, nodes.ValidateSubset(workerCIDRs...)...)
 		}
 
 		if (aws.Networks.VPC.ID == nil && aws.Networks.VPC.CIDR == nil) || (aws.Networks.VPC.ID != nil && aws.Networks.VPC.CIDR != nil) {
 			allErrs = append(allErrs, field.Invalid(awsPath.Child("networks", "vpc"), aws.Networks.VPC, "must specify either a vpc id or a cidr"))
 		} else if aws.Networks.VPC.CIDR != nil && aws.Networks.VPC.ID == nil {
-			allErrs = append(allErrs, validateCIDR(*(aws.Networks.VPC.CIDR), awsPath.Child("networks", "vpc", "cidr"))...)
+			vpcCIDR := cidrvalidation.NewCIDR(*(aws.Networks.VPC.CIDR), awsPath.Child("networks", "vpc", "cidr"))
+			allErrs = append(allErrs, vpcCIDR.ValidateParse()...)
+			allErrs = append(allErrs, vpcCIDR.ValidateSubset(nodes)...)
+			allErrs = append(allErrs, vpcCIDR.ValidateSubset(allVPCCIDRs...)...)
+			allErrs = append(allErrs, vpcCIDR.ValidateNotSubset(pods, services)...)
 		}
+
+		// make sure that VPC cidrs don't overlap with eachother
+		allErrs = append(allErrs, validateCIDROVerlap(allVPCCIDRs, allVPCCIDRs, false)...)
+
+		allErrs = append(allErrs, validateCIDROVerlap([]cidrvalidation.CIDR{pods, services}, allVPCCIDRs, false)...)
 
 		workersPath := awsPath.Child("workers")
 		if len(aws.Workers) == 0 {
@@ -1149,13 +1187,28 @@ func validateCloud(cloud garden.Cloud, hibernation *garden.Hibernation, fldPath 
 		if azure.ResourceGroup != nil {
 			allErrs = append(allErrs, field.Invalid(azurePath.Child("resourceGroup", "name"), azure.ResourceGroup.Name, "specifying an existing resource group is not supported yet."))
 		}
+
+		nodes, pods, services, networkErrors := transformK8SNetworks(azure.Networks.K8SNetworks, azurePath.Child("networks"))
+		allErrs = append(allErrs, networkErrors...)
+
+		workerCIDR := cidrvalidation.NewCIDR(azure.Networks.Workers, azurePath.Child("networks", "workers"))
+		allErrs = append(allErrs, workerCIDR.ValidateParse()...)
+
+		if nodes != nil {
+			allErrs = append(allErrs, nodes.ValidateSubset(workerCIDR)...)
+		}
+
 		if azure.Networks.VNet.Name != nil {
 			allErrs = append(allErrs, field.Invalid(azurePath.Child("networks", "vnet", "name"), *(azure.Networks.VNet.Name), "specifying an existing vnet is not supported yet"))
 		} else {
 			if azure.Networks.VNet.CIDR == nil {
 				allErrs = append(allErrs, field.Required(azurePath.Child("networks", "vnet", "cidr"), "must specify a vnet cidr"))
 			} else {
-				allErrs = append(allErrs, validateCIDR(*(azure.Networks.VNet.CIDR), azurePath.Child("networks", "vnet", "cidr"))...)
+				vpcCIDR := cidrvalidation.NewCIDR(*(azure.Networks.VNet.CIDR), azurePath.Child("networks", "vnet", "cidr"))
+				allErrs = append(allErrs, vpcCIDR.ValidateParse()...)
+				allErrs = append(allErrs, vpcCIDR.ValidateSubset(nodes)...)
+				allErrs = append(allErrs, vpcCIDR.ValidateSubset(workerCIDR)...)
+				allErrs = append(allErrs, vpcCIDR.ValidateNotSubset(pods, services)...)
 			}
 		}
 
@@ -1163,10 +1216,6 @@ func validateCloud(cloud garden.Cloud, hibernation *garden.Hibernation, fldPath 
 		// if azure.ResourceGroup != nil && len(azure.ResourceGroup.Name) == 0 {
 		// 	allErrs = append(allErrs, field.Invalid(azurePath.Child("resourceGroup", "name"), azure.ResourceGroup.Name, "resource group name must not be empty when resource group key is provided"))
 		// }
-
-		allErrs = append(allErrs, validateK8SNetworks(azure.Networks.K8SNetworks, azurePath.Child("networks"))...)
-
-		allErrs = append(allErrs, validateCIDR(azure.Networks.Workers, azurePath.Child("networks", "workers"))...)
 
 		// TODO: re-enable once deployment into existing vnet works properly.
 		// if (azure.Networks.VNet.Name == nil && azure.Networks.VNet.CIDR == nil) || (azure.Networks.VNet.Name != nil && azure.Networks.VNet.CIDR != nil) {
@@ -1206,14 +1255,22 @@ func validateCloud(cloud garden.Cloud, hibernation *garden.Hibernation, fldPath 
 			return allErrs
 		}
 
-		allErrs = append(allErrs, validateK8SNetworks(gcp.Networks.K8SNetworks, gcpPath.Child("networks"))...)
+		nodes, pods, services, networkErrors := transformK8SNetworks(gcp.Networks.K8SNetworks, gcpPath.Child("networks"))
+		allErrs = append(allErrs, networkErrors...)
 
 		if len(gcp.Networks.Workers) != zoneCount {
 			allErrs = append(allErrs, field.Invalid(gcpPath.Child("networks", "workers"), gcp.Networks.Workers, "must specify as many workers networks as zones"))
 		}
+		workerCIDRs := make([]cidrvalidation.CIDR, 0, len(gcp.Networks.Workers))
 		for i, cidr := range gcp.Networks.Workers {
-			allErrs = append(allErrs, validateCIDR(cidr, gcpPath.Child("networks", "workers").Index(i))...)
+			workerCIDRs = append(workerCIDRs, cidrvalidation.NewCIDR(cidr, gcpPath.Child("networks", "workers").Index(i)))
 		}
+
+		allErrs = append(allErrs, validateCIDRParse(workerCIDRs...)...)
+		allErrs = append(allErrs, validateCIDROVerlap(workerCIDRs, workerCIDRs, false)...)
+
+		allErrs = append(allErrs, validateCIDROVerlap([]cidrvalidation.CIDR{pods, services}, workerCIDRs, false)...)
+		allErrs = append(allErrs, validateCIDROVerlap([]cidrvalidation.CIDR{nodes}, workerCIDRs, true)...)
 
 		if gcp.Networks.VPC != nil && len(gcp.Networks.VPC.Name) == 0 {
 			allErrs = append(allErrs, field.Invalid(gcpPath.Child("networks", "vpc", "name"), gcp.Networks.VPC.Name, "vpc name must not be empty when vpc key is provided"))
@@ -1258,13 +1315,24 @@ func validateCloud(cloud garden.Cloud, hibernation *garden.Hibernation, fldPath 
 			return allErrs
 		}
 
-		allErrs = append(allErrs, validateK8SNetworks(openStack.Networks.K8SNetworks, openStackPath.Child("networks"))...)
+		nodes, _, _, networkErrors := transformK8SNetworks(openStack.Networks.K8SNetworks, openStackPath.Child("networks"))
+		allErrs = append(allErrs, networkErrors...)
 
 		if len(openStack.Networks.Workers) != zoneCount {
 			allErrs = append(allErrs, field.Invalid(openStackPath.Child("networks", "workers"), openStack.Networks.Workers, "must specify as many workers networks as zones"))
 		}
+
+		workerCIDRs := make([]cidrvalidation.CIDR, 0, len(openStack.Networks.Workers))
 		for i, cidr := range openStack.Networks.Workers {
-			allErrs = append(allErrs, validateCIDR(cidr, openStackPath.Child("networks", "workers").Index(i))...)
+			workerCIDR := cidrvalidation.NewCIDR(cidr, openStackPath.Child("networks", "workers").Index(i))
+			workerCIDRs = append(workerCIDRs, workerCIDR)
+			allErrs = append(allErrs, workerCIDR.ValidateParse()...)
+		}
+
+		allErrs = append(allErrs, validateCIDROVerlap(workerCIDRs, workerCIDRs, false)...)
+
+		if nodes != nil {
+			allErrs = append(allErrs, nodes.ValidateSubset(workerCIDRs...)...)
 		}
 
 		if openStack.Networks.Router != nil && len(openStack.Networks.Router.ID) == 0 {
@@ -1299,20 +1367,34 @@ func validateCloud(cloud garden.Cloud, hibernation *garden.Hibernation, fldPath 
 			return allErrs
 		}
 
-		allErrs = append(allErrs, validateK8SNetworks(alicloud.Networks.K8SNetworks, alicloudPath.Child("networks"))...)
+		nodes, pods, services, networkErrors := transformK8SNetworks(alicloud.Networks.K8SNetworks, alicloudPath.Child("networks"))
+		allErrs = append(allErrs, networkErrors...)
 
 		if len(alicloud.Networks.Workers) != zoneCount {
 			allErrs = append(allErrs, field.Invalid(alicloudPath.Child("networks", "workers"), alicloud.Networks.Workers, "must specify as many workers networks as zones"))
 		}
 
+		workerCIDRs := make([]cidrvalidation.CIDR, 0, len(alicloud.Networks.Workers))
 		for i, cidr := range alicloud.Networks.Workers {
-			allErrs = append(allErrs, validateCIDR(cidr, alicloudPath.Child("networks", "workers").Index(i))...)
+			workerCIDR := cidrvalidation.NewCIDR(cidr, alicloudPath.Child("networks", "workers").Index(i))
+			workerCIDRs = append(workerCIDRs, workerCIDR)
+			allErrs = append(allErrs, workerCIDR.ValidateParse()...)
+		}
+
+		allErrs = append(allErrs, validateCIDROVerlap(workerCIDRs, workerCIDRs, false)...)
+
+		if nodes != nil {
+			allErrs = append(allErrs, nodes.ValidateSubset(workerCIDRs...)...)
 		}
 
 		if (alicloud.Networks.VPC.ID == nil && alicloud.Networks.VPC.CIDR == nil) || (alicloud.Networks.VPC.ID != nil && alicloud.Networks.VPC.CIDR != nil) {
 			allErrs = append(allErrs, field.Invalid(alicloudPath.Child("networks", "vpc"), alicloud.Networks.VPC, "must specify either a vpc id or a cidr"))
 		} else if alicloud.Networks.VPC.CIDR != nil && alicloud.Networks.VPC.ID == nil {
-			allErrs = append(allErrs, validateCIDR(*(alicloud.Networks.VPC.CIDR), alicloudPath.Child("networks", "vpc", "cidr"))...)
+			vpcCIDR := cidrvalidation.NewCIDR(*(alicloud.Networks.VPC.CIDR), alicloudPath.Child("networks", "vpc", "cidr"))
+			allErrs = append(allErrs, vpcCIDR.ValidateParse()...)
+			allErrs = append(allErrs, vpcCIDR.ValidateSubset(nodes)...)
+			allErrs = append(allErrs, vpcCIDR.ValidateSubset(workerCIDRs...)...)
+			allErrs = append(allErrs, vpcCIDR.ValidateNotSubset(pods, services)...)
 		}
 
 		if len(alicloud.Workers) == 0 {
@@ -1345,6 +1427,7 @@ func ValidateShootSpecUpdate(newSpec, oldSpec *garden.ShootSpec, deletionTimesta
 		return allErrs
 	}
 
+	allErrs = append(allErrs, apivalidation.ValidateImmutableField(newSpec.Cloud.SecretBindingRef, oldSpec.Cloud.SecretBindingRef, fldPath.Child("cloud", "secretBindingRef"))...)
 	allErrs = append(allErrs, apivalidation.ValidateImmutableField(newSpec.Cloud.Profile, oldSpec.Cloud.Profile, fldPath.Child("cloud", "profile"))...)
 	allErrs = append(allErrs, apivalidation.ValidateImmutableField(newSpec.Cloud.Region, oldSpec.Cloud.Region, fldPath.Child("cloud", "region"))...)
 	allErrs = append(allErrs, apivalidation.ValidateImmutableField(newSpec.Cloud.Seed, oldSpec.Cloud.Seed, fldPath.Child("cloud", "seed"))...)
@@ -1476,28 +1559,59 @@ func validateDNS(dns garden.DNS, fldPath *field.Path) field.ErrorList {
 	return allErrs
 }
 
-func validateK8SNetworks(networks garden.K8SNetworks, fldPath *field.Path) field.ErrorList {
-	allErrs := field.ErrorList{}
+func validateCIDRParse(cidrPaths ...cidrvalidation.CIDR) (allErrs field.ErrorList) {
+	for _, cidrPath := range cidrPaths {
+		if cidrPath == nil {
+			continue
+		}
+		allErrs = append(allErrs, cidrPath.ValidateParse()...)
+	}
+	return allErrs
+}
+
+func validateCIDROVerlap(leftPaths, rightPaths []cidrvalidation.CIDR, overlap bool) (allErrs field.ErrorList) {
+	for _, left := range leftPaths {
+		if left == nil {
+			continue
+		}
+		if overlap {
+			allErrs = append(allErrs, left.ValidateSubset(rightPaths...)...)
+		} else {
+			allErrs = append(allErrs, left.ValidateNotSubset(rightPaths...)...)
+		}
+	}
+	return allErrs
+}
+
+func transformK8SNetworks(networks garden.K8SNetworks, fldPath *field.Path) (nodes, pods, services cidrvalidation.CIDR, allErrs field.ErrorList) {
+	cidrs := []cidrvalidation.CIDR{}
 
 	if networks.Nodes != nil {
-		allErrs = append(allErrs, validateCIDR(*networks.Nodes, fldPath.Child("nodes"))...)
+		nodes = cidrvalidation.NewCIDR(*networks.Nodes, fldPath.Child("nodes"))
+		allErrs = append(allErrs, nodes.ValidateParse()...)
+		cidrs = append(cidrs, nodes)
 	} else {
 		allErrs = append(allErrs, field.Required(fldPath.Child("nodes"), "nodes CIDR cannot be unset"))
 	}
 
 	if networks.Pods != nil {
-		allErrs = append(allErrs, validateCIDR(*networks.Pods, fldPath.Child("pods"))...)
+		pods = cidrvalidation.NewCIDR(*networks.Pods, fldPath.Child("pods"))
+		allErrs = append(allErrs, pods.ValidateParse()...)
+		cidrs = append(cidrs, pods)
 	} else {
 		allErrs = append(allErrs, field.Required(fldPath.Child("pods"), "pods CIDR cannot be unset"))
 	}
 
 	if networks.Services != nil {
-		allErrs = append(allErrs, validateCIDR(*networks.Services, fldPath.Child("services"))...)
+		services = cidrvalidation.NewCIDR(*networks.Services, fldPath.Child("services"))
+		allErrs = append(allErrs, services.ValidateParse()...)
+		cidrs = append(cidrs, services)
 	} else {
 		allErrs = append(allErrs, field.Required(fldPath.Child("services"), "services CIDR cannot be unset"))
 	}
+	allErrs = append(allErrs, validateCIDROVerlap(cidrs, cidrs, false)...)
 
-	return allErrs
+	return nodes, pods, services, allErrs
 }
 
 func validateKubernetes(kubernetes garden.Kubernetes, fldPath *field.Path) field.ErrorList {
@@ -1512,10 +1626,6 @@ func validateKubernetes(kubernetes garden.Kubernetes, fldPath *field.Path) field
 		if oidc := kubeAPIServer.OIDCConfig; oidc != nil {
 			oidcPath := fldPath.Child("kubeAPIServer", "oidcConfig")
 
-			geqKubernetes110, err := utils.CheckVersionMeetsConstraint(kubernetes.Version, ">= 1.10")
-			if err != nil {
-				geqKubernetes110 = false
-			}
 			geqKubernetes111, err := utils.CheckVersionMeetsConstraint(kubernetes.Version, ">= 1.11")
 			if err != nil {
 				geqKubernetes111 = false
@@ -1538,8 +1648,8 @@ func validateKubernetes(kubernetes garden.Kubernetes, fldPath *field.Path) field
 			if oidc.IssuerURL != nil && len(*oidc.IssuerURL) == 0 {
 				allErrs = append(allErrs, field.Invalid(oidcPath.Child("issuerURL"), *oidc.IssuerURL, "issuer url cannot be empty when key is provided"))
 			}
-			if !geqKubernetes110 && oidc.SigningAlgs != nil {
-				allErrs = append(allErrs, field.Forbidden(oidcPath.Child("signingAlgs"), "signings algs cannot be provided when version is not greater or equal 1.10"))
+			if oidc.SigningAlgs != nil && len(oidc.SigningAlgs) == 0 {
+				allErrs = append(allErrs, field.Invalid(oidcPath.Child("signingAlgs"), oidc.SigningAlgs, "signings algs cannot be empty when key is provided"))
 			}
 			if !geqKubernetes111 && oidc.RequiredClaims != nil {
 				allErrs = append(allErrs, field.Forbidden(oidcPath.Child("requiredClaims"), "required claims cannot be provided when version is not greater or equal 1.11"))
@@ -1717,6 +1827,66 @@ func ValidateWorkers(workers []garden.Worker, fldPath *field.Path) field.ErrorLi
 
 	if !atLeastOneActivePool {
 		allErrs = append(allErrs, field.Forbidden(fldPath, "at least one worker pool with min>0 and max> 0 needed"))
+	}
+
+	return allErrs
+}
+
+// ValidateHibernation validates a Hibernation object.
+func ValidateHibernation(hibernation *garden.Hibernation, fldPath *field.Path) field.ErrorList {
+	allErrs := field.ErrorList{}
+
+	if hibernation == nil {
+		return allErrs
+	}
+
+	allErrs = append(allErrs, ValidateHibernationSchedules(hibernation.Schedules, fldPath.Child("schedules"))...)
+
+	return allErrs
+}
+
+func ValidateHibernationSchedules(schedules []garden.HibernationSchedule, fldPath *field.Path) field.ErrorList {
+	var (
+		allErrs = field.ErrorList{}
+		seen    = sets.NewString()
+	)
+
+	for i, schedule := range schedules {
+		allErrs = append(allErrs, ValidateHibernationSchedule(seen, &schedule, fldPath.Index(i))...)
+	}
+
+	return allErrs
+}
+
+func ValidateHibernationCronSpec(seenSpecs sets.String, spec string, fldPath *field.Path) field.ErrorList {
+	allErrs := field.ErrorList{}
+
+	_, err := cron.ParseStandard(spec)
+	switch {
+	case err != nil:
+		allErrs = append(allErrs, field.Invalid(fldPath, spec, fmt.Sprintf("not a valid cron spec: %v", err)))
+	case seenSpecs.Has(spec):
+		allErrs = append(allErrs, field.Duplicate(fldPath, spec))
+	default:
+		seenSpecs.Insert(spec)
+	}
+
+	return allErrs
+}
+
+// ValidateHibernationSchedule validates the correctness of a HibernationSchedule.
+// It checks whether the set start and end time are valid cron specs.
+func ValidateHibernationSchedule(seenSpecs sets.String, schedule *garden.HibernationSchedule, fldPath *field.Path) field.ErrorList {
+	allErrs := field.ErrorList{}
+
+	if schedule.Start == nil && schedule.End == nil {
+		allErrs = append(allErrs, field.Required(fldPath.Child("start/end"), "either start or end has to be provided"))
+	}
+	if schedule.Start != nil {
+		allErrs = append(allErrs, ValidateHibernationCronSpec(seenSpecs, *schedule.Start, fldPath.Child("start"))...)
+	}
+	if schedule.End != nil {
+		allErrs = append(allErrs, ValidateHibernationCronSpec(seenSpecs, *schedule.End, fldPath.Child("end"))...)
 	}
 
 	return allErrs

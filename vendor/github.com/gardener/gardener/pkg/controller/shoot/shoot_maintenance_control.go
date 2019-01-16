@@ -16,8 +16,6 @@ package shoot
 
 import (
 	"fmt"
-	kutil "github.com/gardener/gardener/pkg/utils/kubernetes"
-	"k8s.io/client-go/util/retry"
 	"time"
 
 	gardenv1beta1 "github.com/gardener/gardener/pkg/apis/garden/v1beta1"
@@ -30,12 +28,13 @@ import (
 	"github.com/gardener/gardener/pkg/operation/common"
 	"github.com/gardener/gardener/pkg/utils"
 	"github.com/gardener/gardener/pkg/utils/imagevector"
-
+	kutil "github.com/gardener/gardener/pkg/utils/kubernetes"
 	corev1 "k8s.io/api/core/v1"
 	apiequality "k8s.io/apimachinery/pkg/api/equality"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/tools/record"
+	"k8s.io/client-go/util/retry"
 )
 
 const (
@@ -136,12 +135,12 @@ type MaintenanceControlInterface interface {
 // implements the documented semantics for maintaining Shoots. updater is the UpdaterInterface used
 // to update the spec of Shoots. You should use an instance returned from NewDefaultMaintenanceControl() for any
 // scenario other than testing.
-func NewDefaultMaintenanceControl(k8sGardenClient kubernetes.Client, k8sGardenInformers gardeninformers.Interface, secrets map[string]*corev1.Secret, imageVector imagevector.ImageVector, identity *gardenv1beta1.Gardener, recorder record.EventRecorder) MaintenanceControlInterface {
+func NewDefaultMaintenanceControl(k8sGardenClient kubernetes.Interface, k8sGardenInformers gardeninformers.Interface, secrets map[string]*corev1.Secret, imageVector imagevector.ImageVector, identity *gardenv1beta1.Gardener, recorder record.EventRecorder) MaintenanceControlInterface {
 	return &defaultMaintenanceControl{k8sGardenClient, k8sGardenInformers, secrets, imageVector, identity, recorder}
 }
 
 type defaultMaintenanceControl struct {
-	k8sGardenClient    kubernetes.Client
+	k8sGardenClient    kubernetes.Interface
 	k8sGardenInformers gardeninformers.Interface
 	secrets            map[string]*corev1.Secret
 	imageVector        imagevector.ImageVector
@@ -211,7 +210,7 @@ func (c *defaultMaintenanceControl) Maintain(shootObj *gardenv1beta1.Shoot, key 
 	}
 
 	// Update the Shoot resource object.
-	_, err = kutil.TryUpdateShoot(c.k8sGardenClient.GardenClientset(), retry.DefaultBackoff, shoot.ObjectMeta, func(s *gardenv1beta1.Shoot) (*gardenv1beta1.Shoot, error) {
+	_, err = kutil.TryUpdateShoot(c.k8sGardenClient.Garden(), retry.DefaultBackoff, shoot.ObjectMeta, func(s *gardenv1beta1.Shoot) (*gardenv1beta1.Shoot, error) {
 		if !apiequality.Semantic.DeepEqual(shootObj.Spec.Maintenance.AutoUpdate, s.Spec.Maintenance.AutoUpdate) {
 			return nil, fmt.Errorf("auto update section of Shoot %s/%s changed mid-air", s.Namespace, s.Name)
 		}

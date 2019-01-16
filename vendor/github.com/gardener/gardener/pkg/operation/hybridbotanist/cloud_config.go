@@ -24,9 +24,10 @@ import (
 	"github.com/gardener/gardener/pkg/utils/secrets"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	bootstraptokenapi "k8s.io/client-go/tools/bootstrap/token/api"
-	bootstraptokenutil "k8s.io/client-go/tools/bootstrap/token/util"
+	bootstraptokenapi "k8s.io/cluster-bootstrap/token/api"
+	bootstraptokenutil "k8s.io/cluster-bootstrap/token/util"
 )
 
 // generateCloudConfigChart renders the kube-addon-manager configuration for the cloud config user data.
@@ -55,12 +56,33 @@ func (b *HybridBotanist) generateCloudConfigChart() (*chartrenderer.RenderedChar
 		cloudProvider["config"] = cloudProviderConfig
 	}
 
+	machineTypes := b.Shoot.GetMachineTypesFromCloudProfile()
+	memoryThreshold, _ := resource.ParseQuantity("8Gi")
+
 	workers := []map[string]interface{}{}
-	for _, workerName := range userDataConfig.WorkerNames {
-		workers = append(workers, map[string]interface{}{
-			"name":       workerName,
-			"secretName": b.Shoot.ComputeCloudConfigSecretName(workerName),
-		})
+
+	for _, worker := range b.Shoot.GetWorkers() {
+		newWorker := map[string]interface{}{
+			"name":                        worker.Name,
+			"secretName":                  b.Shoot.ComputeCloudConfigSecretName(worker.Name),
+			"evictionHardMemoryAvailable": "100Mi",
+			"evictionSoftMemoryAvailable": "200Mi",
+		}
+		for _, machtype := range machineTypes {
+			if machtype.Name == worker.MachineType {
+				// Found a match, no need for further comparisons
+				// Break the loop after replacing default values
+				if machtype.Memory.Cmp(memoryThreshold) > 0 {
+					newWorker["evictionHardMemoryAvailable"] = "1Gi"
+					newWorker["evictionSoftMemoryAvailable"] = "1.5Gi"
+				} else {
+					newWorker["evictionHardMemoryAvailable"] = "5%"
+					newWorker["evictionSoftMemoryAvailable"] = "10%"
+				}
+				break
+			}
+		}
+		workers = append(workers, newWorker)
 	}
 
 	config := map[string]interface{}{
@@ -81,7 +103,7 @@ func (b *HybridBotanist) generateCloudConfigChart() (*chartrenderer.RenderedChar
 		"workers": workers,
 	}
 
-	config, err = b.InjectImages(config, b.ShootVersion(), b.ShootVersion(), common.HyperkubeImageName)
+	config, err = b.InjectImages(config, b.ShootVersion(), b.ShootVersion(), common.RubyImageName, common.HyperkubeImageName)
 	if err != nil {
 		return nil, err
 	}

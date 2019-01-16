@@ -15,6 +15,7 @@
 package common
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"math"
@@ -46,12 +47,12 @@ var json = jsoniter.ConfigFastest
 // release's namespace <namespace> and two maps <defaultValues>, <additionalValues>, and renders the template
 // based on the merged result of both value maps. The resulting manifest will be applied to the cluster the
 // Kubernetes client has been created for.
-func ApplyChart(k8sClient kubernetes.Client, renderer chartrenderer.ChartRenderer, chartPath, name, namespace string, defaultValues, additionalValues map[string]interface{}) error {
+func ApplyChart(k8sClient kubernetes.Interface, renderer chartrenderer.ChartRenderer, chartPath, name, namespace string, defaultValues, additionalValues map[string]interface{}) error {
 	release, err := renderer.Render(chartPath, name, namespace, utils.MergeMaps(defaultValues, additionalValues))
 	if err != nil {
 		return err
 	}
-	return k8sClient.Apply(release.Manifest())
+	return k8sClient.Applier().ApplyManifest(context.Background(), release.Manifest())
 }
 
 // GetSecretKeysWithPrefix returns a list of keys of the given map <m> which are prefixed with <kind>.
@@ -178,7 +179,7 @@ func GenerateAddonConfig(values map[string]interface{}, enabled bool) map[string
 // GetLoadBalancerIngress takes a K8SClient, a namespace and a service name. It queries for a load balancer's technical name
 // (ip address or hostname). It returns the value of the technical name whereby it always prefers the IP address (if given)
 // over the hostname. It also returns the list of all load balancer ingresses.
-func GetLoadBalancerIngress(client kubernetes.Client, namespace, name string) (string, []corev1.LoadBalancerIngress, error) {
+func GetLoadBalancerIngress(client kubernetes.Interface, namespace, name string) (string, []corev1.LoadBalancerIngress, error) {
 	var (
 		loadBalancerIngress  string
 		serviceStatusIngress []corev1.LoadBalancerIngress
@@ -270,7 +271,7 @@ func (e *errorWithCode) Error() string {
 }
 
 var (
-	unauthorizedRegexp           = regexp.MustCompile(`(?i)(Unauthorized|InvalidClientTokenId|SignatureDoesNotMatch|Authentication failed|AuthFailure|AuthorizationFailed|invalid character|invalid_grant|invalid_client|Authorization Profile was not found|cannot fetch token)`)
+	unauthorizedRegexp           = regexp.MustCompile(`(?i)(Unauthorized|InvalidClientTokenId|SignatureDoesNotMatch|Authentication failed|AuthFailure|AuthorizationFailed|invalid character|invalid_grant|invalid_client|Authorization Profile was not found|cannot fetch token|no active subscriptions)`)
 	quotaExceededRegexp          = regexp.MustCompile(`(?i)(LimitExceeded|Quota)`)
 	insufficientPrivilegesRegexp = regexp.MustCompile(`(?i)(AccessDenied|Forbidden|deny|denied)`)
 	dependenciesRegexp           = regexp.MustCompile(`(?i)(PendingVerification|Access Not Configured|accessNotConfigured|DependencyViolation|OptInRequired|DeleteConflict|Conflict)`)
@@ -370,7 +371,7 @@ func HasInitializer(initializers *metav1.Initializers, name string) bool {
 }
 
 // ReadLeaderElectionRecord returns the leader election record for a given lock type and a namespace/name combination.
-func ReadLeaderElectionRecord(k8sClient kubernetes.Client, lock, namespace, name string) (*resourcelock.LeaderElectionRecord, error) {
+func ReadLeaderElectionRecord(k8sClient kubernetes.Interface, lock, namespace, name string) (*resourcelock.LeaderElectionRecord, error) {
 	var (
 		leaderElectionRecord resourcelock.LeaderElectionRecord
 		annotations          map[string]string
@@ -378,13 +379,13 @@ func ReadLeaderElectionRecord(k8sClient kubernetes.Client, lock, namespace, name
 
 	switch lock {
 	case resourcelock.EndpointsResourceLock:
-		endpoint, err := k8sClient.Clientset().CoreV1().Endpoints(namespace).Get(name, metav1.GetOptions{})
+		endpoint, err := k8sClient.Kubernetes().CoreV1().Endpoints(namespace).Get(name, metav1.GetOptions{})
 		if err != nil {
 			return nil, err
 		}
 		annotations = endpoint.Annotations
 	case resourcelock.ConfigMapsResourceLock:
-		configmap, err := k8sClient.Clientset().CoreV1().ConfigMaps(namespace).Get(name, metav1.GetOptions{})
+		configmap, err := k8sClient.Kubernetes().CoreV1().ConfigMaps(namespace).Get(name, metav1.GetOptions{})
 		if err != nil {
 			return nil, err
 		}
@@ -420,4 +421,65 @@ func ShouldObjectBeRemoved(obj metav1.Object, gracePeriod time.Duration) bool {
 	}
 
 	return deletionTimestamp.Time.Before(time.Now().Add(-gracePeriod))
+}
+
+// DeleteLoggingStack deletes all resource of the EFK logging stack in the given namespace.
+func DeleteLoggingStack(k8sClient kubernetes.Interface, namespace string) error {
+	if k8sClient == nil {
+		return fmt.Errorf("require kubernetes client")
+	}
+
+	var (
+		services     = []string{"kibana-logging", "elasticsearch-logging", "fluentd-es"}
+		configmaps   = []string{"kibana-object-registration", "kibana-saved-objects", "curator-hourly-config", "curator-daily-config", "fluent-bit-config", "fluentd-es-config"}
+		statefulsets = []string{"elasticsearch-logging", "fluentd-es"}
+		cronjobs     = []string{"hourly-curator", "daily-curator"}
+	)
+
+	if err := k8sClient.DeleteDeployment(namespace, "kibana-logging"); err != nil && !apierrors.IsNotFound(err) {
+		return err
+	}
+	if err := k8sClient.DeleteDaemonSet(namespace, "fluent-bit"); err != nil && !apierrors.IsNotFound(err) {
+		return err
+	}
+	for _, name := range statefulsets {
+		if err := k8sClient.DeleteStatefulSet(namespace, name); err != nil && !apierrors.IsNotFound(err) {
+			return err
+		}
+	}
+	for _, name := range cronjobs {
+		if err := k8sClient.DeleteCronJob(namespace, name); err != nil && !apierrors.IsNotFound(err) {
+			return err
+		}
+	}
+
+	if err := k8sClient.DeleteIngress(namespace, "kibana"); err != nil && !apierrors.IsNotFound(err) {
+		return err
+	}
+	if err := k8sClient.DeleteSecret(namespace, "kibana-basic-auth"); err != nil && !apierrors.IsNotFound(err) {
+		return err
+	}
+	if err := k8sClient.DeleteClusterRoleBinding("fluent-bit-read"); err != nil && !apierrors.IsNotFound(err) {
+		return err
+	}
+	if err := k8sClient.DeleteClusterRole("fluent-bit-read"); err != nil && !apierrors.IsNotFound(err) {
+		return err
+	}
+	if err := k8sClient.DeleteServiceAccount(namespace, "fluent-bit"); err != nil && !apierrors.IsNotFound(err) {
+		return err
+	}
+	if err := k8sClient.DeleteHorizontalPodAutoscaler(namespace, "fluentd-es"); err != nil && !apierrors.IsNotFound(err) {
+		return err
+	}
+	for _, name := range services {
+		if err := k8sClient.DeleteService(namespace, name); err != nil && !apierrors.IsNotFound(err) {
+			return err
+		}
+	}
+	for _, name := range configmaps {
+		if err := k8sClient.DeleteConfigMap(namespace, name); err != nil && !apierrors.IsNotFound(err) {
+			return err
+		}
+	}
+	return nil
 }

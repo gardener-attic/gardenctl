@@ -18,14 +18,14 @@ spec:
     spec:
       containers:
       - name: fluent-bit
-        image: {{ index .Values.images "fluent-bit" }}
+        image: {{ index .Values.global.images "fluent-bit" }}
         command:
           - /fluent-bit/bin/fluent-bit
           - -c
           - /fluent-bit/etc/fluent-bit.conf
         env:
         - name: FLUENTD_HOST
-          value: fluentd-es.{{ .Release.Namespace }}.svc
+          value: fluentd-es
         - name: FLUENTD_PORT
           value: "{{ .Values.fluentd.ports.forward }}"
         resources:

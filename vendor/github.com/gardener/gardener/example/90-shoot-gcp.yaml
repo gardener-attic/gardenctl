@@ -26,7 +26,7 @@ spec:
         maxUnavailable: 0
       zones: ['europe-west1-b']
   kubernetes:
-    version: 1.12.1
+    version: 1.13.1
     allowPrivilegedContainers: true # 'true' means that all authenticated users can use the "gardener.privileged" PodSecurityPolicy, allowing full unrestricted access to Pod features.
   # kubeAPIServer:
   #   featureGates:
@@ -44,7 +44,6 @@ spec:
   #     issuerURL: https://identity.example.com
   #     usernameClaim: username-claim
   #     usernamePrefix: username-prefix
-  #-#-# only usable with Kubernetes >= 1.10
   #     signingAlgs: RS256,some-other-algorithm
   #-#-# only usable with Kubernetes >= 1.11
   #     requiredClaims:
@@ -90,6 +89,9 @@ spec:
     domain: johndoe-gcp.garden-dev.example.com
 # hibernation:
 #   enabled: false
+#   schedules:
+#   - start: "0 20 * * *" # Start hibernation every day at 8PM
+#     end: "0 6 * * *"    # Stop hibernation every day at 6AM
   maintenance:
     timeWindow:
       begin: 220000+0100
