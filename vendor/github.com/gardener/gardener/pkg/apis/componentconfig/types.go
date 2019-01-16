@@ -15,8 +15,8 @@
 package componentconfig
 
 import (
-	"github.com/golang/glog"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/klog"
 )
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
@@ -37,8 +37,8 @@ type ControllerManagerConfiguration struct {
 	LeaderElection LeaderElectionConfiguration
 	// LogLevel is the level/severity for the logs. Must be one of [info,debug,error].
 	LogLevel string
-	// KubernetesLogLevel is the log level used for Kubernetes' glog functions.
-	KubernetesLogLevel glog.Level
+	// KubernetesLogLevel is the log level used for Kubernetes' k8s.io/klog functions.
+	KubernetesLogLevel klog.Level
 	// Server defines the configuration of the HTTP server.
 	Server ServerConfiguration
 	// FeatureGates is a map of feature names to bools that enable or disable alpha/experimental
@@ -90,6 +90,8 @@ type ControllerManagerControllerConfiguration struct {
 	ShootMaintenance ShootMaintenanceControllerConfiguration
 	// ShootQuota defines the configuration of the ShootQuota controller.
 	ShootQuota ShootQuotaControllerConfiguration
+	// ShootHibernation defines the configuration of the ShootHibernation controller.
+	ShootHibernation ShootHibernationControllerConfiguration
 	// BackupInfrastructure defines the configuration of the BackupInfrastructure controller.
 	BackupInfrastructure BackupInfrastructureControllerConfiguration
 }
@@ -172,6 +174,17 @@ type ShootCareControllerConfiguration struct {
 	// often the health check of Shoot clusters is performed (only if no operation is
 	// already running on them).
 	SyncPeriod metav1.Duration
+	// ConditionThresholds defines the condition threshold per condition type.
+	// +optional
+	ConditionThresholds []ConditionThreshold
+}
+
+// ConditionThreshold defines the duration how long a flappy condition stays in progressing state.
+type ConditionThreshold struct {
+	// Type is the type of the condition to define the threshold for.
+	Type string
+	// Duration is the duration how long the condition can stay in the progressing state.
+	Duration metav1.Duration
 }
 
 // ShootMaintenanceControllerConfiguration defines the configuration of the
@@ -191,6 +204,14 @@ type ShootQuotaControllerConfiguration struct {
 	// SyncPeriod is the duration how often the existing resources are reconciled
 	// (how often Shoots referenced Quota is checked).
 	SyncPeriod metav1.Duration
+}
+
+// ShootHibernationControllerConfiguration defines the configuration of the
+// ShootHibernation controller.
+type ShootHibernationControllerConfiguration struct {
+	// ConcurrentSyncs is the number of workers used for the controller to work on
+	// events.
+	ConcurrentSyncs int
 }
 
 // BackupInfrastructureControllerConfiguration defines the configuration of the BackupInfrastructure

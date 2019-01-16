@@ -332,7 +332,22 @@ func (b *HybridBotanist) DeployKubeAPIServer() error {
 		return err
 	}
 
-	return b.ApplyChartSeed(filepath.Join(chartPathControlPlane, common.KubeAPIServerDeploymentName), common.KubeAPIServerDeploymentName, b.Shoot.SeedNamespace, values, utils.MergeMaps(cloudSpecificExposeValues, cloudSpecificValues))
+	if err := b.ApplyChartSeed(filepath.Join(chartPathControlPlane, common.KubeAPIServerDeploymentName), common.KubeAPIServerDeploymentName, b.Shoot.SeedNamespace, values, utils.MergeMaps(cloudSpecificExposeValues, cloudSpecificValues)); err != nil {
+		return err
+	}
+
+	// Delete old network policies. This code can be removed in a future version.
+	for _, name := range []string{
+		"kube-apiserver-deny-blacklist",
+		"kube-apiserver-allow-dns",
+		"kube-apiserver-allow-etcd",
+		"kube-apiserver-allow-gardener-admission-controller",
+	} {
+		if err := b.K8sSeedClient.DeleteNetworkPolicy(b.Shoot.SeedNamespace, name); err != nil && !apierrors.IsNotFound(err) {
+			return err
+		}
+	}
+	return nil
 }
 
 func (b *HybridBotanist) getAuditPolicy(name, namespace string) (string, error) {
@@ -379,19 +394,11 @@ func (b *HybridBotanist) DeployKubeControllerManager() error {
 			"checksum/secret-cloudprovider":                  b.CheckSums[common.CloudProviderSecretName],
 			"checksum/configmap-cloud-provider-config":       b.CheckSums[common.CloudProviderConfigName],
 		},
+		"objectCount": b.Shoot.GetNodeCount(),
 	}
 	cloudSpecificValues, err := b.ShootCloudBotanist.GenerateKubeControllerManagerConfig()
 	if err != nil {
 		return err
-	}
-
-	if b.ShootedSeed != nil {
-		defaultValues["resources"] = map[string]interface{}{
-			"limits": map[string]interface{}{
-				"cpu":    "750m",
-				"memory": "1.5Gi",
-			},
-		}
 	}
 
 	// If a shoot is hibernated we only want to scale down the KCM if no nodes exist anymore. The node-lifecycle-controller
@@ -473,7 +480,8 @@ func (b *HybridBotanist) DeployKubeScheduler() error {
 		"replicas":          b.Shoot.GetReplicas(1),
 		"kubernetesVersion": b.Shoot.Info.Spec.Kubernetes.Version,
 		"podAnnotations": map[string]interface{}{
-			"checksum/secret-kube-scheduler": b.CheckSums[common.KubeSchedulerDeploymentName],
+			"checksum/secret-kube-scheduler":        b.CheckSums[common.KubeSchedulerDeploymentName],
+			"checksum/secret-kube-scheduler-server": b.CheckSums[common.KubeSchedulerServerName],
 		},
 	}
 	cloudValues, err := b.ShootCloudBotanist.GenerateKubeSchedulerConfig()

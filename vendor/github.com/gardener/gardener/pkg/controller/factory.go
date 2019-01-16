@@ -47,14 +47,14 @@ type GardenControllerFactory struct {
 	config             *componentconfig.ControllerManagerConfiguration
 	identity           *gardenv1beta1.Gardener
 	gardenNamespace    string
-	k8sGardenClient    kubernetes.Client
+	k8sGardenClient    kubernetes.Interface
 	k8sGardenInformers gardeninformers.SharedInformerFactory
 	k8sInformers       kubeinformers.SharedInformerFactory
 	recorder           record.EventRecorder
 }
 
 // NewGardenControllerFactory creates a new factory for controllers for the Garden API group.
-func NewGardenControllerFactory(k8sGardenClient kubernetes.Client, gardenInformerFactory gardeninformers.SharedInformerFactory, kubeInformerFactory kubeinformers.SharedInformerFactory, config *componentconfig.ControllerManagerConfiguration, identity *gardenv1beta1.Gardener, gardenNamespace string, recorder record.EventRecorder) *GardenControllerFactory {
+func NewGardenControllerFactory(k8sGardenClient kubernetes.Interface, gardenInformerFactory gardeninformers.SharedInformerFactory, kubeInformerFactory kubeinformers.SharedInformerFactory, config *componentconfig.ControllerManagerConfiguration, identity *gardenv1beta1.Gardener, gardenNamespace string, recorder record.EventRecorder) *GardenControllerFactory {
 	return &GardenControllerFactory{
 		config:             config,
 		identity:           identity,
@@ -131,7 +131,7 @@ func (f *GardenControllerFactory) Run(ctx context.Context) {
 	// Initialize the Controller metrics collection.
 	gardenmetrics.RegisterControllerMetrics(shootController, seedController, quotaController, cloudProfileController, secretBindingController, backupInfrastructureController)
 
-	go shootController.Run(ctx, f.config.Controllers.Shoot.ConcurrentSyncs, f.config.Controllers.ShootCare.ConcurrentSyncs, f.config.Controllers.ShootMaintenance.ConcurrentSyncs, f.config.Controllers.ShootQuota.ConcurrentSyncs)
+	go shootController.Run(ctx, f.config.Controllers.Shoot.ConcurrentSyncs, f.config.Controllers.ShootCare.ConcurrentSyncs, f.config.Controllers.ShootMaintenance.ConcurrentSyncs, f.config.Controllers.ShootQuota.ConcurrentSyncs, f.config.Controllers.ShootHibernation.ConcurrentSyncs)
 	go seedController.Run(ctx, f.config.Controllers.Seed.ConcurrentSyncs)
 	go quotaController.Run(ctx, f.config.Controllers.Quota.ConcurrentSyncs)
 	go projectController.Run(ctx, f.config.Controllers.Project.ConcurrentSyncs)
@@ -139,7 +139,7 @@ func (f *GardenControllerFactory) Run(ctx context.Context) {
 	go secretBindingController.Run(ctx, f.config.Controllers.SecretBinding.ConcurrentSyncs)
 	go backupInfrastructureController.Run(ctx, f.config.Controllers.BackupInfrastructure.ConcurrentSyncs)
 
-	logger.Logger.Infof("Gardener controller manager (version %s) initialized.", version.Version)
+	logger.Logger.Infof("Gardener controller manager (version %s) initialized.", version.Get().GitVersion)
 
 	// Shutdown handling
 	<-ctx.Done()

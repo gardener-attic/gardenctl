@@ -33,7 +33,6 @@ import (
 	kutil "github.com/gardener/gardener/pkg/utils/kubernetes"
 	"github.com/gardener/gardener/pkg/utils/reconcilescheduler"
 	"github.com/gardener/gardener/pkg/version"
-
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -191,7 +190,7 @@ func (c *Controller) reconcileShootKey(key string) error {
 }
 
 func (c *Controller) updateShootStatusPending(shoot *gardenv1beta1.Shoot, message string) error {
-	_, err := kutil.TryUpdateShootStatus(c.k8sGardenClient.GardenClientset(), retry.DefaultRetry, shoot.ObjectMeta,
+	_, err := kutil.TryUpdateShootStatus(c.k8sGardenClient.Garden(), retry.DefaultRetry, shoot.ObjectMeta,
 		func(shoot *gardenv1beta1.Shoot) (*gardenv1beta1.Shoot, error) {
 			shoot.Status.LastOperation = &gardenv1beta1.LastOperation{
 				Type:           controllerutils.ComputeOperationType(shoot.ObjectMeta, shoot.Status.LastOperation),
@@ -226,7 +225,7 @@ func scheduleNextSync(config componentconfig.ShootControllerConfiguration, error
 		creationTimeNano = objectMeta.CreationTimestamp.UnixNano()
 	)
 
-	if syncPeriodOverwrite, ok := objectMeta.Annotations[common.ShootSyncPeriod]; ok && respectSyncPeriodOverwrite {
+	if syncPeriodOverwrite, ok := objectMeta.Annotations[common.ShootSyncPeriod]; ok && (respectSyncPeriodOverwrite || objectMeta.Namespace == common.GardenNamespace) {
 		if syncPeriodDuration, err := time.ParseDuration(syncPeriodOverwrite); err == nil {
 			if syncPeriodDuration.Nanoseconds() == 0 {
 				return 0
@@ -260,12 +259,12 @@ type ControlInterface interface {
 // implements the documented semantics for Shoots. updater is the UpdaterInterface used
 // to update the status of Shoots. You should use an instance returned from NewDefaultControl() for any
 // scenario other than testing.
-func NewDefaultControl(k8sGardenClient kubernetes.Client, k8sGardenInformers gardeninformers.Interface, secrets map[string]*corev1.Secret, imageVector imagevector.ImageVector, identity *gardenv1beta1.Gardener, config *componentconfig.ControllerManagerConfiguration, gardenerNamespace string, recorder record.EventRecorder) ControlInterface {
+func NewDefaultControl(k8sGardenClient kubernetes.Interface, k8sGardenInformers gardeninformers.Interface, secrets map[string]*corev1.Secret, imageVector imagevector.ImageVector, identity *gardenv1beta1.Gardener, config *componentconfig.ControllerManagerConfiguration, gardenerNamespace string, recorder record.EventRecorder) ControlInterface {
 	return &defaultControl{k8sGardenClient, k8sGardenInformers, secrets, imageVector, identity, config, gardenerNamespace, recorder}
 }
 
 type defaultControl struct {
-	k8sGardenClient    kubernetes.Client
+	k8sGardenClient    kubernetes.Interface
 	k8sGardenInformers gardeninformers.Interface
 	secrets            map[string]*corev1.Secret
 	imageVector        imagevector.ImageVector
@@ -304,7 +303,7 @@ func (c *defaultControl) ReconcileShoot(shootObj *gardenv1beta1.Shoot, key strin
 	// We check whether the Shoot's last operation status field indicates that the last operation failed (i.e. the operation
 	// will not be retried unless the shoot generation changes).
 	if shootIsFailed(shoot) {
-		if shoot.Status.Gardener.Version == version.Version {
+		if shoot.Status.Gardener.Version == version.Get().GitVersion {
 			shootLogger.Infof("Will not reconcile as the last operation has been set to '%s' and the generation has not changed since then.", gardenv1beta1.ShootLastOperationStateFailed)
 			return false, nil
 		}

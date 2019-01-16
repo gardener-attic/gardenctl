@@ -1,0 +1,26 @@
+{{- if .Values.global.apiserver.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: gardener-apiserver
+  namespace: garden
+  labels:
+    app: gardener
+    role: apiserver
+    chart: "{{ .Chart.Name }}-{{ .Chart.Version }}"
+    release: "{{ .Release.Name }}"
+    heritage: "{{ .Release.Service }}"
+spec:
+  type: ClusterIP
+  {{- if .Values.global.deployment.virtualGarden.enabled }}
+  clusterIP: {{ .Values.global.deployment.virtualGarden.clusterIP }}
+  {{- end }}
+  selector:
+    app: gardener
+    role: apiserver
+    release: {{ .Release.Name }}
+  ports:
+  - port: 443
+    protocol: TCP
+    targetPort: 443
+{{- end }}

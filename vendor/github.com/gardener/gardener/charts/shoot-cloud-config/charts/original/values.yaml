@@ -6,6 +6,7 @@
 #   root certificates
 # images:
 #   hyperkube: image-repository
+#   ruby: image-repository
 # kubernetes:
 #   clusterDNS: 100.64.0.10
 #   domain: cluster.local
@@ -21,5 +22,9 @@
 # workers:
 # - name: cpu-worker
 #   secretName: cloud-config-cpu-worker-ab234
+#   evictionSoftMemoryAvailable: 200Mi
+#   evictionHardMemoryAvailable: 100Mi
 # - name: cpu-worker2
 #   secretName: cloud-config-cpu-worker2-4av4a
+#   evictionSoftMemoryAvailable: 200Mi
+#   evictionHardMemoryAvailable: 100Mi

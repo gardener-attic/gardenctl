@@ -543,6 +543,10 @@ example.com.   DNAME 10 ; TTL=314 after second $TTL
 			continue
 		}
 		expected := reCaseFromComment.FindStringSubmatch(record.Comment)
+		if len(expected) != 3 {
+			t.Errorf("regexp didn't match for record %d", i)
+			continue
+		}
 		expectedTTL, _ := strconv.ParseUint(expected[1], 10, 32)
 		ttl := record.RR.Header().Ttl
 		if ttl != uint32(expectedTTL) {
@@ -1032,8 +1036,8 @@ func TestTXT(t *testing.T) {
 		if rr.String() != `_raop._tcp.local.	60	IN	TXT	"single value"` {
 			t.Error("bad representation of TXT record:", rr.String())
 		}
-		if rr.len() != 28+1+12 {
-			t.Error("bad size of serialized record:", rr.len())
+		if Len(rr) != 28+1+12 {
+			t.Error("bad size of serialized record:", Len(rr))
 		}
 	}
 
@@ -1052,8 +1056,8 @@ func TestTXT(t *testing.T) {
 		if rr.String() != `_raop._tcp.local.	60	IN	TXT	"a=1" "b=2" "c=3" "d=4"` {
 			t.Error("bad representation of TXT multi value record:", rr.String())
 		}
-		if rr.len() != 28+1+3+1+3+1+3+1+3 {
-			t.Error("bad size of serialized multi value record:", rr.len())
+		if Len(rr) != 28+1+3+1+3+1+3+1+3 {
+			t.Error("bad size of serialized multi value record:", Len(rr))
 		}
 	}
 
@@ -1072,8 +1076,8 @@ func TestTXT(t *testing.T) {
 		if rr.String() != `_raop._tcp.local.	60	IN	TXT	""` {
 			t.Error("bad representation of empty-string TXT record:", rr.String())
 		}
-		if rr.len() != 28+1 {
-			t.Error("bad size of serialized record:", rr.len())
+		if Len(rr) != 28+1 {
+			t.Error("bad size of serialized record:", Len(rr))
 		}
 	}
 
@@ -1565,5 +1569,19 @@ func TestBad(t *testing.T) {
 		if _, err = NewRR(s); err == nil {
 			t.Errorf("correctly parsed %q", s)
 		}
+	}
+}
+
+func TestNULLRecord(t *testing.T) {
+	// packet captured from iodine
+	packet := `8116840000010001000000000569627a6c700474657374046d69656b026e6c00000a0001c00c000a0001000000000005497f000001`
+	data, _ := hex.DecodeString(packet)
+	msg := new(Msg)
+	err := msg.Unpack(data)
+	if err != nil {
+		t.Fatalf("Failed to unpack NULL record")
+	}
+	if _, ok := msg.Answer[0].(*NULL); !ok {
+		t.Fatalf("Expected packet to contain NULL record")
 	}
 }

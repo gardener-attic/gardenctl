@@ -57,8 +57,8 @@ inhibit_rules:
 receivers:
 - name: dev-null
 - name: email-kubernetes-ops
-{{- if .Values.email_configs }}
+{{- if .Values.emailConfigs }}
   email_configs:
-{{ toYaml .Values.email_configs | indent 6 }}
+{{ toYaml .Values.emailConfigs | indent 2 }}
 {{- end }}
 {{- end -}}

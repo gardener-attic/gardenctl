@@ -117,63 +117,63 @@ func (c *defaultControl) deleteShoot(o *operation.Operation) *gardenv1beta1.Last
 		// existing machine class secrets.
 		deployCloudProviderSecret = g.Add(flow.Task{
 			Name: "Deploying cloud provider account secret",
-			Fn:   flow.TaskFn(botanist.DeployCloudProviderSecret).DoIf(cleanupShootResources),
+			Fn:   flow.SimpleTaskFn(botanist.DeployCloudProviderSecret).DoIf(cleanupShootResources),
 		})
 		refreshMachineClassSecrets = g.Add(flow.Task{
 			Name:         "Refreshing machine class secrets",
-			Fn:           flow.TaskFn(hybridBotanist.RefreshMachineClassSecrets).DoIf(cleanupShootResources).RetryUntilTimeout(defaultInterval, defaultTimeout),
+			Fn:           flow.SimpleTaskFn(hybridBotanist.RefreshMachineClassSecrets).DoIf(cleanupShootResources).RetryUntilTimeout(defaultInterval, defaultTimeout),
 			Dependencies: flow.NewTaskIDs(deployCloudProviderSecret),
 		})
 		refreshCloudProviderConfig = g.Add(flow.Task{
 			Name:         "Refreshing cloud provider configuration",
-			Fn:           flow.TaskFn(hybridBotanist.RefreshCloudProviderConfig).DoIf(cleanupShootResources).RetryUntilTimeout(defaultInterval, defaultTimeout),
+			Fn:           flow.SimpleTaskFn(hybridBotanist.RefreshCloudProviderConfig).DoIf(cleanupShootResources).RetryUntilTimeout(defaultInterval, defaultTimeout),
 			Dependencies: flow.NewTaskIDs(deployCloudProviderSecret),
 		})
 		refreshCloudControllerManager = g.Add(flow.Task{
 			Name:         "Refreshing cloud controller manager checksums",
-			Fn:           flow.TaskFn(botanist.RefreshCloudControllerManagerChecksums).DoIf(cleanupShootResources).RetryUntilTimeout(defaultInterval, defaultTimeout),
+			Fn:           flow.SimpleTaskFn(botanist.RefreshCloudControllerManagerChecksums).DoIf(cleanupShootResources).RetryUntilTimeout(defaultInterval, defaultTimeout),
 			Dependencies: flow.NewTaskIDs(deployCloudProviderSecret, refreshCloudProviderConfig),
 		})
 		refreshKubeControllerManager = g.Add(flow.Task{
 			Name:         "Refreshing Kubernetes controller manager checksums",
-			Fn:           flow.TaskFn(botanist.RefreshKubeControllerManagerChecksums).DoIf(cleanupShootResources).RetryUntilTimeout(defaultInterval, defaultTimeout),
+			Fn:           flow.SimpleTaskFn(botanist.RefreshKubeControllerManagerChecksums).DoIf(cleanupShootResources).RetryUntilTimeout(defaultInterval, defaultTimeout),
 			Dependencies: flow.NewTaskIDs(deployCloudProviderSecret, refreshCloudProviderConfig),
 		})
 		wakeUpControllers = g.Add(flow.Task{
 			Name: "Waking up kube-/cloud-/machine-controller-manager to ensure proper cleanup of resources",
-			Fn:   flow.TaskFn(botanist.WakeUpControllers).DoIf(o.Shoot.IsHibernated && cleanupShootResources),
+			Fn:   flow.SimpleTaskFn(botanist.WakeUpControllers).DoIf(o.Shoot.IsHibernated && cleanupShootResources),
 		})
 
 		// Deletion of monitoring stack (to avoid false positive alerts) and kube-addon-manager (to avoid redeploying
 		// resources).
 		initializeShootClients = g.Add(flow.Task{
 			Name:         "Initializing connection to Shoot",
-			Fn:           flow.TaskFn(botanist.InitializeShootClients).DoIf(cleanupShootResources).RetryUntilTimeout(defaultInterval, 2*time.Minute),
+			Fn:           flow.SimpleTaskFn(botanist.InitializeShootClients).DoIf(cleanupShootResources).RetryUntilTimeout(defaultInterval, 2*time.Minute),
 			Dependencies: flow.NewTaskIDs(deployCloudProviderSecret, refreshMachineClassSecrets, refreshCloudProviderConfig, refreshCloudControllerManager, refreshKubeControllerManager),
 		})
 		deleteSeedMonitoring = g.Add(flow.Task{
 			Name:         "Deleting Shoot monitoring stack in Seed",
-			Fn:           flow.TaskFn(botanist.DeleteSeedMonitoring).RetryUntilTimeout(defaultInterval, defaultTimeout),
+			Fn:           flow.SimpleTaskFn(botanist.DeleteSeedMonitoring).RetryUntilTimeout(defaultInterval, defaultTimeout),
 			Dependencies: flow.NewTaskIDs(initializeShootClients),
 		})
 		deleteKubeAddonManager = g.Add(flow.Task{
 			Name:         "Deleting Kubernetes addon manager",
-			Fn:           flow.TaskFn(botanist.DeleteKubeAddonManager).RetryUntilTimeout(defaultInterval, defaultTimeout),
+			Fn:           flow.SimpleTaskFn(botanist.DeleteKubeAddonManager).RetryUntilTimeout(defaultInterval, defaultTimeout),
 			Dependencies: flow.NewTaskIDs(initializeShootClients),
 		})
 		deleteClusterAutoscaler = g.Add(flow.Task{
 			Name:         "Deleting cluster autoscaler",
-			Fn:           flow.TaskFn(botanist.DeleteClusterAutoscaler).RetryUntilTimeout(defaultInterval, defaultTimeout),
+			Fn:           flow.SimpleTaskFn(botanist.DeleteClusterAutoscaler).RetryUntilTimeout(defaultInterval, defaultTimeout),
 			Dependencies: flow.NewTaskIDs(initializeShootClients),
 		})
 		waitUntilKubeAddonManagerDeleted = g.Add(flow.Task{
 			Name:         "Waiting until Kubernetes addon manager has been deleted",
-			Fn:           botanist.WaitUntilKubeAddonManagerDeleted,
+			Fn:           flow.SimpleTaskFn(botanist.WaitUntilKubeAddonManagerDeleted),
 			Dependencies: flow.NewTaskIDs(deleteKubeAddonManager),
 		})
 		waitForControllersToBeActive = g.Add(flow.Task{
 			Name:         "Waiting until both cloud-controller-manager and kube-controller-manager are active",
-			Fn:           flow.TaskFn(botanist.WaitForControllersToBeActive).DoIf(cleanupShootResources).RetryUntilTimeout(defaultInterval, defaultTimeout),
+			Fn:           flow.SimpleTaskFn(botanist.WaitForControllersToBeActive).DoIf(cleanupShootResources).RetryUntilTimeout(defaultInterval, defaultTimeout),
 			Dependencies: flow.NewTaskIDs(refreshKubeControllerManager, refreshCloudControllerManager, wakeUpControllers, waitUntilKubeAddonManagerDeleted),
 		})
 
@@ -184,44 +184,44 @@ func (c *defaultControl) deleteShoot(o *operation.Operation) *gardenv1beta1.Last
 		// If the deletion of a CRD or an API service fails, then it is force deleted.
 		cleanCustomResourceDefinitions = g.Add(flow.Task{
 			Name: "Cleaning custom resource definitions",
-			Fn: flow.TaskFn(botanist.CleanCustomResourceDefinitions).RetryUntilTimeout(defaultInterval, 5*time.Minute).DoIf(cleanupShootResources).
-				RecoverTimeout(flow.TaskFn(botanist.ForceDeleteCustomResourceDefinitions).RetryUntilTimeout(defaultInterval, 2*time.Minute).ToRecoverFn()),
+			Fn: flow.SimpleTaskFn(botanist.CleanCustomResourceDefinitions).RetryUntilTimeout(defaultInterval, 5*time.Minute).DoIf(cleanupShootResources).
+				RecoverTimeout(flow.SimpleTaskFn(botanist.ForceDeleteCustomResourceDefinitions).RetryUntilTimeout(defaultInterval, 2*time.Minute).ToRecoverFn()),
 			Dependencies: flow.NewTaskIDs(waitUntilKubeAddonManagerDeleted, deleteClusterAutoscaler, waitForControllersToBeActive),
 		})
 		cleanCustomAPIServices = g.Add(flow.Task{
 			Name: "Cleaning custom API service definitions",
-			Fn: flow.TaskFn(botanist.CleanupCustomAPIServices).RetryUntilTimeout(defaultInterval, 5*time.Minute).DoIf(cleanupShootResources).
-				RecoverTimeout(flow.TaskFn(botanist.ForceDeleteCustomAPIServices).RetryUntilTimeout(defaultInterval, 2*time.Minute).ToRecoverFn()),
+			Fn: flow.SimpleTaskFn(botanist.CleanupCustomAPIServices).RetryUntilTimeout(defaultInterval, 5*time.Minute).DoIf(cleanupShootResources).
+				RecoverTimeout(flow.SimpleTaskFn(botanist.ForceDeleteCustomAPIServices).RetryUntilTimeout(defaultInterval, 2*time.Minute).ToRecoverFn()),
 			Dependencies: flow.NewTaskIDs(waitUntilKubeAddonManagerDeleted, deleteClusterAutoscaler, waitForControllersToBeActive),
 		})
 		cleanKubernetesResources = g.Add(flow.Task{
 			Name:         "Cleaning kubernetes resources",
-			Fn:           flow.TaskFn(botanist.CleanKubernetesResources).RetryUntilTimeout(defaultInterval, 5*time.Minute).DoIf(cleanupShootResources),
+			Fn:           flow.SimpleTaskFn(botanist.CleanKubernetesResources).RetryUntilTimeout(defaultInterval, 5*time.Minute).DoIf(cleanupShootResources),
 			Dependencies: flow.NewTaskIDs(cleanCustomResourceDefinitions, cleanCustomAPIServices),
 		})
 		destroyMachines = g.Add(flow.Task{
 			Name:         "Destroying Shoot workers",
-			Fn:           flow.TaskFn(hybridBotanist.DestroyMachines).RetryUntilTimeout(defaultInterval, defaultTimeout).DoIf(isCloud),
+			Fn:           flow.SimpleTaskFn(hybridBotanist.DestroyMachines).RetryUntilTimeout(defaultInterval, defaultTimeout).DoIf(isCloud),
 			Dependencies: flow.NewTaskIDs(cleanKubernetesResources),
 		})
 		destroyNginxIngressResources = g.Add(flow.Task{
 			Name:         "Destroying ingress DNS record",
-			Fn:           flow.TaskFn(botanist.DestroyIngressDNSRecord),
+			Fn:           flow.SimpleTaskFn(botanist.DestroyIngressDNSRecord),
 			Dependencies: flow.NewTaskIDs(cleanKubernetesResources),
 		})
 		destroyKube2IAMResources = g.Add(flow.Task{
 			Name:         "Destroying Kube2IAM resources",
-			Fn:           flow.TaskFn(shootCloudBotanist.DestroyKube2IAMResources),
+			Fn:           flow.SimpleTaskFn(shootCloudBotanist.DestroyKube2IAMResources),
 			Dependencies: flow.NewTaskIDs(cleanKubernetesResources),
 		})
 		destroyInfrastructure = g.Add(flow.Task{
 			Name:         "Destroying Shoot infrastructure",
-			Fn:           flow.TaskFn(shootCloudBotanist.DestroyInfrastructure),
+			Fn:           flow.SimpleTaskFn(shootCloudBotanist.DestroyInfrastructure),
 			Dependencies: flow.NewTaskIDs(cleanKubernetesResources, destroyMachines),
 		})
 		destroyExternalDomainDNSRecord = g.Add(flow.Task{
 			Name:         "Destroying external domain DNS record",
-			Fn:           flow.TaskFn(botanist.DestroyExternalDomainDNSRecord),
+			Fn:           flow.SimpleTaskFn(botanist.DestroyExternalDomainDNSRecord),
 			Dependencies: flow.NewTaskIDs(cleanKubernetesResources),
 		})
 
@@ -234,32 +234,32 @@ func (c *defaultControl) deleteShoot(o *operation.Operation) *gardenv1beta1.Last
 		)
 		deleteKubeAPIServer = g.Add(flow.Task{
 			Name:         "Deleting Kubernetes API server",
-			Fn:           flow.TaskFn(botanist.DeleteKubeAPIServer).RetryUntilTimeout(defaultInterval, defaultTimeout),
+			Fn:           flow.SimpleTaskFn(botanist.DeleteKubeAPIServer).Retry(defaultInterval),
 			Dependencies: flow.NewTaskIDs(syncPointTerraformers),
 		})
 		deleteBackupInfrastructure = g.Add(flow.Task{
 			Name:         "Deleting backup infrastructure",
-			Fn:           flow.TaskFn(botanist.DeleteBackupInfrastructure),
+			Fn:           flow.SimpleTaskFn(botanist.DeleteBackupInfrastructure),
 			Dependencies: flow.NewTaskIDs(deleteKubeAPIServer),
 		})
 		destroyInternalDomainDNSRecord = g.Add(flow.Task{
 			Name:         "Destroying internal domain DNS record",
-			Fn:           flow.TaskFn(botanist.DestroyInternalDomainDNSRecord),
+			Fn:           flow.SimpleTaskFn(botanist.DestroyInternalDomainDNSRecord),
 			Dependencies: flow.NewTaskIDs(syncPointTerraformers),
 		})
 		deleteNamespace = g.Add(flow.Task{
 			Name:         "Deleting Shoot namespace in Seed",
-			Fn:           flow.TaskFn(botanist.DeleteNamespace).RetryUntilTimeout(defaultInterval, defaultTimeout),
+			Fn:           flow.SimpleTaskFn(botanist.DeleteNamespace).Retry(defaultInterval),
 			Dependencies: flow.NewTaskIDs(syncPointTerraformers, destroyInternalDomainDNSRecord, deleteBackupInfrastructure, deleteKubeAPIServer),
 		})
 		_ = g.Add(flow.Task{
 			Name:         "Waiting until Shoot namespace in Seed has been deleted",
-			Fn:           flow.TaskFn(botanist.WaitUntilSeedNamespaceDeleted),
+			Fn:           flow.SimpleTaskFn(botanist.WaitUntilSeedNamespaceDeleted),
 			Dependencies: flow.NewTaskIDs(deleteNamespace),
 		})
 		_ = g.Add(flow.Task{
 			Name:         "Deleting Garden secrets",
-			Fn:           flow.TaskFn(botanist.DeleteGardenSecrets).RetryUntilTimeout(defaultInterval, defaultTimeout),
+			Fn:           flow.SimpleTaskFn(botanist.DeleteGardenSecrets).Retry(defaultInterval),
 			Dependencies: flow.NewTaskIDs(deleteNamespace),
 		})
 
@@ -288,7 +288,7 @@ func (c *defaultControl) updateShootStatusDeleteStart(o *operation.Operation) er
 		now    = metav1.Now()
 	)
 
-	newShoot, err := kubernetes.TryUpdateShootStatus(c.k8sGardenClient.GardenClientset(), retry.DefaultRetry, o.Shoot.Info.ObjectMeta,
+	newShoot, err := kubernetes.TryUpdateShootStatus(c.k8sGardenClient.Garden(), retry.DefaultRetry, o.Shoot.Info.ObjectMeta,
 		func(shoot *gardenv1beta1.Shoot) (*gardenv1beta1.Shoot, error) {
 			if status.RetryCycleStartTime == nil || (status.LastOperation != nil && status.LastOperation.Type != gardenv1beta1.ShootLastOperationTypeDelete) {
 				shoot.Status.RetryCycleStartTime = &now
@@ -315,7 +315,7 @@ func (c *defaultControl) updateShootStatusDeleteStart(o *operation.Operation) er
 }
 
 func (c *defaultControl) updateShootStatusDeleteSuccess(o *operation.Operation) error {
-	newShoot, err := kubernetes.TryUpdateShootStatus(c.k8sGardenClient.GardenClientset(), retry.DefaultRetry, o.Shoot.Info.ObjectMeta,
+	newShoot, err := kubernetes.TryUpdateShootStatus(c.k8sGardenClient.Garden(), retry.DefaultRetry, o.Shoot.Info.ObjectMeta,
 		func(shoot *gardenv1beta1.Shoot) (*gardenv1beta1.Shoot, error) {
 			shoot.Status.RetryCycleStartTime = nil
 			shoot.Status.LastError = nil
@@ -337,7 +337,7 @@ func (c *defaultControl) updateShootStatusDeleteSuccess(o *operation.Operation) 
 	finalizers := sets.NewString(o.Shoot.Info.Finalizers...)
 	finalizers.Delete(gardenv1beta1.GardenerName)
 	o.Shoot.Info.Finalizers = finalizers.List()
-	newShoot, err = c.k8sGardenClient.GardenClientset().GardenV1beta1().Shoots(o.Shoot.Info.Namespace).Update(o.Shoot.Info)
+	newShoot, err = c.k8sGardenClient.Garden().GardenV1beta1().Shoots(o.Shoot.Info.Namespace).Update(o.Shoot.Info)
 	if err != nil {
 		return err
 	}
@@ -367,7 +367,7 @@ func (c *defaultControl) updateShootStatusDeleteError(o *operation.Operation, la
 		description = lastError.Description
 	)
 
-	newShoot, err := kubernetes.TryUpdateShootStatus(c.k8sGardenClient.GardenClientset(), retry.DefaultRetry, o.Shoot.Info.ObjectMeta,
+	newShoot, err := kubernetes.TryUpdateShootStatus(c.k8sGardenClient.Garden(), retry.DefaultRetry, o.Shoot.Info.ObjectMeta,
 		func(shoot *gardenv1beta1.Shoot) (*gardenv1beta1.Shoot, error) {
 			if !utils.TimeElapsed(shoot.Status.RetryCycleStartTime, c.config.Controllers.Shoot.RetryDuration.Duration) {
 				description += " Operation will be retried."
@@ -390,7 +390,7 @@ func (c *defaultControl) updateShootStatusDeleteError(o *operation.Operation, la
 	}
 	o.Logger.Error(description)
 
-	newShootAfterLabel, err := kubernetes.TryUpdateShootLabels(c.k8sGardenClient.GardenClientset(), retry.DefaultRetry, o.Shoot.Info.ObjectMeta, shootHealthyLabelTransform(false))
+	newShootAfterLabel, err := kubernetes.TryUpdateShootLabels(c.k8sGardenClient.Garden(), retry.DefaultRetry, o.Shoot.Info.ObjectMeta, StatusLabelTransform(StatusUnhealthy))
 	if err == nil {
 		o.Shoot.Info = newShootAfterLabel
 	}

@@ -29,18 +29,18 @@ enableDebuggingHandlers: true
 enableServer: true
 enforceNodeAllocatable:
 - pods
-eventRecordQPS: 25
-eventBurst: 25
+eventRecordQPS: 50
+eventBurst: 50
 evictionHard:
   imagefs.available: 5%
   imagefs.inodesFree: 5%
-  memory.available: 100Mi
+  memory.available: {{ .worker.evictionHardMemoryAvailable }}
   nodefs.available: 5%
   nodefs.inodesFree: 5%
 evictionSoft:
   imagefs.available: 10%
   imagefs.inodesFree: 10%
-  memory.available: 200Mi
+  memory.available: {{ .worker.evictionSoftMemoryAvailable }}
   nodefs.available: 10%
   nodefs.inodesFree: 10%
 evictionSoftGracePeriod:
@@ -61,9 +61,10 @@ fileCheckFrequency: 20s
 imageMinimumGCAge: 2m0s
 imageGCHighThresholdPercent: 50
 imageGCLowThresholdPercent: 40
-kubeAPIBurst: 25
-kubeAPIQPS: 25
+kubeAPIBurst: 50
+kubeAPIQPS: 50
 kubeReserved:
+  cpu: 80m
   memory: 1Gi
 hairpinMode: promiscuous-bridge
 hostNetworkSources:

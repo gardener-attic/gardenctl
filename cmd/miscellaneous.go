@@ -166,12 +166,17 @@ func getMonitoringCredentials() (username, password string) {
 func getLoggingCredentials() (username, password string) {
 	var target Target
 	ReadTarget(pathTarget, &target)
-	shootName := target.Target[2].Name
-	shootNamespace := getSeedNamespaceNameForShoot(shootName)
+	var namespace, secretName string
+	if len(target.Target) == 2 {
+		namespace = "garden"
+		secretName = "seed-logging-ingress-credentials"
+	} else if len(target.Target) == 3 {
+		namespace = getSeedNamespaceNameForShoot(target.Target[2].Name)
+		secretName = "logging-ingress-credentials"
+	}
 	Client, err = clientToTarget("seed")
 	checkError(err)
-	secretName := "logging-ingress-credentials"
-	monitoringSecret, err := Client.CoreV1().Secrets(shootNamespace).Get((secretName), metav1.GetOptions{})
+	monitoringSecret, err := Client.CoreV1().Secrets(namespace).Get((secretName), metav1.GetOptions{})
 	checkError(err)
 	username = string(monitoringSecret.Data["username"][:])
 	password = string(monitoringSecret.Data["password"][:])

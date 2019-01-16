@@ -20,9 +20,8 @@ import (
 	"strconv"
 	"time"
 
-	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	sets "k8s.io/apimachinery/pkg/util/sets"
+	"k8s.io/apimachinery/pkg/util/sets"
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -35,14 +34,14 @@ import (
 )
 
 type metrics struct {
-	k8sGardenClient kubernetes.Client
+	k8sGardenClient kubernetes.Interface
 	interval        time.Duration
 }
 
 // InitMetrics takes an Kubernetes <client> for a Garden cluster and initiate the
 // collection of Gardener and Shoot related metrics. It returns a <http.Handler> to
 // register on a webserver, which provides the collected metrics in the Prometheus format.
-func InitMetrics(client kubernetes.Client, scrapeInterval time.Duration) http.Handler {
+func InitMetrics(client kubernetes.Interface, scrapeInterval time.Duration) http.Handler {
 	m := metrics{
 		k8sGardenClient: client,
 		interval:        scrapeInterval,
@@ -74,7 +73,7 @@ func (m metrics) initShootMetrics() {
 	prometheus.Register(metricShootStateConditions)
 
 	m.collect(func() {
-		shoots, err := m.k8sGardenClient.GardenClientset().GardenV1beta1().Shoots(metav1.NamespaceAll).List(metav1.ListOptions{})
+		shoots, err := m.k8sGardenClient.Garden().GardenV1beta1().Shoots(metav1.NamespaceAll).List(metav1.ListOptions{})
 		if err != nil {
 			logger.Logger.Info("Unable to fetch shoots. skip shoot metric set...")
 			return
@@ -133,7 +132,7 @@ func (m metrics) initShootMetrics() {
 
 			for _, condition := range shoot.Status.Conditions {
 				var conditionStatus float64
-				if condition.Status == corev1.ConditionTrue {
+				if condition.Status == gardenv1beta1.ConditionTrue {
 					conditionStatus = 1
 				}
 				metricShootStateConditions.With(prometheus.Labels{

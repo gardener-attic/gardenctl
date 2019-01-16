@@ -18,7 +18,6 @@ import (
 	"github.com/gardener/gardener/pkg/apis/garden"
 	gardeninformers "github.com/gardener/gardener/pkg/client/garden/informers/internalversion"
 	. "github.com/gardener/gardener/plugin/pkg/shoot/seedmanager"
-	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apiserver/pkg/admission"
@@ -63,7 +62,7 @@ var _ = Describe("seedmanager", func() {
 					Conditions: []garden.Condition{
 						{
 							Type:   garden.SeedAvailable,
-							Status: corev1.ConditionTrue,
+							Status: garden.ConditionTrue,
 						},
 					},
 				},
@@ -97,8 +96,8 @@ var _ = Describe("seedmanager", func() {
 			gardenInformerFactory = gardeninformers.NewSharedInformerFactory(nil, 0)
 			admissionHandler.SetInternalGardenInformerFactory(gardenInformerFactory)
 
-			seed = seedBase
-			shoot = shootBase
+			seed = *seedBase.DeepCopy()
+			shoot = *shootBase.DeepCopy()
 		})
 
 		Context("Shoot references a Seed - protection", func() {
@@ -157,6 +156,21 @@ var _ = Describe("seedmanager", func() {
 				err := admissionHandler.Admit(attrs)
 
 				Expect(err).ToNot(HaveOccurred())
+			})
+
+			It("should fail because the networks of the shoot overlaps with the seed networks", func() {
+				shoot.Spec.Cloud.AWS.Networks.K8SNetworks = garden.K8SNetworks{
+					Pods:     &seed.Spec.Networks.Pods,
+					Services: &seed.Spec.Networks.Services,
+					Nodes:    &seed.Spec.Networks.Nodes,
+				}
+				gardenInformerFactory.Garden().InternalVersion().Seeds().Informer().GetStore().Add(&seed)
+				attrs := admission.NewAttributesRecord(&shoot, nil, garden.Kind("Shoot").WithVersion("version"), shoot.Namespace, shoot.Name, garden.Resource("shoots").WithVersion("version"), "", admission.Create, false, nil)
+
+				err := admissionHandler.Admit(attrs)
+
+				Expect(err).To(HaveOccurred())
+				Expect(apierrors.IsForbidden(err)).To(BeTrue())
 			})
 		})
 
@@ -243,7 +257,7 @@ var _ = Describe("seedmanager", func() {
 				seed.Status.Conditions = []garden.Condition{
 					{
 						Type:   garden.SeedAvailable,
-						Status: corev1.ConditionFalse,
+						Status: garden.ConditionFalse,
 					},
 				}
 

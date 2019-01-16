@@ -45,10 +45,10 @@ var showCmd = &cobra.Command{
 		checkError(err)
 		err = yaml.Unmarshal(targetFile, &t)
 		checkError(err)
-		if len(t.Target) < 3 && (args[0] != "operator") && (args[0] != "tf") && (args[0] != "dashboard") && (args[0] != "etcd-operator") {
+		if len(t.Target) < 3 && (args[0] != "operator") && (args[0] != "tf") && (args[0] != "dashboard") && (args[0] != "etcd-operator") && (args[0] != "kibana") {
 			fmt.Println("No shoot targeted")
 			os.Exit(2)
-		} else if (len(t.Target) < 2 && (args[0] == "tf")) || len(t.Target) < 3 && (args[0] == "tf") && (t.Target[1].Kind != "seed") {
+		} else if (len(t.Target) < 2 && (args[0] == "tf")) || len(t.Target) < 3 && (args[0] == "tf") && (t.Target[1].Kind != "seed") || (len(t.Target) < 2 && (args[0] == "kibana")) {
 			fmt.Println("No seed or shoot targeted")
 			os.Exit(2)
 		} else if len(t.Target) == 0 {

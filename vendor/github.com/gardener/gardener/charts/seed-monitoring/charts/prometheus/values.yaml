@@ -16,6 +16,8 @@ ingress:
   # admin : admin base64 encoded
   basicAuthSecret: YWRtaW46JGFwcjEkSWRSaVM5c3MkR3U1MHMxaGUwL2Z6Tzh2elE4S1BEMQ==
 
+kubernetesVersion: 1.13.1
+
 namespace:
   uid: 100c3bb5-48b9-4f88-96ef-48ed557d4212
 
@@ -65,11 +67,22 @@ allowedMetrics:
   kubeETCD3:
   - etcd_disk_backend_commit_duration_seconds_bucket
   - etcd_disk_wal_fsync_duration_seconds_bucket
+  - etcd_mvcc_db_total_size_in_bytes
+  - etcd_network_client_grpc_received_bytes_total
+  - etcd_network_client_grpc_sent_bytes_total
+  - etcd_network_peer_received_bytes_total
+  - etcd_network_peer_sent_bytes_total
   - etcd_server_has_leader
   - etcd_server_leader_changes_seen_total
+  - etcd_server_proposals_applied_total
+  - etcd_server_proposals_committed_total
   - etcd_server_proposals_failed_total
+  - etcd_server_proposals_pending
+  - grpc_server_handled_total
+  - grpc_server_started_total
   - process_max_fds
   - process_open_fds
+  - process_resident_memory_bytes
   kubeScheduler:
   - scheduler_binding_latency_microseconds_bucket
   - scheduler_e2e_scheduling_latency_microseconds_bucket
@@ -77,6 +90,13 @@ allowedMetrics:
   - process_max_fds
   - process_open_fds
   kubeStateMetrics:
+  - kube_daemonset_status_current_number_scheduled
+  - kube_daemonset_metadata_generation
+  - kube_daemonset_status_current_number_scheduled
+  - kube_daemonset_status_number_available
+  - kube_daemonset_status_number_unavailable
+  - kube_daemonset_updated_number_scheduled
+  - kube_daemonset_status_desired_number_scheduled
   - kube_deployment_metadata_generation
   - kube_deployment_spec_replicas
   - kube_deployment_status_observed_generation
@@ -106,6 +126,10 @@ allowedMetrics:
   - kube_statefulset_replicas
   - kube_statefulset_status_observed_generation
   - kube_statefulset_status_replicas
+  - kube_statefulset_status_replicas_available
+  - kube_statefulset_status_replicas_ready
+  - kube_statefulset_status_replicas_unavailable
+  - kube_statefulset_status_replicas_updated
   - process_max_fds
   - process_open_fds
   machineControllerManager:
@@ -148,6 +172,9 @@ seed:
   region: antarctica-1
   profile: penguin
 
+shoot:
+  apiserver: https://api.foo.bar
+
 rules:
   optional:
     cluster-autoscaler:
@@ -160,24 +187,24 @@ rules:
 objectCount: 4
 resources:
   requests:
-  - name: cpu
-    base: 200
-    perObject: 6
-    weight: 5
-    unit: m
-  - name: memory
-    base: 300
-    perObject: 35
-    weight: 5
-    unit: Mi
+    cpu:
+      base: 200
+      perObject: 6
+      weight: 5
+      unit: m
+    memory:
+      base: 360
+      perObject: 35
+      weight: 5
+      unit: Mi
   limits:
-  - name: cpu
-    base: 350
-    perObject: 12
-    weight: 5
-    unit: m
-  - name: memory
-    base: 700
-    perObject: 60
-    weight: 5
-    unit: Mi
+    cpu:
+      base: 350
+      perObject: 12
+      weight: 5
+      unit: m
+    memory:
+      base: 760
+      perObject: 60
+      weight: 5
+      unit: Mi

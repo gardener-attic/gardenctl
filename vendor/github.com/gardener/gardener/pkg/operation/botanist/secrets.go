@@ -76,7 +76,7 @@ func (b *Botanist) generateWantedSecrets(basicAuthAPIServer *secrets.BasicAuth, 
 	var (
 		alertManagerHost = b.Seed.GetIngressFQDN("a", b.Shoot.Info.Name, b.Garden.Project.Name)
 		grafanaHost      = b.Seed.GetIngressFQDN("g", b.Shoot.Info.Name, b.Garden.Project.Name)
-		prometheusHost   = b.Seed.GetIngressFQDN("p", b.Shoot.Info.Name, b.Garden.Project.Name)
+		prometheusHost   = b.ComputePrometheusIngressFQDN()
 
 		apiServerIPAddresses = []net.IP{
 			net.ParseIP("127.0.0.1"),
@@ -89,9 +89,9 @@ func (b *Botanist) generateWantedSecrets(basicAuthAPIServer *secrets.BasicAuth, 
 			b.Shoot.InternalClusterDomain,
 		}, dnsNamesForService("kubernetes", "default")...)
 
-		kubeControllerManagerCertDNSNames = dnsNamesForService("kube-controller-manager", b.Shoot.SeedNamespace)
-
 		cloudControllerManagerCertDNSNames = dnsNamesForService("cloud-controller-manager", b.Shoot.SeedNamespace)
+		kubeControllerManagerCertDNSNames  = dnsNamesForService("kube-controller-manager", b.Shoot.SeedNamespace)
+		kubeSchedulerCertDNSNames          = dnsNamesForService("kube-scheduler", b.Shoot.SeedNamespace)
 
 		etcdCertDNSNames = []string{
 			fmt.Sprintf("etcd-%s-0", common.EtcdRoleMain),
@@ -263,6 +263,21 @@ func (b *Botanist) generateWantedSecrets(basicAuthAPIServer *secrets.BasicAuth, 
 			KubeConfigRequest: &secrets.KubeConfigRequest{
 				ClusterName:  b.Shoot.SeedNamespace,
 				APIServerURL: b.computeAPIServerURL(true, false),
+			},
+		},
+
+		// Secret definition for kube-scheduler server
+		&secrets.ControlPlaneSecretConfig{
+			CertificateSecretConfig: &secrets.CertificateSecretConfig{
+				Name: common.KubeSchedulerServerName,
+
+				CommonName:   common.KubeSchedulerDeploymentName,
+				Organization: nil,
+				DNSNames:     kubeSchedulerCertDNSNames,
+				IPAddresses:  nil,
+
+				CertType:  secrets.ServerCert,
+				SigningCA: certificateAuthorities[caCluster],
 			},
 		},
 
@@ -635,6 +650,25 @@ func (b *Botanist) generateWantedSecrets(basicAuthAPIServer *secrets.BasicAuth, 
 		)
 	}
 
+	certManagementEnabled := features.ControllerFeatureGate.Enabled(features.CertificateManagement)
+	if certManagementEnabled {
+		secretList = append(secretList,
+			&secrets.ControlPlaneSecretConfig{
+				CertificateSecretConfig: &secrets.CertificateSecretConfig{
+					Name: common.CertBrokerResourceName,
+
+					CommonName: "garden.sapcloud.io:system:cert-broker",
+					CertType:   secrets.ClientCert,
+					SigningCA:  certificateAuthorities[caCluster],
+				},
+
+				KubeConfigRequest: &secrets.KubeConfigRequest{
+					ClusterName:  b.Shoot.SeedNamespace,
+					APIServerURL: b.computeAPIServerURL(true, true),
+				},
+			})
+	}
+
 	return secretList, nil
 }
 
@@ -673,10 +707,6 @@ func (b *Botanist) DeploySecrets() error {
 	}
 
 	if err := b.generateShootSecrets(existingSecretsMap, wantedSecretsList); err != nil {
-		return err
-	}
-
-	if err := b.syncShootCredentialsToGarden(); err != nil {
 		return err
 	}
 
@@ -823,7 +853,9 @@ func (b *Botanist) generateShootSecrets(existingSecretsMap map[string]*corev1.Se
 	return nil
 }
 
-func (b *Botanist) syncShootCredentialsToGarden() error {
+// SyncShootCredentialsToGarden copies the kubeconfig generated for the user as well as the SSH keypair to
+// the project namespace in the Garden cluster.
+func (b *Botanist) SyncShootCredentialsToGarden() error {
 	for key, value := range map[string]string{"kubeconfig": "kubecfg", "ssh-keypair": "ssh-keypair"} {
 		secretObj := &corev1.Secret{
 			ObjectMeta: metav1.ObjectMeta{

@@ -98,7 +98,7 @@ spec:
           successThreshold: 1
           timeoutSeconds: 3
         resources:
-{{- include "resource.quantity" .Values | indent 10 }}
+{{- include "util-templates.resource-quantity" .Values | indent 10 }}
         volumeMounts:
         - mountPath: /srv/kubernetes/prometheus-kubelet
           name: prometheus-kubelet
@@ -168,6 +168,9 @@ spec:
         volumeMounts:
         - name: blackbox-exporter-config-prometheus
           mountPath: /vpn
+        - mountPath: /var/run/secrets/blackbox
+          name: prometheus-kubeconfig
+          readOnly: true
       terminationGracePeriodSeconds: 300
       volumes:
       - name: config

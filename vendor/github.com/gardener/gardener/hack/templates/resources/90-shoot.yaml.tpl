@@ -25,22 +25,22 @@
   kubernetesVersion=""
   if cloud == "aws":
     region="eu-west-1"
-    kubernetesVersion="1.12.1"
+    kubernetesVersion="1.13.1"
   elif cloud == "azure" or cloud == "az":
     region="westeurope"
-    kubernetesVersion="1.12.1"
+    kubernetesVersion="1.13.1"
   elif cloud == "gcp":
     region="europe-west1"
-    kubernetesVersion="1.12.1"
+    kubernetesVersion="1.13.1"
   elif cloud == "alicloud":
     region="cn-beijing"
-    kubernetesVersion="1.12.1"
+    kubernetesVersion="1.13.1"
   elif cloud == "openstack" or cloud == "os":
     region="europe-1"
-    kubernetesVersion="1.12.1"
+    kubernetesVersion="1.13.1"
   elif cloud == "local":
     region="local"
-    kubernetesVersion="1.12.1"
+    kubernetesVersion="1.13.1"
 %>---
 apiVersion: garden.sapcloud.io/v1beta1
 kind: Shoot
@@ -202,7 +202,7 @@ spec:
     local:
       endpoint: ${value("spec.cloud.local.endpoint", "localhost:3777")} # endpoint service pointing to gardener-local-provider
       networks:
-        workers: ${value("spec.cloud.local.networks.workers", ["192.168.99.100/24"])}
+        workers: ${value("spec.cloud.local.networks.workers", ["192.168.99.200/25"])}
     % endif
   kubernetes:
     version: ${value("spec.kubernetes.version", kubernetesVersion)}<% kubeAPIServer=value("spec.kubernetes.kubeAPIServer", {}) %><% cloudControllerManager=value("spec.kubernetes.cloudControllerManager", {}) %><% kubeControllerManager=value("spec.kubernetes.kubeControllerManager", {}) %><% kubeScheduler=value("spec.kubernetes.kubeScheduler", {}) %><% kubeProxy=value("spec.kubernetes.kubeProxy", {}) %><% kubelet=value("spec.kubernetes.kubelet", {}) %>
@@ -226,7 +226,6 @@ spec:
   #     issuerURL: https://identity.example.com
   #     usernameClaim: username-claim
   #     usernamePrefix: username-prefix
-  #-#-# only usable with Kubernetes >= 1.10
   #     signingAlgs: RS256,some-other-algorithm
   #-#-# only usable with Kubernetes >= 1.11
   #     requiredClaims:
@@ -296,6 +295,9 @@ spec:
   % else:
 # hibernation:
 #   enabled: false
+#   schedules:
+#   - start: "0 20 * * *" # Start hibernation every day at 8PM
+#     end: "0 6 * * *"    # Stop hibernation every day at 6AM
   % endif
   maintenance:
     timeWindow:

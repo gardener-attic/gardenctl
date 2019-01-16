@@ -29,7 +29,7 @@ import (
 
 // New takes a <k8sGardenClient>, the <k8sGardenInformers> and a <shoot> manifest, and creates a new Shoot representation.
 // It will add the CloudProfile, the cloud provider secret, compute the internal cluster domain and identify the cloud provider.
-func New(k8sGardenClient kubernetes.Client, k8sGardenInformers gardeninformers.Interface, shoot *gardenv1beta1.Shoot, projectName, internalDomain string) (*Shoot, error) {
+func New(k8sGardenClient kubernetes.Interface, k8sGardenInformers gardeninformers.Interface, shoot *gardenv1beta1.Shoot, projectName, internalDomain string) (*Shoot, error) {
 	var (
 		secret *corev1.Secret
 		err    error
@@ -101,6 +101,11 @@ func (s *Shoot) GetIngressFQDN(subDomain string) string {
 // GetWorkers returns a list of worker objects of the worker groups in the Shoot manifest.
 func (s *Shoot) GetWorkers() []gardenv1beta1.Worker {
 	return helper.GetShootCloudProviderWorkers(s.CloudProvider, s.Info)
+}
+
+// GetMachineTypesFromCloudProfile returns a list of machine types in the cloud profile.
+func (s *Shoot) GetMachineTypesFromCloudProfile() []gardenv1beta1.MachineType {
+	return helper.GetMachineTypesFromCloudProfile(s.CloudProvider, s.CloudProfile)
 }
 
 // GetWorkerNames returns a list of names of the worker groups in the Shoot manifest.

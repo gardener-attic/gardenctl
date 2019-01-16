@@ -28,6 +28,12 @@ const (
 	// authenticate against the respective cloud provider (required to store the backups of Shoot clusters).
 	BackupSecretName = "etcd-backup"
 
+	// BackupInfrastructureOperation is a constant for an annotation on a Backupinfrastructure indicating that an operation shall be performed.
+	BackupInfrastructureOperation = "backupinfrastructure.garden.sapcloud.io/operation"
+
+	// BackupInfrastructureReconcile is a constant for an annotation on a Backupinfrastructure indicating that a Backupinfrastructure reconciliation shall be triggered.
+	BackupInfrastructureReconcile = "reconcile"
+
 	// ChartPath is the path to the Helm charts.
 	ChartPath = "charts"
 
@@ -129,6 +135,9 @@ const (
 	//GardenRoleBackup is the value of GardenRole key indicating type 'backup'.
 	GardenRoleBackup = "backup"
 
+	// GardenRoleCertificateManagement is the value of GardenRole key indicating type 'certificate-management'.
+	GardenRoleCertificateManagement = "certificate-management"
+
 	// GardenCreatedBy is the key for an annotation of a Shoot cluster whose value indicates contains the username
 	// of the user that created the resource.
 	GardenCreatedBy = "garden.sapcloud.io/createdBy"
@@ -176,6 +185,9 @@ const (
 
 	// KubeSchedulerDeploymentName is the name of the kube-scheduler deployment.
 	KubeSchedulerDeploymentName = "kube-scheduler"
+
+	// KubeSchedulerServerName is the name of the kube-scheduler server.
+	KubeSchedulerServerName = "kube-scheduler-server"
 
 	// KubeAddonManagerDeploymentName is the name of the kube-addon-manager deployment.
 	KubeAddonManagerDeploymentName = "kube-addon-manager"
@@ -296,8 +308,13 @@ const (
 	// Garden cluster once successfully created.
 	ShootUseAsSeed = "shoot.garden.sapcloud.io/use-as-seed"
 
+	// ShootStatus is a constant for a label on a Shoot resource indicating that the Shoot's health.
+	// Shoot Care controller and can be used to easily identify Shoot clusters with certain states.
+	ShootStatus = "shoot.garden.sapcloud.io/status"
+
 	// ShootUnhealthy is a constant for a label on a Shoot resource indicating that the Shoot is unhealthy. It is set and unset by the
 	// Shoot Care controller and can be used to easily identify Shoot clusters with issues.
+	// Deprecated: Use ShootStatus instead
 	ShootUnhealthy = "shoot.garden.sapcloud.io/unhealthy"
 
 	// ShootOperation is a constant for an annotation on a Shoot in a failed state indicating that an operation shall be performed.
@@ -332,6 +349,16 @@ const (
 	// ignored completely. That means that the Shoot will never reach the reconciliation flow (independent of the operation (create/update/
 	// delete)).
 	ShootIgnore = "shoot.garden.sapcloud.io/ignore"
+
+	// ShootUID is an annotation key for the shoot namespace in the seed cluster,
+	// which value will be the value of `shoot.status.uid`
+	ShootUID = "shoot.garden.sapcloud.io/uid"
+
+	// AnnotateSeedNamespacePrefix is such a prefix so that the shoot namespace in the seed cluster
+	// will be annotated with the annotations of the shoot resource starting with it.
+	// For example, if the shoot is annotated with <AnnotateSeedNamespacePrefix>key=value,
+	// then the namespace in the seed will be annotated with <AnnotateSeedNamespacePrefix>key=value, as well.
+	AnnotateSeedNamespacePrefix = "custom.shoot.sapcloud.io/"
 
 	// BackupNamespacePrefix is a constant for backup namespace created for shoot's backup infrastructure related resources.
 	BackupNamespacePrefix = "backup"
@@ -455,6 +482,18 @@ const (
 
 	// AlpineImageName is the name of alpine image
 	AlpineImageName = "alpine"
+
+	// CertManagerImageName is the name of cert-manager image
+	CertManagerImageName = "cert-manager"
+
+	// CertManagerResourceName is the name of the Cert-Manager resources.
+	CertManagerResourceName = "cert-manager"
+
+	// CertBrokerImageName is the name of cert-broker image.
+	CertBrokerImageName = "cert-broker"
+
+	// CertBrokerResourceName is the name of the Cert-Broker resources.
+	CertBrokerResourceName = "cert-broker"
 )
 
 var (
@@ -529,6 +568,5 @@ var (
 type CloudConfigUserDataConfig struct {
 	ProvisionCloudProviderConfig bool
 	KubeletParameters            []string
-	WorkerNames                  []string
 	HostnameOverride             bool
 }

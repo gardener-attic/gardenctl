@@ -25,11 +25,13 @@ import (
 	gardenv1beta1 "github.com/gardener/gardener/pkg/apis/garden/v1beta1"
 	"github.com/gardener/gardener/pkg/operation/common"
 	"github.com/gardener/gardener/pkg/utils"
-	corev1 "k8s.io/api/core/v1"
 	apiequality "k8s.io/apimachinery/pkg/api/equality"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/validation/field"
 )
+
+// Now determines the current metav1.Time.
+var Now = metav1.Now
 
 // DetermineCloudProviderInProfile takes a CloudProfile specification and returns the cloud provider this profile is used for.
 // If it is not able to determine it, an error will be returned.
@@ -133,6 +135,32 @@ func GetShootCloudProviderWorkers(cloudProvider gardenv1beta1.CloudProvider, sho
 	return workers
 }
 
+// GetMachineTypesFromCloudProfile retrieves list of machine types from cloud profile
+func GetMachineTypesFromCloudProfile(cloudProvider gardenv1beta1.CloudProvider, profile *gardenv1beta1.CloudProfile) []gardenv1beta1.MachineType {
+	var (
+		machineTypes []gardenv1beta1.MachineType
+	)
+
+	switch cloudProvider {
+	case gardenv1beta1.CloudProviderAWS:
+		return profile.Spec.AWS.Constraints.MachineTypes
+	case gardenv1beta1.CloudProviderAzure:
+		return profile.Spec.Azure.Constraints.MachineTypes
+	case gardenv1beta1.CloudProviderGCP:
+		return profile.Spec.GCP.Constraints.MachineTypes
+	case gardenv1beta1.CloudProviderOpenStack:
+		for _, openStackMachineType := range profile.Spec.OpenStack.Constraints.MachineTypes {
+			machineTypes = append(machineTypes, openStackMachineType.MachineType)
+		}
+	case gardenv1beta1.CloudProviderLocal:
+		machineTypes = append(machineTypes, gardenv1beta1.MachineType{
+			Name: "local",
+		})
+	}
+
+	return machineTypes
+}
+
 // DetermineCloudProviderInShoot takes a Shoot cloud object and returns the cloud provider this profile is used for.
 // If it is not able to determine it, an error will be returned.
 func DetermineCloudProviderInShoot(cloudObj gardenv1beta1.Cloud) (gardenv1beta1.CloudProvider, error) {
@@ -182,25 +210,26 @@ func InitCondition(conditionType gardenv1beta1.ConditionType, reason, message st
 	}
 	return &gardenv1beta1.Condition{
 		Type:               conditionType,
-		Status:             corev1.ConditionUnknown,
+		Status:             gardenv1beta1.ConditionUnknown,
 		Reason:             reason,
 		Message:            message,
-		LastTransitionTime: metav1.Now(),
+		LastTransitionTime: Now(),
 	}
 }
 
 // UpdatedCondition updates the properties of one specific condition.
-func UpdatedCondition(condition *gardenv1beta1.Condition, status corev1.ConditionStatus, reason, message string) *gardenv1beta1.Condition {
+func UpdatedCondition(condition *gardenv1beta1.Condition, status gardenv1beta1.ConditionStatus, reason, message string) *gardenv1beta1.Condition {
 	newCondition := &gardenv1beta1.Condition{
 		Type:               condition.Type,
 		Status:             status,
 		Reason:             reason,
 		Message:            message,
 		LastTransitionTime: condition.LastTransitionTime,
+		LastUpdateTime:     Now(),
 	}
 
-	if !apiequality.Semantic.DeepEqual(condition, newCondition) {
-		newCondition.LastTransitionTime = metav1.Now()
+	if condition.Status != status {
+		newCondition.LastTransitionTime = Now()
 	}
 	return newCondition
 }
@@ -210,7 +239,7 @@ func UpdatedConditionUnknownError(condition *gardenv1beta1.Condition, err error)
 }
 
 func UpdatedConditionUnknownErrorMessage(condition *gardenv1beta1.Condition, message string) *gardenv1beta1.Condition {
-	return UpdatedCondition(condition, corev1.ConditionUnknown, gardenv1beta1.ConditionCheckError, message)
+	return UpdatedCondition(condition, gardenv1beta1.ConditionUnknown, gardenv1beta1.ConditionCheckError, message)
 }
 
 // NewConditions initializes the provided conditions based on an existing list. If a condition type does not exist

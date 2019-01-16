@@ -14,7 +14,18 @@ controllers:
   shootCare:
     concurrentSyncs: 5
     syncPeriod: 30s
+    conditionThresholds:
+    - type: APIServerAvailable
+      duration: 1m
+    - type: ControlPlaneHealthy
+      duration: 1m
+    - type: SystemComponentsHealthy
+      duration: 1m
+    - type: EveryNodeReady
+      duration: 5m
   shootMaintenance:
+    concurrentSyncs: 5
+  shootHibernation:
     concurrentSyncs: 5
   shootQuota:
     concurrentSyncs: 5
@@ -47,3 +58,6 @@ server:
       serverKeyPath: dev/tls/gardener-controller-manager.key
 featureGates:
   Logging: true
+  # If enabled you require a proper configuration, please see example/10-secret-certificate-management-config.yaml
+  # and https://gardener.cloud/050-tutorials/content/howto/gardener_certificate_management/.
+  CertificateManagement: false

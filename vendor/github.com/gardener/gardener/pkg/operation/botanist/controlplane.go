@@ -18,13 +18,19 @@ import (
 	"encoding/json"
 	"fmt"
 	"path/filepath"
+	"strings"
 
+	"github.com/gardener/gardener/pkg/features"
+	"github.com/gardener/gardener/pkg/operation/certmanagement"
 	"github.com/gardener/gardener/pkg/operation/common"
 	"github.com/gardener/gardener/pkg/utils"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 )
+
+var chartPathControlPlane = filepath.Join(common.ChartPath, "seed-controlplane", "charts")
 
 // DeployNamespace creates a namespace in the Seed cluster which is used to deploy all the control plane
 // components for the Shoot cluster. Moreover, the cloud provider configuration and all the secrets will be
@@ -32,7 +38,8 @@ import (
 func (b *Botanist) DeployNamespace() error {
 	namespace, err := b.K8sSeedClient.CreateNamespace(&corev1.Namespace{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: b.Shoot.SeedNamespace,
+			Annotations: getShootAnnotations(b.Shoot.Info.Annotations, b.Shoot.Info.Status.UID),
+			Name:        b.Shoot.SeedNamespace,
 			Labels: map[string]string{
 				common.GardenRole: common.GardenRoleShoot,
 			},
@@ -43,6 +50,18 @@ func (b *Botanist) DeployNamespace() error {
 	}
 	b.SeedNamespaceObject = namespace
 	return nil
+}
+
+func getShootAnnotations(annotations map[string]string, uid types.UID) map[string]string {
+	shootAnnotations := map[string]string{
+		common.ShootUID: string(uid),
+	}
+	for key, value := range annotations {
+		if strings.HasPrefix(key, common.AnnotateSeedNamespacePrefix) {
+			shootAnnotations[key] = value
+		}
+	}
+	return shootAnnotations
 }
 
 // DeployBackupNamespace creates a namespace in the Seed cluster from info in shoot object, which is used to deploy all the backup infrastructure
@@ -84,7 +103,7 @@ func (b *Botanist) deleteNamespace(name string) error {
 // DeployCloudMetadataServiceNetworkPolicy creates a global network policy that allows access to the meta-data service only from
 // the cloud-controller-manager and the kube-controller-manager
 func (b *Botanist) DeployCloudMetadataServiceNetworkPolicy() error {
-	return b.ApplyChartSeed(filepath.Join(common.ChartPath, "seed-controlplane", "charts", "cloud-metadata-service"), "cloud-metadata-service", b.Shoot.SeedNamespace, nil, nil)
+	return b.ApplyChartSeed(filepath.Join(chartPathControlPlane, "cloud-metadata-service"), "cloud-metadata-service", b.Shoot.SeedNamespace, nil, nil)
 }
 
 // DeleteKubeAPIServer deletes the kube-apiserver deployment in the Seed cluster which holds the Shoot's control plane.
@@ -138,7 +157,7 @@ func (b *Botanist) DeployBackupInfrastructure() error {
 // DeleteBackupInfrastructure deletes the sets deletionTimestamp on the backupInfrastructure resource in the Garden namespace
 // which is responsible for actual deletion of cloud resource for Shoot's backup infrastructure.
 func (b *Botanist) DeleteBackupInfrastructure() error {
-	err := b.K8sGardenClient.GardenClientset().GardenV1beta1().BackupInfrastructures(b.Shoot.Info.Namespace).Delete(common.GenerateBackupInfrastructureName(b.Shoot.SeedNamespace, b.Shoot.Info.Status.UID), nil)
+	err := b.K8sGardenClient.Garden().GardenV1beta1().BackupInfrastructures(b.Shoot.Info.Namespace).Delete(common.GenerateBackupInfrastructureName(b.Shoot.SeedNamespace, b.Shoot.Info.Status.UID), nil)
 	if apierrors.IsNotFound(err) {
 		return nil
 	}
@@ -186,7 +205,7 @@ func (b *Botanist) DeployMachineControllerManager() error {
 		return err
 	}
 
-	return b.ApplyChartSeed(filepath.Join(common.ChartPath, "seed-controlplane", "charts", name), name, b.Shoot.SeedNamespace, nil, values)
+	return b.ApplyChartSeed(filepath.Join(chartPathControlPlane, name), name, b.Shoot.SeedNamespace, nil, values)
 }
 
 // DeployClusterAutoscaler deploys the cluster-autoscaler into the Shoot namespace in the Seed cluster. It is responsible
@@ -230,7 +249,7 @@ func (b *Botanist) DeployClusterAutoscaler() error {
 		return err
 	}
 
-	return b.ApplyChartSeed(filepath.Join(common.ChartPath, "seed-controlplane", "charts", name), name, b.Shoot.SeedNamespace, nil, values)
+	return b.ApplyChartSeed(filepath.Join(chartPathControlPlane, name), name, b.Shoot.SeedNamespace, nil, values)
 }
 
 // DeleteClusterAutoscaler deletes the cluster-autoscaler deployment in the Seed cluster which holds the Shoot's control plane.
@@ -250,7 +269,7 @@ func (b *Botanist) DeploySeedMonitoring() error {
 		basicAuth        = utils.CreateSHA1Secret(credentials.Data["username"], credentials.Data["password"])
 		alertManagerHost = b.Seed.GetIngressFQDN("a", b.Shoot.Info.Name, b.Garden.Project.Name)
 		grafanaHost      = b.Seed.GetIngressFQDN("g", b.Shoot.Info.Name, b.Garden.Project.Name)
-		prometheusHost   = b.Seed.GetIngressFQDN("p", b.Shoot.Info.Name, b.Garden.Project.Name)
+		prometheusHost   = b.ComputePrometheusIngressFQDN()
 	)
 
 	var (
@@ -269,6 +288,7 @@ func (b *Botanist) DeploySeedMonitoring() error {
 			"replicas": b.Shoot.GetReplicas(1),
 		}
 		prometheusConfig = map[string]interface{}{
+			"kubernetesVersion": b.Shoot.Info.Spec.Kubernetes.Version,
 			"networks": map[string]interface{}{
 				"pods":     b.Shoot.GetPodNetwork(),
 				"services": b.Shoot.GetServiceNetwork(),
@@ -291,7 +311,7 @@ func (b *Botanist) DeploySeedMonitoring() error {
 			"replicas":           b.Shoot.GetReplicas(1),
 			"apiserverServiceIP": common.ComputeClusterIP(b.Shoot.GetServiceNetwork(), 1),
 			"seed": map[string]interface{}{
-				"apiserver": b.K8sSeedClient.GetConfig().Host,
+				"apiserver": b.K8sSeedClient.RESTConfig().Host,
 				"region":    b.Seed.Info.Spec.Cloud.Region,
 				"profile":   b.Seed.Info.Spec.Cloud.Profile,
 			},
@@ -301,6 +321,9 @@ func (b *Botanist) DeploySeedMonitoring() error {
 						"enabled": b.Shoot.WantsClusterAutoscaler,
 					},
 				},
+			},
+			"shoot": map[string]interface{}{
+				"apiserver": b.K8sShootClient.RESTConfig().Host,
 			},
 		}
 		kubeStateMetricsSeedConfig = map[string]interface{}{
@@ -358,9 +381,11 @@ func (b *Botanist) DeploySeedMonitoring() error {
 				secret = b.Secrets[key]
 				to     = string(secret.Data["to"])
 			)
-			if operatedBy, ok := b.Shoot.Info.Annotations[common.GardenOperatedBy]; ok && utils.TestEmail(operatedBy) {
-				to = operatedBy
+			to, ok := b.Shoot.Info.Annotations[common.GardenOperatedBy]
+			if !ok || !utils.TestEmail(to) {
+				continue
 			}
+
 			emailConfigs = append(emailConfigs, map[string]interface{}{
 				"to":            to,
 				"from":          string(secret.Data["from"]),
@@ -370,7 +395,7 @@ func (b *Botanist) DeploySeedMonitoring() error {
 				"auth_password": string(secret.Data["auth_password"]),
 			})
 		}
-		values["alertmanager"].(map[string]interface{})["email_configs"] = emailConfigs
+		values["alertmanager"].(map[string]interface{})["emailConfigs"] = emailConfigs
 	}
 
 	return b.ApplyChartSeed(filepath.Join(common.ChartPath, "seed-monitoring"), fmt.Sprintf("%s-monitoring", b.Shoot.SeedNamespace), b.Shoot.SeedNamespace, nil, values)
@@ -426,22 +451,17 @@ func (b *Botanist) patchDeploymentCloudProviderChecksums(deploymentName string) 
 
 // DeploySeedLogging will install the Helm release "seed-bootstrap/charts/elastic-kibana-curator" in the Seed clusters.
 func (b *Botanist) DeploySeedLogging() error {
+	if !features.ControllerFeatureGate.Enabled(features.Logging) {
+		return common.DeleteLoggingStack(b.K8sSeedClient, b.Shoot.SeedNamespace)
+	}
+
 	var (
 		credentials = b.Secrets["logging-ingress-credentials"]
 		basicAuth   = utils.CreateSHA1Secret(credentials.Data["username"], credentials.Data["password"])
 		kibanaHost  = b.Seed.GetIngressFQDN("k", b.Shoot.Info.Name, b.Garden.Project.Name)
 	)
 
-	var kibanaConfig = map[string]interface{}{
-		"ingress": map[string]interface{}{
-			"basicAuthSecret": basicAuth,
-			"host":            kibanaHost,
-		},
-		"elasticsearchReplicas": b.Shoot.GetReplicas(1),
-		"kibanaReplicas":        b.Shoot.GetReplicas(1),
-	}
-
-	elasticKibanaCurator, err := b.InjectImages(kibanaConfig, b.K8sSeedClient.Version(), b.K8sSeedClient.Version(),
+	images, err := b.InjectImages(map[string]interface{}{}, b.K8sSeedClient.Version(), b.K8sSeedClient.Version(),
 		common.ElasticsearchImageName,
 		common.CuratorImageName,
 		common.KibanaImageName,
@@ -449,6 +469,18 @@ func (b *Botanist) DeploySeedLogging() error {
 	)
 	if err != nil {
 		return err
+	}
+
+	elasticKibanaCurator := map[string]interface{}{
+		"ingress": map[string]interface{}{
+			"basicAuthSecret": basicAuth,
+			"host":            kibanaHost,
+		},
+		"elasticsearch": map[string]interface{}{
+			"elasticsearchReplicas": b.Shoot.GetReplicas(1),
+		},
+		"kibanaReplicas": b.Shoot.GetReplicas(1),
+		"global":         images,
 	}
 
 	return b.ApplyChartSeed(filepath.Join(common.ChartPath, "seed-bootstrap", "charts", "elastic-kibana-curator"), fmt.Sprintf("%s-logging", b.Operation.Shoot.SeedNamespace), b.Operation.Shoot.SeedNamespace, nil, elasticKibanaCurator)
@@ -466,6 +498,88 @@ func (b *Botanist) WakeUpControllers() error {
 		return err
 	}
 	if _, err := b.K8sSeedClient.ScaleDeployment(b.Shoot.SeedNamespace, common.MachineControllerManagerDeploymentName, 1); err != nil {
+		return err
+	}
+	return nil
+}
+
+// DeployCertBroker deploys the Cert-Broker to the Shoot namespace in the Seed.
+func (b *Botanist) DeployCertBroker() error {
+	certManagementEnabled := features.ControllerFeatureGate.Enabled(features.CertificateManagement)
+	if !certManagementEnabled {
+		return b.DeleteCertBroker()
+	}
+
+	certificateManagement, ok := b.Secrets[common.GardenRoleCertificateManagement]
+	if !ok {
+		return fmt.Errorf("certificate management is enabled but no secret with role %s could be found", common.GardenRoleCertificateManagement)
+	}
+	certificateManagementConfig, err := certmanagement.RetrieveCertificateManagementConfig(certificateManagement)
+	if err != nil {
+		return fmt.Errorf("certificate management configuration could not be created %v", err)
+	}
+
+	var dns []interface{}
+	for _, route53Provider := range certificateManagementConfig.Providers.Route53 {
+		route53values := createDNSProviderValuesForDomain(&route53Provider, *b.Shoot.Info.Spec.DNS.Domain)
+		dns = append(dns, route53values...)
+	}
+	for _, cloudDNSProvider := range certificateManagementConfig.Providers.CloudDNS {
+		cloudDNSValues := createDNSProviderValuesForDomain(&cloudDNSProvider, *b.Shoot.Info.Spec.DNS.Domain)
+		dns = append(dns, cloudDNSValues...)
+	}
+
+	certBrokerConfig := map[string]interface{}{
+		"replicas": b.Shoot.GetReplicas(1),
+		"certbroker": map[string]interface{}{
+			"namespace":           b.Shoot.SeedNamespace,
+			"targetClusterSecret": common.CertBrokerResourceName,
+		},
+		"certmanager": map[string]interface{}{
+			"clusterissuer": certificateManagementConfig.ClusterIssuerName,
+			"dns":           dns,
+		},
+		"podAnnotations": map[string]interface{}{
+			"checksum/secret-cert-broker": b.CheckSums[common.CertBrokerResourceName],
+		},
+	}
+
+	certBroker, err := b.InjectImages(certBrokerConfig, b.K8sSeedClient.Version(), b.K8sSeedClient.Version(), common.CertBrokerImageName)
+	if err != nil {
+		return nil
+	}
+
+	return b.ApplyChartSeed(filepath.Join(chartPathControlPlane, "cert-broker"), "cert-broker", b.Shoot.SeedNamespace, nil, certBroker)
+}
+
+func createDNSProviderValuesForDomain(config certmanagement.DNSProviderConfig, shootDomain string) []interface{} {
+	var dnsConfig []interface{}
+	for _, domain := range config.DomainNames() {
+		if strings.HasSuffix(shootDomain, domain) {
+			dnsConfig = append(dnsConfig, map[string]interface{}{
+				"domain":   shootDomain,
+				"provider": config.ProviderName(),
+			})
+		}
+	}
+	return dnsConfig
+}
+
+// DeleteCertBroker delete the Cert-Broker deployment if cert-management in disabled.
+func (b *Botanist) DeleteCertBroker() error {
+	if err := b.K8sSeedClient.DeleteDeployment(b.Shoot.SeedNamespace, common.CertBrokerResourceName); err != nil && !apierrors.IsNotFound(err) {
+		return err
+	}
+	if err := b.K8sSeedClient.DeleteSecret(b.Shoot.SeedNamespace, common.CertBrokerResourceName); err != nil && !apierrors.IsNotFound(err) {
+		return err
+	}
+	if err := b.K8sSeedClient.DeleteServiceAccount(b.Shoot.SeedNamespace, common.CertBrokerResourceName); err != nil && !apierrors.IsNotFound(err) {
+		return err
+	}
+	if err := b.K8sSeedClient.DeleteRoleBinding(b.Shoot.SeedNamespace, common.CertBrokerResourceName); err != nil && !apierrors.IsNotFound(err) {
+		return err
+	}
+	if err := b.K8sSeedClient.DeleteClusterRole(common.CertBrokerResourceName); err != nil && !apierrors.IsNotFound(err) {
 		return err
 	}
 	return nil

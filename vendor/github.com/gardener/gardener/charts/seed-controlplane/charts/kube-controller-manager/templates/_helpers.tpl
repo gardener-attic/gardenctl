@@ -4,21 +4,10 @@
 {{- end }}
 {{- end -}}
 
-{{- define "kube-controller-manager.controllers" -}}
-{{- if and (semverCompare "< 1.10" .Values.kubernetesVersion) (ne .Values.cloudProvider "") }}
-- --controllers=*,bootstrapsigner,tokencleaner,-service,-route
-{{- else }}
-- --controllers=*,bootstrapsigner,tokencleaner
-{{- end }}
+{{- define "kube-controller-manager.port" -}}
+{{- if semverCompare ">= 1.13" .Values.kubernetesVersion -}}
+10257
+{{- else -}}
+10252
 {{- end -}}
-
-{{- define "kube-controller-manager.cloudProviderFlags" -}}
-{{- if (ne .Values.cloudProvider "") }}
-{{- if semverCompare "< 1.10" .Values.kubernetesVersion }}
-- --cloud-provider={{ .Values.cloudProvider }}
-{{- else }}
-- --cloud-provider=external
-- --external-cloud-volume-plugin={{ .Values.cloudProvider }}
-{{- end }}
-{{- end }}
 {{- end -}}
