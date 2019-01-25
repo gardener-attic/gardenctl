@@ -13,7 +13,7 @@
 # limitations under the License.
 
 # build gardenctl binary
-FROM golang:1.10
+FROM golang:1.11.5
 RUN mkdir -p /go/src/github.com/gardener/gardenctl &&\
     cd /go/src/github.com/gardener &&\
     git clone https://github.com/gardener/gardenctl.git &&\
@@ -44,7 +44,7 @@ RUN apt-get --yes update;\
     curl -sL https://github.com/jingweno/ccat/releases/download/v1.1.0/linux-amd64-1.1.0.tar.gz -o ccat.tar.gz && tar -zxvf ccat.tar.gz linux-amd64-1.1.0/ccat && mv linux-amd64-1.1.0/ccat /bin/cat && rm -rf linux-amd64-1.1.0 ccat.tar.gz && chmod 755 /bin/cat;\
     curl -sL http://stedolan.github.io/jq/download/linux64/jq -o /bin/jq && chmod 755 /bin/jq;\
     curl -sL https://github.com/bronze1man/yaml2json/raw/master/builds/linux_amd64/yaml2json -o /bin/yaml2json && chmod 755 /bin/yaml2json;\
-# remove package lists to safe space
+    # remove package lists to safe space
     rm -rf /var/lib/apt/lists
 
 # install network tools
@@ -55,7 +55,7 @@ RUN apt-get --yes update;\
     apt-get --yes install dstat;\
     apt-get --yes install ngrep;\
     apt-get --yes install tcpdump;\
-# remove package lists to safe space
+    # remove package lists to safe space
     rm -rf /var/lib/apt/lists
 
 # install Kubernetes CLI
@@ -81,7 +81,7 @@ RUN apt-get --yes update;\
     curl -sL https://packages.microsoft.com/keys/microsoft.asc | apt-key add -;\
     apt-get --yes update && apt-get --yes install azure-cli;\
     apt-get --yes --purge remove lsb-release gnupg apt-transport-https;\
-# remove package lists to safe space
+    # remove package lists to safe space
     rm -rf /var/lib/apt/lists
 
 # install GCP CLI
@@ -92,7 +92,7 @@ RUN apt-get --yes update;\
     curl -sL https://packages.cloud.google.com/apt/doc/apt-key.gpg | apt-key add -;\
     apt-get --yes update && apt-get --yes install google-cloud-sdk;\
     apt-get --yes --purge remove lsb-release gnupg apt-transport-https;\
-# remove package lists to safe space
+    # remove package lists to safe space
     rm -rf /var/lib/apt/lists
 
 # install OpenStack CLI

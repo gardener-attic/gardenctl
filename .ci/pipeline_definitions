@@ -3,13 +3,13 @@ gardenctl:
   base_definition:
     repo: ~
     traits:
-      version: 
+      version:
         inject_effective_version: true
     steps:
       test:
-        image: 'golang:1.11.0'
+        image: 'golang:1.11.5'
       build:
-        image: 'golang:1.11.0'
+        image: 'golang:1.11.5'
   variants:
     head-update: ~
     pull-request:
