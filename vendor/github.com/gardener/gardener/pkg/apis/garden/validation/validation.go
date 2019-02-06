@@ -26,6 +26,7 @@ import (
 	"github.com/Masterminds/semver"
 	"github.com/gardener/gardener/pkg/apis/garden"
 	"github.com/gardener/gardener/pkg/apis/garden/helper"
+	"github.com/gardener/gardener/pkg/operation/common"
 	"github.com/gardener/gardener/pkg/utils"
 	cidrvalidation "github.com/gardener/gardener/pkg/utils/validation/cidr"
 	"github.com/robfig/cron"
@@ -716,6 +717,7 @@ func ValidateSeed(seed *garden.Seed) field.ErrorList {
 
 	allErrs = append(allErrs, apivalidation.ValidateObjectMeta(&seed.ObjectMeta, false, ValidateName, field.NewPath("metadata"))...)
 	allErrs = append(allErrs, ValidateSeedSpec(&seed.Spec, field.NewPath("spec"))...)
+	allErrs = append(allErrs, ValidateSeedAnnotation(seed.ObjectMeta.Annotations, field.NewPath("metadata", "annotations"))...)
 
 	return allErrs
 }
@@ -728,6 +730,20 @@ func ValidateSeedUpdate(newSeed, oldSeed *garden.Seed) field.ErrorList {
 	allErrs = append(allErrs, apivalidation.ValidateImmutableField(newSeed.Spec.Networks, newSeed.Spec.Networks, field.NewPath("spec", "networks"))...)
 	allErrs = append(allErrs, ValidateSeed(newSeed)...)
 
+	return allErrs
+}
+
+//ValidateSeedAnnotation validates the annotations of seed
+func ValidateSeedAnnotation(annotations map[string]string, fldPath *field.Path) field.ErrorList {
+	allErrs := field.ErrorList{}
+	if annotations != nil {
+		if v, ok := annotations[common.AnnotatePersistentVolumeMinimumSize]; ok {
+			volumeSizeRegex, _ := regexp.Compile(`^(\d)+Gi$`)
+			if !volumeSizeRegex.MatchString(v) {
+				allErrs = append(allErrs, field.Invalid(fldPath.Key(common.AnnotatePersistentVolumeMinimumSize), v, fmt.Sprintf("volume size must match the regex %s", volumeSizeRegex)))
+			}
+		}
+	}
 	return allErrs
 }
 
@@ -973,17 +989,13 @@ func ValidateShootSpec(spec *garden.ShootSpec, fldPath *field.Path) field.ErrorL
 	}
 
 	allErrs = append(allErrs, validateAddons(spec.Addons, fldPath.Child("addons"))...)
-	allErrs = append(allErrs, validateBackup(spec.Backup, fldPath.Child("backup"))...)
-	allErrs = append(allErrs, validateCloud(spec.Cloud, spec.Hibernation, fldPath.Child("cloud"))...)
+	allErrs = append(allErrs, validateCloud(spec.Cloud, fldPath.Child("cloud"))...)
 	allErrs = append(allErrs, validateDNS(spec.DNS, fldPath.Child("dns"))...)
 	allErrs = append(allErrs, validateKubernetes(spec.Kubernetes, fldPath.Child("kubernetes"))...)
 	allErrs = append(allErrs, validateMaintenance(spec.Maintenance, fldPath.Child("maintenance"))...)
 	allErrs = append(allErrs, ValidateHibernation(spec.Hibernation, fldPath.Child("hibernation"))...)
 
 	if spec.DNS.Provider == garden.DNSUnmanaged {
-		if spec.Addons != nil && spec.Addons.Monocular != nil && spec.Addons.Monocular.Enabled {
-			allErrs = append(allErrs, field.Invalid(fldPath.Child("addons", "monocular", "enabled"), spec.Addons.Monocular.Enabled, fmt.Sprintf("`.spec.addons.monocular.enabled` must be false when `.spec.dns.provider` is '%s'", garden.DNSUnmanaged)))
-		}
 		if spec.DNS.HostedZoneID != nil {
 			allErrs = append(allErrs, field.Invalid(fldPath.Child("dns", "hostedZoneID"), spec.DNS.HostedZoneID, fmt.Sprintf("`.spec.dns.hostedZoneID` must not be set when `.spec.dns.provider` is '%s'", garden.DNSUnmanaged)))
 		}
@@ -1059,23 +1071,7 @@ func validateAddons(addons *garden.Addons, fldPath *field.Path) field.ErrorList 
 	return allErrs
 }
 
-func validateBackup(backup *garden.Backup, fldPath *field.Path) field.ErrorList {
-	allErrs := field.ErrorList{}
-
-	if backup == nil {
-		return allErrs
-	}
-	if _, err := cron.ParseStandard(backup.Schedule); err != nil {
-		allErrs = append(allErrs, field.Invalid(fldPath.Child("schedule"), backup.Schedule, "schedule must be in standard cron format"))
-	}
-	if backup.Maximum <= 0 {
-		allErrs = append(allErrs, field.Invalid(fldPath.Child("maximum"), backup.Maximum, "maximum number must be greater than zero"))
-	}
-
-	return allErrs
-}
-
-func validateCloud(cloud garden.Cloud, hibernation *garden.Hibernation, fldPath *field.Path) field.ErrorList {
+func validateCloud(cloud garden.Cloud, fldPath *field.Path) field.ErrorList {
 	allErrs := field.ErrorList{}
 	workerNames := make(map[string]bool)
 

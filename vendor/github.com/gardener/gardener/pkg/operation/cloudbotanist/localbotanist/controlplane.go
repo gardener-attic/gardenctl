@@ -17,6 +17,8 @@ package localbotanist
 import (
 	"fmt"
 	"strings"
+
+	"github.com/gardener/gardener/pkg/operation/common"
 )
 
 // GenerateCloudProviderConfig returns a cloud provider config for the Local cloud provider.
@@ -62,7 +64,12 @@ func (b *LocalBotanist) GenerateKubeAPIServerConfig() (map[string]interface{}, e
 
 // GenerateCloudControllerManagerConfig generates the cloud provider specific values which are required to
 // render the Deployment manifest of the cloud-controller-manager properly.
-func (b *LocalBotanist) GenerateCloudControllerManagerConfig() (map[string]interface{}, error) {
+func (b *LocalBotanist) GenerateCloudControllerManagerConfig() (map[string]interface{}, string, error) {
+	return nil, common.CloudControllerManagerDeploymentName, nil
+}
+
+// GenerateCSIConfig generates the configuration for CSI charts
+func (b *LocalBotanist) GenerateCSIConfig() (map[string]interface{}, error) {
 	return nil, nil
 }
 
@@ -81,8 +88,7 @@ func (b *LocalBotanist) GenerateKubeSchedulerConfig() (map[string]interface{}, e
 // GenerateEtcdBackupConfig returns the etcd backup configuration for the etcd Helm chart.
 func (b *LocalBotanist) GenerateEtcdBackupConfig() (map[string][]byte, map[string]interface{}, error) {
 	backupConfigData := map[string]interface{}{
-		"schedule":         b.Shoot.Info.Spec.Backup.Schedule,
-		"maxBackups":       b.Shoot.Info.Spec.Backup.Maximum,
+		"schedule":         b.Operation.ShootBackup.Schedule,
 		"storageProvider":  "",
 		"storageContainer": "/var/etcd/default.bkp",
 		"env":              []map[string]interface{}{},

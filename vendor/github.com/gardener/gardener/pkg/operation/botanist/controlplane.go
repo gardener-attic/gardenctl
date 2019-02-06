@@ -20,10 +20,12 @@ import (
 	"path/filepath"
 	"strings"
 
+	controllermanagerfeatures "github.com/gardener/gardener/pkg/controllermanager/features"
 	"github.com/gardener/gardener/pkg/features"
 	"github.com/gardener/gardener/pkg/operation/certmanagement"
 	"github.com/gardener/gardener/pkg/operation/common"
 	"github.com/gardener/gardener/pkg/utils"
+
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -279,6 +281,7 @@ func (b *Botanist) DeploySeedMonitoring() error {
 				"host":            alertManagerHost,
 			},
 			"replicas": b.Shoot.GetReplicas(1),
+			"storage":  b.Seed.GetValidVolumeSize("1Gi"),
 		}
 		grafanaConfig = map[string]interface{}{
 			"ingress": map[string]interface{}{
@@ -333,7 +336,6 @@ func (b *Botanist) DeploySeedMonitoring() error {
 			"replicas": b.Shoot.GetReplicas(1),
 		}
 	)
-
 	alertManager, err := b.InjectImages(alertManagerConfig, b.SeedVersion(), b.ShootVersion(), common.AlertManagerImageName, common.ConfigMapReloaderImageName)
 	if err != nil {
 		return err
@@ -451,7 +453,7 @@ func (b *Botanist) patchDeploymentCloudProviderChecksums(deploymentName string) 
 
 // DeploySeedLogging will install the Helm release "seed-bootstrap/charts/elastic-kibana-curator" in the Seed clusters.
 func (b *Botanist) DeploySeedLogging() error {
-	if !features.ControllerFeatureGate.Enabled(features.Logging) {
+	if !controllermanagerfeatures.FeatureGate.Enabled(features.Logging) {
 		return common.DeleteLoggingStack(b.K8sSeedClient, b.Shoot.SeedNamespace)
 	}
 
@@ -479,8 +481,13 @@ func (b *Botanist) DeploySeedLogging() error {
 		"elasticsearch": map[string]interface{}{
 			"elasticsearchReplicas": b.Shoot.GetReplicas(1),
 		},
-		"kibanaReplicas": b.Shoot.GetReplicas(1),
-		"global":         images,
+		"kibana": map[string]interface{}{
+			"replicaCount": b.Shoot.GetReplicas(1),
+		},
+		"curator": map[string]interface{}{
+			"suspend": b.Shoot.IsHibernated,
+		},
+		"global": images,
 	}
 
 	return b.ApplyChartSeed(filepath.Join(common.ChartPath, "seed-bootstrap", "charts", "elastic-kibana-curator"), fmt.Sprintf("%s-logging", b.Operation.Shoot.SeedNamespace), b.Operation.Shoot.SeedNamespace, nil, elasticKibanaCurator)
@@ -505,7 +512,7 @@ func (b *Botanist) WakeUpControllers() error {
 
 // DeployCertBroker deploys the Cert-Broker to the Shoot namespace in the Seed.
 func (b *Botanist) DeployCertBroker() error {
-	certManagementEnabled := features.ControllerFeatureGate.Enabled(features.CertificateManagement)
+	certManagementEnabled := controllermanagerfeatures.FeatureGate.Enabled(features.CertificateManagement)
 	if !certManagementEnabled {
 		return b.DeleteCertBroker()
 	}

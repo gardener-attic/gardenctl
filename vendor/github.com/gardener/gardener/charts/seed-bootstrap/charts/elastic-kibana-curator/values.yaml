@@ -7,7 +7,6 @@ global:
   elasticsearchPorts:
     db: 9200
     transport: 9300
-kibanaPort: 5601
 
 ingress:
   enabled: true
@@ -15,13 +14,11 @@ ingress:
   # admin : admin base64 encoded
   basicAuthSecret: YWRtaW46JGFwcjEkSWRSaVM5c3MkR3U1MHMxaGUwL2Z6Tzh2elE4S1BEMQ==
 
-
-kibanaReplicas: 1
-
 curator:
   objectCount: 1
   # set curator threshold to 1GB
   baseDiskThreshold: 1073741824
+  suspend: false
 
 elasticsearch:
   elasticsearchReplicas: 1
@@ -51,3 +48,15 @@ elasticsearch:
         perObject: 89
         weight: 5
         unit: Mi
+
+kibana:
+  replicaCount: 1
+  service:
+    internalPort: 5601
+  readinessProbe:
+    enabled: true
+    initialDelaySeconds: 5
+    timeoutSeconds: 10
+    periodSeconds: 10
+    successThreshold: 1
+    failureThreshold: 10

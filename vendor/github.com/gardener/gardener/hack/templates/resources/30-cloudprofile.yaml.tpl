@@ -69,8 +69,8 @@ spec:<% caBundle=value("spec.caBundle", "") %>
         % if kubernetesVersions != []:
         ${yaml.dump(kubernetesVersions, width=10000)}
         % else:
-        - 1.13.1
-        - 1.12.4
+        - 1.13.2
+        - 1.12.5
         - 1.11.6
         - 1.10.12
         % endif
@@ -174,8 +174,8 @@ spec:<% caBundle=value("spec.caBundle", "") %>
         % if kubernetesVersions != []:
         ${yaml.dump(kubernetesVersions, width=10000)}
         % else:
-        - 1.13.1
-        - 1.12.4
+        - 1.13.2
+        - 1.12.5
         - 1.11.6
         - 1.10.12
         % endif
@@ -275,8 +275,8 @@ spec:<% caBundle=value("spec.caBundle", "") %>
         % if kubernetesVersions != []:
         ${yaml.dump(kubernetesVersions, width=10000)}
         % else:
-        - 1.13.1
-        - 1.12.4
+        - 1.13.2
+        - 1.12.5
         - 1.11.6
         - 1.10.12
         % endif
@@ -356,7 +356,7 @@ spec:<% caBundle=value("spec.caBundle", "") %>
       % if dnsProviders != []:
       ${yaml.dump(dnsProviders, width=10000)}
       % else:
-      - name: aws-route53
+      - name: alicloud-dns
       - name: unmanaged
       % endif
       kubernetes:<% kubernetesVersions=value("spec.alicloud.constraints.kubernetes.versions", []) %>
@@ -364,10 +364,7 @@ spec:<% caBundle=value("spec.caBundle", "") %>
         ${yaml.dump(kubernetesVersions, width=10000)}
         % else:
         versions:
-        - 1.13.1
-        - 1.12.4
         - 1.11.6
-        - 1.10.12
         % endif
       machineImages:<% machineImages=value("spec.alicloud.constraints.machineImages", []) %>
       % if machineImages != []:
@@ -418,7 +415,7 @@ spec:<% caBundle=value("spec.caBundle", "") %>
         usable: true
         zones:
         - cn-beijing-f
-      - name: ssd
+      - name: cloud_ssd
         class: premium
         usable: false
         zones:
@@ -454,8 +451,8 @@ spec:<% caBundle=value("spec.caBundle", "") %>
         % if kubernetesVersions != []:
         ${yaml.dump(kubernetesVersions, width=10000)}
         % else:
-        - 1.13.1
-        - 1.12.4
+        - 1.13.2
+        - 1.12.5
         - 1.11.6
         - 1.10.12
         % endif

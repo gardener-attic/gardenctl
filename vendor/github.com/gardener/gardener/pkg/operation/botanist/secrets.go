@@ -23,10 +23,12 @@ import (
 
 	"github.com/gardener/gardener/pkg/apis/garden"
 	gardenv1beta1 "github.com/gardener/gardener/pkg/apis/garden/v1beta1"
+	controllermanagerfeatures "github.com/gardener/gardener/pkg/controllermanager/features"
 	"github.com/gardener/gardener/pkg/features"
 	"github.com/gardener/gardener/pkg/operation/common"
 	"github.com/gardener/gardener/pkg/utils"
 	"github.com/gardener/gardener/pkg/utils/secrets"
+
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -610,21 +612,7 @@ func (b *Botanist) generateWantedSecrets(basicAuthAPIServer *secrets.BasicAuth, 
 		},
 	}
 
-	if b.Shoot.MonocularEnabled() && b.Shoot.Info.Spec.DNS.Domain != nil {
-		secretList = append(secretList, &secrets.CertificateSecretConfig{
-			Name: "monocular-tls",
-
-			CommonName:   "monocular",
-			Organization: nil,
-			DNSNames:     []string{b.Shoot.GetIngressFQDN("monocular")},
-			IPAddresses:  nil,
-
-			CertType:  secrets.ServerCert,
-			SigningCA: certificateAuthorities[caCluster],
-		})
-	}
-
-	loggingEnabled := features.ControllerFeatureGate.Enabled(features.Logging)
+	loggingEnabled := controllermanagerfeatures.FeatureGate.Enabled(features.Logging)
 	if loggingEnabled {
 		kibanaHost := b.Seed.GetIngressFQDN("k", b.Shoot.Info.Name, b.Garden.Project.Name)
 		secretList = append(secretList,
@@ -650,7 +638,7 @@ func (b *Botanist) generateWantedSecrets(basicAuthAPIServer *secrets.BasicAuth, 
 		)
 	}
 
-	certManagementEnabled := features.ControllerFeatureGate.Enabled(features.CertificateManagement)
+	certManagementEnabled := controllermanagerfeatures.FeatureGate.Enabled(features.CertificateManagement)
 	if certManagementEnabled {
 		secretList = append(secretList,
 			&secrets.ControlPlaneSecretConfig{

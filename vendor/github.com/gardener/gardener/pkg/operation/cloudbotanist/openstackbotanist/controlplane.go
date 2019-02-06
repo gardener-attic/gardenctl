@@ -138,7 +138,12 @@ func (b *OpenStackBotanist) GenerateKubeAPIServerConfig() (map[string]interface{
 
 // GenerateCloudControllerManagerConfig generates the cloud provider specific values which are required to
 // render the Deployment manifest of the cloud-controller-manager properly.
-func (b *OpenStackBotanist) GenerateCloudControllerManagerConfig() (map[string]interface{}, error) {
+func (b *OpenStackBotanist) GenerateCloudControllerManagerConfig() (map[string]interface{}, string, error) {
+	return nil, common.CloudControllerManagerDeploymentName, nil
+}
+
+// GenerateCSIConfig generates the configuration for CSI charts
+func (b *OpenStackBotanist) GenerateCSIConfig() (map[string]interface{}, error) {
 	return nil, nil
 }
 
@@ -179,8 +184,7 @@ func (b *OpenStackBotanist) GenerateEtcdBackupConfig() (map[string][]byte, map[s
 	}
 
 	backupConfigData := map[string]interface{}{
-		"schedule":         b.Shoot.Info.Spec.Backup.Schedule,
-		"maxBackups":       b.Shoot.Info.Spec.Backup.Maximum,
+		"schedule":         b.Operation.ShootBackup.Schedule,
 		"storageProvider":  "Swift",
 		"storageContainer": stateVariables[containerName],
 		"env": []map[string]interface{}{
