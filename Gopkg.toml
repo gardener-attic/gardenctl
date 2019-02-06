@@ -1,10 +1,6 @@
 [[constraint]]
-  name = "github.com/spf13/cobra"
-  version = "^0.0.1"
-
-[[constraint]]
   name = "github.com/gardener/gardener"
-  version = "^0.16.0"
+  version = "^0.17.1"
 
 [[override]]
   name = "k8s.io/api"
@@ -29,3 +25,7 @@
 [[override]]
   name = "gopkg.in/fsnotify.v1"
   source = "gopkg.in/fsnotify/fsnotify.v1"
+
+[[override]]
+  name = "github.com/spf13/cobra"
+  revision = "7547e83b2d85fd1893c7d76916f67689d761fecb"

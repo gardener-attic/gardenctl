@@ -18,11 +18,10 @@ import (
 	"fmt"
 	"path/filepath"
 
-	kutil "github.com/gardener/gardener/pkg/utils/kubernetes"
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
-
 	"github.com/gardener/gardener/pkg/operation/common"
 	"github.com/gardener/gardener/pkg/operation/terraformer"
+	kutil "github.com/gardener/gardener/pkg/utils/kubernetes"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 )
 
 const cloudProviderConfigTemplate = `
@@ -128,11 +127,11 @@ func (b *AWSBotanist) GenerateKubeAPIServerConfig() (map[string]interface{}, err
 
 // GenerateCloudControllerManagerConfig generates the cloud provider specific values which are required to
 // render the Deployment manifest of the cloud-controller-manager properly.
-func (b *AWSBotanist) GenerateCloudControllerManagerConfig() (map[string]interface{}, error) {
+func (b *AWSBotanist) GenerateCloudControllerManagerConfig() (map[string]interface{}, string, error) {
 	return map[string]interface{}{
 		"configureRoutes": false,
 		"environment":     getAWSCredentialsEnvironment(),
-	}, nil
+	}, common.CloudControllerManagerDeploymentName, nil
 }
 
 // GenerateKubeControllerManagerConfig generates the cloud provider specific values which are required to
@@ -146,6 +145,11 @@ func (b *AWSBotanist) GenerateKubeControllerManagerConfig() (map[string]interfac
 // GenerateKubeSchedulerConfig generates the cloud provider specific values which are required to render the
 // Deployment manifest of the kube-scheduler properly.
 func (b *AWSBotanist) GenerateKubeSchedulerConfig() (map[string]interface{}, error) {
+	return nil, nil
+}
+
+// GenerateCSIConfig generates the configuration for CSI charts
+func (b *AWSBotanist) GenerateCSIConfig() (map[string]interface{}, error) {
 	return nil, nil
 }
 
@@ -196,8 +200,7 @@ func (b *AWSBotanist) GenerateEtcdBackupConfig() (map[string][]byte, map[string]
 	}
 
 	backupConfigData := map[string]interface{}{
-		"schedule":         b.Shoot.Info.Spec.Backup.Schedule,
-		"maxBackups":       b.Shoot.Info.Spec.Backup.Maximum,
+		"schedule":         b.Operation.ShootBackup.Schedule,
 		"storageProvider":  "S3",
 		"storageContainer": stateVariables[bucketName],
 		"backupSecret":     common.BackupSecretName,

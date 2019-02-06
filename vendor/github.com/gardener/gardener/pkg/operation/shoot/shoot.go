@@ -137,6 +137,8 @@ func (s *Shoot) GetK8SNetworks() *gardenv1beta1.K8SNetworks {
 		return &s.Info.Spec.Cloud.GCP.Networks.K8SNetworks
 	case gardenv1beta1.CloudProviderOpenStack:
 		return &s.Info.Spec.Cloud.OpenStack.Networks.K8SNetworks
+	case gardenv1beta1.CloudProviderAlicloud:
+		return &s.Info.Spec.Cloud.Alicloud.Networks.K8SNetworks
 	case gardenv1beta1.CloudProviderLocal:
 		return &s.Info.Spec.Cloud.Local.Networks.K8SNetworks
 	}
@@ -176,6 +178,8 @@ func (s *Shoot) GetMachineImageName() gardenv1beta1.MachineImageName {
 		return s.Info.Spec.Cloud.Azure.MachineImage.Name
 	case gardenv1beta1.CloudProviderGCP:
 		return s.Info.Spec.Cloud.GCP.MachineImage.Name
+	case gardenv1beta1.CloudProviderAlicloud:
+		return s.Info.Spec.Cloud.Alicloud.MachineImage.Name
 	case gardenv1beta1.CloudProviderOpenStack:
 		return s.Info.Spec.Cloud.OpenStack.MachineImage.Name
 	}
@@ -207,11 +211,6 @@ func (s *Shoot) NginxIngressEnabled() bool {
 	return s.Info.Spec.Addons != nil && s.Info.Spec.Addons.NginxIngress != nil && s.Info.Spec.Addons.NginxIngress.Enabled
 }
 
-// MonocularEnabled returns true if the monocular addon is enabled in the Shoot manifest.
-func (s *Shoot) MonocularEnabled() bool {
-	return s.Info.Spec.Addons != nil && s.Info.Spec.Addons.Monocular != nil && s.Info.Spec.Addons.Monocular.Enabled
-}
-
 // ComputeCloudConfigSecretName computes the name for a secret which contains the original cloud config for
 // the worker group with the given <workerName>. It is build by the cloud config secret prefix, the worker
 // name itself and a hash of the minor Kubernetes version of the Shoot cluster.
@@ -225,6 +224,11 @@ func (s *Shoot) GetReplicas(wokenUp int) int {
 		return 0
 	}
 	return wokenUp
+}
+
+// UsesCSI returns whether the given shoot uses CSI volume plugins.
+func (s *Shoot) UsesCSI() bool {
+	return s.CloudProvider == gardenv1beta1.CloudProviderAlicloud
 }
 
 // ComputeTechnicalID determines the technical id of that Shoot which is later used for the name of the

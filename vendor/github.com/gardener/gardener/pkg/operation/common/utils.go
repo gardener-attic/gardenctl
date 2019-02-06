@@ -407,7 +407,7 @@ func ReadLeaderElectionRecord(k8sClient kubernetes.Interface, lock, namespace, n
 }
 
 // GardenerDeletionGracePeriod is the default grace period for Gardener's force deletion methods.
-var GardenerDeletionGracePeriod = 1 * time.Minute
+var GardenerDeletionGracePeriod = 5 * time.Minute
 
 // ShouldObjectBeRemoved determines whether the given object should be gone now.
 // This is calculated by first checking the deletion timestamp of an object: If the deletion timestamp
@@ -431,7 +431,7 @@ func DeleteLoggingStack(k8sClient kubernetes.Interface, namespace string) error 
 
 	var (
 		services     = []string{"kibana-logging", "elasticsearch-logging", "fluentd-es"}
-		configmaps   = []string{"kibana-object-registration", "kibana-saved-objects", "curator-hourly-config", "curator-daily-config", "fluent-bit-config", "fluentd-es-config"}
+		configmaps   = []string{"kibana-object-registration", "kibana-saved-objects", "curator-hourly-config", "curator-daily-config", "fluent-bit-config", "fluentd-es-config", "es-configmap"}
 		statefulsets = []string{"elasticsearch-logging", "fluentd-es"}
 		cronjobs     = []string{"hourly-curator", "daily-curator"}
 	)

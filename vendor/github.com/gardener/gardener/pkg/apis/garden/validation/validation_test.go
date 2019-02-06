@@ -18,12 +18,17 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/gardener/gardener/pkg/operation/common"
 	"k8s.io/apimachinery/pkg/util/sets"
-
 	"github.com/gardener/gardener/pkg/apis/garden"
 	. "github.com/gardener/gardener/pkg/apis/garden/validation"
 	"github.com/gardener/gardener/pkg/utils"
-
+	. "github.com/gardener/gardener/pkg/utils/validation/gomega"
+	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/extensions/table"
+	. "github.com/onsi/gomega"
+	. "github.com/onsi/gomega/gstruct"
+	gomegatypes "github.com/onsi/gomega/types"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -31,13 +36,6 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/apimachinery/pkg/util/validation/field"
-
-	. "github.com/gardener/gardener/pkg/utils/validation/gomega"
-	. "github.com/onsi/ginkgo"
-	. "github.com/onsi/ginkgo/extensions/table"
-	. "github.com/onsi/gomega"
-	. "github.com/onsi/gomega/gstruct"
-	gomegatypes "github.com/onsi/gomega/types"
 )
 
 var _ = Describe("validation", func() {
@@ -2010,6 +2008,9 @@ var _ = Describe("validation", func() {
 			seed = &garden.Seed{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "seed-1",
+					Annotations: map[string]string{
+						common.AnnotatePersistentVolumeMinimumSize: "10Gi",
+					},
 				},
 				Spec: garden.SeedSpec{
 					Cloud: garden.SeedCloud{
@@ -2046,6 +2047,14 @@ var _ = Describe("validation", func() {
 				"Type":  Equal(field.ErrorTypeRequired),
 				"Field": Equal("metadata.name"),
 			}))
+		})
+
+		It("should forbid invalid annotations", func(){
+			seed.ObjectMeta.Annotations = map[string]string{
+				common.AnnotatePersistentVolumeMinimumSize: "10Gix",
+			}
+			errorList := ValidateSeed(seed)
+			Expect(len(errorList)).To(Equal(1))
 		})
 
 		It("should forbid Seed specification with empty or invalid keys", func() {
@@ -2418,16 +2427,12 @@ var _ = Describe("validation", func() {
 			hostedZoneID = "ABCDEF1234"
 			domain       = "my-cluster.example.com"
 
-			nodeCIDR      = garden.CIDR("10.250.0.0/16")
-			podCIDR       = garden.CIDR("100.96.0.0/11")
-			serviceCIDR   = garden.CIDR("100.64.0.0/13")
-			invalidCIDR   = garden.CIDR("invalid-cidr")
-			vpcCIDR       = garden.CIDR("10.0.0.0/8")
-			invalidBackup = &garden.Backup{
-				Schedule: "76 * * * *",
-				Maximum:  0,
-			}
-			addon = garden.Addon{
+			nodeCIDR    = garden.CIDR("10.250.0.0/16")
+			podCIDR     = garden.CIDR("100.96.0.0/11")
+			serviceCIDR = garden.CIDR("100.64.0.0/13")
+			invalidCIDR = garden.CIDR("invalid-cidr")
+			vpcCIDR     = garden.CIDR("10.0.0.0/8")
+			addon       = garden.Addon{
 				Enabled: true,
 			}
 			k8sNetworks = garden.K8SNetworks{
@@ -2517,17 +2522,10 @@ var _ = Describe("validation", func() {
 						NginxIngress: &garden.NginxIngress{
 							Addon: addon,
 						},
-						Monocular: &garden.Monocular{
-							Addon: addon,
-						},
 						KubeLego: &garden.KubeLego{
 							Addon: addon,
 							Mail:  "info@example.com",
 						},
-					},
-					Backup: &garden.Backup{
-						Schedule: "*/1 * * * *",
-						Maximum:  2,
 					},
 					Cloud: garden.Cloud{
 						Profile: "aws-profile",
@@ -2782,22 +2780,6 @@ var _ = Describe("validation", func() {
 				errorList := ValidateShoot(shoot)
 
 				Expect(errorList).To(HaveLen(0))
-			})
-
-			It("should forbid invalid backup configuration", func() {
-				shoot.Spec.Backup = invalidBackup
-
-				errorList := ValidateShoot(shoot)
-
-				Expect(len(errorList)).To(Equal(2))
-				Expect(*errorList[0]).To(MatchFields(IgnoreExtras, Fields{
-					"Type":  Equal(field.ErrorTypeInvalid),
-					"Field": Equal("spec.backup.schedule"),
-				}))
-				Expect(*errorList[1]).To(MatchFields(IgnoreExtras, Fields{
-					"Type":  Equal(field.ErrorTypeInvalid),
-					"Field": Equal("spec.backup.maximum"),
-				}))
 			})
 
 			Context("CIDR", func() {
@@ -3240,22 +3222,6 @@ var _ = Describe("validation", func() {
 				Expect(len(errorList)).To(Equal(0))
 			})
 
-			It("should forbid invalid backup configuration", func() {
-				shoot.Spec.Backup = invalidBackup
-
-				errorList := ValidateShoot(shoot)
-
-				Expect(len(errorList)).To(Equal(2))
-				Expect(*errorList[0]).To(MatchFields(IgnoreExtras, Fields{
-					"Type":  Equal(field.ErrorTypeInvalid),
-					"Field": Equal("spec.backup.schedule"),
-				}))
-				Expect(*errorList[1]).To(MatchFields(IgnoreExtras, Fields{
-					"Type":  Equal(field.ErrorTypeInvalid),
-					"Field": Equal("spec.backup.maximum"),
-				}))
-			})
-
 			It("should forbid specifying a resource group configuration", func() {
 				shoot.Spec.Cloud.Azure.ResourceGroup = &garden.AzureResourceGroup{}
 
@@ -3661,7 +3627,6 @@ var _ = Describe("validation", func() {
 				}
 				shoot.Spec.Cloud.AWS = nil
 				shoot.Spec.Cloud.GCP = gcpCloud
-				shoot.Spec.Backup = nil
 			})
 
 			It("should not return any errors", func() {
@@ -4367,7 +4332,6 @@ var _ = Describe("validation", func() {
 				}
 				shoot.Spec.Cloud.AWS = nil
 				shoot.Spec.Cloud.OpenStack = openStackCloud
-				shoot.Spec.Backup = nil
 			})
 
 			It("should not return any errors", func() {
@@ -4725,22 +4689,8 @@ var _ = Describe("validation", func() {
 				}))
 			})
 
-			It("should forbid monocular when provider equals 'unmanaged'", func() {
-				shoot.Spec.DNS.Provider = garden.DNSUnmanaged
-				shoot.Spec.DNS.HostedZoneID = nil
-
-				errorList := ValidateShoot(shoot)
-
-				Expect(len(errorList)).To(Equal(1))
-				Expect(*errorList[0]).To(MatchFields(IgnoreExtras, Fields{
-					"Type":  Equal(field.ErrorTypeInvalid),
-					"Field": Equal("spec.addons.monocular.enabled"),
-				}))
-			})
-
 			It("should forbid specifying a secret name when provider equals 'unmanaged'", func() {
 				shoot.Spec.DNS.Provider = garden.DNSUnmanaged
-				shoot.Spec.Addons.Monocular.Enabled = false
 				shoot.Spec.DNS.HostedZoneID = nil
 				shoot.Spec.DNS.SecretName = makeStringPointer("")
 
@@ -4755,7 +4705,6 @@ var _ = Describe("validation", func() {
 
 			It("should forbid specifying a hosted zone id when provider equals 'unmanaged'", func() {
 				shoot.Spec.DNS.Provider = garden.DNSUnmanaged
-				shoot.Spec.Addons.Monocular.Enabled = false
 
 				errorList := ValidateShoot(shoot)
 
@@ -4768,7 +4717,6 @@ var _ = Describe("validation", func() {
 
 			It("should forbid specifying a hosted zone id when provider equals 'alicloud-dns'", func() {
 				shoot.Spec.DNS.Provider = garden.DNSAlicloud
-				shoot.Spec.Addons.Monocular.Enabled = false
 
 				errorList := ValidateShoot(shoot)
 

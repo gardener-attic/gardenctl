@@ -5,9 +5,10 @@ images:
   etcd: image-repository:image-tag
   etcd-backup-restore: image-repository:image-tag
 
+storage: 10Gi
+
 backup:
-  schedule: "*/5 * * * *" # cron standard schedule
-  maxBackups: 7 # Maximum number of backups to keep (may change in future)
+  schedule: "0 */24 * * *" # cron standard schedule
   storageProvider: ""  # Abs,Gcs,S3,Swift empty means no backup,
   backupSecret: etcd-backup
   storageContainer: ""
