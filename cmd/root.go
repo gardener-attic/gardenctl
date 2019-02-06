@@ -37,6 +37,49 @@ var RootCmd = &cobra.Command{
 	Long:  ``,
 }
 
+const (
+	bashCompletionFunc = `
+
+__gardenctl_parse() {
+	local gardenctl_out
+	case $1 in
+	garden)
+	if gardenctl_out=$(gardenctl ls gardens | grep -w "\- name:" | awk '{print $3}' 2>/dev/null); then
+		COMPREPLY+=( $( compgen -W "${gardenctl_out[*]}" -- "$cur" ) )
+	fi
+	;;
+	seed)
+	if gardenctl_out=$(gardenctl ls seeds | grep -w "\- seed:" | awk '{print $3}' 2>/dev/null); then
+		COMPREPLY+=( $( compgen -W "${gardenctl_out[*]}" -- "$cur" ) )
+	fi
+	;;
+	project)
+	if gardenctl_out=$(gardenctl ls projects | grep -w "\- project:" | awk '{print $3}' 2>/dev/null); then
+		COMPREPLY+=( $( compgen -W "${gardenctl_out[*]}" -- "$cur" ) )
+	fi
+	;;
+	shoot)
+	if gardenctl_out=$(gardenctl ls shoots | grep -v "projects:" | grep -v "\- project: " | grep -v "seeds:" | grep -v "\- seed: " | grep -v "shoots:" | awk '{print $2}' 2>/dev/null); then
+		COMPREPLY+=( $( compgen -W "${gardenctl_out[*]}" -- "$cur" ) )
+	fi
+	;;
+	*)
+	;;
+	esac
+}
+
+__custom_func() {
+	case ${last_command} in
+	gardenctl_target | gardenctl_get)
+	if [[ ${#nouns[@]} -ne 0 ]]; then
+		__gardenctl_parse "${nouns[${#nouns[@]} -1]}"
+	fi
+	;;
+	esac
+}
+`
+)
+
 // Execute adds all child commands to the root command and sets flags appropriately.
 // This is called by main.main(). It only needs to happen once to the rootCmd.
 func Execute() {
@@ -85,29 +128,30 @@ func init() {
 	RootCmd.AddCommand(infoCmd)
 	RootCmd.AddCommand(versionCmd)
 	RootCmd.SuggestionsMinimumDistance = suggestionsMinimumDistance
+	RootCmd.BashCompletionFunction = bashCompletionFunc
 	RootCmd.SetUsageTemplate(`Usage:{{if .Runnable}}
   {{if .HasAvailableFlags}}{{appendIfNotPresent .UseLine "[flags]"}}{{else}}{{.UseLine}}{{end}}{{end}}{{if .HasAvailableSubCommands}}
   {{ .CommandPath}} [command]{{end}}{{if gt .Aliases 0}}
-	  
+
 Aliases:
   {{.NameAndAliases}}
 {{end}}{{if .HasExample}}
-	  
+
 Examples:
 {{ .Example }}{{end}}{{ if .HasAvailableSubCommands}}
-	  
+
 Available Commands:{{range .Commands}}{{if .IsAvailableCommand}}
   {{rpad .Name .NamePadding }} {{.Short}}{{end}}{{end}}{{end}}{{ if .HasAvailableLocalFlags}}
-	  
+
 Flags:
 {{.LocalFlags.FlagUsages | trimRightSpace}}{{end}}{{ if .HasAvailableInheritedFlags}}
-	  
+
 Global Flags:
 {{.InheritedFlags.FlagUsages | trimRightSpace}}{{end}}{{if .HasHelpSubCommands}}
-	  
+
 Additional help topics:{{range .Commands}}{{if .IsHelpCommand}}
   {{rpad .CommandPath .CommandPathPadding}} {{.Short}}{{end}}{{end}}{{end}}{{ if .HasAvailableSubCommands }}
-	  
+
 Use "{{.CommandPath}} [command] --help" for more information about a command.
 
 Configuration and KUBECONFIG file cache located $GARDENCTL_HOME or ~/.garden (default).
