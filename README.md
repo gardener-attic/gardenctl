@@ -143,6 +143,10 @@ Targets represent a hierarchical structure of resources. On top, there is/are th
 `gardenctl drop`
 - Open a shell to a cluster node <br/>
 `gardenctl shell nodename`
+- Show logs from elasticsearch <br/>
+`gardenctl logs etcd-main --elasticsearch`
+- Show last 100 logs from elasticsearch from the last 2 hours<br/>
+`gardenctl logs etcd-main --elasticsearch --since=2h --tail=100`
 
 ## Advanced usage based on JsonQuery
 
