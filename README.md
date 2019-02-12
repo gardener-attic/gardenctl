@@ -53,15 +53,13 @@ mkdir -p ~/go/src/github.com/gardener
 cd ~/go/src/github.com/gardener
 git clone https://github.com/gardener/gardenctl.git
 cd gardenctl
-go build gardenctl.go
+make build
 ```
 
-In case dependencies are missing, run `dep ensure` and build `gardenctl` again via `go build gardenctl.go`.
-
-After the successful build you get the executable `gardenctl` in the the directory `~/go/src/github.com/gardener/gardenctl`. Next, make it available by moving the executable to e.g. `/usr/local/bin`.
+After successfully building `gardenctl` the executables are in the directory `~/go/src/github.com/gardener/gardenctl/bin/`. Next, move the executable for your architecture to `/usr/local/bin`. In this case for darwin-amd64.
 
 ```bash
-sudo mv gardenctl /usr/local/bin
+sudo mv gardenctl-darwin-amd64 /usr/local/bin/gardenctl
 ```
 
 `gardenctl` supports auto completion. This recommended feature is bound to `gardenctl` or the alias `g`. To configure it you can run:
@@ -71,17 +69,6 @@ echo "gardenctl completion && source gardenctl_completion.sh && rm gardenctl_com
 source ~/.bashrc
 ```
 
-### Via go tools
-First install `gardenctl` via the `go get` command.
-```go
-go get github.com/gardener/gardenctl
-```
-
-It will locate the binary under `$GOPATH/bin/gardenctl`. To generate the auto completion and add it to your `~/.bashrc` file, run the following command:
-
-```bash
-echo "$GOPATH/bin/gardenctl completion && source gardenctl_completion.sh && rm gardenctl_completion.sh" >> ~/.bashrc
-```
 ### Via Dockerfile
 
 First clone the repository as described in the the build step "From source". As next step add the garden "config" file and "clusters" folder with the corresponding kubeconfig files for the garden cluster. Then build the container image via `docker build -t gardener/gardenctl:v1 .` in the cloned repository and run a shell in the image with `docker run -it gardener/gardenctl:v1 /bin/bash`.
@@ -124,7 +111,7 @@ Please keep in mind that the auto completion is bound to `gardenctl` or the alia
 
 # Use gardenctl
 
-`gardenctl` requires the definition of a target, e.g. garden, project, seed or shoot. The following commands, e.g. `gardenctl ls shoots` usees the target definition as a context for getting the information. 
+`gardenctl` requires the definition of a target, e.g. garden, project, seed or shoot. The following commands, e.g. `gardenctl ls shoots` uses the target definition as a context for getting the information. 
 
 Targets represent a hierarchical structure of resources. On top, there is/are the garden/s. E.g. in case you setup a development and a production garden, you would have two entries in your `~/.garden/config`. Via `gardenctl ls gardens` you get a list of the available gardens. 
 
