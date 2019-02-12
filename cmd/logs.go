@@ -18,6 +18,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -33,9 +34,6 @@ const (
 	fourteenDaysInSeconds = 60 * 60 * 24 * 14
 )
 
-// numberOfLines of logfile to return
-var numberOfLines = "400"
-
 //flags passed to the command
 var flags *logFlags
 
@@ -44,7 +42,7 @@ func newCmdLogs() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "logs (gardener-apiserver|gardener-controller-manager|ui|api|scheduler|controller-manager|etcd-operator|etcd-main[etcd backup-restore]|etcd-main-backup|etcd-events[etcd backup-restore]|addon-manager|vpn-seed|vpn-shoot|machine-controller-manager|dashboard|prometheus|grafana|alertmanager|tf (infra|dns|ingress)",
 		Short: "Show and optionally follow logs of given component\n",
-		Long:  `s`,
+		Long:  ``,
 		PreRun: func(cmd *cobra.Command, args []string) {
 			validateArgs(args)
 			validateFlags(flags)
@@ -55,16 +53,16 @@ func newCmdLogs() *cobra.Command {
 		ValidArgs: []string{"gardener-apiserver", "gardener-controller-manager", "ui", "api", "scheduler", "controller-manager", "etcd-operator", "etcd-main", "etcd-events", "addon-manager", "vpn-seed", "vpn-shoot", "auto-node-repair", "dashboard", "prometheus", "grafana", "alertmanager", "tf"},
 		Aliases:   []string{"log"},
 	}
-	cmd.Flags().Int64Var(&flags.tail, "tail", flags.tail, "Lines of recent log file to display. Defaults to 100 with no selector, showing all log lines otherwise 10, if a selector is provided.")
+	cmd.Flags().Int64Var(&flags.tail, "tail", 200, "Lines of recent log file to display. Defaults to 200 with no selector, if a selector is provided takes the number of specified lines.")
 	cmd.Flags().DurationVar(&flags.sinceSeconds, "since", flags.sinceSeconds, "Only return logs newer than a relative duration like 5s, 2m, or 3h. Defaults to all logs. Only one of since-time / since may be used.")
 	cmd.Flags().StringVar(&flags.sinceTime, "since-time", flags.sinceTime, "Only return logs after a specific date (RFC3339). Defaults to all logs. Only one of since-time / since may be used.")
-	cmd.Flags().BoolVar(&flags.elasticsearch, "elasticsearch", flags.elasticsearch, "Show logs from elasticsearch")
+	cmd.Flags().BoolVar(&flags.elasticsearch, "elasticsearch", flags.elasticsearch, "If the flag is set the logs are retrieved and shown from elasticsearch, otherwise from the kubelet.")
 	return cmd
 }
 
 func validateArgs(args []string) {
 	if len(args) < 1 || len(args) > 2 {
-		fmt.Println("Command must be in the format: logs (gardener-apiserver|gardener-controller-manager|ui|api|scheduler|controller-manager|etcd-operator|etcd-main[etcd backup-restore]|etcd-events[etcd backup-restore]|addon-manager|vpn-seed|vpn-shoot|machine-controller-manager|dashboard|prometheus|grafana|alertmanager|tf (infra|dns|ingress) args(--elasticsearch|--tail|--since|--since-time|--timestamps)")
+		fmt.Println("Command must be in the format: logs (gardener-apiserver|gardener-controller-manager|ui|api|scheduler|controller-manager|etcd-operator|etcd-main[etcd backup-restore]|etcd-events[etcd backup-restore]|addon-manager|vpn-seed|vpn-shoot|machine-controller-manager|dashboard|prometheus|grafana|alertmanager|tf (infra|dns|ingress) flags(--elasticsearch|--tail|--since|--since-time|--timestamps)")
 		os.Exit(2)
 	}
 	var t Target
@@ -82,7 +80,6 @@ func validateArgs(args []string) {
 }
 
 func validateFlags(flags *logFlags) {
-
 	if flags.sinceSeconds != 0 && flags.sinceTime != "" {
 		fmt.Println("Logs command can not contains --since and --since-time in the same time")
 		os.Exit(2)
@@ -94,6 +91,9 @@ func validateFlags(flags *logFlags) {
 		} else {
 			flags.sinceSeconds = time.Since(value)
 		}
+	} else if flags.tail < 0 {
+		fmt.Println("Incorrect value for flag: --tail, value must be greater 0")
+		os.Exit(2)
 	}
 }
 
@@ -224,7 +224,7 @@ func buildKubectlCommand(namespace, podName, container string) string {
 	if flags.tail != -1 {
 		command.WriteString(fmt.Sprintf("--tail=%d ", flags.tail))
 	}
-	if flags.sinceSeconds != -0 {
+	if flags.sinceSeconds != 0 {
 		command.WriteString(fmt.Sprintf("--since=%vs ", flags.sinceSeconds.Seconds()))
 	}
 
@@ -248,7 +248,7 @@ func logPodGarden(toMatch, namespace string) {
 	checkError(err)
 	for _, pod := range pods.Items {
 		if strings.Contains(pod.Name, toMatch) {
-			err := ExecCmd(nil, "kubectl logs --tail="+numberOfLines+" "+pod.Name+" -n "+namespace, false, "KUBECONFIG="+KUBECONFIG)
+			err := ExecCmd(nil, "kubectl logs --tail="+strconv.Itoa(int(flags.tail))+" "+pod.Name+" -n "+namespace, false, "KUBECONFIG="+KUBECONFIG)
 			checkError(err)
 			break
 		}
@@ -390,7 +390,7 @@ func logsDashboard() {
 	checkError(err)
 	for _, pod := range pods.Items {
 		if strings.Contains(pod.Name, "kubernetes-dashboard") {
-			err := ExecCmd(nil, "kubectl logs --tail="+numberOfLines+" "+pod.Name+" -n "+namespace, false, "KUBECONFIG="+KUBECONFIG)
+			err := ExecCmd(nil, "kubectl logs --tail="+strconv.Itoa(int(flags.tail))+" "+pod.Name+" -n "+namespace, false, "KUBECONFIG="+KUBECONFIG)
 			checkError(err)
 		}
 	}
@@ -607,7 +607,6 @@ func buildQueries(numberOfRequests int, r rng, sources []string, terms []term) [
 }
 
 func (response logResponse) String() string {
-	//var output strings.Builder
 	output := make([]string, 0)
 	for _, hit := range response.Hits.Hits {
 		source := hit.Source
