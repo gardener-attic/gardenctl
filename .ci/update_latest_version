@@ -1,0 +1,3 @@
+#!/usr/bin/env bash
+
+echo $EFFECTIVE_VERSION > $REPO_DIR/LATEST

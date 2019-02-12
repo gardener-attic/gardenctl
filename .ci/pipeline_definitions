@@ -19,4 +19,5 @@ gardenctl:
       traits:
         version:
           preprocess: 'finalize'
-        release: ~
+        release:
+          release_callback: './ci/update_latest_version'
