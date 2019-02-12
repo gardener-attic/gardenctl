@@ -3,24 +3,39 @@
 ![](https://github.com/gardener/gardenctl/blob/master/logo/logo_gardener_cli_large.png)
 
 [![Go Report Card](https://goreportcard.com/badge/github.com/gardener/gardenctl)](https://goreportcard.com/report/github.com/gardener/gardenctl)
+
 # What is gardenctl?
+
 `gardenctl` is a command-line client for administrative purposes for the [Gardener](https://github.com/gardener/gardener). It facilitates the administration of one or many garden, seed and shoot clusters, e.g. to check for issues which occured in one of these clusters. Details about the concept behind the Gardener are described in the [Gardener wiki](https://github.com/gardener/documentation/wiki/Architecture).
 
 # Installation
-`gardenctl` is shipped for mac and linux in a binary format. The easiest way to install it, is to download the file or curl it.
+
+`gardenctl` is shipped for mac and linux in a binary format. 
+
+1. Download the latest release:
 ```bash
-curl -LO https://github.com/gardener/gardenctl/releases/download/0.1.0/gardenctl-darwin-amd64
+curl -LO https://github.com/gardener/gardenctl/releases/download/$(curl -s https://raw.githubusercontent.com/gardener/gardenctl/master/LATEST)/gardenctl-darwin-amd64
 ```
-After downloading make the gardenctl binary executable.
+
+To download a specific version, replace the `$(curl -s https://raw.githubusercontent.com/gardener/gardenctl/master/LATEST)` portion of the command with the specific version.
+
+For example, to download version 0.7.0 on macOS, type:
+```bash
+curl -LO https://github.com/gardener/gardenctl/releases/download/0.7.0/gardenctl-darwin-amd64
+```
+
+2. Make the gardenctl binary executable.
 ```bash
 chmod +x ./gardenctl-darwin-amd64
 ```
-Move the binary in to your PATH.
+
+3. Move the binary in to your PATH.
 ```bash
 sudo mv ./gardenctl-darwin-amd64 /usr/local/bin/gardenctl
 ```
 
 # How to build it
+
 If no binary builds are available for your platform or architecture, you can build it from source,`go get` it or build the docker image from Dockerfile. Please keep in mind to use an up to date version of [golang](https://golang.org/doc/devel/release.html). 
 
 ## Prerequisites
@@ -121,31 +136,32 @@ Targets represent a hierarchical structure of resources. On top, there is/are th
   Drop the deepest target. 
 
 ## Examples of basic usage:
-- List all seed cluster <br/>
+
+- List all seed cluster  
 `gardenctl ls seeds`
-- List all projects with shoot cluster <br/>
+- List all projects with shoot cluster  
 `gardenctl ls projects`
-- Target a seed cluster <br/>
+- Target a seed cluster  
 `gardenctl target seed-gce-dev`
-- Target a project <br/>
+- Target a project  
 `gardenctl target garden-vora`
-- Open prometheus ui for a targeted shoot-cluster <br/>
+- Open prometheus ui for a targeted shoot-cluster  
 `gardenctl show prometheus`
-- Execute an aws command on a targeted aws shoot cluster <br/>
-`gardenctl aws ec2 describe-instances` or <br/>
+- Execute an aws command on a targeted aws shoot cluster  
+`gardenctl aws ec2 describe-instances` or   
 `gardenctl aws ec2 describe-instances --no-cache` without locally caching credentials
-- Target a shoot directly and get all kube-dns pods in kube-system namespace <br/>
-`gardenctl target myshoot`<br/>
-`gardenctl kubectl get pods -- -n kube-system | grep kube-dns`<br/>
-- List all cluster with an issue <br/>
+- Target a shoot directly and get all kube-dns pods in kube-system namespace  
+`gardenctl target myshoot`  
+`gardenctl kubectl get pods -- -n kube-system | grep kube-dns`  
+- List all cluster with an issue  
 `gardenctl ls issues`
-- Drop an element from target stack <br/>
+- Drop an element from target stack  
 `gardenctl drop`
-- Open a shell to a cluster node <br/>
+- Open a shell to a cluster node  
 `gardenctl shell nodename`
-- Show logs from elasticsearch <br/>
+- Show logs from elasticsearch  
 `gardenctl logs etcd-main --elasticsearch`
-- Show last 100 logs from elasticsearch from the last 2 hours<br/>
+- Show last 100 logs from elasticsearch from the last 2 hours  
 `gardenctl logs etcd-main --elasticsearch --since=2h --tail=100`
 
 ## Advanced usage based on JsonQuery
@@ -186,4 +202,3 @@ gardenctl ls issues -o json | jq '.issues | group_by( .status.lastOperation.stat
 ```bash
 gardenctl ls issues -o json | jq '.issues[] | if (.status.lastOperation.state=="Failed") then . else empty end'
 ```
-
