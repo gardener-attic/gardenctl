@@ -68,7 +68,7 @@ var sshCmd = &cobra.Command{
 			fmt.Printf("Node ips:\n")
 			printNodeIPs(kind)
 			os.Exit(2)
-		} else if len(args) != 1 || !is_ip(args[0]) {
+		} else if len(args) != 1 || !isIP(args[0]) {
 			fmt.Printf("Select a valid node ip\n\n")
 			fmt.Printf("Node ips:\n")
 			printNodeIPs(kind)
@@ -138,7 +138,7 @@ func sshToAWSNode(imageID, nodeIP, path string) {
 	words = strings.Fields(capturedOutput)
 	ip := ""
 	for _, value := range words {
-		if is_ip(value) && !strings.HasPrefix(value, "10.") {
+		if isIP(value) && !strings.HasPrefix(value, "10.") {
 			ip = value
 			break
 		}

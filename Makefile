@@ -29,3 +29,11 @@ build:
 .PHONY: clean
 clean:
 	@rm -rf bin/
+
+.PHONY: check
+check:
+	@.ci/check
+
+.PHONY: test
+test:
+	@.ci/test

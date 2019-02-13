@@ -138,6 +138,7 @@ func ReadTarget(pathTarget string, target *Target) {
 	checkError(err)
 }
 
+// NewConfigFromBytes returns a client from the given kubeconfig path
 func NewConfigFromBytes(kubeconfig string) *restclient.Config {
 	kubecf, err := ioutil.ReadFile(kubeconfig)
 	configObj, err := clientcmd.Load(kubecf)
