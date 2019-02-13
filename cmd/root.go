@@ -21,6 +21,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	// Register clients
 	_ "k8s.io/client-go/plugin/pkg/client/auth/azure"
 	_ "k8s.io/client-go/plugin/pkg/client/auth/gcp"
 )
