@@ -238,9 +238,9 @@ func getTargetType() (string, error) {
 	case 2:
 		if target.Target[1].Kind == "seed" {
 			return "seed", nil
-		} else {
-			return "project", nil
 		}
+
+		return "project", nil
 	case 3:
 		return "shoot", nil
 	default:
@@ -289,7 +289,7 @@ func capture() func() (string, error) {
 	}
 }
 
-func is_ip(word string) bool {
+func isIP(word string) bool {
 	parts := strings.Split(word, ".")
 	if len(parts) < 4 {
 		return false
