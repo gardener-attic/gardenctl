@@ -20,18 +20,19 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"text/tabwriter"
 	"time"
 
+	"github.com/spf13/cobra"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/clientcmd"
-
-	"github.com/spf13/cobra"
 )
 
 const (
-	maxEsLogsPerQuery     = 10000
+	maxEsLogs             = 100000
 	fourteenDaysInSeconds = 60 * 60 * 24 * 14
+	esLogsPerRequest      = 10000
 )
 
 //flags passed to the command
@@ -40,9 +41,8 @@ var flags *logFlags
 func newCmdLogs() *cobra.Command {
 	flags = newLogsFlags()
 	cmd := &cobra.Command{
-		Use:   "logs (gardener-apiserver|gardener-controller-manager|ui|api|scheduler|controller-manager|etcd-operator|etcd-main[etcd backup-restore]|etcd-main-backup|etcd-events[etcd backup-restore]|addon-manager|vpn-seed|vpn-shoot|machine-controller-manager|dashboard|prometheus|grafana|alertmanager|tf (infra|dns|ingress)",
+		Use:   "logs (gardener-apiserver|gardener-controller-manager|gardener-dashboard|api|scheduler|controller-manager|etcd-operator|etcd-main[etcd backup-restore]|etcd-main-backup|etcd-events[etcd backup-restore]|addon-manager|vpn-seed|vpn-shoot|machine-controller-manager|kubernetes-dashboard|prometheus|grafana|alertmanager|tf (infra|dns|ingress)",
 		Short: "Show and optionally follow logs of given component\n",
-		Long:  ``,
 		PreRun: func(cmd *cobra.Command, args []string) {
 			validateArgs(args)
 			validateFlags(flags)
@@ -50,10 +50,10 @@ func newCmdLogs() *cobra.Command {
 		Run: func(cmd *cobra.Command, args []string) {
 			runCommand(args)
 		},
-		ValidArgs: []string{"gardener-apiserver", "gardener-controller-manager", "ui", "api", "scheduler", "controller-manager", "etcd-operator", "etcd-main", "etcd-events", "addon-manager", "vpn-seed", "vpn-shoot", "auto-node-repair", "dashboard", "prometheus", "grafana", "alertmanager", "tf"},
+		ValidArgs: []string{"gardener-apiserver", "gardener-controller-manager", "gardener-dashboard", "api", "scheduler", "controller-manager", "etcd-operator", "etcd-main", "etcd-events", "addon-manager", "vpn-seed", "vpn-shoot", "auto-node-repair", "kubernetes-dashboard", "prometheus", "grafana", "alertmanager", "tf"},
 		Aliases:   []string{"log"},
 	}
-	cmd.Flags().Int64Var(&flags.tail, "tail", 200, "Lines of recent log file to display. Defaults to 200 with no selector, if a selector is provided takes the number of specified lines.")
+	cmd.Flags().Int64Var(&flags.tail, "tail", 200, "Lines of recent log file to display. Defaults to 200 with no selector, if a selector is provided takes the number of specified lines (max 100 000 for elasticsearch).")
 	cmd.Flags().DurationVar(&flags.sinceSeconds, "since", flags.sinceSeconds, "Only return logs newer than a relative duration like 5s, 2m, or 3h. Defaults to all logs. Only one of since-time / since may be used.")
 	cmd.Flags().StringVar(&flags.sinceTime, "since-time", flags.sinceTime, "Only return logs after a specific date (RFC3339). Defaults to all logs. Only one of since-time / since may be used.")
 	cmd.Flags().BoolVar(&flags.elasticsearch, "elasticsearch", flags.elasticsearch, "If the flag is set the logs are retrieved and shown from elasticsearch, otherwise from the kubelet.")
@@ -62,12 +62,12 @@ func newCmdLogs() *cobra.Command {
 
 func validateArgs(args []string) {
 	if len(args) < 1 || len(args) > 2 {
-		fmt.Println("Command must be in the format: logs (gardener-apiserver|gardener-controller-manager|ui|api|scheduler|controller-manager|etcd-operator|etcd-main[etcd backup-restore]|etcd-events[etcd backup-restore]|addon-manager|vpn-seed|vpn-shoot|machine-controller-manager|dashboard|prometheus|grafana|alertmanager|tf (infra|dns|ingress) flags(--elasticsearch|--tail|--since|--since-time|--timestamps)")
+		fmt.Println("Command must be in the format: logs (gardener-apiserver|gardener-controller-manager|gardener-dashboard|api|scheduler|controller-manager|etcd-operator|etcd-main[etcd backup-restore]|etcd-events[etcd backup-restore]|addon-manager|vpn-seed|vpn-shoot|machine-controller-manager|kubernetes-dashboard|prometheus|grafana|alertmanager|tf (infra|dns|ingress) flags(--elasticsearch|--tail|--since|--since-time|--timestamps)")
 		os.Exit(2)
 	}
 	var t Target
 	ReadTarget(pathTarget, &t)
-	if len(t.Target) < 3 && (args[0] != "gardener-apiserver") && (args[0] != "gardener-controller-manager") && (args[0] != "tf") && (args[0] != "dashboard") {
+	if len(t.Target) < 3 && (args[0] != "gardener-apiserver") && (args[0] != "gardener-controller-manager") && (args[0] != "tf") && (args[0] != "kubernetes-dashboard") {
 		fmt.Println("No shoot targeted")
 		os.Exit(2)
 	} else if (len(t.Target) < 2 && (args[0] == "tf")) || len(t.Target) < 3 && (args[0] == "tf") && (t.Target[1].Kind != "seed") {
@@ -94,6 +94,9 @@ func validateFlags(flags *logFlags) {
 	} else if flags.tail < 0 {
 		fmt.Println("Incorrect value for flag: --tail, value must be greater 0")
 		os.Exit(2)
+	} else if flags.elasticsearch && flags.tail > maxEsLogs {
+		fmt.Println(fmt.Sprintf("Maximum number of logs that can be fetched from elasticsearch is %d", maxEsLogs))
+		os.Exit(2)
 	}
 }
 
@@ -103,8 +106,8 @@ func runCommand(args []string) {
 		logsGardenerApiserver()
 	case "gardener-controller-manager":
 		logsGardenerControllerManager()
-	case "ui":
-		logsUI()
+	case "gardener-dashboard":
+		logsGardenerDashboard()
 	case "api":
 		logsAPIServer()
 	case "scheduler":
@@ -135,8 +138,8 @@ func runCommand(args []string) {
 		logsVpnShoot()
 	case "machine-controller-manager":
 		logsMachineControllerManager()
-	case "dashboard":
-		logsDashboard()
+	case "kubernetes-dashboard":
+		logsKubernetesDashboard()
 	case "prometheus":
 		logsPrometheus()
 	case "grafana":
@@ -156,10 +159,10 @@ func runCommand(args []string) {
 		case "ingress":
 			logsIngress()
 		default:
-			fmt.Println("Command must be in the format: logs (gardener-apiserver|gardener-controller-manager|ui|api|scheduler|controller-manager|etcd-operator|etcd-main[etcd backup-restore]|etcd-events[etcd backup-restore]|addon-manager|vpn-seed|vpn-shoot|auto-node-repair|dashboard|prometheus|grafana|alertmanager|tf (infra|dns|ingress)")
+			fmt.Println("Command must be in the format: logs (gardener-apiserver|gardener-controller-manager|gardener-dashboard|api|scheduler|controller-manager|etcd-operator|etcd-main[etcd backup-restore]|etcd-events[etcd backup-restore]|addon-manager|vpn-seed|vpn-shoot|auto-node-repair|kubernetes-dashboard|prometheus|grafana|alertmanager|tf (infra|dns|ingress)")
 		}
 	default:
-		fmt.Println("Command must be in the format: logs (gardener-apiserver|gardener-controller-manager|ui|api|scheduler|controller-manager|etcd-operator|etcd-main[etcd backup-restore]|etcd-events[etcd backup-restore]|addon-manager|vpn-seed|vpn-shoot|auto-node-repair|dashboard|prometheus|grafana|alertmanager|tf (infra|dns|ingress)")
+		fmt.Println("Command must be in the format: logs (gardener-apiserver|gardener-controller-manager|gardener-dashboard|api|scheduler|controller-manager|etcd-operator|etcd-main[etcd backup-restore]|etcd-events[etcd backup-restore]|addon-manager|vpn-seed|vpn-shoot|auto-node-repair|kubernetes-dashboard|prometheus|grafana|alertmanager|tf (infra|dns|ingress)")
 	}
 }
 
@@ -200,27 +203,33 @@ func showLogsFromKubectl(namespace, toMatch, container string) {
 	checkError(err)
 	for _, pod := range pods.Items {
 		if strings.Contains(pod.Name, toMatch) {
-			err := ExecCmd(nil, buildKubectlCommand(namespace, pod.Name, container), false, "KUBECONFIG="+KUBECONFIG)
+			err := ExecCmd(nil, buildKubectlCommand(namespace, pod.Name, container), false)
 			checkError(err)
 		}
 	}
 }
 
 func showLogsFromElasticsearch(namespace, toMatch, container string) {
-	commands := buildElasticsearchCommands(namespace, toMatch, container)
-	for _, command := range commands {
-		output, err := ExecCmdReturnOutput("bash", "-c", fmt.Sprintf("export KUBECONFIG=%s; %s", KUBECONFIG, command))
-		checkError(err)
-		byteOutput := []byte(output)
-		response := new(logResponse)
-		json.Unmarshal(byteOutput, &response)
-		fmt.Println(response)
+	output, err := ExecCmdReturnOutput("bash", "-c", buildElasticsearchCommand(namespace, toMatch, container))
+	checkError(err)
+
+	responses := buildElasticsearchResponses(output, namespace, toMatch, container)
+	var logs strings.Builder
+	for i := len(responses) - 1; i >= 0; i-- {
+		logs.WriteString(responses[i].String())
+		if i != 0 {
+			logs.WriteString("\n")
+		}
 	}
+
+	w := tabwriter.NewWriter(os.Stdout, 6, 4, 3, ' ', 0)
+	fmt.Fprintln(w, logs.String())
+	w.Flush()
 }
 
 func buildKubectlCommand(namespace, podName, container string) string {
 	var command strings.Builder
-	command.WriteString(fmt.Sprintf("kubectl logs %s%s -n %s ", podName, container, namespace))
+	command.WriteString(fmt.Sprintf("kubectl logs --kubeconfig=%s %s%s -n %s ", KUBECONFIG, podName, container, namespace))
 	if flags.tail != -1 {
 		command.WriteString(fmt.Sprintf("--tail=%d ", flags.tail))
 	}
@@ -231,26 +240,86 @@ func buildKubectlCommand(namespace, podName, container string) string {
 	return command.String()
 }
 
-func buildElasticsearchCommands(namespace, podName, container string) []string {
-	queries := createElasticQueries(podName, container)
-	commands := []string{}
-	for _, query := range queries {
-		commands = append(commands, fmt.Sprintf("kubectl exec elasticsearch-logging-0 -n %s -- curl -X GET -H \"Content-Type:application/json\" localhost:9200/_all/_search -d '%s'", namespace, query.toJSON()))
+func buildElasticsearchCommand(namespace, podName, container string) string {
+	query := createElasticQuery(podName, container)
+	bytes, err := json.Marshal(query)
+	checkError(err)
+
+	return fmt.Sprintf("kubectl --kubeconfig=%s exec elasticsearch-logging-0 -n %s -- curl -X GET -H \"Content-Type:application/json\" localhost:9200/_all/_search?scroll=1m -d '%s'", KUBECONFIG, namespace, string(bytes))
+}
+
+func buildElasticsearchScrollCommand(namespace, podName, container, scrollID string) string {
+	request := scrollRequest{Scroll: "1m", ScrollID: scrollID}
+	bytes, err := json.Marshal(request)
+	checkError(err)
+
+	return fmt.Sprintf("kubectl --kubeconfig=%s exec elasticsearch-logging-0 -n %s -- curl -X POST -H \"Content-Type:application/json\" localhost:9200/_search/scroll -d '%s'", KUBECONFIG, namespace, string(bytes))
+}
+
+func buildElasticsearchResponses(output, namespace, toMatch, container string) []logResponse {
+	responses := make([]logResponse, 0)
+
+	byteOutput := []byte(output)
+	var response logResponse
+	err = json.Unmarshal(byteOutput, &response)
+	checkError(err)
+
+	responses = append(responses, response)
+
+	scrollID := response.ScrollID
+	logsToFetch := flags.tail - esLogsPerRequest
+	for logsToFetch > 0 {
+		output, err := ExecCmdReturnOutput("bash", "-c", buildElasticsearchScrollCommand(namespace, toMatch, container, scrollID))
+		checkError(err)
+
+		byteOutput := []byte(output)
+		logResponse := new(logResponse)
+		err = json.Unmarshal(byteOutput, logResponse)
+		checkError(err)
+
+		if int(logsToFetch) < len(logResponse.Hits.Hits) {
+			start := esLogsPerRequest - logsToFetch
+			logResponse.Hits.Hits = logResponse.Hits.Hits[start:]
+		}
+
+		responses = append(responses, *logResponse)
+
+		scrollID = logResponse.ScrollID
+		logsToFetch -= esLogsPerRequest
 	}
-	return commands
+
+	return responses
 }
 
 // logPodGarden print logfiles for garden pods
 func logPodGarden(toMatch, namespace string) {
 	Client, err = clientToTarget("garden")
 	checkError(err)
-	pods, err := Client.CoreV1().Pods(namespace).List(metav1.ListOptions{})
+	showLogsFromKubectl(namespace, toMatch, "")
+}
+
+// logPodGardenImproved print logfiles for garden pods
+func logPodGardenImproved(podName string) {
+	var target Target
+	ReadTarget(pathTarget, &target)
+	Client, err := clientToTarget("garden")
 	checkError(err)
+	pods, err := Client.CoreV1().Pods("garden").List(metav1.ListOptions{})
+	checkError(err)
+	projectName := getProjectForShoot()
 	for _, pod := range pods.Items {
-		if strings.Contains(pod.Name, toMatch) {
-			err := ExecCmd(nil, "kubectl logs --tail="+strconv.Itoa(int(flags.tail))+" "+pod.Name+" -n "+namespace, false, "KUBECONFIG="+KUBECONFIG)
-			checkError(err)
-			break
+		if strings.Contains(pod.Name, podName) {
+			output, err := ExecCmdReturnOutput("bash", "-c", buildKubectlCommand("garden", pod.Name, ""))
+			if err != nil {
+				fmt.Println("Cmd was unsuccessful")
+				os.Exit(2)
+			}
+			lines := strings.Split("time="+output, `time=`)
+			for _, line := range lines {
+				if strings.Contains(line, ("shoot=" + projectName + "/" + target.Target[2].Name)) {
+					fmt.Printf(line)
+				}
+			}
 		}
 	}
 }
@@ -273,34 +342,8 @@ func logsGardenerControllerManager() {
 	}
 }
 
-// logPodGardenImproved print logfiles for garden pods
-func logPodGardenImproved(podName string) {
-	var target Target
-	ReadTarget(pathTarget, &target)
-	Client, err := clientToTarget("garden")
-	checkError(err)
-	pods, err := Client.CoreV1().Pods("garden").List(metav1.ListOptions{})
-	checkError(err)
-	projectName := getProjectForShoot()
-	for _, pod := range pods.Items {
-		if strings.Contains(pod.Name, podName) {
-			output, err := ExecCmdReturnOutput("bash", "-c", "export KUBECONFIG="+KUBECONFIG+"; kubectl logs "+pod.Name+" -n garden")
-			if err != nil {
-				fmt.Println("Cmd was unsuccessful")
-				os.Exit(2)
-			}
-			lines := strings.Split("time="+output, `time=`)
-			for _, line := range lines {
-				if strings.Contains(line, ("shoot=" + projectName + "/" + target.Target[2].Name)) {
-					fmt.Printf(line)
-				}
-			}
-		}
-	}
-}
-
-// logsUI
-func logsUI() {
+// logsGardenerDashboard
+func logsGardenerDashboard() {
 	logPodGarden("gardener", "garden")
 }
 
@@ -362,8 +405,8 @@ func logsMachineControllerManager() {
 	logPod("machine-controller-manager", "seed", "")
 }
 
-// logsDashboard prints the logfile of the dashboard
-func logsDashboard() {
+// logsKubernetesDashboard prints the logfile of the dashboard
+func logsKubernetesDashboard() {
 	var target Target
 	ReadTarget(pathTarget, &target)
 	namespace := "kube-system"
@@ -476,7 +519,8 @@ func newLogsFlags() *logFlags {
 }
 
 type logResponse struct {
-	Hits struct {
+	ScrollID string `json:"_scroll_id"`
+	Hits     struct {
 		Hits []struct {
 			Source struct {
 				Timestamp time.Time `json:"@timestamp"`
@@ -489,129 +533,114 @@ type logResponse struct {
 }
 
 type rng struct {
-	TimeField string
-	Gte       int64
+	Range struct {
+		Timestamp rangeTimestamp `json:"@timestamp"`
+	} `json:"range"`
 }
 
-func (r *rng) toJSON() string {
-	return fmt.Sprintf("\"range\":{\"%s\":{\"gte\":\"now-%ds\"}}", r.TimeField, r.Gte)
+type rangeTimestamp struct {
+	Gte string `json:"gte"`
 }
 
-type term struct {
-	Key   string
-	Value string
+type podNameMatchPhrase struct {
+	MatchPhrase struct {
+		Value string `json:"kubernetes.pod_name"`
+	} `json:"match_phrase"`
 }
 
-func (t *term) toJSON() string {
-	return fmt.Sprintf("\"term\":{\"%s\":\"%s\"}", t.Key, t.Value)
+type containerNameMatchPhrase struct {
+	MatchPhrase struct {
+		Value string `json:"kubernetes.container_name"`
+	} `json:"match_phrase"`
 }
 
-type boolQuery struct {
-	rng  rng
-	term []term
+type mustQuery struct {
+	MatchPhrases []interface{} `json:"must"`
 }
 
-func (f *boolQuery) toJSON() string {
-	var sb strings.Builder
-	sb.WriteString("\"query\":{\"bool\":{\"filter\":[")
-	for _, term := range f.term {
-		sb.WriteString("{")
-		sb.WriteString(term.toJSON())
-		sb.WriteString("},")
-	}
-	sb.WriteString("{")
-	sb.WriteString(f.rng.toJSON())
-	sb.WriteString("}]}}")
-	return sb.String()
+type query struct {
+	Bool struct {
+		MatchPhrases []interface{} `json:"must"`
+	} `json:"bool"`
 }
 
 type requestQuery struct {
-	BoolQuery boolQuery
-	From      int64
-	Size      int64
-	Source    []string
+	Query  query    `json:"query"`
+	Size   int64    `json:"size"`
+	Source []string `json:"_source"`
+	Sort   struct {
+		Timestamp string `json:"@timestamp"`
+	} `json:"sort"`
 }
 
-func (q *requestQuery) toJSON() string {
-	var sb strings.Builder
-	sb.WriteString("{")
-	sb.WriteString(q.BoolQuery.toJSON() + ",")
-	sb.WriteString(fmt.Sprintf("\"from\":%d,", q.From))
-	sb.WriteString(fmt.Sprintf("\"size\":%d,", q.Size))
-	sb.WriteString("\"sort\": {\"@timestamp\": \"desc\"},")
-	sb.WriteString("\"_source\":[")
-	for index, source := range q.Source {
-		if index != 0 {
-			sb.WriteString(", " + fmt.Sprintf("\"%s\"", source))
-		} else {
-			sb.WriteString(fmt.Sprintf("\"%s\"", source))
-		}
-	}
-	sb.WriteString("]}")
-	return sb.String()
+type scrollRequest struct {
+	Scroll   string `json:"scroll"`
+	ScrollID string `json:"scroll_id"`
 }
 
-func newRequestQuery(from, size int64, r rng, sources []string, terms []term) *requestQuery {
+func newRequestQuery(size int64, r rng, sources []string, matchPhrases []interface{}) *requestQuery {
 	q := new(requestQuery)
-	q.BoolQuery.rng = r
-	q.BoolQuery.term = append(q.BoolQuery.term, terms...)
-	q.From = from
+	q.Query.Bool.MatchPhrases = append(q.Query.Bool.MatchPhrases, matchPhrases...)
+	q.Sort.Timestamp = "desc"
 	q.Size = size
 	q.Source = append(q.Source, sources...)
 	return q
 }
 
-func createElasticQueries(podName, containerName string) []requestQuery {
-	podTokens := strings.Split(podName, "-")
-	containerTokens := strings.Split(containerName, "-")
-	terms := setTerms(podTokens, containerTokens)
+func createElasticQuery(podName, containerName string) requestQuery {
+	matchPhrases := buildMatchPhrases(podName, containerName)
 	sources := []string{"@timestamp", "severity", "source", "log"}
-	rng := rng{TimeField: "@timestamp", Gte: int64(flags.sinceSeconds.Seconds())}
-	if rng.Gte == 0 {
-		rng.Gte = fourteenDaysInSeconds
+
+	if flags.sinceSeconds == 0 {
+		flags.sinceSeconds = fourteenDaysInSeconds * time.Second
 	}
 
-	numberOfRequests := int((flags.tail-1)/maxEsLogsPerQuery + 1)
-	queries := buildQueries(numberOfRequests, rng, sources, terms)
-	return queries
+	timestamp := rangeTimestamp{Gte: fmt.Sprintf("now-%ds", int64(flags.sinceSeconds.Seconds()))}
+	rng := rng{
+		Range: struct {
+			Timestamp rangeTimestamp `json:"@timestamp"`
+		}{
+			Timestamp: timestamp,
+		}}
+	matchPhrases = append(matchPhrases, rng)
+
+	min := flags.tail
+	if min > esLogsPerRequest {
+		min = esLogsPerRequest
+	}
+
+	return *newRequestQuery(min, rng, sources, matchPhrases)
 }
 
-func setTerms(podTokens, containerTokens []string) []term {
-	terms := []term{}
-	for _, token := range podTokens {
-		terms = append(terms, term{Key: "kubernetes.pod_name", Value: token})
+func buildMatchPhrases(podName, containerName string) []interface{} {
+	matchPhrases := make([]interface{}, 0)
+	podNameMatchPhrase := podNameMatchPhrase{
+		MatchPhrase: struct {
+			Value string `json:"kubernetes.pod_name"`
+		}{
+			Value: podName,
+		}}
+	matchPhrases = append(matchPhrases, podNameMatchPhrase)
+	if containerName != "" {
+		containerNameMatchPhrase := containerNameMatchPhrase{
+			MatchPhrase: struct {
+				Value string `json:"kubernetes.container_name"`
+			}{
+				Value: containerName,
+			}}
+		matchPhrases = append(matchPhrases, containerNameMatchPhrase)
 	}
-	for _, token := range containerTokens {
-		if token != "" {
-			terms = append(terms, term{Key: "kubernetes.container_name", Value: token})
-		}
-	}
-	return terms
-}
 
-func buildQueries(numberOfRequests int, r rng, sources []string, terms []term) []requestQuery {
-	queries := []requestQuery{}
-	from := int64(0)
-	if flags.tail == -1 {
-		flags.tail = maxEsLogsPerQuery
-	}
-	for i := 0; i < numberOfRequests; i++ {
-		size := flags.tail - from
-		if size > maxEsLogsPerQuery {
-			size = maxEsLogsPerQuery
-		}
-		queries = append(queries, *newRequestQuery(from, size, r, sources, terms))
-		from += (maxEsLogsPerQuery + 1)
-	}
-	return queries
+	return matchPhrases
 }
 
 func (response logResponse) String() string {
-	output := make([]string, 0)
-	for _, hit := range response.Hits.Hits {
-		source := hit.Source
-		output = append(output, fmt.Sprintf("%v %v %v | %v", source.Timestamp, source.Severity, source.Source, source.Log))
+	hits := response.Hits.Hits
+	length := len(hits)
+	output := make([]string, 0, length)
+	for i := length - 1; i >= 0; i-- {
+		source := hits[i].Source
+		output = append(output, strings.TrimSpace(fmt.Sprintf("%v\t%v\t%v\t%v", source.Timestamp, source.Severity, source.Source, source.Log)))
 	}
-
-	return strings.Join(output[:], "\n")
+	return strings.Join(output, "\n")
 }

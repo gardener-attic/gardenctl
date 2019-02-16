@@ -1,4 +1,4 @@
-// Copyright (c) 2018 SAP SE or an SAP affiliate company. All rights reserved. This file is licensed under the Apache Software License, v. 2 except as noted otherwise in the LICENSE file
+// Copyright (c) 2019 SAP SE or an SAP affiliate company. All rights reserved. This file is licensed under the Apache Software License, v. 2 except as noted otherwise in the LICENSE file
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -32,12 +32,12 @@ import (
 
 // showCmd represents the show command
 var showCmd = &cobra.Command{
-	Use:   "show (operator|ui|api|scheduler|controller-manager|etcd-operator|etcd-main|etcd-events|addon-manager|vpn-seed|vpn-shoot|machine-controller-manager|dashboard|prometheus|grafana|alertmanager|tf (infra|dns|ingress))",
+	Use:   "show (operator|gardener-dashboard|api|scheduler|controller-manager|etcd-operator|etcd-main|etcd-events|addon-manager|vpn-seed|vpn-shoot|machine-controller-manager|kubernetes-dashboard|prometheus|grafana|alertmanager|tf (infra|dns|ingress))",
 	Short: `Show details about endpoint/service and open in default browser if applicable`,
 	Long:  ``,
 	Run: func(cmd *cobra.Command, args []string) {
 		if len(args) < 1 || len(args) > 2 {
-			fmt.Println("Command must be in the format: show (operator|ui|api|scheduler|controller-manager|etcd-operator|etcd-main|etcd-events|addon-manager|vpn-seed|vpn-shoot|machine-controller-manager|dashboard|prometheus|grafana|alertmanager|tf (infra|dns|ingress)")
+			fmt.Println("Command must be in the format: show (operator|gardener-dashboard|api|scheduler|controller-manager|etcd-operator|etcd-main|etcd-events|addon-manager|vpn-seed|vpn-shoot|machine-controller-manager|kubernetes-dashboard|prometheus|grafana|alertmanager|tf (infra|dns|ingress)")
 			os.Exit(2)
 		}
 		var t Target
@@ -45,7 +45,7 @@ var showCmd = &cobra.Command{
 		checkError(err)
 		err = yaml.Unmarshal(targetFile, &t)
 		checkError(err)
-		if len(t.Target) < 3 && (args[0] != "operator") && (args[0] != "tf") && (args[0] != "dashboard") && (args[0] != "etcd-operator") && (args[0] != "kibana") {
+		if len(t.Target) < 3 && (args[0] != "operator") && (args[0] != "tf") && (args[0] != "kubernetes-dashboard") && (args[0] != "etcd-operator") && (args[0] != "kibana") {
 			fmt.Println("No shoot targeted")
 			os.Exit(2)
 		} else if (len(t.Target) < 2 && (args[0] == "tf")) || len(t.Target) < 3 && (args[0] == "tf") && (t.Target[1].Kind != "seed") || (len(t.Target) < 2 && (args[0] == "kibana")) {
@@ -58,8 +58,8 @@ var showCmd = &cobra.Command{
 		switch args[0] {
 		case "operator":
 			showOperator()
-		case "ui":
-			showUI()
+		case "gardener-dashboard":
+			showGardenerDashboard()
 		case "api":
 			showAPIServer()
 		case "scheduler":
@@ -80,8 +80,8 @@ var showCmd = &cobra.Command{
 			showVpnShoot()
 		case "machine-controller-manager":
 			showMachineControllerManager()
-		case "dashboard":
-			showDashboard()
+		case "kubernetes-dashboard":
+			showKubernetesDashboard()
 		case "prometheus":
 			showPrometheus()
 		case "grafana":
@@ -103,13 +103,13 @@ var showCmd = &cobra.Command{
 			case "ingress":
 				showIngress()
 			default:
-				fmt.Println("Command must be in the format: show (operator|ui|api|scheduler|controller-manager|etcd-operator|etcd-main|etcd-events|addon-manager|vpn-seed|vpn-shoot|machine-controller-manager|dashboard|prometheus|grafana|alertmanager|tf (infra|dns|ingress)")
+				fmt.Println("Command must be in the format: show (operator|gardener-dashboard|api|scheduler|controller-manager|etcd-operator|etcd-main|etcd-events|addon-manager|vpn-seed|vpn-shoot|machine-controller-manager|kubernetes-dashboard|prometheus|grafana|alertmanager|tf (infra|dns|ingress)")
 			}
 		default:
-			fmt.Println("Command must be in the format: show (operator|ui|api|scheduler|controller-manager|etcd-operator|etcd-main|etcd-events|addon-manager|vpn-seed|vpn-shoot|machine-controller-manager|dashboard|prometheus|grafana|alertmanager|tf (infra|dns|ingress)")
+			fmt.Println("Command must be in the format: show (operator|gardener-dashboard|api|scheduler|controller-manager|etcd-operator|etcd-main|etcd-events|addon-manager|vpn-seed|vpn-shoot|machine-controller-manager|kubernetes-dashboard|prometheus|grafana|alertmanager|tf (infra|dns|ingress)")
 		}
 	},
-	ValidArgs: []string{"operator", "ui", "api", "scheduler", "controller-manager", "etcd-operator", "etcd-main", "etcd-events", "addon-manager", "vpn-seed", "vpn-shoot", "machine-controller-manager", "dashboard", "prometheus", "grafana", "alertmanager", "tf"},
+	ValidArgs: []string{"operator", "gardener-dashboard", "api", "scheduler", "controller-manager", "etcd-operator", "etcd-main", "etcd-events", "addon-manager", "vpn-seed", "vpn-shoot", "machine-controller-manager", "kubernetes-dashboard", "prometheus", "grafana", "alertmanager", "tf"},
 }
 
 func init() {
@@ -135,7 +135,7 @@ func showOperator() {
 }
 
 // showUI opens the gardener landing page
-func showUI() {
+func showGardenerDashboard() {
 	showPodGarden("gardener-dashboard", "garden")
 	output, err := ExecCmdReturnOutput("bash", "-c", "export KUBECONFIG="+KUBECONFIG+"; kubectl get ingress gardener-dashboard-ingress -n garden")
 	if err != nil {
@@ -284,8 +284,8 @@ func showMachineControllerManager() {
 	showPod("machine-controller-manager", "seed")
 }
 
-// showDashboard shows the dashboard for the targeted cluster
-func showDashboard() {
+// showKubernetesDashboard shows the kubernetes dashboard for the targeted cluster
+func showKubernetesDashboard() {
 	var target Target
 	ReadTarget(pathTarget, &target)
 	if len(target.Target) == 1 {
