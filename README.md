@@ -59,7 +59,7 @@ make build
 After successfully building `gardenctl` the executables are in the directory `~/go/src/github.com/gardener/gardenctl/bin/`. Next, move the executable for your architecture to `/usr/local/bin`. In this case for darwin-amd64.
 
 ```bash
-sudo mv gardenctl-darwin-amd64 /usr/local/bin/gardenctl
+sudo mv bin/darwin-amd64/gardenctl-darwin-amd64 /usr/local/bin/gardenctl
 ```
 
 `gardenctl` supports auto completion. This recommended feature is bound to `gardenctl` or the alias `g`. To configure it you can run:
