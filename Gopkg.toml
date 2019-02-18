@@ -29,3 +29,8 @@
 [[override]]
   name = "github.com/spf13/cobra"
   revision = "7547e83b2d85fd1893c7d76916f67689d761fecb"
+
+[prune]
+  unused-packages = true
+  go-tests = true
+  non-go = true
