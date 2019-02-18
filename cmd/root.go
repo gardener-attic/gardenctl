@@ -69,7 +69,7 @@ __gardenctl_parse() {
 	esac
 }
 
-__custom_func() {
+__gardenctl_custom_func() {
 	case ${last_command} in
 	gardenctl_target | gardenctl_get)
 	if [[ ${#nouns[@]} -ne 0 ]]; then
