@@ -1,5 +1,0 @@
-gardener:
-  variants:
-    head-update:
-      traits:
-        version: ~
