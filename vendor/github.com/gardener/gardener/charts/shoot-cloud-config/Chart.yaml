@@ -1,4 +1,0 @@
-apiVersion: v1
-description: Meta chart for cloud-config user data
-name: shoot-cloud-config
-version: 0.1.0
