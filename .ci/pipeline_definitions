@@ -22,4 +22,4 @@ gardenctl:
         version:
           preprocess: 'finalize'
         release:
-          release_callback: './ci/update_latest_version'
+          release_callback: './.ci/update_latest_version'
