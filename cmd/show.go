@@ -21,10 +21,9 @@ import (
 	"strconv"
 	"strings"
 
-	yaml "gopkg.in/yaml.v2"
-
 	"github.com/pkg/browser"
 	"github.com/spf13/cobra"
+	yaml "gopkg.in/yaml.v2"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/clientcmd"
@@ -174,7 +173,14 @@ func showUI() {
 func showPod(toMatch string, toTarget string) {
 	var target Target
 	ReadTarget(pathTarget, &target)
-	namespace := getSeedNamespaceNameForShoot(target.Target[2].Name)
+
+	var namespace string
+	if len(target.Target) == 2 {
+		namespace = "garden"
+	} else if len(target.Target) == 3 {
+		namespace = getSeedNamespaceNameForShoot(target.Target[2].Name)
+	}
+
 	Client, err = clientToTarget("seed")
 	checkError(err)
 	if toTarget == "shoot" {
@@ -353,7 +359,18 @@ func showGrafana() {
 func showKibana() {
 	username, password = getLoggingCredentials()
 	showPod("kibana", "seed")
-	output, err := ExecCmdReturnOutput("bash", "-c", "export KUBECONFIG="+KUBECONFIG+"; kubectl get ingress kibana -n "+getShootClusterName())
+
+	var target Target
+	ReadTarget(pathTarget, &target)
+
+	var namespace string
+	if len(target.Target) == 2 {
+		namespace = "garden"
+	} else if len(target.Target) == 3 {
+		namespace = getShootClusterName()
+	}
+
+	output, err := ExecCmdReturnOutput("bash", "-c", "export KUBECONFIG="+KUBECONFIG+"; kubectl get ingress kibana -n "+namespace)
 	if err != nil {
 		fmt.Println("Cmd was unsuccessful")
 		os.Exit(2)
