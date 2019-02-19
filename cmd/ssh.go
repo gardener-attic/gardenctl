@@ -149,7 +149,7 @@ func sshToAWSNode(imageID, nodeIP, path string) {
 	fmt.Printf("Cleanup: gardenctl aws ec2 terminate-instances -- --instance-ids %s\n", instanceID)
 }
 
-// sshToGCPNode provides cmds to ssh to aws via a public ip and clean it up afterwards
+// sshToGCPNode provides cmds to ssh to gcp via a public ip and clean it up afterwards
 func sshToGCPNode(nodeIP, path string) {
 	securityGroupID, err := ExecCmdReturnOutput("bash", "-c", "cat "+path+" | jq -r '.modules[].resources[\"google_compute_firewall.rule-allow-external-access\"].primary[\"id\"]'")
 	checkError(err)
@@ -161,7 +161,7 @@ func sshToGCPNode(nodeIP, path string) {
 	fmt.Printf("Cleanup: gardenctl gcloud compute firewall-rules update %s -- --allow tcp:80,tcp:443\n", securityGroupID)
 }
 
-// sshToAZNode provides cmds to ssh to aws via a public ip and clean it up afterwards
+// sshToAZNode provides cmds to ssh to az via a public ip and clean it up afterwards
 func sshToAZNode(nodeIP, path string) {
 	name := "sshIP"
 	resourceGroup, err := ExecCmdReturnOutput("bash", "-c", "cat "+path+" | jq -r '.modules[].outputs.resourceGroupName.value'")
