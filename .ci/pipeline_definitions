@@ -13,7 +13,9 @@ gardenctl:
       build:
         image: 'golang:1.12.0'
   variants:
-    head-update: ~
+    head-update:
+      traits:
+        draft_release: ~
     pull-request:
       traits:
         pull-request: ~
@@ -23,3 +25,9 @@ gardenctl:
           preprocess: 'finalize'
         release:
           release_callback: './.ci/update_latest_version'
+        slack:
+          default_channel: 'internal_scp_workspace'
+          channel_cfgs:
+            internal_scp_workspace:
+              channel_name: 'k8s-op-of-the-week'
+              slack_cfg_name: 'scp_workspace'
