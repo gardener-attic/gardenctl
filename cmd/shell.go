@@ -112,6 +112,9 @@ func shellToNode(name string) {
 	manifest = strings.Replace(manifest, "HOSTNAME", hostname, -1)
 	err = ExecCmd([]byte(manifest), "kubectl -n "+namespace+" apply -f -", false, "KUBECONFIG="+getKubeConfigOfClusterType(typeName))
 	checkError(err)
+
+	Client, err = clientToTarget(typeName)
+	checkError(err)
 	for true {
 		pod, err := Client.CoreV1().Pods(namespace).Get(podName, metav1.GetOptions{})
 		if err != nil {
