@@ -28,8 +28,8 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-// removeOldEntryAWS removes old credential entry for gardenctl if existing
-func removeOldEntryAWS(filePath, contains string) {
+// removeOldEntry removes old credential and config entry for gardenctl if existing
+func removeOldEntry(filePath, contains string) {
 	input, err := ioutil.ReadFile(filePath)
 	checkError(err)
 	lines := strings.Split(string(input), "\n")
@@ -86,8 +86,8 @@ func operate(provider, arguments string) {
 			}
 			CreateFileIfNotExists(pathGardenHome+"/"+awsPathCredentials, 0644)
 			CreateFileIfNotExists(pathGardenHome+"/"+awsPathConfig, 0644)
-			removeOldEntryAWS(pathGardenHome+"/"+awsPathCredentials, "[gardenctl]")
-			removeOldEntryAWS(pathGardenHome+"/"+awsPathConfig, "[profile gardenctl]")
+			removeOldEntry(pathGardenHome+"/"+awsPathCredentials, "[gardenctl]")
+			removeOldEntry(pathGardenHome+"/"+awsPathConfig, "[profile gardenctl]")
 			credentials := "[gardenctl]\n" + "aws_access_key_id=" + string(accessKeyID[:]) + "\n" + "aws_secret_access_key=" + string(secretAccessKey[:]) + "\n"
 			originalCredentials, err := os.OpenFile(pathGardenHome+"/"+awsPathCredentials, os.O_APPEND|os.O_WRONLY, 0644)
 			checkError(err)
@@ -220,6 +220,46 @@ func operate(provider, arguments string) {
 		}
 		err = ExecCmd(nil, arguments, false, "OS_IDENTITY_API_VERSION=3", "OS_AUTH_VERSION=3", "OS_AUTH_STRATEGY=keystone", "OS_AUTH_URL="+authURL, "OS_TENANT_NAME="+string(tenantName[:]),
 			"OS_PROJECT_DOMAIN_NAME="+string(domainName[:]), "OS_USER_DOMAIN_NAME="+string(domainName[:]), "OS_USERNAME="+string(username[:]), "OS_PASSWORD="+string(password[:]), "OS_REGION_NAME="+region)
+		if err != nil {
+			os.Exit(2)
+		}
+	case "aliyun":
+		accessKeyID := []byte(secret.Data["accessKeyID"])
+		accessKeySecret := []byte(secret.Data["accessKeySecret"])
+		if !cachevar {
+			aliyunPathCredentials := ""
+			aliyunPathConfig := ""
+			if target.Target[1].Kind == "project" {
+				CreateDir(pathGardenHome+"/cache/projects/"+target.Target[1].Name+"/"+target.Target[2].Name+"/.aliyun", 0751)
+				aliyunPathCredentials = "cache/projects/" + target.Target[1].Name + "/" + target.Target[2].Name + "/.aliyun/credentials"
+				aliyunPathConfig = "cache/projects/" + target.Target[1].Name + "/" + target.Target[2].Name + "/.aliyun/config"
+			} else if target.Target[1].Kind == "seed" {
+				CreateDir(pathGardenHome+"/cache/seeds/"+target.Target[1].Name+"/"+target.Target[2].Name+"/.aliyun", 0751)
+				aliyunPathCredentials = "cache/seeds/" + target.Target[1].Name + "/" + target.Target[2].Name + "/.aliyun/credentials"
+				aliyunPathConfig = "cache/seeds/" + target.Target[1].Name + "/" + target.Target[2].Name + "/.aliyun/config"
+			}
+			CreateFileIfNotExists(pathGardenHome+"/"+aliyunPathCredentials, 0644)
+			CreateFileIfNotExists(pathGardenHome+"/"+aliyunPathConfig, 0644)
+			removeOldEntry(pathGardenHome+"/"+aliyunPathCredentials, "[gardenctl]")
+			removeOldEntry(pathGardenHome+"/"+aliyunPathConfig, "[profile gardenctl]")
+			credentials := "[gardenctl]\n" + "accessKeyId=" + string(accessKeyID[:]) + "\n" + "accessKeySecret=" + string(accessKeySecret[:]) + "\n"
+			originalCredentials, err := os.OpenFile(pathGardenHome+"/"+aliyunPathCredentials, os.O_APPEND|os.O_WRONLY, 0644)
+			checkError(err)
+			defer originalCredentials.Close()
+			_, err = originalCredentials.WriteString(credentials)
+			checkError(err)
+			config := "[profile gardenctl]\n" + "region=" + region + "\n" + "output=json\n"
+			originalConfig, err := os.OpenFile(pathGardenHome+"/"+aliyunPathConfig, os.O_APPEND|os.O_WRONLY, 0644)
+			checkError(err)
+			defer originalConfig.Close()
+			_, err = originalConfig.WriteString(config)
+			checkError(err)
+		}
+		err = ExecCmd(nil, "aliyun configure set --access-key-id="+string(accessKeyID[:])+" --access-key-secret="+string(accessKeySecret[:])+" --region="+region, true)
+		if err != nil {
+			os.Exit(2)
+		}
+		err = ExecCmd(nil, arguments, false)
 		if err != nil {
 			os.Exit(2)
 		}
