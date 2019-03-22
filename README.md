@@ -94,6 +94,7 @@ The path to the kubeconfig files of a garden cluster can be relative by using th
 `gardenctl` makes it easy to get additional information of your IaaS provider by using the secrets stored in the corresponding projects in the Gardener. To use this functionality, the CLIs of the IaaS providers need to be available. 
 
 Please check the IaaS provider documentation for more details about their CLIs.
+  - [aliyun](https://github.com/aliyun/aliyun-cli)
   - [aws](https://aws.amazon.com/cli/)
   - [az](https://docs.microsoft.com/en-us/cli/azure/install-azure-cli?view=azure-cli-latest)
   - [gcloud](https://cloud.google.com/sdk/downloads)
