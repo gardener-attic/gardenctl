@@ -18,6 +18,8 @@ import (
 	"encoding/json"
 	"time"
 
+	gardencorev1alpha1 "github.com/gardener/gardener/pkg/apis/core/v1alpha1"
+
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -75,6 +77,9 @@ type CloudProfileSpec struct {
 	// Alicloud is the profile specification for the Alibaba cloud.
 	// +optional
 	Alicloud *AlicloudProfile `json:"alicloud,omitempty"`
+	// Packet is the profile specification for the Packet cloud.
+	// +optional
+	Packet *PacketProfile `json:"packet,omitempty"`
 	// Local is the profile specification for the Local provider.
 	// +optional
 	Local *LocalProfile `json:"local,omitempty"`
@@ -201,7 +206,7 @@ type GCPMachineImage struct {
 	// Name is the name of the image.
 	Name MachineImageName `json:"name"`
 	// Image is the technical name of the image. It contains the image name and the Google Cloud project.
-	// Example: projects/coreos-cloud/global/images/coreos-stable-1576-5-0-v20180105
+	// Example: projects/<name>/global/images/version23
 	Image string `json:"image"`
 }
 
@@ -303,6 +308,36 @@ type AlicloudVolumeType struct {
 	Zones      []string `json:"zones"`
 }
 
+// PacketProfile defines constraints and definitions in Packet Cloud environment.
+type PacketProfile struct {
+	// Constraints is an object containing constraints for certain values in the Shoot specification.
+	Constraints PacketConstraints `json:"constraints"`
+}
+
+// PacketConstraints is an object containing constraints for certain values in the Shoot specification
+type PacketConstraints struct {
+	// DNSProviders contains constraints regarding allowed values of the 'dns.provider' block in the Shoot specification.
+	DNSProviders []DNSProviderConstraint `json:"dnsProviders"`
+	// Kubernetes contains constraints regarding allowed values of the 'kubernetes' block in the Shoot specification.
+	Kubernetes KubernetesConstraints `json:"kubernetes"`
+	// MachineImages contains constraints regarding allowed values for machine images in the Shoot specification.
+	MachineImages []PacketMachineImage `json:"machineImages"`
+	// MachineTypes contains constraints regarding allowed values for machine types in the 'workers' block in the Shoot specification.
+	MachineTypes []MachineType `json:"machineTypes"`
+	// VolumeTypes contains constraints regarding allowed values for volume types in the 'workers' block in the Shoot specification.
+	VolumeTypes []VolumeType `json:"volumeTypes"`
+	// Zones contains constraints regarding allowed values for 'zones' block in the Shoot specification.
+	Zones []Zone `json:"zones"`
+}
+
+// PacketMachineImage defines the machine image for Packet.
+type PacketMachineImage struct {
+	// Name is the name of the image.
+	Name MachineImageName `json:"name"`
+	// ID is the ID of the image.
+	ID string `json:"id"`
+}
+
 // LocalProfile defines constraints and definitions for the local development.
 type LocalProfile struct {
 	// Constraints is an object containing constraints for certain values in the Shoot specification.
@@ -313,12 +348,20 @@ type LocalProfile struct {
 type LocalConstraints struct {
 	// DNSProviders contains constraints regarding allowed values of the 'dns.provider' block in the Shoot specification.
 	DNSProviders []DNSProviderConstraint `json:"dnsProviders"`
+	// MachineImages contains constraints regarding allowed values for machine images in the Shoot specification.
+	MachineImages []LocalMachineImage `json:"machineImages"`
 }
 
 // DNSProviderConstraint contains constraints regarding allowed values of the 'dns.provider' block in the Shoot specification.
 type DNSProviderConstraint struct {
 	// Name is the name of the DNS provider.
-	Name DNSProvider `json:"name"`
+	Name string `json:"name"`
+}
+
+// LocalMachineImage defines the machine image for Local Provider.
+type LocalMachineImage struct {
+	// Name is the name of the image.
+	Name MachineImageName `json:"name"`
 }
 
 // KubernetesConstraints contains constraints regarding allowed values of the 'kubernetes' block in the Shoot specification.
@@ -375,7 +418,13 @@ type MachineImageName string
 
 const (
 	// MachineImageCoreOS is a constant for the CoreOS machine image.
-	MachineImageCoreOS MachineImageName = "CoreOS"
+	// deprecated
+	MachineImageCoreOS MachineImageName = "coreos"
+	// MachineImageCoreOSAlicloud is a constant for the CoreOS machine image used by Alicloud.
+	// The Alicloud CoreOS image is modified (e.g., it does not support cloud-config, and is therefore
+	// treated like another OS).
+	// deprecated
+	MachineImageCoreOSAlicloud MachineImageName = "coreos-alicloud"
 )
 
 ////////////////////////////////////////////////////
@@ -520,7 +569,7 @@ type SeedSpec struct {
 type SeedStatus struct {
 	// Conditions represents the latest available observations of a Seed's current state.
 	// +optional
-	Conditions []Condition `json:"conditions,omitempty"`
+	Conditions []gardencorev1alpha1.Condition `json:"conditions,omitempty"`
 }
 
 // SeedCloud defines the cloud profile and the region this Seed cluster belongs to.
@@ -534,11 +583,11 @@ type SeedCloud struct {
 // SeedNetworks contains CIDRs for the pod, service and node networks of a Kubernetes cluster.
 type SeedNetworks struct {
 	// Nodes is the CIDR of the node network.
-	Nodes CIDR `json:"nodes"`
+	Nodes gardencorev1alpha1.CIDR `json:"nodes"`
 	// Pods is the CIDR of the pod network.
-	Pods CIDR `json:"pods"`
+	Pods gardencorev1alpha1.CIDR `json:"pods"`
 	// Services is the CIDR of the service network.
-	Services CIDR `json:"services"`
+	Services gardencorev1alpha1.CIDR `json:"services"`
 }
 
 ////////////////////////////////////////////////////
@@ -683,15 +732,15 @@ type ShootSpec struct {
 type ShootStatus struct {
 	// Conditions represents the latest available observations of a Shoots's current state.
 	// +optional
-	Conditions []Condition `json:"conditions,omitempty"`
+	Conditions []gardencorev1alpha1.Condition `json:"conditions,omitempty"`
 	// Gardener holds information about the Gardener which last acted on the Shoot.
 	Gardener Gardener `json:"gardener"`
 	// LastOperation holds information about the last operation on the Shoot.
 	// +optional
-	LastOperation *LastOperation `json:"lastOperation,omitempty"`
+	LastOperation *gardencorev1alpha1.LastOperation `json:"lastOperation,omitempty"`
 	// LastError holds information about the last occurred error during an operation.
 	// +optional
-	LastError *LastError `json:"lastError,omitempty"`
+	LastError *gardencorev1alpha1.LastError `json:"lastError,omitempty"`
 	// ObservedGeneration is the most recent generation observed for this Shoot. It corresponds to the
 	// Shoot's generation, which is updated on mutation by the API Server.
 	// +optional
@@ -742,22 +791,12 @@ type Cloud struct {
 	// Alicloud contains the Shoot specification for the Alibaba cloud.
 	// +optional
 	Alicloud *Alicloud `json:"alicloud,omitempty"`
+	// Packet contains the Shoot specification for the Packet cloud.
+	// +optional
+	Packet *PacketCloud `json:"packet,omitempty"`
 	// Local contains the Shoot specification for the Local local provider.
 	// +optional
 	Local *Local `json:"local,omitempty"`
-}
-
-// K8SNetworks contains CIDRs for the pod, service and node networks of a Kubernetes cluster.
-type K8SNetworks struct {
-	// Nodes is the CIDR of the node network.
-	// +optional
-	Nodes *CIDR `json:"nodes,omitempty"`
-	// Pods is the CIDR of the pod network.
-	// +optional
-	Pods *CIDR `json:"pods,omitempty"`
-	// Services is the CIDR of the service network.
-	// +optional
-	Services *CIDR `json:"services,omitempty"`
 }
 
 // AWSCloud contains the Shoot specification for AWS.
@@ -778,15 +817,15 @@ type AWSCloud struct {
 
 // AWSNetworks holds information about the Kubernetes and infrastructure networks.
 type AWSNetworks struct {
-	K8SNetworks `json:",inline"`
+	gardencorev1alpha1.K8SNetworks `json:",inline"`
 	// VPC indicates whether to use an existing VPC or create a new one.
 	VPC AWSVPC `json:"vpc"`
 	// Internal is a list of private subnets to create (used for internal load balancers).
-	Internal []CIDR `json:"internal"`
+	Internal []gardencorev1alpha1.CIDR `json:"internal"`
 	// Public is a list of public subnets to create (used for bastion and load balancers).
-	Public []CIDR `json:"public"`
+	Public []gardencorev1alpha1.CIDR `json:"public"`
 	// Workers is a list of worker subnets (private) to create (used for the VMs).
-	Workers []CIDR `json:"workers"`
+	Workers []gardencorev1alpha1.CIDR `json:"workers"`
 }
 
 // AWSVPC contains either an id (of an existing VPC) or the CIDR (for a VPC to be created).
@@ -796,7 +835,7 @@ type AWSVPC struct {
 	ID *string `json:"id,omitempty"`
 	// CIDR is a CIDR range for a new VPC.
 	// +optional
-	CIDR *CIDR `json:"cidr,omitempty"`
+	CIDR *gardencorev1alpha1.CIDR `json:"cidr,omitempty"`
 }
 
 // AWSWorker is the definition of a worker group.
@@ -830,20 +869,49 @@ type AlicloudVPC struct {
 	ID *string `json:"id,omitempty"`
 	// CIDR is a CIDR range for a new VPC.
 	// +optional
-	CIDR *CIDR `json:"cidr,omitempty"`
+	CIDR *gardencorev1alpha1.CIDR `json:"cidr,omitempty"`
 }
 
 // AlicloudNetworks holds information about the Kubernetes and infrastructure networks.
 type AlicloudNetworks struct {
-	K8SNetworks `json:",inline"`
+	gardencorev1alpha1.K8SNetworks `json:",inline"`
 	// VPC indicates whether to use an existing VPC or create a new one.
 	VPC AlicloudVPC `json:"vpc"`
 	// Workers is a CIDR of a worker subnet (private) to create (used for the VMs).
-	Workers []CIDR `json:"workers"`
+	Workers []gardencorev1alpha1.CIDR `json:"workers"`
 }
 
 // AlicloudWorker is the definition of a worker group.
 type AlicloudWorker struct {
+	Worker `json:",inline"`
+	// VolumeType is the type of the root volumes.
+	VolumeType string `json:"volumeType"`
+	// VolumeSize is the size of the root volume.
+	VolumeSize string `json:"volumeSize"`
+}
+
+// PacketCloud contains the Shoot specification for Packet cloud
+type PacketCloud struct {
+	// MachineImage holds information about the machine image to use for all workers.
+	// It will default to the first image stated in the referenced CloudProfile if no
+	// value has been provided.
+	// +optional
+	MachineImage *PacketMachineImage `json:"machineImage,omitempty"`
+	// Networks holds information about the Kubernetes and infrastructure networks.
+	Networks PacketNetworks `json:"networks"`
+	// Workers is a list of worker groups.
+	Workers []PacketWorker `json:"workers"`
+	// Zones is a list of availability zones to deploy the Shoot cluster to, currently, only one is supported.
+	Zones []string `json:"zones"`
+}
+
+// PacketNetworks holds information about the Kubernetes and infrastructure networks.
+type PacketNetworks struct {
+	gardencorev1alpha1.K8SNetworks `json:",inline"`
+}
+
+// PacketWorker is the definition of a worker group.
+type PacketWorker struct {
 	Worker `json:",inline"`
 	// VolumeType is the type of the root volumes.
 	VolumeType string `json:"volumeType"`
@@ -875,11 +943,11 @@ type AzureResourceGroup struct {
 
 // AzureNetworks holds information about the Kubernetes and infrastructure networks.
 type AzureNetworks struct {
-	K8SNetworks `json:",inline"`
+	gardencorev1alpha1.K8SNetworks `json:",inline"`
 	// VNet indicates whether to use an existing VNet or create a new one.
 	VNet AzureVNet `json:"vnet"`
 	// Workers is a CIDR of a worker subnet (private) to create (used for the VMs).
-	Workers CIDR `json:"workers"`
+	Workers gardencorev1alpha1.CIDR `json:"workers"`
 }
 
 // AzureVNet indicates whether to use an existing VNet or create a new one.
@@ -889,7 +957,7 @@ type AzureVNet struct {
 	Name *string `json:"name,omitempty"`
 	// CIDR is a CIDR range for a new VNet.
 	// +optional
-	CIDR *CIDR `json:"cidr,omitempty"`
+	CIDR *gardencorev1alpha1.CIDR `json:"cidr,omitempty"`
 }
 
 // AzureWorker is the definition of a worker group.
@@ -918,12 +986,15 @@ type GCPCloud struct {
 
 // GCPNetworks holds information about the Kubernetes and infrastructure networks.
 type GCPNetworks struct {
-	K8SNetworks `json:",inline"`
+	gardencorev1alpha1.K8SNetworks `json:",inline"`
 	// VPC indicates whether to use an existing VPC or create a new one.
 	// +optional
 	VPC *GCPVPC `json:"vpc,omitempty"`
 	// Workers is a list of CIDRs of worker subnets (private) to create (used for the VMs).
-	Workers []CIDR `json:"workers"`
+	Workers []gardencorev1alpha1.CIDR `json:"workers"`
+	// Internal is a private subnet (used for internal load balancers).
+	// +optional
+	Internal *gardencorev1alpha1.CIDR `json:"internal,omitempty"`
 }
 
 // GCPVPC indicates whether to use an existing VPC or create a new one.
@@ -962,12 +1033,12 @@ type OpenStackCloud struct {
 
 // OpenStackNetworks holds information about the Kubernetes and infrastructure networks.
 type OpenStackNetworks struct {
-	K8SNetworks `json:",inline"`
+	gardencorev1alpha1.K8SNetworks `json:",inline"`
 	// Router indicates whether to use an existing router or create a new one.
 	// +optional
 	Router *OpenStackRouter `json:"router,omitempty"`
 	// Workers is a list of CIDRs of worker subnets (private) to create (used for the VMs).
-	Workers []CIDR `json:"workers"`
+	Workers []gardencorev1alpha1.CIDR `json:"workers"`
 }
 
 // OpenStackRouter indicates whether to use an existing router or create a new one.
@@ -985,15 +1056,20 @@ type OpenStackWorker struct {
 type Local struct {
 	// Networks holds information about the Kubernetes and infrastructure networks.
 	Networks LocalNetworks `json:"networks"`
+	// MachineImage holds information about the machine image to use for all workers.
+	// It will default to the first image stated in the referenced CloudProfile if no
+	// value has been provided.
+	// +optional
+	MachineImage *LocalMachineImage `json:"machineImage,omitempty"`
 	// Endpoint of the local service.
 	Endpoint string `json:"endpoint"`
 }
 
 // LocalNetworks holds information about the Kubernetes and infrastructure networks.
 type LocalNetworks struct {
-	K8SNetworks `json:",inline"`
+	gardencorev1alpha1.K8SNetworks `json:",inline"`
 	// Workers is a CIDR of a worker subnet (private) to create (used for the VMs).
-	Workers []CIDR `json:"workers"`
+	Workers []gardencorev1alpha1.CIDR `json:"workers"`
 }
 
 // Worker is the base definition of a worker group.
@@ -1028,6 +1104,7 @@ type Addons struct {
 	// +optional
 	KubernetesDashboard *KubernetesDashboard `json:"kubernetes-dashboard,omitempty"`
 	// NginxIngress holds configuration settings for the nginx-ingress addon.
+	// DEPRECATED: This field will be removed in a future version.
 	// +optional
 	NginxIngress *NginxIngress `json:"nginx-ingress,omitempty"`
 
@@ -1129,36 +1206,25 @@ type Backup struct {
 // DNS holds information about the provider, the hosted zone id and the domain.
 type DNS struct {
 	// Provider is the DNS provider type for the Shoot.
-	Provider DNSProvider `json:"provider"`
+	// +optional
+	Provider *string `json:"provider,omitempty"`
 	// HostedZoneID is the ID of an existing DNS Hosted Zone used to create the DNS records in.
 	// +optional
+	// deprecated
 	HostedZoneID *string `json:"hostedZoneID,omitempty"`
 	// Domain is the external available domain of the Shoot cluster.
 	// +optional
 	Domain *string `json:"domain,omitempty"`
-	// SecretName is a name of a secret containing credentials for the stated HostedZoneID and the
+	// SecretName is a name of a secret containing credentials for the stated domain and the
 	// provider. When not specified, the Gardener will use the cloud provider credentials referenced
 	// by the Shoot and try to find respective credentials there. Specifying this field may override
-	// this behaviour, i.e. forcing the Gardener to only look into the given secret.
+	// this behavior, i.e. forcing the Gardener to only look into the given secret.
 	// +optional
 	SecretName *string `json:"secretName,omitempty"`
 }
 
-// DNSProvider is a string alias.
-type DNSProvider string
-
-const (
-	// DNSUnmanaged is a constant for the 'unmanaged' DNS provider.
-	DNSUnmanaged DNSProvider = "unmanaged"
-	// DNSAWSRoute53 is a constant for the 'aws-route53' DNS provider.
-	DNSAWSRoute53 DNSProvider = "aws-route53"
-	// DNSGoogleCloudDNS is a constant for the 'google-clouddns' DNS provider.
-	DNSGoogleCloudDNS DNSProvider = "google-clouddns"
-	// DNSOpenstackDesignate is a constant for the designate DNS provider
-	DNSOpenstackDesignate DNSProvider = "openstack-designate"
-	// DNSAlicloud is a constant for Alicloud DNS provider
-	DNSAlicloud DNSProvider = "alicloud-dns"
-)
+// DNSUnmanaged is a constant for the 'unmanaged' DNS provider.
+const DNSUnmanaged string = "unmanaged"
 
 // CloudProvider is a string alias.
 type CloudProvider string
@@ -1174,12 +1240,11 @@ const (
 	CloudProviderOpenStack CloudProvider = "openstack"
 	// CloudProviderAlicloud is a constant for the Alibaba cloud provider.
 	CloudProviderAlicloud CloudProvider = "alicloud"
+	// CloudProviderPacket is a constant for the Packet cloud provider.
+	CloudProviderPacket CloudProvider = "packet"
 	// CloudProviderLocal is a constant for the development provider.
 	CloudProviderLocal CloudProvider = "local"
 )
-
-// CIDR is a string alias.
-type CIDR string
 
 // Hibernation contains information whether the Shoot is suspended or not.
 type Hibernation struct {
@@ -1200,6 +1265,9 @@ type HibernationSchedule struct {
 	// End is a Cron spec at which time a Shoot will be woken up.
 	// +optional
 	End *string `json:"end,omitempty"`
+	// Location is the time location in which both start and and shall be evaluated.
+	// +optional
+	Location *string `json:"location,omitempty"`
 }
 
 // Kubernetes contains the version and configuration variables for the Shoot control plane.
@@ -1416,11 +1484,35 @@ type KubeSchedulerConfig struct {
 // KubeProxyConfig contains configuration settings for the kube-proxy.
 type KubeProxyConfig struct {
 	KubernetesConfig `json:",inline"`
+	// Mode specifies which proxy mode to use.
+	// defaults to IPTables.
+	// +optional
+	Mode *ProxyMode `json:"mode,omitempty"`
 }
+
+// ProxyMode available in Linux platform: 'userspace' (older, going to be EOL), 'iptables'
+// (newer, faster), 'ipvs'(newest, better in performance and scalability).
+//
+// As of now only 'iptables' and 'ipvs' is supported by Gardener.
+//
+// In Linux platform, if the iptables proxy is selected, regardless of how, but the system's kernel or iptables versions are
+// insufficient, this always falls back to the userspace proxy. IPVS mode will be enabled when proxy mode is set to 'ipvs',
+// and the fall back path is firstly iptables and then userspace.
+type ProxyMode string
+
+const (
+	// ProxyModeIPTables uses iptables as proxy implementation.
+	ProxyModeIPTables ProxyMode = "IPTables"
+	// ProxyModeIPVS uses ipvs as proxy implementation.
+	ProxyModeIPVS ProxyMode = "IPVS"
+)
 
 // KubeletConfig contains configuration settings for the kubelet.
 type KubeletConfig struct {
 	KubernetesConfig `json:",inline"`
+	// PodPIDsLimit is the maximum number of process IDs per pod allowed by the kubelet.
+	// +optional
+	PodPIDsLimit *int64 `json:"podPidsLimit,omitempty"`
 }
 
 // Maintenance contains information about the time window for maintenance operations and which
@@ -1450,13 +1542,6 @@ type MaintenanceTimeWindow struct {
 	End string `json:"end"`
 }
 
-const (
-	// DefaultPodNetworkCIDR is a constant for the default pod network CIDR of a Shoot cluster.
-	DefaultPodNetworkCIDR = CIDR("100.96.0.0/11")
-	// DefaultServiceNetworkCIDR is a constant for the default service network CIDR of a Shoot cluster.
-	DefaultServiceNetworkCIDR = CIDR("100.64.0.0/13")
-)
-
 ////////////////////////
 // Shoot Status Types //
 ////////////////////////
@@ -1470,74 +1555,6 @@ type Gardener struct {
 	// Version is the version of the Gardener which last acted on a Shoot cluster.
 	Version string `json:"version"`
 }
-
-// LastOperation indicates the type and the state of the last operation, along with a description
-// message and a progress indicator.
-type LastOperation struct {
-	// A human readable message indicating details about the last operation.
-	Description string `json:"description"`
-	// Last time the operation state transitioned from one to another.
-	LastUpdateTime metav1.Time `json:"lastUpdateTime"`
-	// The progress in percentage (0-100) of the last operation.
-	Progress int `json:"progress"`
-	// Status of the last operation, one of Aborted, Processing, Succeeded, Error, Failed.
-	State ShootLastOperationState `json:"state"`
-	// Type of the last operation, one of Create, Reconcile, Delete.
-	Type ShootLastOperationType `json:"type"`
-}
-
-// ShootLastOperationType is a string alias.
-type ShootLastOperationType string
-
-const (
-	// ShootLastOperationTypeCreate indicates a 'create' operation.
-	ShootLastOperationTypeCreate ShootLastOperationType = "Create"
-	// ShootLastOperationTypeReconcile indicates a 'reconcile' operation.
-	ShootLastOperationTypeReconcile ShootLastOperationType = "Reconcile"
-	// ShootLastOperationTypeDelete indicates a 'delete' operation.
-	ShootLastOperationTypeDelete ShootLastOperationType = "Delete"
-)
-
-// ShootLastOperationState is a string alias.
-type ShootLastOperationState string
-
-const (
-	// ShootLastOperationStateProcessing indicates that an operation is ongoing.
-	ShootLastOperationStateProcessing ShootLastOperationState = "Processing"
-	// ShootLastOperationStateSucceeded indicates that an operation has completed successfully.
-	ShootLastOperationStateSucceeded ShootLastOperationState = "Succeeded"
-	// ShootLastOperationStateError indicates that an operation is completed with errors and will be retried.
-	ShootLastOperationStateError ShootLastOperationState = "Error"
-	// ShootLastOperationStateFailed indicates that an operation is completed with errors and won't be retried.
-	ShootLastOperationStateFailed ShootLastOperationState = "Failed"
-	// ShootLastOperationStatePending indicates that an operation cannot be done now, but will be tried in future.
-	ShootLastOperationStatePending ShootLastOperationState = "Pending"
-	// ShootLastOperationStateAborted indicates that an operation has been aborted.
-	ShootLastOperationStateAborted ShootLastOperationState = "Aborted"
-)
-
-// LastError indicates the last occurred error for an operation on a Shoot cluster.
-type LastError struct {
-	// A human readable message indicating details about the last error.
-	Description string `json:"description"`
-	// Well-defined error codes of the last error(s).
-	// +optional
-	Codes []ErrorCode `json:"codes,omitempty"`
-}
-
-// ErrorCode is a string alias.
-type ErrorCode string
-
-const (
-	// ErrorInfraUnauthorized indicates that the last error occurred due to invalid cloud provider credentials.
-	ErrorInfraUnauthorized ErrorCode = "ERR_INFRA_UNAUTHORIZED"
-	// ErrorInfraInsufficientPrivileges indicates that the last error occurred due to insufficient cloud provider privileges.
-	ErrorInfraInsufficientPrivileges ErrorCode = "ERR_INFRA_INSUFFICIENT_PRIVILEGES"
-	// ErrorInfraQuotaExceeded indicates that the last error occurred due to cloud provider quota limits.
-	ErrorInfraQuotaExceeded ErrorCode = "ERR_INFRA_QUOTA_EXCEEDED"
-	// ErrorInfraDependencies indicates that the last error occurred due to dependent objects on the cloud provider level.
-	ErrorInfraDependencies ErrorCode = "ERR_INFRA_DEPENDENCIES"
-)
 
 const (
 	// EventReconciling indicates that the a Reconcile operation started.
@@ -1581,57 +1598,20 @@ const (
 	DefaultDomain = "cluster.local"
 )
 
-// ConditionStatus is the status of a condition.
-type ConditionStatus string
-
-// These are valid condition statuses. "ConditionTrue" means a resource is in the condition.
-// "ConditionFalse" means a resource is not in the condition. "ConditionUnknown" means kubernetes
-// can't decide if a resource is in the condition or not. "ConditionProgressing" means the condition was
-// seen true, failed but stayed within a predefined failure threshold. In the future, we could add other
-// intermediate conditions, e.g. ConditionDegraded.
-const (
-	ConditionTrue        ConditionStatus = "True"
-	ConditionFalse       ConditionStatus = "False"
-	ConditionUnknown     ConditionStatus = "Unknown"
-	ConditionProgressing ConditionStatus = "Progressing"
-)
-
-// Condition holds the information about the state of a resource.
-type Condition struct {
-	// Type of the Shoot condition.
-	Type ConditionType `json:"type"`
-	// Status of the condition, one of True, False, Unknown.
-	Status ConditionStatus `json:"status"`
-	// Last time the condition transitioned from one status to another.
-	LastTransitionTime metav1.Time `json:"lastTransitionTime"`
-	// Last time the condition was updated.
-	LastUpdateTime metav1.Time `json:"lastUpdateTime"`
-	// The reason for the condition's last transition.
-	Reason string `json:"reason"`
-	// A human readable message indicating details about the transition.
-	Message string `json:"message"`
-}
-
-// ConditionType is a string alias.
-type ConditionType string
-
 const (
 	// SeedAvailable is a constant for a condition type indicating the Seed cluster availability.
-	SeedAvailable ConditionType = "Available"
+	SeedAvailable gardencorev1alpha1.ConditionType = "Available"
 
 	// ShootControlPlaneHealthy is a constant for a condition type indicating the control plane health.
-	ShootControlPlaneHealthy ConditionType = "ControlPlaneHealthy"
+	ShootControlPlaneHealthy gardencorev1alpha1.ConditionType = "ControlPlaneHealthy"
 	// ShootEveryNodeReady is a constant for a condition type indicating the node health.
-	ShootEveryNodeReady ConditionType = "EveryNodeReady"
+	ShootEveryNodeReady gardencorev1alpha1.ConditionType = "EveryNodeReady"
 	// ShootSystemComponentsHealthy is a constant for a condition type indicating the system components health.
-	ShootSystemComponentsHealthy ConditionType = "SystemComponentsHealthy"
+	ShootSystemComponentsHealthy gardencorev1alpha1.ConditionType = "SystemComponentsHealthy"
 	// ShootAlertsInactive is a constant for a condition type indicating the Shoot cluster alert states.
-	ShootAlertsInactive ConditionType = "AlertsInactive"
+	ShootAlertsInactive gardencorev1alpha1.ConditionType = "AlertsInactive"
 	// ShootAPIServerAvailable is a constant for a condition type indicating that the Shoot clusters API server is available.
-	ShootAPIServerAvailable ConditionType = "APIServerAvailable"
-
-	// ConditionCheckError is a constant for indicating that a condition could not be checked.
-	ConditionCheckError = "ConditionCheckError"
+	ShootAPIServerAvailable gardencorev1alpha1.ConditionType = "APIServerAvailable"
 )
 
 ////////////////////////////////////////////////////
@@ -1678,10 +1658,10 @@ type BackupInfrastructureSpec struct {
 type BackupInfrastructureStatus struct {
 	// LastOperation holds information about the last operation on the BackupInfrastructure.
 	// +optional
-	LastOperation *LastOperation `json:"lastOperation,omitempty"`
+	LastOperation *gardencorev1alpha1.LastOperation `json:"lastOperation,omitempty"`
 	// LastError holds information about the last occurred error during an operation.
 	// +optional
-	LastError *LastError `json:"lastError,omitempty"`
+	LastError *gardencorev1alpha1.LastError `json:"lastError,omitempty"`
 	// ObservedGeneration is the most recent generation observed for this BackupInfrastructure. It corresponds to the
 	// BackupInfrastructure's generation, which is updated on mutation by the API Server.
 	// +optional
