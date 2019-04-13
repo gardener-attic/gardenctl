@@ -72,6 +72,7 @@ func GetGardenClusterKubeConfigFromConfig(pathGardenConfig, pathTarget string) {
 
 // clientToTarget returns the client to target e.g. garden, seed
 func clientToTarget(target string) (*k8s.Clientset, error) {
+	// TODO (ialidzhikov): move the invocations to the corresponding method in TargetProviderAPI
 	switch target {
 	case "garden":
 		KUBECONFIG = getKubeConfigOfClusterType("garden")
@@ -229,6 +230,7 @@ func getProjectForShoot() (projectName string) {
 
 // getTargetType returns error and name of type
 func getTargetType() (string, error) {
+	// TODO (ialidzhikov): move the invocations to the corresponding method in TargetProviderAPI
 	var target Target
 	ReadTarget(pathTarget, &target)
 	length := len(target.Target)

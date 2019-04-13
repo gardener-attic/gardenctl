@@ -14,6 +14,17 @@
 
 package cmd
 
+import k8s "k8s.io/client-go/kubernetes"
+
+// TargetProviderAPI provides bindings for target operations.
+type TargetProviderAPI interface {
+	FetchTargetKind() (string, error)
+	ClientToTarget(target string) (k8s.Interface, error)
+}
+
+// TargetProvider implements TargetProviderAPI.
+type TargetProvider struct{}
+
 // Target contains the current target
 type Target struct {
 	Target []TargetMeta `yaml:"target,omitempty" json:"target,omitempty"`
