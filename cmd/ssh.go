@@ -247,7 +247,7 @@ func printNodeIPs(kindIP string) {
 	}
 }
 
-// getNodeNameForIP extract node name for ip adress
+// getNodeNameForIP extract node name for ip address
 func getNodeNameForIP(ip string) string {
 	typeName, err := getTargetType()
 	checkError(err)
