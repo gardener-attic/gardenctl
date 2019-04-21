@@ -34,7 +34,7 @@ func (m *MockTargetProviderAPI) EXPECT() *MockTargetProviderAPIMockRecorder {
 }
 
 // ClientToTarget mocks base method
-func (m *MockTargetProviderAPI) ClientToTarget(arg0 string) (kubernetes.Interface, error) {
+func (m *MockTargetProviderAPI) ClientToTarget(arg0 TargetKind) (kubernetes.Interface, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "ClientToTarget", arg0)
 	ret0, _ := ret[0].(kubernetes.Interface)
@@ -49,10 +49,10 @@ func (mr *MockTargetProviderAPIMockRecorder) ClientToTarget(arg0 interface{}) *g
 }
 
 // FetchTargetKind mocks base method
-func (m *MockTargetProviderAPI) FetchTargetKind() (string, error) {
+func (m *MockTargetProviderAPI) FetchTargetKind() (TargetKind, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "FetchTargetKind")
-	ret0, _ := ret[0].(string)
+	ret0, _ := ret[0].(TargetKind)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }

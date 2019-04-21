@@ -14,12 +14,12 @@
 
 package cmd
 
-import k8s "k8s.io/client-go/kubernetes"
+import "k8s.io/client-go/kubernetes"
 
 // TargetProviderAPI provides bindings for target operations.
 type TargetProviderAPI interface {
-	FetchTargetKind() (string, error)
-	ClientToTarget(target string) (k8s.Interface, error)
+	FetchTargetKind() (TargetKind, error)
+	ClientToTarget(target TargetKind) (kubernetes.Interface, error)
 }
 
 // TargetProvider implements TargetProviderAPI.
@@ -30,10 +30,25 @@ type Target struct {
 	Target []TargetMeta `yaml:"target,omitempty" json:"target,omitempty"`
 }
 
-// TargetMeta contains kind and name of target
+// TargetKind is a valid value for target kind.
+type TargetKind string
+
+// These are valid target kinds.
+const (
+	// TargetKindGarden points to garden cluster.
+	TargetKindGarden TargetKind = "garden"
+	// TargetKindProject points to project.
+	TargetKindProject TargetKind = "project"
+	// TargetKindSeed points to seed cluster.
+	TargetKindSeed TargetKind = "seed"
+	// TargetKindShoot points to shoot cluster.
+	TargetKindShoot TargetKind = "shoot"
+)
+
+// TargetMeta contains kind and name of target.
 type TargetMeta struct {
-	Kind string `yaml:"kind,omitempty" json:"kind,omitempty"`
-	Name string `yaml:"name,omitempty" json:"name,omitempty"`
+	Kind TargetKind `yaml:"kind,omitempty" json:"kind,omitempty"`
+	Name string     `yaml:"name,omitempty" json:"name,omitempty"`
 }
 
 // Projects contains list of all projects

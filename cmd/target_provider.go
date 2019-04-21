@@ -15,7 +15,7 @@
 package cmd
 
 import (
-	k8s "k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/kubernetes"
 )
 
 // NewTargetProvider returns a new target provider.
@@ -24,11 +24,11 @@ func NewTargetProvider() *TargetProvider {
 }
 
 // FetchTargetKind returns the current target kind.
-func (tp *TargetProvider) FetchTargetKind() (string, error) {
+func (tp *TargetProvider) FetchTargetKind() (TargetKind, error) {
 	return getTargetType()
 }
 
 // ClientToTarget returns a kubernetes client configured against the current target.
-func (tp *TargetProvider) ClientToTarget(target string) (k8s.Interface, error) {
-	return clientToTarget(target)
+func (tp *TargetProvider) ClientToTarget(targetKind TargetKind) (kubernetes.Interface, error) {
+	return clientToTarget(targetKind)
 }

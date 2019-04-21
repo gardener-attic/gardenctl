@@ -71,20 +71,19 @@ func GetGardenClusterKubeConfigFromConfig(pathGardenConfig, pathTarget string) {
 }
 
 // clientToTarget returns the client to target e.g. garden, seed
-func clientToTarget(target string) (*k8s.Clientset, error) {
-	// TODO (ialidzhikov): move the invocations to the corresponding method in TargetProviderAPI
+func clientToTarget(target TargetKind) (*k8s.Clientset, error) {
 	switch target {
-	case "garden":
+	case TargetKindGarden:
 		KUBECONFIG = getKubeConfigOfClusterType("garden")
-	case "seed":
+	case TargetKindSeed:
 		KUBECONFIG = getKubeConfigOfClusterType("seed")
-	case "shoot":
+	case TargetKindShoot:
 		KUBECONFIG = getKubeConfigOfClusterType("shoot")
 	}
 	var pathToKubeconfig = ""
 	if kubeconfig == nil {
 		if home := HomeDir(); home != "" {
-			if target == "seed" || target == "shoot" {
+			if target == TargetKindSeed || target == TargetKindShoot {
 				kubeconfig = flag.String("kubeconfig", getKubeConfigOfCurrentTarget(), "(optional) absolute path to the kubeconfig file")
 			} else {
 				if strings.Contains(getGardenKubeConfig(), "~") {
@@ -229,22 +228,21 @@ func getProjectForShoot() (projectName string) {
 }
 
 // getTargetType returns error and name of type
-func getTargetType() (string, error) {
-	// TODO (ialidzhikov): move the invocations to the corresponding method in TargetProviderAPI
+func getTargetType() (TargetKind, error) {
 	var target Target
 	ReadTarget(pathTarget, &target)
 	length := len(target.Target)
 	switch length {
 	case 1:
-		return "garden", nil
+		return TargetKindGarden, nil
 	case 2:
 		if target.Target[1].Kind == "seed" {
-			return "seed", nil
+			return TargetKindSeed, nil
 		}
 
-		return "project", nil
+		return TargetKindProject, nil
 	case 3:
-		return "shoot", nil
+		return TargetKindShoot, nil
 	default:
 		return "", errors.New("No target selected")
 	}

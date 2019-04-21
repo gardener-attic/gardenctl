@@ -185,7 +185,7 @@ func logPod(toMatch string, toTarget string, container string) {
 	checkError(err)
 	if toTarget == "shoot" {
 		namespace = "kube-system"
-		Client, err = clientToTarget(toTarget)
+		Client, err = clientToTarget(TargetKindShoot)
 		checkError(err)
 	}
 	if !flags.elasticsearch {
