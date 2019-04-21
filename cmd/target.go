@@ -619,23 +619,23 @@ func getSeedForProject(shootName string) (seedName string) {
 }
 
 // getKubeConfigOfClusterType return config of specified type
-func getKubeConfigOfClusterType(clusterType string) (pathToKubeconfig string) {
+func getKubeConfigOfClusterType(clusterType TargetKind) (pathToKubeconfig string) {
 	var target Target
 	ReadTarget(pathTarget, &target)
 	switch clusterType {
-	case "garden":
+	case TargetKindGarden:
 		if strings.Contains(getGardenKubeConfig(), "~") {
 			pathToKubeconfig = filepath.Clean(filepath.Join(HomeDir(), strings.Replace(getGardenKubeConfig(), "~", "", 1)))
 		} else {
 			pathToKubeconfig = getGardenKubeConfig()
 		}
-	case "seed":
+	case TargetKindSeed:
 		if target.Target[1].Kind == "seed" {
 			pathToKubeconfig = pathGardenHome + "/cache/seeds" + "/" + target.Target[1].Name + "/" + "kubeconfig.yaml"
 		} else {
 			pathToKubeconfig = pathGardenHome + "/cache/seeds" + "/" + getSeedForProject(target.Target[2].Name) + "/" + "kubeconfig.yaml"
 		}
-	case "shoot":
+	case TargetKindShoot:
 		if target.Target[1].Kind == "seed" {
 			pathToKubeconfig = pathGardenHome + "/cache/seeds" + "/" + getSeedForProject(target.Target[2].Name) + "/" + target.Target[2].Name + "/" + "kubeconfig.yaml"
 		} else if target.Target[1].Kind == "project" {

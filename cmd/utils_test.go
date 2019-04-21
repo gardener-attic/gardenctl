@@ -35,13 +35,13 @@ var _ = Describe("Utils", func() {
 	pathFile := dumpPath + "/testDir/testfile"
 	pathTarget := dumpPath + "/target"
 	tm.Name = "garden-test"
-	tm.Kind = "garden"
+	tm.Kind = TargetKindGarden
 	target.Target = append(target.Target, tm)
 	tm.Name = "seed-test"
-	tm.Kind = "seed"
+	tm.Kind = TargetKindSeed
 	target.Target = append(target.Target, tm)
 	tm.Name = "shoot-test"
-	tm.Kind = "shoot"
+	tm.Kind = TargetKindShoot
 	target.Target = append(target.Target, tm)
 
 	file, err := os.OpenFile(pathTarget, os.O_WRONLY|os.O_CREATE, 0644)

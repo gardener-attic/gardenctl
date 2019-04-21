@@ -23,7 +23,7 @@ import (
 
 	"github.com/pkg/browser"
 	"github.com/spf13/cobra"
-	yaml "gopkg.in/yaml.v2"
+	"gopkg.in/yaml.v2"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/clientcmd"
@@ -170,7 +170,7 @@ func showGardenerDashboard() {
 }
 
 // showPod is an abstraction to show pods in seed cluster controlplane or kube-system namespace of shoot
-func showPod(toMatch string, toTarget string) {
+func showPod(toMatch string, toTarget TargetKind) {
 	var target Target
 	ReadTarget(pathTarget, &target)
 
@@ -183,9 +183,9 @@ func showPod(toMatch string, toTarget string) {
 
 	Client, err = clientToTarget("seed")
 	checkError(err)
-	if toTarget == "shoot" {
+	if toTarget == TargetKindShoot {
 		namespace = "kube-system"
-		Client, err = clientToTarget(toTarget)
+		Client, err = clientToTarget(TargetKindShoot)
 		checkError(err)
 	}
 	pods, err := Client.CoreV1().Pods(namespace).List(metav1.ListOptions{})

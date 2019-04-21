@@ -56,8 +56,8 @@ var _ = Describe("Shell command", func() {
 					Name: "minikube",
 				},
 			})
-			tp.EXPECT().FetchTargetKind().Return("shoot", nil)
-			tp.EXPECT().ClientToTarget(gomock.Eq("shoot")).Return(clientSet, nil)
+			tp.EXPECT().FetchTargetKind().Return(cmd.TargetKindShoot, nil)
+			tp.EXPECT().ClientToTarget(gomock.Eq(cmd.TargetKindShoot)).Return(clientSet, nil)
 
 			ioStreams, _, out, _ := cmd.NewTestIOStreams()
 			command = cmd.NewShellCmd(tp, ioStreams)
@@ -69,7 +69,7 @@ var _ = Describe("Shell command", func() {
 
 		Context("when project is targeted", func() {
 			It("should return error", func() {
-				tp.EXPECT().FetchTargetKind().Return("project", nil)
+				tp.EXPECT().FetchTargetKind().Return(cmd.TargetKindProject, nil)
 
 				ioStreams, _, _, _ := cmd.NewTestIOStreams()
 				command = cmd.NewShellCmd(tp, ioStreams)
@@ -84,8 +84,8 @@ var _ = Describe("Shell command", func() {
 	Context("with non-existing node name", func() {
 		It("should return error", func() {
 			clientSet = fake.NewSimpleClientset()
-			tp.EXPECT().FetchTargetKind().Return("shoot", nil)
-			tp.EXPECT().ClientToTarget(gomock.Eq("shoot")).Return(clientSet, nil)
+			tp.EXPECT().FetchTargetKind().Return(cmd.TargetKindShoot, nil)
+			tp.EXPECT().ClientToTarget(gomock.Eq(cmd.TargetKindShoot)).Return(clientSet, nil)
 
 			ioStreams, _, _, _ := cmd.NewTestIOStreams()
 			command = cmd.NewShellCmd(tp, ioStreams)
@@ -98,7 +98,7 @@ var _ = Describe("Shell command", func() {
 
 	Context("when project is targeted", func() {
 		It("should return error", func() {
-			tp.EXPECT().FetchTargetKind().Return("project", nil)
+			tp.EXPECT().FetchTargetKind().Return(cmd.TargetKindProject, nil)
 
 			ioStreams, _, _, _ := cmd.NewTestIOStreams()
 			command = cmd.NewShellCmd(tp, ioStreams)
