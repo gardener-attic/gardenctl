@@ -630,7 +630,7 @@
   version = "kubernetes-1.14.0"
 
 [[projects]]
-  digest = "1:c0f19f368bcf05fd68dc0390a5d930897a2f7c73fbed995edc631c4664e72e4e"
+  digest = "1:8b5ebdb22b5f2a8d2a241a5c9dfe977aee6f5e0468c4712da72c9d114ccd97b9"
   name = "k8s.io/apimachinery"
   packages = [
     "pkg/api/errors",
@@ -667,6 +667,7 @@
     "pkg/util/strategicpatch",
     "pkg/util/validation",
     "pkg/util/validation/field",
+    "pkg/util/wait",
     "pkg/util/yaml",
     "pkg/version",
     "pkg/watch",
@@ -837,7 +838,9 @@
     "gopkg.in/yaml.v2",
     "k8s.io/api/core/v1",
     "k8s.io/api/rbac/v1",
+    "k8s.io/apimachinery/pkg/api/errors",
     "k8s.io/apimachinery/pkg/apis/meta/v1",
+    "k8s.io/apimachinery/pkg/util/wait",
     "k8s.io/client-go/kubernetes",
     "k8s.io/client-go/kubernetes/fake",
     "k8s.io/client-go/plugin/pkg/client/auth/azure",

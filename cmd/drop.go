@@ -37,11 +37,11 @@ var dropCmd = &cobra.Command{
 			var target Target
 			ReadTarget(pathTarget, &target)
 			if len(target.Target) == 1 {
-				fmt.Println("Dropped " + target.Target[0].Kind + " " + target.Target[0].Name)
+				fmt.Printf("Dropped %s %s\n", target.Target[0].Kind, target.Target[0].Name)
 			} else if len(target.Target) == 2 {
-				fmt.Println("Dropped " + target.Target[1].Kind + " " + target.Target[1].Name)
+				fmt.Printf("Dropped %s %s\n", target.Target[1].Kind, target.Target[1].Name)
 			} else if len(target.Target) == 3 {
-				fmt.Println("Dropped " + target.Target[2].Kind + " " + target.Target[2].Name)
+				fmt.Printf("Dropped %s %s\n", target.Target[2].Kind, target.Target[2].Name)
 			}
 			drop()
 		} else if len(args) == 1 {
@@ -51,24 +51,24 @@ var dropCmd = &cobra.Command{
 			case "project":
 				if len(target.Target) == 2 && target.Target[1].Kind == "project" {
 					drop()
-					fmt.Println("Dropped " + target.Target[1].Kind + " " + target.Target[1].Name)
+					fmt.Printf("Dropped %s %s\n", target.Target[1].Kind, target.Target[1].Name)
 				} else if len(target.Target) == 3 && target.Target[1].Kind == "project" {
 					drop()
 					drop()
-					fmt.Println("Dropped " + target.Target[2].Kind + " " + target.Target[2].Name)
-					fmt.Println("Dropped " + target.Target[1].Kind + " " + target.Target[1].Name)
+					fmt.Printf("Dropped %s %s\n", target.Target[2].Kind, target.Target[2].Name)
+					fmt.Printf("Dropped %s %s\n", target.Target[1].Kind, target.Target[1].Name)
 				} else {
 					fmt.Println("A seed is targeted")
 				}
 			case "seed":
 				if len(target.Target) == 2 && target.Target[1].Kind == "seed" {
 					drop()
-					fmt.Println("Dropped " + target.Target[1].Kind + " " + target.Target[1].Name)
+					fmt.Printf("Dropped %s %s\n", target.Target[1].Kind, target.Target[1].Name)
 				} else if len(target.Target) == 3 && target.Target[1].Kind == "seed" {
 					drop()
 					drop()
-					fmt.Println("Dropped " + target.Target[2].Kind + " " + target.Target[2].Name)
-					fmt.Println("Dropped " + target.Target[1].Kind + " " + target.Target[1].Name)
+					fmt.Printf("Dropped %s %s\n", target.Target[2].Kind, target.Target[2].Name)
+					fmt.Printf("Dropped %s %s\n", target.Target[1].Kind, target.Target[1].Name)
 				} else {
 					fmt.Println("A project is targeted")
 				}
@@ -78,9 +78,6 @@ var dropCmd = &cobra.Command{
 		}
 	},
 	ValidArgs: []string{"project", "seed"},
-}
-
-func init() {
 }
 
 // drop drops target until stack is empty
