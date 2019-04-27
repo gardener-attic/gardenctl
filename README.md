@@ -1,6 +1,6 @@
 # Gardenctl
 
-![](https://github.com/gardener/gardenctl/blob/master/logo/logo_gardener_cli_large.png)
+![](logo/logo_gardener_cli_large.png)
 
 [![Go Report Card](https://goreportcard.com/badge/github.com/gardener/gardenctl)](https://goreportcard.com/report/github.com/gardener/gardenctl)
 
@@ -36,21 +36,19 @@ sudo mv ./gardenctl-darwin-amd64 /usr/local/bin/gardenctl
 
 # How to build it
 
-If no binary builds are available for your platform or architecture, you can build it from source,`go get` it or build the docker image from Dockerfile. Please keep in mind to use an up to date version of [golang](https://golang.org/doc/devel/release.html). 
+If no binary builds are available for your platform or architecture, you can build it from source, `go get` it or build the docker image from Dockerfile. Please keep in mind to use an up to date version of [golang](https://golang.org/doc/devel/release.html). 
 
 ## Prerequisites
 
-To build `gardenctl` from sources you need to have a running Golang environment with `dep` as dependency management system. Moreover, since `gardenctl` allows to execute `kubectl` as well as a running `kubectl` installation is recommended, but not required. Please check this [description](https://github.com/gardener/gardener/blob/master/docs/development/local_setup.md) for further details.
+To build `gardenctl` from sources you need to have a running Golang environment. Moreover, since `gardenctl` allows to execute `kubectl` as well as a running `kubectl` installation is recommended, but not required. Please check this [description](https://github.com/gardener/gardener/blob/master/docs/development/local_setup.md) for further details.
 
 ## Build gardenctl 
 
 ### From source
 
-First, you need to create a target folder structure before cloning and building `gardenctl`.
+First, you need to clone the repository and build `gardenctl`.
 
 ```bash
-mkdir -p ~/go/src/github.com/gardener
-cd ~/go/src/github.com/gardener
 git clone https://github.com/gardener/gardenctl.git
 cd gardenctl
 make build
