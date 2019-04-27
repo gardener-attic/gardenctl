@@ -7,11 +7,11 @@ gardenctl:
         inject_effective_version: true
     steps:
       check:
-        image: 'golang:1.12.0'
+        image: 'golang:1.12.4'
       test:
-        image: 'golang:1.12.0'
+        image: 'golang:1.12.4'
       build:
-        image: 'golang:1.12.0'
+        image: 'golang:1.12.4'
   variants:
     head-update:
       traits:
