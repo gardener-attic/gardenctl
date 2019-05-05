@@ -32,7 +32,7 @@ import (
 var imageFlag string
 
 // NewShellCmd returns a new shell command.
-func NewShellCmd(targetProvider TargetProviderAPI, ioStreams IOStreams) *cobra.Command {
+func NewShellCmd(reader TargetReader, ioStreams IOStreams) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:          "shell (node|pod)",
 		Short:        "Shell to a node",
@@ -42,16 +42,19 @@ func NewShellCmd(targetProvider TargetProviderAPI, ioStreams IOStreams) *cobra.C
 				return errors.New("command must be in the format: gardenctl shell (node|pod)")
 			}
 
+			target := reader.ReadTarget(pathTarget)
+
 			var targetKind TargetKind
-			if targetKind, err = targetProvider.FetchTargetKind(); err != nil {
+			if targetKind, err = target.Kind(); err != nil {
 				return err
 			}
+
 			if targetKind == TargetKindProject {
 				return errors.New("project targeted")
 			}
 
 			var client kubernetes.Interface
-			if client, err = targetProvider.ClientToTarget(targetKind); err != nil {
+			if client, err = target.K8SClient(); err != nil {
 				return err
 			}
 			if len(args) == 0 {

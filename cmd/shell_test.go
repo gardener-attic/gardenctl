@@ -16,6 +16,7 @@ package cmd_test
 
 import (
 	"github.com/gardener/gardenctl/cmd"
+	mockcmd "github.com/gardener/gardenctl/pkg/mock/cmd"
 	"github.com/golang/mock/gomock"
 	"github.com/spf13/cobra"
 	"k8s.io/api/core/v1"
@@ -30,24 +31,26 @@ var _ = Describe("Shell command", func() {
 
 	var (
 		ctrl      *gomock.Controller
-		tp        *cmd.MockTargetProviderAPI
+		reader    *mockcmd.MockTargetReader
+		target    *mockcmd.MockTargetInterface
 		clientSet *fake.Clientset
 		command   *cobra.Command
+
+		execute = func(command *cobra.Command, args []string) error {
+			command.SetArgs(args)
+			return command.Execute()
+		}
 	)
 
 	BeforeEach(func() {
 		ctrl = gomock.NewController(GinkgoT())
-		tp = cmd.NewMockTargetProviderAPI(ctrl)
+		reader = mockcmd.NewMockTargetReader(ctrl)
+		target = mockcmd.NewMockTargetInterface(ctrl)
 	})
 
 	AfterEach(func() {
 		ctrl.Finish()
 	})
-
-	execute := func(command *cobra.Command, args []string) error {
-		command.SetArgs(args)
-		return command.Execute()
-	}
 
 	Context("without args", func() {
 		It("should list the node names", func() {
@@ -56,11 +59,12 @@ var _ = Describe("Shell command", func() {
 					Name: "minikube",
 				},
 			})
-			tp.EXPECT().FetchTargetKind().Return(cmd.TargetKindShoot, nil)
-			tp.EXPECT().ClientToTarget(gomock.Eq(cmd.TargetKindShoot)).Return(clientSet, nil)
+			reader.EXPECT().ReadTarget(gomock.Any()).Return(target)
+			target.EXPECT().Kind().Return(cmd.TargetKindShoot, nil)
+			target.EXPECT().K8SClient().Return(clientSet, nil)
 
 			ioStreams, _, out, _ := cmd.NewTestIOStreams()
-			command = cmd.NewShellCmd(tp, ioStreams)
+			command = cmd.NewShellCmd(reader, ioStreams)
 			err := execute(command, []string{})
 
 			Expect(err).NotTo(HaveOccurred())
@@ -69,10 +73,11 @@ var _ = Describe("Shell command", func() {
 
 		Context("when project is targeted", func() {
 			It("should return error", func() {
-				tp.EXPECT().FetchTargetKind().Return(cmd.TargetKindProject, nil)
+				reader.EXPECT().ReadTarget(gomock.Any()).Return(target)
+				target.EXPECT().Kind().Return(cmd.TargetKindProject, nil)
 
 				ioStreams, _, _, _ := cmd.NewTestIOStreams()
-				command = cmd.NewShellCmd(tp, ioStreams)
+				command = cmd.NewShellCmd(reader, ioStreams)
 				err := execute(command, []string{})
 
 				Expect(err).To(HaveOccurred())
@@ -84,11 +89,12 @@ var _ = Describe("Shell command", func() {
 	Context("with non-existing node name", func() {
 		It("should return error", func() {
 			clientSet = fake.NewSimpleClientset()
-			tp.EXPECT().FetchTargetKind().Return(cmd.TargetKindShoot, nil)
-			tp.EXPECT().ClientToTarget(gomock.Eq(cmd.TargetKindShoot)).Return(clientSet, nil)
+			reader.EXPECT().ReadTarget(gomock.Any()).Return(target)
+			target.EXPECT().Kind().Return(cmd.TargetKindShoot, nil)
+			target.EXPECT().K8SClient().Return(clientSet, nil)
 
 			ioStreams, _, _, _ := cmd.NewTestIOStreams()
-			command = cmd.NewShellCmd(tp, ioStreams)
+			command = cmd.NewShellCmd(reader, ioStreams)
 			err := execute(command, []string{"minikube"})
 
 			Expect(err).To(HaveOccurred())
@@ -98,10 +104,11 @@ var _ = Describe("Shell command", func() {
 
 	Context("when project is targeted", func() {
 		It("should return error", func() {
-			tp.EXPECT().FetchTargetKind().Return(cmd.TargetKindProject, nil)
+			reader.EXPECT().ReadTarget(gomock.Any()).Return(target)
+			target.EXPECT().Kind().Return(cmd.TargetKindProject, nil)
 
 			ioStreams, _, _, _ := cmd.NewTestIOStreams()
-			command = cmd.NewShellCmd(tp, ioStreams)
+			command = cmd.NewShellCmd(reader, ioStreams)
 			err := execute(command, []string{"minikube"})
 
 			Expect(err).To(HaveOccurred())
@@ -112,7 +119,7 @@ var _ = Describe("Shell command", func() {
 	Context("with >= 2 args", func() {
 		It("should return error", func() {
 			ioStreams, _, _, _ := cmd.NewTestIOStreams()
-			command = cmd.NewShellCmd(tp, ioStreams)
+			command = cmd.NewShellCmd(reader, ioStreams)
 			err := execute(command, []string{"minikube", "docker-for-mac"})
 
 			Expect(err).To(HaveOccurred())
