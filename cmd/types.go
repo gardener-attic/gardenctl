@@ -16,16 +16,22 @@ package cmd
 
 import "k8s.io/client-go/kubernetes"
 
-// TargetProviderAPI provides bindings for target operations.
-type TargetProviderAPI interface {
-	FetchTargetKind() (TargetKind, error)
-	ClientToTarget(target TargetKind) (kubernetes.Interface, error)
+// TargetReader reads the current target.
+type TargetReader interface {
+	ReadTarget(targetPath string) TargetInterface
 }
 
-// TargetProvider implements TargetProviderAPI.
-type TargetProvider struct{}
+// GardenctlTargetReader implements TargetReader.
+type GardenctlTargetReader struct{}
 
-// Target contains the current target
+// TargetInterface defines target operations.
+type TargetInterface interface {
+	Stack() []TargetMeta
+	Kind() (TargetKind, error)
+	K8SClient() (kubernetes.Interface, error)
+}
+
+// Target contains the current target.
 type Target struct {
 	Target []TargetMeta `yaml:"target,omitempty" json:"target,omitempty"`
 }
@@ -72,6 +78,14 @@ type SeedMeta struct {
 	Seed   string   `yaml:"seed,omitempty" json:"seed,omitempty"`
 	Shoots []string `yaml:"shoots,omitempty" json:"shoots,omitempty"`
 }
+
+// ConfigReader reads the configuration.
+type ConfigReader interface {
+	ReadConfig(configPath string) *GardenConfig
+}
+
+// GardenConfigReader implementes ConfigReader.
+type GardenConfigReader struct{}
 
 //GardenConfig contains config for gardenctl
 type GardenConfig struct {

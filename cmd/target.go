@@ -15,6 +15,7 @@
 package cmd
 
 import (
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -24,116 +25,28 @@ import (
 	"github.com/gardener/gardener/pkg/apis/garden/v1beta1"
 	clientset "github.com/gardener/gardener/pkg/client/garden/clientset/versioned"
 	"github.com/spf13/cobra"
-	yaml "gopkg.in/yaml.v2"
+	"gopkg.in/yaml.v2"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-// targetCmd represents the target command
-var targetCmd = &cobra.Command{
-	Use:   "target <project|garden|seed|shoot> + NAME",
-	Short: `Set scope for next operations`,
-	Long:  ``,
-	Run: func(cmd *cobra.Command, args []string) {
-		if len(args) < 1 || len(args) > 4 {
-			fmt.Println("Command must be in the format: target" + `	<project|garden|seed|shoot> + NAME`)
-			os.Exit(2)
-		}
-		var t Target
-		ReadTarget(pathTarget, &t)
-		switch args[0] {
-		case "garden":
-			if len(args) != 2 {
-				fmt.Println("Command must be in the format: target" + `	<project|garden|seed|shoot> + NAME`)
-				os.Exit(2)
+// NewTargetCmd returns a new target command.
+func NewTargetCmd(targetReader TargetReader, configReader ConfigReader) *cobra.Command {
+	cmd := &cobra.Command{
+		Use:          "target <project|garden|seed|shoot> NAME",
+		Short:        "Set scope for next operations",
+		SilenceUsage: true,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if len(args) < 1 || len(args) > 4 {
+				return errors.New("command must be in the format: target <project|garden|seed|shoot> NAME")
 			}
-			gardens := resolveNameGarden(args[1])
-			if len(gardens) == 0 {
-				fmt.Println("No match for " + args[1])
-				os.Exit(2)
-			} else if len(gardens) == 1 {
-				targetGarden(gardens[0])
-			} else if len(gardens) > 1 {
-				fmt.Println("gardens:")
-				for _, val := range gardens {
-					fmt.Println("- garden: " + val)
+			switch args[0] {
+			case "garden":
+				if len(args) != 2 {
+					return errors.New("command must be in the format: target garden NAME")
 				}
-				os.Exit(2)
-			}
-		case "project":
-			if len(args) != 2 {
-				fmt.Println("Command must be in the format: target" + `	<project|garden|seed|shoot> + NAME`)
-				os.Exit(2)
-			}
-			if len(t.Target) < 1 {
-				fmt.Println("No garden cluster targeted")
-				os.Exit(2)
-			}
-			projects := resolveNameProject(args[1])
-			if len(projects) == 0 {
-				fmt.Println("No match for " + args[1])
-				os.Exit(2)
-			} else if len(projects) == 1 {
-				targetProject(projects[0])
-			} else if len(projects) > 1 {
-				fmt.Println("projects:")
-				for _, val := range projects {
-					fmt.Println("- project: " + val)
-				}
-				os.Exit(2)
-			}
-		case "seed":
-			if len(args) != 2 {
-				fmt.Println("Command must be in the format: target" + `	<project|garden|seed|shoot> + NAME`)
-				os.Exit(2)
-			}
-			if len(t.Target) < 1 {
-				fmt.Println("No garden cluster targeted")
-				os.Exit(2)
-			}
-			seeds := resolveNameSeed(args[1])
-			if len(seeds) == 0 {
-				fmt.Println("No match for " + args[1])
-				os.Exit(2)
-			} else if len(seeds) == 1 {
-				targetSeed(seeds[0], true)
-			} else if len(seeds) > 1 {
-				fmt.Println("seeds:")
-				for _, val := range seeds {
-					fmt.Println("- seed: " + val)
-				}
-				os.Exit(2)
-			}
-		case "shoot":
-			if len(args) != 2 {
-				fmt.Println("Command must be in the format: target" + `	<project|garden|seed|shoot> + NAME`)
-				os.Exit(2)
-			}
-			if len(t.Target) < 1 {
-				fmt.Println("No garden cluster targeted")
-				os.Exit(2)
-			}
-			shoots := resolveNameShoot(args[1])
-			if len(shoots) == 0 {
-				fmt.Println("No match for " + args[1])
-				os.Exit(2)
-			} else if len(shoots) == 1 {
-				targetShoot(shoots[0])
-			} else if len(shoots) > 1 {
-				fmt.Println("shoots:")
-				for _, val := range shoots {
-					fmt.Println("- shoot: " + val)
-				}
-				os.Exit(2)
-			}
-		default:
-			if len(t.Target) < 1 {
-				fmt.Println("No garden cluster targeted")
-				os.Exit(2)
-			} else if garden && !seed && !project {
-				gardens := resolveNameGarden(args[0])
+				gardens := resolveNameGarden(configReader, args[1])
 				if len(gardens) == 0 {
-					fmt.Println("No match for " + args[0])
-					os.Exit(2)
+					return fmt.Errorf("no match for %q", args[1])
 				} else if len(gardens) == 1 {
 					targetGarden(gardens[0])
 				} else if len(gardens) > 1 {
@@ -143,26 +56,17 @@ var targetCmd = &cobra.Command{
 					}
 					os.Exit(2)
 				}
-				break
-			} else if !garden && seed && !project {
-				seeds := resolveNameSeed(args[0])
-				if len(seeds) == 0 {
-					fmt.Println("No match for " + args[0])
-					os.Exit(2)
-				} else if len(seeds) == 1 {
-					targetSeed(seeds[0], true)
-				} else if len(seeds) > 1 {
-					fmt.Println("seeds:")
-					for _, val := range seeds {
-						fmt.Println("- seed: " + val)
-					}
-					os.Exit(2)
+			case "project":
+				if len(args) != 2 {
+					return errors.New("command must be in the format: target project NAME")
 				}
-				break
-			} else if !garden && !seed && project {
-				projects := resolveNameProject(args[0])
+				target := targetReader.ReadTarget(pathTarget)
+				if len(target.Stack()) < 1 {
+					return errors.New("no garden cluster targeted")
+				}
+				projects := resolveNameProject(args[1])
 				if len(projects) == 0 {
-					fmt.Println("No match for " + args[0])
+					fmt.Println("No match for " + args[1])
 					os.Exit(2)
 				} else if len(projects) == 1 {
 					targetProject(projects[0])
@@ -173,62 +77,155 @@ var targetCmd = &cobra.Command{
 					}
 					os.Exit(2)
 				}
-				break
-			}
-			tmp := KUBECONFIG
-			Client, err = clientToTarget("garden")
-			checkError(err)
-			seedList := getSeeds()
-			for _, seed := range seedList.Items {
-				if args[0] == seed.Name {
-					targetSeed(args[0], true)
-					os.Exit(0)
+			case "seed":
+				if len(args) != 2 {
+					return errors.New("command must be in the format: target seed NAME")
 				}
-			}
-			projectLabel := "garden.sapcloud.io/role=project"
-			projectList, err := Client.CoreV1().Namespaces().List(metav1.ListOptions{
-				LabelSelector: fmt.Sprintf("%s", projectLabel),
-			})
-			checkError(err)
-			match := false
-			for _, project := range projectList.Items {
-				if args[0] == project.Name {
-					targetProject(args[0])
-					match = true
+				target := targetReader.ReadTarget(pathTarget)
+				if len(target.Stack()) < 1 {
+					return errors.New("no garden cluster targeted")
+				}
+				seeds := resolveNameSeed(args[1])
+				if len(seeds) == 0 {
+					fmt.Println("No match for " + args[1])
+					os.Exit(2)
+				} else if len(seeds) == 1 {
+					targetSeed(seeds[0], true)
+				} else if len(seeds) > 1 {
+					fmt.Println("seeds:")
+					for _, val := range seeds {
+						fmt.Println("- seed: " + val)
+					}
+					os.Exit(2)
+				}
+			case "shoot":
+				if len(args) != 2 {
+					return errors.New("command must be in the format: target shoot NAME")
+				}
+				target := targetReader.ReadTarget(pathTarget)
+				if len(target.Stack()) < 1 {
+					return errors.New("no garden cluster targeted")
+				}
+				shoots := resolveNameShoot(args[1])
+				if len(shoots) == 0 {
+					fmt.Println("No match for " + args[1])
+					os.Exit(2)
+				} else if len(shoots) == 1 {
+					targetShoot(shoots[0])
+				} else if len(shoots) > 1 {
+					fmt.Println("shoots:")
+					for _, val := range shoots {
+						fmt.Println("- shoot: " + val)
+					}
+					os.Exit(2)
+				}
+			default:
+				target := targetReader.ReadTarget(pathTarget)
+				if len(target.Stack()) < 1 {
+					return errors.New("no garden cluster targeted")
+				} else if garden && !seed && !project {
+					gardens := resolveNameGarden(configReader, args[0])
+					if len(gardens) == 0 {
+						fmt.Println("No match for " + args[0])
+						os.Exit(2)
+					} else if len(gardens) == 1 {
+						targetGarden(gardens[0])
+					} else if len(gardens) > 1 {
+						fmt.Println("gardens:")
+						for _, val := range gardens {
+							fmt.Println("- garden: " + val)
+						}
+						os.Exit(2)
+					}
+					break
+				} else if !garden && seed && !project {
+					seeds := resolveNameSeed(args[0])
+					if len(seeds) == 0 {
+						fmt.Println("No match for " + args[0])
+						os.Exit(2)
+					} else if len(seeds) == 1 {
+						targetSeed(seeds[0], true)
+					} else if len(seeds) > 1 {
+						fmt.Println("seeds:")
+						for _, val := range seeds {
+							fmt.Println("- seed: " + val)
+						}
+						os.Exit(2)
+					}
+					break
+				} else if !garden && !seed && project {
+					projects := resolveNameProject(args[0])
+					if len(projects) == 0 {
+						fmt.Println("No match for " + args[0])
+						os.Exit(2)
+					} else if len(projects) == 1 {
+						targetProject(projects[0])
+					} else if len(projects) > 1 {
+						fmt.Println("projects:")
+						for _, val := range projects {
+							fmt.Println("- project: " + val)
+						}
+						os.Exit(2)
+					}
 					break
 				}
-				if ("garden-" + args[0]) == project.Name {
-					targetProject("garden-" + args[0])
-					match = true
+				tmp := KUBECONFIG
+				Client, err = clientToTarget("garden")
+				checkError(err)
+				seedList := getSeeds()
+				for _, seed := range seedList.Items {
+					if args[0] == seed.Name {
+						targetSeed(args[0], true)
+						os.Exit(0)
+					}
+				}
+				projectLabel := "garden.sapcloud.io/role=project"
+				projectList, err := Client.CoreV1().Namespaces().List(metav1.ListOptions{
+					LabelSelector: fmt.Sprintf("%s", projectLabel),
+				})
+				checkError(err)
+				match := false
+				for _, project := range projectList.Items {
+					if args[0] == project.Name {
+						targetProject(args[0])
+						match = true
+						break
+					}
+					if ("garden-" + args[0]) == project.Name {
+						targetProject("garden-" + args[0])
+						match = true
+						break
+					}
+				}
+				KUBECONFIG = tmp
+				if match {
 					break
 				}
-			}
-			KUBECONFIG = tmp
-			if match {
-				break
-			}
-			shoots := resolveNameShoot(args[0])
-			if len(shoots) == 0 {
-				fmt.Println("No match for " + args[0])
-				os.Exit(2)
-			} else if len(shoots) == 1 {
-				targetShoot(shoots[0])
-			} else if len(shoots) > 1 {
-				fmt.Println("shoots:")
-				for _, val := range shoots {
-					fmt.Println("- shoot: " + val)
+				shoots := resolveNameShoot(args[0])
+				if len(shoots) == 0 {
+					fmt.Println("No match for " + args[0])
+					os.Exit(2)
+				} else if len(shoots) == 1 {
+					targetShoot(shoots[0])
+				} else if len(shoots) > 1 {
+					fmt.Println("shoots:")
+					for _, val := range shoots {
+						fmt.Println("- shoot: " + val)
+					}
+					os.Exit(2)
 				}
-				os.Exit(2)
 			}
-		}
-	},
-	ValidArgs: []string{"project", "garden", "seed", "shoot"},
-}
 
-func init() {
-	targetCmd.PersistentFlags().BoolVarP(&garden, "garden", "g", false, "target garden")
-	targetCmd.PersistentFlags().BoolVarP(&seed, "seed", "s", false, "target seed")
-	targetCmd.PersistentFlags().BoolVarP(&project, "project", "p", false, "target project")
+			return nil
+		},
+		ValidArgs: []string{"project", "garden", "seed", "shoot"},
+	}
+
+	cmd.PersistentFlags().BoolVarP(&garden, "garden", "g", false, "target garden")
+	cmd.PersistentFlags().BoolVarP(&seed, "seed", "s", false, "target seed")
+	cmd.PersistentFlags().BoolVarP(&project, "project", "p", false, "target project")
+
+	return cmd
 }
 
 // resolveNameProject resolves name to project
@@ -295,14 +292,11 @@ func targetProject(name string) {
 }
 
 // resolveNameGarden resolves name to garden
-func resolveNameGarden(name string) (matches []string) {
-	var gardenClusters GardenClusters
-	yamlGardenConfig, err := ioutil.ReadFile(pathGardenConfig)
-	checkError(err)
-	err = yaml.Unmarshal(yamlGardenConfig, &gardenClusters)
-	checkError(err)
+func resolveNameGarden(reader ConfigReader, name string) (matches []string) {
+	config := reader.ReadConfig(pathGardenConfig)
+
 	matcher := ""
-	for _, garden := range gardenClusters.GardenClusters {
+	for _, garden := range config.GardenClusters {
 		if strings.HasPrefix(name, "*") && strings.HasSuffix(name, "*") {
 			matcher = strings.Replace(name, "*", "", 2)
 			if strings.Contains(garden.Name, matcher) {

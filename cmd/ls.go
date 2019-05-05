@@ -28,80 +28,80 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-// getCmd represents the get command
-var lsCmd = &cobra.Command{
-	Use:   "ls [gardens|projects|seeds|shoots|issues]",
-	Short: "List all resource instances, e.g. list of shoots|issues",
-	Long:  ``,
-	Run: func(cmd *cobra.Command, args []string) {
-		if len(args) < 1 || len(args) > 2 {
-			fmt.Println("Command must be in the format: ls [gardens|projects|seeds|shoots|issues]")
-			os.Exit(2)
-		}
-		var t Target
-		targetFile, err := ioutil.ReadFile(pathTarget)
-		checkError(err)
-		err = yaml.Unmarshal(targetFile, &t)
-		checkError(err)
-		if (len(t.Target) == 0) && args[0] != "gardens" {
-			fmt.Println("Target stack is empty")
-			os.Exit(2)
-		}
-		switch args[0] {
-		case "projects":
-			tmp := KUBECONFIG
-			Client, err = clientToTarget("garden")
-			checkError(err)
-			getProjectsWithShoots()
-			KUBECONFIG = tmp
-		case "gardens":
-			getGardens()
-		case "seeds":
-			Client, err = clientToTarget("garden")
-			checkError(err)
-			var seeds Seeds
-			seedList := getSeeds()
-			for _, seed := range seedList.Items {
-				var sm SeedMeta
-				sm.Seed = seed.Name
-				seeds.Seeds = append(seeds.Seeds, sm)
+// NewLsCmd returns a new ls command.
+func NewLsCmd(reader ConfigReader) *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "ls [gardens|projects|seeds|shoots|issues]",
+		Short: "List all resource instances, e.g. list of shoots|issues",
+		Run: func(cmd *cobra.Command, args []string) {
+			if len(args) < 1 || len(args) > 2 {
+				fmt.Println("Command must be in the format: ls [gardens|projects|seeds|shoots|issues]")
+				os.Exit(2)
 			}
-			if outputFormat == "yaml" {
-				y, err := yaml.Marshal(seeds)
-				checkError(err)
-				os.Stdout.Write(y)
-			} else if outputFormat == "json" {
-				j, err := json.Marshal(seeds)
-				checkError(err)
-				var out bytes.Buffer
-				json.Indent(&out, j, "", "  ")
-				out.WriteTo(os.Stdout)
+			var t Target
+			targetFile, err := ioutil.ReadFile(pathTarget)
+			checkError(err)
+			err = yaml.Unmarshal(targetFile, &t)
+			checkError(err)
+			if (len(t.Target) == 0) && args[0] != "gardens" {
+				fmt.Println("Target stack is empty")
+				os.Exit(2)
 			}
-		case "shoots":
-			var target Target
-			ReadTarget(pathTarget, &target)
-			tmp := KUBECONFIG
-			Client, err = clientToTarget("garden")
-			if len(target.Target) == 1 {
+			switch args[0] {
+			case "projects":
+				tmp := KUBECONFIG
+				Client, err = clientToTarget("garden")
+				checkError(err)
 				getProjectsWithShoots()
-			} else if len(target.Target) == 2 && target.Target[1].Kind == "seed" {
-				getProjectsWithShootsForSeed()
-			} else if len(target.Target) == 2 && target.Target[1].Kind == "project" {
-				getSeedsWithShootsForProject()
+				KUBECONFIG = tmp
+			case "gardens":
+				getGardens(reader)
+			case "seeds":
+				Client, err = clientToTarget("garden")
+				checkError(err)
+				var seeds Seeds
+				seedList := getSeeds()
+				for _, seed := range seedList.Items {
+					var sm SeedMeta
+					sm.Seed = seed.Name
+					seeds.Seeds = append(seeds.Seeds, sm)
+				}
+				if outputFormat == "yaml" {
+					y, err := yaml.Marshal(seeds)
+					checkError(err)
+					os.Stdout.Write(y)
+				} else if outputFormat == "json" {
+					j, err := json.Marshal(seeds)
+					checkError(err)
+					var out bytes.Buffer
+					json.Indent(&out, j, "", "  ")
+					out.WriteTo(os.Stdout)
+				}
+			case "shoots":
+				var target Target
+				ReadTarget(pathTarget, &target)
+				tmp := KUBECONFIG
+				Client, err = clientToTarget("garden")
+				if len(target.Target) == 1 {
+					getProjectsWithShoots()
+				} else if len(target.Target) == 2 && target.Target[1].Kind == "seed" {
+					getProjectsWithShootsForSeed()
+				} else if len(target.Target) == 2 && target.Target[1].Kind == "project" {
+					getSeedsWithShootsForProject()
+				}
+				KUBECONFIG = tmp
+			case "issues":
+				Client, err = clientToTarget("garden")
+				checkError(err)
+				getIssues()
+			default:
+				fmt.Println("Command must be in the format: ls [gardens|projects|seeds|shoots|issues]")
 			}
-			KUBECONFIG = tmp
-		case "issues":
-			Client, err = clientToTarget("garden")
-			checkError(err)
-			getIssues()
-		default:
-			fmt.Println("Command must be in the format: ls [gardens|projects|seeds|shoots|issues]")
-		}
-	},
-	ValidArgs: []string{"issues", "projects", "gardens", "seeds", "shoots"},
-}
+		},
+		ValidArgs: []string{"issues", "projects", "gardens", "seeds", "shoots"},
+	}
 
-func init() {
+	return cmd
 }
 
 // getProjectsWithShoots lists list of projects with shoots
@@ -140,14 +140,11 @@ func getProjectsWithShoots() {
 }
 
 // getGardens lists all garden cluster in config
-func getGardens() {
-	var gardenClusters GardenClusters
-	yamlGardenConfig, err := ioutil.ReadFile(pathGardenConfig)
-	checkError(err)
-	err = yaml.Unmarshal(yamlGardenConfig, &gardenClusters)
-	checkError(err)
+func getGardens(reader ConfigReader) {
+	config := reader.ReadConfig(pathGardenConfig)
+
 	var gardens GardenClusters
-	for _, garden := range gardenClusters.GardenClusters {
+	for _, garden := range config.GardenClusters {
 		var gm GardenClusterMeta
 		gm.Name = garden.Name
 		gardens.GardenClusters = append(gardens.GardenClusters, gm)

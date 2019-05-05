@@ -114,23 +114,26 @@ func Execute() {
 }
 
 func init() {
-	targetProvider := NewTargetProvider()
-	ioStreams := IOStreams{
-		In:     os.Stdin,
-		Out:    os.Stdout,
-		ErrOut: os.Stderr,
-	}
+	var (
+		configReader = &GardenConfigReader{}
+		targetReader = &GardenctlTargetReader{}
+		ioStreams    = IOStreams{
+			In:     os.Stdin,
+			Out:    os.Stdout,
+			ErrOut: os.Stderr,
+		}
+	)
 
 	cobra.OnInitialize(initConfig)
 	RootCmd.PersistentFlags().BoolVarP(&cachevar, "no-cache", "n", false, "no caching")
 	RootCmd.PersistentFlags().StringVarP(&outputFormat, "output", "o", "yaml", "output format yaml or json")
 	cobra.EnableCommandSorting = false
 	cobra.EnablePrefixMatching = prefixMatching
-	RootCmd.AddCommand(lsCmd, targetCmd, dropCmd, getCmd)
+	RootCmd.AddCommand(NewLsCmd(configReader), NewTargetCmd(targetReader, configReader), dropCmd, getCmd)
 	RootCmd.AddCommand(downloadCmd, showCmd, logsCmd)
 	RootCmd.AddCommand(registerCmd, unregisterCmd)
 	RootCmd.AddCommand(completionCmd)
-	RootCmd.AddCommand(NewShellCmd(targetProvider, ioStreams))
+	RootCmd.AddCommand(NewShellCmd(targetReader, ioStreams))
 	RootCmd.AddCommand(sshCmd)
 	RootCmd.AddCommand(kubectlCmd, kaCmd, ksCmd, kgCmd, knCmd, aliyunCmd, awsCmd, azCmd, gcloudCmd, openstackCmd)
 	RootCmd.AddCommand(infoCmd)

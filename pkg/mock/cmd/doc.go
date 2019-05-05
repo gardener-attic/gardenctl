@@ -11,6 +11,9 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-//go:generate mockgen -package cmd -destination=mocks.go github.com/gardener/gardenctl/cmd TargetProviderAPI
+
+//go:generate mockgen -package cmd -destination=target.go github.com/gardener/gardenctl/cmd TargetInterface
+//go:generate mockgen -package cmd -destination=target_reader.go github.com/gardener/gardenctl/cmd TargetReader
+//go:generate mockgen -package cmd -destination=config_reader.go github.com/gardener/gardenctl/cmd ConfigReader
 
 package cmd

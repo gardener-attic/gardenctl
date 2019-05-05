@@ -14,21 +14,9 @@
 
 package cmd
 
-import (
-	"k8s.io/client-go/kubernetes"
-)
-
-// NewTargetProvider returns a new target provider.
-func NewTargetProvider() *TargetProvider {
-	return &TargetProvider{}
-}
-
-// FetchTargetKind returns the current target kind.
-func (tp *TargetProvider) FetchTargetKind() (TargetKind, error) {
-	return getTargetType()
-}
-
-// ClientToTarget returns a kubernetes client configured against the current target.
-func (tp *TargetProvider) ClientToTarget(targetKind TargetKind) (kubernetes.Interface, error) {
-	return clientToTarget(targetKind)
+// ReadConfig reads the configuration.
+func (r *GardenConfigReader) ReadConfig(gardenConfigPath string) *GardenConfig {
+	var gardenConfig GardenConfig
+	GetGardenConfig(gardenConfigPath, &gardenConfig)
+	return &gardenConfig
 }
