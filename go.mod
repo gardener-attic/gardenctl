@@ -10,7 +10,7 @@ require (
 	github.com/badoux/checkmail v0.0.0-20181210160741-9661bd69e9ad
 	github.com/dgrijalva/jwt-go v3.2.0+incompatible // indirect
 	github.com/evanphx/json-patch v4.1.0+incompatible // indirect
-	github.com/gardener/gardener v0.0.0-20190410075443-fee279c3aa25
+	github.com/gardener/gardener v0.0.0-20190605055815-b3b8faa6f651
 	github.com/ghodss/yaml v1.0.0
 	github.com/gogo/protobuf v1.2.1 // indirect
 	github.com/golang/mock v1.2.0

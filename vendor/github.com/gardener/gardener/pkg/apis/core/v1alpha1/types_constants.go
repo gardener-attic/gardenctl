@@ -30,6 +30,12 @@ const (
 	// SecretNameCAMetricsServer is a constant for the name of a Kubernetes secret object that contains the CA
 	// certificate of the metrics-server of a shoot cluster.
 	SecretNameCAMetricsServer = "ca-metrics-server"
+	// SecretNameCloudProvider is a constant for the name of a Kubernetes secret object that contains the provider
+	// specific credentials that shall be used to create/delete the shoot.
+	SecretNameCloudProvider = "cloudprovider"
+	// SecretNameSSHKeyPair is a constant for the name of a Kubernetes secret object that contains the SSH key pair
+	// (public and private key) that can be used to SSH into the shoot nodes.
+	SecretNameSSHKeyPair = "ssh-keypair"
 
 	// SecretNameGardener is a constant for the name of a Kubernetes secret object that contains the client
 	// certificate and a kubeconfig for a shoot cluster. It is used by Gardener and can be used by extension
@@ -43,6 +49,8 @@ const (
 
 	// GardenPurpose is a constant for the key in a label describing the purpose of the respective object.
 	GardenPurpose = "garden.sapcloud.io/purpose"
+	// GardenerPurpose is a constant for the key in a label describing the purpose of the respective object.
+	GardenerPurpose = "gardener.cloud/purpose"
 	// GardenPurposeMachineClass is a constant for the 'machineclass' value in a label.
 	GardenPurposeMachineClass = "machineclass"
 
@@ -51,4 +59,11 @@ const (
 	// GardenerOperationReconcile is a constant for the value of the operation annotation describing a reconcile
 	// operation.
 	GardenerOperationReconcile = "reconcile"
+
+	// BackupProvider is used to identify the backup provider.
+	BackupProvider = "backup.gardener.cloud/provider"
+	// SeedProvider is used to identify the seed provider.
+	SeedProvider = "seed.gardener.cloud/provider"
+	// ShootProvider is used to identify the shoot provider.
+	ShootProvider = "shoot.gardener.cloud/provider"
 )

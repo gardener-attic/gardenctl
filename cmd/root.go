@@ -134,7 +134,7 @@ func init() {
 	RootCmd.AddCommand(registerCmd, unregisterCmd)
 	RootCmd.AddCommand(completionCmd)
 	RootCmd.AddCommand(NewShellCmd(targetReader, ioStreams))
-	RootCmd.AddCommand(sshCmd)
+	RootCmd.AddCommand(NewSSHCmd(targetReader, ioStreams))
 	RootCmd.AddCommand(kubectlCmd, kaCmd, ksCmd, kgCmd, knCmd, aliyunCmd, awsCmd, azCmd, gcloudCmd, openstackCmd)
 	RootCmd.AddCommand(infoCmd)
 	RootCmd.AddCommand(versionCmd)
