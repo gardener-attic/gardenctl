@@ -26,7 +26,7 @@ github.com/davecgh/go-spew/spew
 github.com/dgrijalva/jwt-go
 # github.com/evanphx/json-patch v4.1.0+incompatible
 github.com/evanphx/json-patch
-# github.com/gardener/gardener v0.0.0-20190410075443-fee279c3aa25
+# github.com/gardener/gardener v0.0.0-20190605055815-b3b8faa6f651
 github.com/gardener/gardener/pkg/apis/garden/v1beta1
 github.com/gardener/gardener/pkg/client/garden/clientset/versioned
 github.com/gardener/gardener/pkg/apis/core
@@ -85,6 +85,8 @@ github.com/inconshreveable/mousetrap
 github.com/jmoiron/jsonq
 # github.com/json-iterator/go v1.1.6
 github.com/json-iterator/go
+# github.com/konsorten/go-windows-terminal-sequences v1.0.1
+github.com/konsorten/go-windows-terminal-sequences
 # github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd
 github.com/modern-go/concurrent
 # github.com/modern-go/reflect2 v0.0.0-20180701023420-4b7aa43c6742
@@ -124,6 +126,8 @@ github.com/onsi/gomega/matchers/support/goraph/node
 github.com/onsi/gomega/matchers/support/goraph/util
 # github.com/pkg/browser v0.0.0-20180916011732-0a3d74bf9ce4
 github.com/pkg/browser
+# github.com/sirupsen/logrus v1.2.0
+github.com/sirupsen/logrus
 # github.com/spf13/cobra v0.0.0-20190109003409-7547e83b2d85
 github.com/spf13/cobra
 # github.com/spf13/pflag v1.0.3

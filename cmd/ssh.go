@@ -16,6 +16,7 @@ package cmd
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -27,84 +28,82 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-// sshCmd represents the ssh command
-var sshCmd = &cobra.Command{
-	Use:   "ssh",
-	Short: "SSH to a node\n",
-	Long:  ``,
-	Run: func(cmd *cobra.Command, args []string) {
-		var target Target
-		ReadTarget(pathTarget, &target)
-		if len(target.Target) < 3 {
-			fmt.Println("No shoot targeted")
-			os.Exit(2)
-		}
-		Client, err = clientToTarget("garden")
-		checkError(err)
-		gardenClientset, err := clientset.NewForConfig(NewConfigFromBytes(*kubeconfig))
-		checkError(err)
-		shootList, err := gardenClientset.GardenV1beta1().Shoots("").List(metav1.ListOptions{})
-		var ind int
-		for index, shoot := range shootList.Items {
-			if shoot.Name == target.Target[2].Name && (shoot.Namespace == target.Target[1].Name || *shoot.Spec.Cloud.Seed == target.Target[1].Name) {
-				ind = index
-				break
+// NewSSHCmd returns a new ssh command.
+func NewSSHCmd(reader TargetReader, ioStreams IOStreams) *cobra.Command {
+	cmd := &cobra.Command{
+		Use:          "ssh",
+		Short:        "SSH to a node",
+		SilenceUsage: true,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			target := reader.ReadTarget(pathTarget)
+			if len(target.Stack()) < 3 {
+				return errors.New("no shoot targeted")
 			}
-		}
-		infraType := shootList.Items[ind].Spec.Cloud.Profile
-		var kind string
-		switch infraType {
-		case "aws":
-			kind = "internal"
-		case "gcp":
-			kind = "external"
-		case "az":
-			kind = "internal"
-		case "openstack":
-		default:
-			fmt.Printf("Infrastructure type %s not found\n", infraType)
-		}
-		if len(args) == 0 {
-			fmt.Printf("Node ips:\n")
-			printNodeIPs(kind)
-			os.Exit(2)
-		} else if len(args) != 1 || !isIP(args[0]) {
-			fmt.Printf("Select a valid node ip\n\n")
-			fmt.Printf("Node ips:\n")
-			printNodeIPs(kind)
-			os.Exit(2)
-		}
-		path := downloadTerraformFiles("infra")
-		if path != "" {
-			path += "/terraform.tfstate"
-		}
-		pathToKey := downloadSSHKeypair()
-		fmt.Printf(pathToKey)
-		switch infraType {
-		case "aws":
-			region := shootList.Items[ind].Spec.Cloud.Region
-			cloudprofile, err := gardenClientset.GardenV1beta1().CloudProfiles().Get(infraType, metav1.GetOptions{})
+
+			Client, err = clientToTarget("garden")
 			checkError(err)
-			var imageID string
-			for _, v := range cloudprofile.Spec.AWS.Constraints.MachineImages[0].Regions {
-				if v.Name == region {
-					imageID = v.AMI
+			gardenClientset, err := clientset.NewForConfig(NewConfigFromBytes(*kubeconfig))
+			checkError(err)
+			shootList, err := gardenClientset.GardenV1beta1().Shoots("").List(metav1.ListOptions{})
+			var ind int
+			for index, shoot := range shootList.Items {
+				if shoot.Name == target.Stack()[2].Name && (shoot.Namespace == target.Stack()[1].Name || *shoot.Spec.Cloud.Seed == target.Stack()[1].Name) {
+					ind = index
+					break
 				}
 			}
-			sshToAWSNode(imageID, args[0], path)
-		case "gcp":
-			sshToGCPNode(args[0], path)
-		case "az":
-			sshToAZNode(args[0], path)
+			infraType := shootList.Items[ind].Spec.Cloud.Profile
+			var kind string
+			switch infraType {
+			case "aws":
+				kind = "internal"
+			case "gcp":
+				kind = "external"
+			case "az":
+				kind = "internal"
+			case "openstack":
+			default:
+				return fmt.Errorf("infrastructure type %q not found", infraType)
+			}
 
-		case "openstack":
-		default:
-			fmt.Printf("Infrastructure type %s not found\n", infraType)
-		}
-	},
-}
+			if len(args) == 0 {
+				fmt.Printf("Node ips:\n")
+				printNodeIPs(kind)
+				return nil
+			} else if len(args) != 1 || !isIP(args[0]) {
+				fmt.Printf("Select a valid node ip\n\n")
+				fmt.Printf("Node ips:\n")
+				printNodeIPs(kind)
+				os.Exit(2)
+			}
+			path := downloadTerraformFiles("infra")
+			if path != "" {
+				path += "/terraform.tfstate"
+			}
+			pathToKey := downloadSSHKeypair()
+			fmt.Printf(pathToKey)
+			switch infraType {
+			case "aws":
+				var imageID string
+				if imageID, err = fetchAWSImageIDByInstancePrivateIP(args[0]); err != nil {
+					return err
+				}
 
-func init() {
+				sshToAWSNode(imageID, args[0], path)
+			case "gcp":
+				sshToGCPNode(args[0], path)
+			case "az":
+				sshToAZNode(args[0], path)
+			case "openstack":
+			default:
+				return fmt.Errorf("infrastructure type %q not found", infraType)
+			}
+
+			return nil
+		},
+	}
+
+	return cmd
 }
 
 // sshToAWSNode provides cmds to ssh to aws via a bastions host and clean it up afterwards
@@ -261,4 +260,18 @@ func getNodeNameForIP(ip string) string {
 		}
 	}
 	return ""
+}
+
+// fetchAWSImageIDByInstancePrivateIP returns the image ID (AMI) for instance with the given <privateIP>.
+func fetchAWSImageIDByInstancePrivateIP(privateIP string) (string, error) {
+	command := fmt.Sprintf("aws ec2 describe-instances --filters Name=private-ip-address,Values=%s --query Reservations[0].Instances[0].ImageId", privateIP)
+	captured := capture()
+	operate("aws", command)
+	output, err := captured()
+
+	if err != nil || output == "None" {
+		return "", fmt.Errorf("could not fetch image ID (AMI) of instance with private IP address %q", privateIP)
+	}
+
+	return output, nil
 }
