@@ -21,15 +21,20 @@ import (
 )
 
 // ReadTarget returns the current target.
-func (r *GardenctlTargetReader) ReadTarget(pathTarget string) TargetInterface {
+func (r *GardenctlTargetReader) ReadTarget(targetPath string) TargetInterface {
 	var target Target
-	ReadTarget(pathTarget, &target)
+	ReadTarget(targetPath, &target)
 	return &target
 }
 
 // Stack return current target stack.
 func (t *Target) Stack() []TargetMeta {
 	return t.Target
+}
+
+// SetStack sets the current target stack to a new one.
+func (t *Target) SetStack(stack []TargetMeta) {
+	t.Target = stack
 }
 
 // Kind returns the current target kind.
@@ -58,5 +63,10 @@ func (t *Target) K8SClient() (kubernetes.Interface, error) {
 		return nil, err
 	}
 
+	return clientToTarget(kind)
+}
+
+// K8SClientToKind returns a kubernetes client configured against the given target <kind>.
+func (t *Target) K8SClientToKind(kind TargetKind) (kubernetes.Interface, error) {
 	return clientToTarget(kind)
 }

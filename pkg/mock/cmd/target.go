@@ -49,6 +49,21 @@ func (mr *MockTargetInterfaceMockRecorder) K8SClient() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "K8SClient", reflect.TypeOf((*MockTargetInterface)(nil).K8SClient))
 }
 
+// K8SClientToKind mocks base method
+func (m *MockTargetInterface) K8SClientToKind(arg0 cmd.TargetKind) (kubernetes.Interface, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "K8SClientToKind", arg0)
+	ret0, _ := ret[0].(kubernetes.Interface)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// K8SClientToKind indicates an expected call of K8SClientToKind
+func (mr *MockTargetInterfaceMockRecorder) K8SClientToKind(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "K8SClientToKind", reflect.TypeOf((*MockTargetInterface)(nil).K8SClientToKind), arg0)
+}
+
 // Kind mocks base method
 func (m *MockTargetInterface) Kind() (cmd.TargetKind, error) {
 	m.ctrl.T.Helper()
@@ -62,6 +77,18 @@ func (m *MockTargetInterface) Kind() (cmd.TargetKind, error) {
 func (mr *MockTargetInterfaceMockRecorder) Kind() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Kind", reflect.TypeOf((*MockTargetInterface)(nil).Kind))
+}
+
+// SetStack mocks base method
+func (m *MockTargetInterface) SetStack(arg0 []cmd.TargetMeta) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "SetStack", arg0)
+}
+
+// SetStack indicates an expected call of SetStack
+func (mr *MockTargetInterfaceMockRecorder) SetStack(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetStack", reflect.TypeOf((*MockTargetInterface)(nil).SetStack), arg0)
 }
 
 // Stack mocks base method

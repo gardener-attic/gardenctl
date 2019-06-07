@@ -21,14 +21,24 @@ type TargetReader interface {
 	ReadTarget(targetPath string) TargetInterface
 }
 
+// TargetWriter writes the current target.
+type TargetWriter interface {
+	WriteTarget(targetPath string, target TargetInterface) error
+}
+
 // GardenctlTargetReader implements TargetReader.
 type GardenctlTargetReader struct{}
+
+// GardenctlTargetWriter implements TargetWriter.
+type GardenctlTargetWriter struct{}
 
 // TargetInterface defines target operations.
 type TargetInterface interface {
 	Stack() []TargetMeta
+	SetStack([]TargetMeta)
 	Kind() (TargetKind, error)
 	K8SClient() (kubernetes.Interface, error)
+	K8SClientToKind(TargetKind) (kubernetes.Interface, error)
 }
 
 // Target contains the current target.
@@ -84,7 +94,7 @@ type ConfigReader interface {
 	ReadConfig(configPath string) *GardenConfig
 }
 
-// GardenConfigReader implementes ConfigReader.
+// GardenConfigReader implements ConfigReader.
 type GardenConfigReader struct{}
 
 //GardenConfig contains config for gardenctl
