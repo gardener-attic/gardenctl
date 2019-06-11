@@ -117,6 +117,7 @@ func init() {
 	var (
 		configReader = &GardenConfigReader{}
 		targetReader = &GardenctlTargetReader{}
+		targetWriter = &GardenctlTargetWriter{}
 		ioStreams    = IOStreams{
 			In:     os.Stdin,
 			Out:    os.Stdout,
@@ -129,7 +130,11 @@ func init() {
 	RootCmd.PersistentFlags().StringVarP(&outputFormat, "output", "o", "yaml", "output format yaml or json")
 	cobra.EnableCommandSorting = false
 	cobra.EnablePrefixMatching = prefixMatching
-	RootCmd.AddCommand(NewLsCmd(configReader), NewTargetCmd(targetReader, configReader), dropCmd, getCmd)
+	RootCmd.AddCommand(
+		NewLsCmd(configReader),
+		NewTargetCmd(targetReader, targetWriter, configReader),
+		NewDropCmd(targetReader, targetWriter, ioStreams),
+		getCmd)
 	RootCmd.AddCommand(downloadCmd, showCmd, logsCmd)
 	RootCmd.AddCommand(registerCmd, unregisterCmd)
 	RootCmd.AddCommand(completionCmd)

@@ -19,6 +19,9 @@ import (
 	mockcmd "github.com/gardener/gardenctl/pkg/mock/cmd"
 	"github.com/golang/mock/gomock"
 	"github.com/spf13/cobra"
+	"k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/kubernetes/fake"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/ginkgo/extensions/table"
@@ -31,6 +34,7 @@ var _ = Describe("Target command", func() {
 		ctrl         *gomock.Controller
 		configReader *mockcmd.MockConfigReader
 		targetReader *mockcmd.MockTargetReader
+		targetWriter *mockcmd.MockTargetWriter
 		target       *mockcmd.MockTargetInterface
 		command      *cobra.Command
 
@@ -44,6 +48,7 @@ var _ = Describe("Target command", func() {
 		ctrl = gomock.NewController(GinkgoT())
 		configReader = mockcmd.NewMockConfigReader(ctrl)
 		targetReader = mockcmd.NewMockTargetReader(ctrl)
+		targetWriter = mockcmd.NewMockTargetWriter(ctrl)
 		target = mockcmd.NewMockTargetInterface(ctrl)
 	})
 
@@ -56,30 +61,86 @@ var _ = Describe("Target command", func() {
 			targetReader.EXPECT().ReadTarget(gomock.Any()).Return(target)
 			target.EXPECT().Stack().Return([]cmd.TargetMeta{})
 
-			command = cmd.NewTargetCmd(targetReader, configReader)
+			command = cmd.NewTargetCmd(targetReader, targetWriter, configReader)
 			err := execute(command, []string{"project", "bar"})
 
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(Equal("no garden cluster targeted"))
 		})
-	})
 
-	Context("with target kind garden", func() {
-		It("with wrong name", func() {
+		It("targeting garden with wrong name", func() {
 			gardenConfig := &cmd.GardenConfig{
 				GardenClusters: []cmd.GardenClusterMeta{
 					cmd.GardenClusterMeta{
-						Name: "bar",
+						Name: "prod",
 					},
 				},
 			}
 			configReader.EXPECT().ReadConfig(gomock.Any()).Return(gardenConfig)
 
-			command = cmd.NewTargetCmd(targetReader, configReader)
+			command = cmd.NewTargetCmd(targetReader, targetWriter, configReader)
 			err := execute(command, []string{"garden", "foo"})
 
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(Equal("no match for \"foo\""))
+		})
+	})
+
+	Context("with garden target", func() {
+		It("targeting project with wrong name", func() {
+			targetReader.EXPECT().ReadTarget(gomock.Any()).Return(target)
+			target.EXPECT().Stack().Return([]cmd.TargetMeta{
+				cmd.TargetMeta{
+					Kind: cmd.TargetKindGarden,
+					Name: "prod",
+				},
+			})
+
+			clientSet := fake.NewSimpleClientset()
+			target.EXPECT().K8SClientToKind(cmd.TargetKindGarden).Return(clientSet, nil)
+
+			command = cmd.NewTargetCmd(targetReader, targetWriter, configReader)
+			err := execute(command, []string{"project", "foo"})
+
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(Equal("no match for \"foo\""))
+		})
+
+		It("targeting project with correct name", func() {
+			targetReader.EXPECT().ReadTarget(gomock.Any()).Return(target).Times(2)
+			target.EXPECT().Stack().Return([]cmd.TargetMeta{
+				cmd.TargetMeta{
+					Kind: cmd.TargetKindGarden,
+					Name: "prod",
+				},
+			}).Times(2)
+
+			clientSet := fake.NewSimpleClientset(&v1.Namespace{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "garden-myproj",
+					Labels: map[string]string{
+						"garden.sapcloud.io/role": "project",
+					},
+				},
+			})
+			target.EXPECT().K8SClientToKind(cmd.TargetKindGarden).Return(clientSet, nil)
+
+			target.EXPECT().SetStack([]cmd.TargetMeta{
+				cmd.TargetMeta{
+					Kind: cmd.TargetKindGarden,
+					Name: "prod",
+				},
+				cmd.TargetMeta{
+					Kind: cmd.TargetKindProject,
+					Name: "garden-myproj",
+				},
+			})
+			targetWriter.EXPECT().WriteTarget(gomock.Any(), target)
+
+			command = cmd.NewTargetCmd(targetReader, targetWriter, configReader)
+			err := execute(command, []string{"project", "garden-myproj"})
+
+			Expect(err).NotTo(HaveOccurred())
 		})
 	})
 
@@ -91,7 +152,7 @@ var _ = Describe("Target command", func() {
 
 	DescribeTable("validation",
 		func(c targetCase) {
-			command := cmd.NewTargetCmd(targetReader, configReader)
+			command := cmd.NewTargetCmd(targetReader, targetWriter, configReader)
 
 			err := execute(command, c.args)
 
