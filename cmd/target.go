@@ -30,7 +30,7 @@ import (
 )
 
 // NewTargetCmd returns a new target command.
-func NewTargetCmd(targetReader TargetReader, configReader ConfigReader) *cobra.Command {
+func NewTargetCmd(targetReader TargetReader, targetWriter TargetWriter, configReader ConfigReader) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:          "target <project|garden|seed|shoot> NAME",
 		Short:        "Set scope for next operations",
@@ -48,7 +48,7 @@ func NewTargetCmd(targetReader TargetReader, configReader ConfigReader) *cobra.C
 				if len(gardens) == 0 {
 					return fmt.Errorf("no match for %q", args[1])
 				} else if len(gardens) == 1 {
-					targetGarden(gardens[0])
+					targetGarden(targetWriter, gardens[0])
 				} else if len(gardens) > 1 {
 					fmt.Println("gardens:")
 					for _, val := range gardens {
@@ -64,12 +64,11 @@ func NewTargetCmd(targetReader TargetReader, configReader ConfigReader) *cobra.C
 				if len(target.Stack()) < 1 {
 					return errors.New("no garden cluster targeted")
 				}
-				projects := resolveNameProject(args[1])
+				projects := resolveNameProject(target, args[1])
 				if len(projects) == 0 {
-					fmt.Println("No match for " + args[1])
-					os.Exit(2)
+					return fmt.Errorf("no match for %q", args[1])
 				} else if len(projects) == 1 {
-					targetProject(projects[0])
+					targetProject(targetReader, targetWriter, projects[0])
 				} else if len(projects) > 1 {
 					fmt.Println("projects:")
 					for _, val := range projects {
@@ -87,10 +86,9 @@ func NewTargetCmd(targetReader TargetReader, configReader ConfigReader) *cobra.C
 				}
 				seeds := resolveNameSeed(args[1])
 				if len(seeds) == 0 {
-					fmt.Println("No match for " + args[1])
-					os.Exit(2)
+					return fmt.Errorf("no match for %q", args[1])
 				} else if len(seeds) == 1 {
-					targetSeed(seeds[0], true)
+					targetSeed(targetReader, targetWriter, seeds[0], true)
 				} else if len(seeds) > 1 {
 					fmt.Println("seeds:")
 					for _, val := range seeds {
@@ -106,12 +104,11 @@ func NewTargetCmd(targetReader TargetReader, configReader ConfigReader) *cobra.C
 				if len(target.Stack()) < 1 {
 					return errors.New("no garden cluster targeted")
 				}
-				shoots := resolveNameShoot(args[1])
+				shoots := resolveNameShoot(target, args[1])
 				if len(shoots) == 0 {
-					fmt.Println("No match for " + args[1])
-					os.Exit(2)
+					return fmt.Errorf("no match for %q", args[1])
 				} else if len(shoots) == 1 {
-					targetShoot(shoots[0])
+					targetShoot(targetWriter, shoots[0])
 				} else if len(shoots) > 1 {
 					fmt.Println("shoots:")
 					for _, val := range shoots {
@@ -129,7 +126,7 @@ func NewTargetCmd(targetReader TargetReader, configReader ConfigReader) *cobra.C
 						fmt.Println("No match for " + args[0])
 						os.Exit(2)
 					} else if len(gardens) == 1 {
-						targetGarden(gardens[0])
+						targetGarden(targetWriter, gardens[0])
 					} else if len(gardens) > 1 {
 						fmt.Println("gardens:")
 						for _, val := range gardens {
@@ -144,7 +141,7 @@ func NewTargetCmd(targetReader TargetReader, configReader ConfigReader) *cobra.C
 						fmt.Println("No match for " + args[0])
 						os.Exit(2)
 					} else if len(seeds) == 1 {
-						targetSeed(seeds[0], true)
+						targetSeed(targetReader, targetWriter, seeds[0], true)
 					} else if len(seeds) > 1 {
 						fmt.Println("seeds:")
 						for _, val := range seeds {
@@ -154,12 +151,12 @@ func NewTargetCmd(targetReader TargetReader, configReader ConfigReader) *cobra.C
 					}
 					break
 				} else if !garden && !seed && project {
-					projects := resolveNameProject(args[0])
+					projects := resolveNameProject(target, args[0])
 					if len(projects) == 0 {
 						fmt.Println("No match for " + args[0])
 						os.Exit(2)
 					} else if len(projects) == 1 {
-						targetProject(projects[0])
+						targetProject(targetReader, targetWriter, projects[0])
 					} else if len(projects) > 1 {
 						fmt.Println("projects:")
 						for _, val := range projects {
@@ -175,7 +172,7 @@ func NewTargetCmd(targetReader TargetReader, configReader ConfigReader) *cobra.C
 				seedList := getSeeds()
 				for _, seed := range seedList.Items {
 					if args[0] == seed.Name {
-						targetSeed(args[0], true)
+						targetSeed(targetReader, targetWriter, args[0], true)
 						os.Exit(0)
 					}
 				}
@@ -187,12 +184,12 @@ func NewTargetCmd(targetReader TargetReader, configReader ConfigReader) *cobra.C
 				match := false
 				for _, project := range projectList.Items {
 					if args[0] == project.Name {
-						targetProject(args[0])
+						targetProject(targetReader, targetWriter, args[0])
 						match = true
 						break
 					}
 					if ("garden-" + args[0]) == project.Name {
-						targetProject("garden-" + args[0])
+						targetProject(targetReader, targetWriter, "garden-"+args[0])
 						match = true
 						break
 					}
@@ -201,12 +198,12 @@ func NewTargetCmd(targetReader TargetReader, configReader ConfigReader) *cobra.C
 				if match {
 					break
 				}
-				shoots := resolveNameShoot(args[0])
+				shoots := resolveNameShoot(target, args[0])
 				if len(shoots) == 0 {
 					fmt.Println("No match for " + args[0])
 					os.Exit(2)
 				} else if len(shoots) == 1 {
-					targetShoot(shoots[0])
+					targetShoot(targetWriter, shoots[0])
 				} else if len(shoots) > 1 {
 					fmt.Println("shoots:")
 					for _, val := range shoots {
@@ -229,13 +226,14 @@ func NewTargetCmd(targetReader TargetReader, configReader ConfigReader) *cobra.C
 }
 
 // resolveNameProject resolves name to project
-func resolveNameProject(name string) (matches []string) {
+func resolveNameProject(target TargetInterface, name string) (matches []string) {
 	tmp := KUBECONFIG
-	Client, err = clientToTarget("garden")
+
+	client, err := target.K8SClientToKind(TargetKindGarden)
 	checkError(err)
 	projectLabel := "garden.sapcloud.io/role=project"
-	projectList, err := Client.CoreV1().Namespaces().List(metav1.ListOptions{
-		LabelSelector: fmt.Sprintf("%s", projectLabel),
+	projectList, err := client.CoreV1().Namespaces().List(metav1.ListOptions{
+		LabelSelector: projectLabel,
 	})
 	checkError(err)
 	matcher := ""
@@ -266,29 +264,17 @@ func resolveNameProject(name string) (matches []string) {
 }
 
 // targetProject targets a project
-func targetProject(name string) {
-	var target Target
-	ReadTarget(pathTarget, &target)
-	if len(target.Target) == 1 {
-		target.Target = append(target.Target, TargetMeta{"project", name})
-	} else if len(target.Target) == 2 {
-		drop()
-		target.Target[1].Kind = "project"
-		target.Target[1].Name = name
-	} else if len(target.Target) == 3 {
-		drop()
-		drop()
-		if len(target.Target) > 2 {
-			target.Target = target.Target[:len(target.Target)-2]
-			target.Target = append(target.Target, TargetMeta{"project", name})
-		}
-	}
-	file, err := os.OpenFile(pathTarget, os.O_WRONLY|os.O_CREATE, 0644)
+func targetProject(targetReader TargetReader, targetWriter TargetWriter, name string) {
+	target := targetReader.ReadTarget(pathTarget)
+	new := target.Stack()[:1]
+	new = append(new, TargetMeta{
+		Kind: TargetKindProject,
+		Name: name,
+	})
+	target.SetStack(new)
+
+	err = targetWriter.WriteTarget(pathTarget, target)
 	checkError(err)
-	content, err := yaml.Marshal(target)
-	checkError(err)
-	file.Write(content)
-	file.Close()
 }
 
 // resolveNameGarden resolves name to garden
@@ -322,35 +308,19 @@ func resolveNameGarden(reader ConfigReader, name string) (matches []string) {
 }
 
 // targetGarden targets kubeconfig file of garden cluster
-func targetGarden(name string) {
-	var target Target
-	ReadTarget(pathTarget, &target)
-	if len(target.Target) == 0 {
-		target.Target = append(target.Target, TargetMeta{"garden", name})
-	} else if len(target.Target) == 1 {
-		drop()
-		target.Target[0].Kind = "garden"
-		target.Target[0].Name = name
-	} else if len(target.Target) == 2 {
-		drop()
-		drop()
-		target.Target = target.Target[:len(target.Target)-2]
-		target.Target = append(target.Target, TargetMeta{"garden", name})
-	} else if len(target.Target) == 3 {
-		drop()
-		drop()
-		drop()
-		if len(target.Target) > 2 {
-			target.Target = target.Target[:len(target.Target)-3]
-			target.Target = append(target.Target, TargetMeta{"garden", name})
-		}
+func targetGarden(targetWriter TargetWriter, name string) {
+	target := &Target{
+		Target: []TargetMeta{
+			TargetMeta{
+				Kind: TargetKindGarden,
+				Name: name,
+			},
+		},
 	}
-	file, err := os.OpenFile(pathTarget, os.O_WRONLY|os.O_CREATE, 0644)
+
+	err = targetWriter.WriteTarget(pathTarget, target)
 	checkError(err)
-	content, err := yaml.Marshal(target)
-	checkError(err)
-	file.Write(content)
-	file.Close()
+
 	fmt.Println("KUBECONFIG=" + getKubeConfigOfCurrentTarget())
 }
 
@@ -388,7 +358,7 @@ func resolveNameSeed(name string) (matches []string) {
 }
 
 // targetSeed targets kubeconfig file of seed cluster and updates target
-func targetSeed(name string, cache bool) {
+func targetSeed(targetReader TargetReader, targetWriter TargetWriter, name string, cache bool) {
 	Client, err = clientToTarget("garden")
 	checkError(err)
 	gardenClientset, err := clientset.NewForConfig(NewConfigFromBytes(*kubeconfig))
@@ -409,54 +379,38 @@ func targetSeed(name string, cache bool) {
 		err = ioutil.WriteFile(pathSeed+"/kubeconfig.yaml", kubeSecret.Data["kubeconfig"], 0644)
 		checkError(err)
 	}
-	var target Target
-	targetFile, err := ioutil.ReadFile(pathTarget)
+
+	target := targetReader.ReadTarget(pathTarget)
+	new := target.Stack()[:1]
+	new = append(new, TargetMeta{
+		Kind: TargetKindSeed,
+		Name: name,
+	})
+	target.SetStack(new)
+
+	err = targetWriter.WriteTarget(pathTarget, target)
 	checkError(err)
-	err = yaml.Unmarshal(targetFile, &target)
-	checkError(err)
-	if len(target.Target) == 1 {
-		target.Target = append(target.Target, TargetMeta{"seed", name})
-	} else if len(target.Target) == 2 {
-		drop()
-		target.Target[1].Kind = "seed"
-		target.Target[1].Name = name
-	} else if len(target.Target) == 3 {
-		drop()
-		drop()
-		if len(target.Target) > 2 {
-			target.Target = target.Target[:len(target.Target)-2]
-			target.Target = append(target.Target, TargetMeta{"seed", name})
-		}
-	}
-	file, err := os.OpenFile(pathTarget, os.O_WRONLY|os.O_CREATE, 0644)
-	checkError(err)
-	content, err := yaml.Marshal(target)
-	checkError(err)
-	file.Write(content)
-	file.Close()
+
 	fmt.Println("KUBECONFIG=" + getKubeConfigOfCurrentTarget())
 }
 
 // resolveNameShoot resolves name to shoot
-func resolveNameShoot(name string) (matches []string) {
+func resolveNameShoot(target TargetInterface, name string) (matches []string) {
 	tmp := KUBECONFIG
 	Client, err = clientToTarget("garden")
 	checkError(err)
-	matcher := ""
-	var target Target
-	ReadTarget(pathTarget, &target)
 	gardenClientset, err := clientset.NewForConfig(NewConfigFromBytes(*kubeconfig))
 	checkError(err)
 	var shootList *v1beta1.ShootList
-	if len(target.Target) > 1 && target.Target[1].Kind == "project" {
-		shootList, err = gardenClientset.GardenV1beta1().Shoots(target.Target[1].Name).List(metav1.ListOptions{})
+	if len(target.Stack()) > 1 && target.Stack()[1].Kind == TargetKindProject {
+		shootList, err = gardenClientset.GardenV1beta1().Shoots(target.Stack()[1].Name).List(metav1.ListOptions{})
 		checkError(err)
-	} else if len(target.Target) > 1 && target.Target[1].Kind == "seed" {
+	} else if len(target.Stack()) > 1 && target.Stack()[1].Kind == TargetKindSeed {
 		shootList, err = gardenClientset.GardenV1beta1().Shoots("").List(metav1.ListOptions{})
 		checkError(err)
 		var filteredShoots []v1beta1.Shoot
 		for _, shoot := range shootList.Items {
-			if *shoot.Spec.Cloud.Seed == target.Target[1].Name {
+			if *shoot.Spec.Cloud.Seed == target.Stack()[1].Name {
 				filteredShoots = append(filteredShoots, shoot)
 			}
 		}
@@ -465,6 +419,8 @@ func resolveNameShoot(name string) (matches []string) {
 		shootList, err = gardenClientset.GardenV1beta1().Shoots("").List(metav1.ListOptions{})
 		checkError(err)
 	}
+
+	matcher := ""
 	for _, shoot := range shootList.Items {
 		shootName := shoot.Name
 		if strings.HasPrefix(name, "*") && strings.HasSuffix(name, "*") {
@@ -493,7 +449,7 @@ func resolveNameShoot(name string) (matches []string) {
 }
 
 // targetShoot targets shoot cluster with project as default value in stack
-func targetShoot(name string) {
+func targetShoot(targetWriter TargetWriter, name string) {
 	Client, err = clientToTarget("garden")
 	gardenClientset, err := clientset.NewForConfig(NewConfigFromBytes(*kubeconfig))
 	shootList, err := gardenClientset.GardenV1beta1().Shoots("").List(metav1.ListOptions{})
@@ -527,7 +483,7 @@ func targetShoot(name string) {
 			target.Target = append(target.Target, TargetMeta{"project", matchedShoots[0].Namespace})
 			target.Target = append(target.Target, TargetMeta{"shoot", matchedShoots[0].Name})
 		} else if len(target.Target) == 2 {
-			drop()
+			drop(targetWriter)
 			if target.Target[1].Kind == "seed" {
 				target.Target[1].Kind = "seed"
 				target.Target[1].Name = *matchedShoots[0].Spec.Cloud.Seed
@@ -537,8 +493,8 @@ func targetShoot(name string) {
 			}
 			target.Target = append(target.Target, TargetMeta{"shoot", matchedShoots[0].Name})
 		} else if len(target.Target) == 3 {
-			drop()
-			drop()
+			drop(targetWriter)
+			drop(targetWriter)
 			if len(target.Target) > 2 && target.Target[1].Kind == "seed" {
 				target.Target = target.Target[:len(target.Target)-2]
 				target.Target = append(target.Target, TargetMeta{"seed", *matchedShoots[0].Spec.Cloud.Seed})
@@ -549,12 +505,9 @@ func targetShoot(name string) {
 				target.Target = append(target.Target, TargetMeta{"shoot", matchedShoots[0].Name})
 			}
 		}
-		file, err := os.OpenFile(pathTarget, os.O_WRONLY|os.O_CREATE, 0644)
+		err := targetWriter.WriteTarget(pathTarget, &target)
 		checkError(err)
-		content, err := yaml.Marshal(target)
-		checkError(err)
-		file.Write(content)
-		file.Close()
+
 		Client, err = clientToTarget("garden")
 		checkError(err)
 		seed, err := gardenClientset.GardenV1beta1().Seeds().Get(seedName, metav1.GetOptions{})
@@ -625,15 +578,15 @@ func getKubeConfigOfClusterType(clusterType TargetKind) (pathToKubeconfig string
 		}
 	case TargetKindSeed:
 		if target.Target[1].Kind == "seed" {
-			pathToKubeconfig = pathGardenHome + "/cache/seeds" + "/" + target.Target[1].Name + "/" + "kubeconfig.yaml"
+			pathToKubeconfig = pathGardenHome + "/cache/seeds/" + target.Target[1].Name + "/kubeconfig.yaml"
 		} else {
-			pathToKubeconfig = pathGardenHome + "/cache/seeds" + "/" + getSeedForProject(target.Target[2].Name) + "/" + "kubeconfig.yaml"
+			pathToKubeconfig = pathGardenHome + "/cache/seeds/" + getSeedForProject(target.Target[2].Name) + "/kubeconfig.yaml"
 		}
 	case TargetKindShoot:
 		if target.Target[1].Kind == "seed" {
-			pathToKubeconfig = pathGardenHome + "/cache/seeds" + "/" + getSeedForProject(target.Target[2].Name) + "/" + target.Target[2].Name + "/" + "kubeconfig.yaml"
+			pathToKubeconfig = pathGardenHome + "/cache/seeds/" + getSeedForProject(target.Target[2].Name) + "/" + target.Target[2].Name + "/kubeconfig.yaml"
 		} else if target.Target[1].Kind == "project" {
-			pathToKubeconfig = pathGardenHome + "/cache/projects" + "/" + target.Target[1].Name + "/" + target.Target[2].Name + "/" + "kubeconfig.yaml"
+			pathToKubeconfig = pathGardenHome + "/cache/projects/" + target.Target[1].Name + "/" + target.Target[2].Name + "/kubeconfig.yaml"
 		}
 	}
 	return pathToKubeconfig
@@ -650,12 +603,12 @@ func getKubeConfigOfCurrentTarget() (pathToKubeconfig string) {
 			pathToKubeconfig = getGardenKubeConfig()
 		}
 	} else if (len(target.Target) == 2) && (target.Target[1].Kind != "project") {
-		pathToKubeconfig = pathGardenHome + "/cache/seeds" + "/" + target.Target[1].Name + "/" + "kubeconfig.yaml"
+		pathToKubeconfig = pathGardenHome + "/cache/seeds/" + target.Target[1].Name + "/kubeconfig.yaml"
 	} else if len(target.Target) == 3 {
 		if target.Target[1].Kind == "seed" {
-			pathToKubeconfig = pathGardenHome + "/cache/seeds" + "/" + target.Target[1].Name + "/" + target.Target[2].Name + "/" + "kubeconfig.yaml"
+			pathToKubeconfig = pathGardenHome + "/cache/seeds/" + target.Target[1].Name + "/" + target.Target[2].Name + "/kubeconfig.yaml"
 		} else if target.Target[1].Kind == "project" {
-			pathToKubeconfig = pathGardenHome + "/cache/projects" + "/" + target.Target[1].Name + "/" + target.Target[2].Name + "/" + "kubeconfig.yaml"
+			pathToKubeconfig = pathGardenHome + "/cache/projects/" + target.Target[1].Name + "/" + target.Target[2].Name + "/kubeconfig.yaml"
 		}
 	}
 	return pathToKubeconfig

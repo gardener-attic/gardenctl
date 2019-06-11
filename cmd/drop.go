@@ -15,73 +15,78 @@
 package cmd
 
 import (
+	"errors"
 	"fmt"
-	"os"
-
-	yaml "gopkg.in/yaml.v2"
 
 	"github.com/spf13/cobra"
 )
 
-// dropCmd represents the drop command
-var dropCmd = &cobra.Command{
-	Use:   "drop [(project|seed)]",
-	Short: "Drop scope for next operations (default: last target)",
-	Long:  ``,
-	Run: func(cmd *cobra.Command, args []string) {
-		if len(args) > 1 {
-			fmt.Println("Command must be in the format: gardenctl drop [(project|seed)]")
-			os.Exit(2)
-		}
-		if len(args) == 0 {
-			var target Target
-			ReadTarget(pathTarget, &target)
-			if len(target.Target) == 1 {
-				fmt.Printf("Dropped %s %s\n", target.Target[0].Kind, target.Target[0].Name)
-			} else if len(target.Target) == 2 {
-				fmt.Printf("Dropped %s %s\n", target.Target[1].Kind, target.Target[1].Name)
-			} else if len(target.Target) == 3 {
-				fmt.Printf("Dropped %s %s\n", target.Target[2].Kind, target.Target[2].Name)
+// NewDropCmd returns a new drop command.
+func NewDropCmd(targetReader TargetReader, targetWriter TargetWriter, ioStreams IOStreams) *cobra.Command {
+	cmd := &cobra.Command{
+		Use:          "drop [(project|seed)]",
+		Short:        "Drop scope for next operations (default: last target)",
+		SilenceUsage: true,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if len(args) > 1 {
+				return errors.New("command must be in the format: gardenctl drop [(project|seed)]")
 			}
-			drop()
-		} else if len(args) == 1 {
-			var target Target
-			ReadTarget(pathTarget, &target)
-			switch args[0] {
-			case "project":
-				if len(target.Target) == 2 && target.Target[1].Kind == "project" {
-					drop()
-					fmt.Printf("Dropped %s %s\n", target.Target[1].Kind, target.Target[1].Name)
-				} else if len(target.Target) == 3 && target.Target[1].Kind == "project" {
-					drop()
-					drop()
-					fmt.Printf("Dropped %s %s\n", target.Target[2].Kind, target.Target[2].Name)
-					fmt.Printf("Dropped %s %s\n", target.Target[1].Kind, target.Target[1].Name)
-				} else {
-					fmt.Println("A seed is targeted")
+			if len(args) == 0 {
+				target := targetReader.ReadTarget(pathTarget)
+				stackLength := len(target.Stack())
+				if stackLength == 0 {
+					return errors.New("target stack is empty")
 				}
-			case "seed":
-				if len(target.Target) == 2 && target.Target[1].Kind == "seed" {
-					drop()
-					fmt.Printf("Dropped %s %s\n", target.Target[1].Kind, target.Target[1].Name)
-				} else if len(target.Target) == 3 && target.Target[1].Kind == "seed" {
-					drop()
-					drop()
-					fmt.Printf("Dropped %s %s\n", target.Target[2].Kind, target.Target[2].Name)
-					fmt.Printf("Dropped %s %s\n", target.Target[1].Kind, target.Target[1].Name)
-				} else {
-					fmt.Println("A project is targeted")
+
+				fmt.Fprintf(ioStreams.Out, "Dropped %s %s\n", target.Stack()[stackLength-1].Kind, target.Stack()[stackLength-1].Name)
+
+				target.SetStack(target.Stack()[:stackLength-1])
+				if err = targetWriter.WriteTarget(pathTarget, target); err != nil {
+					return err
 				}
-			default:
-				fmt.Println("Command must be in the format: gardenctl drop <project|seed>")
+			} else if len(args) == 1 {
+				var target Target
+				ReadTarget(pathTarget, &target)
+				switch args[0] {
+				case "project":
+					if len(target.Target) == 2 && target.Target[1].Kind == "project" {
+						drop(targetWriter)
+						fmt.Printf("Dropped %s %s\n", target.Target[1].Kind, target.Target[1].Name)
+					} else if len(target.Target) == 3 && target.Target[1].Kind == "project" {
+						drop(targetWriter)
+						drop(targetWriter)
+						fmt.Printf("Dropped %s %s\n", target.Target[2].Kind, target.Target[2].Name)
+						fmt.Printf("Dropped %s %s\n", target.Target[1].Kind, target.Target[1].Name)
+					} else {
+						fmt.Println("A seed is targeted")
+					}
+				case "seed":
+					if len(target.Target) == 2 && target.Target[1].Kind == "seed" {
+						drop(targetWriter)
+						fmt.Printf("Dropped %s %s\n", target.Target[1].Kind, target.Target[1].Name)
+					} else if len(target.Target) == 3 && target.Target[1].Kind == "seed" {
+						drop(targetWriter)
+						drop(targetWriter)
+						fmt.Printf("Dropped %s %s\n", target.Target[2].Kind, target.Target[2].Name)
+						fmt.Printf("Dropped %s %s\n", target.Target[1].Kind, target.Target[1].Name)
+					} else {
+						fmt.Println("A project is targeted")
+					}
+				default:
+					fmt.Println("Command must be in the format: gardenctl drop <project|seed>")
+				}
 			}
-		}
-	},
-	ValidArgs: []string{"project", "seed"},
+
+			return nil
+		},
+		ValidArgs: []string{"project", "seed"},
+	}
+
+	return cmd
 }
 
 // drop drops target until stack is empty
-func drop() {
+func drop(targetWriter TargetWriter) {
 	var target Target
 	ReadTarget(pathTarget, &target)
 	if len(target.Target) > 0 {
@@ -89,11 +94,9 @@ func drop() {
 	} else {
 		fmt.Println("Target stack is empty")
 	}
-	file, err := os.OpenFile(pathTarget, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0644)
+
+	err = targetWriter.WriteTarget(pathTarget, &target)
 	checkError(err)
-	content, err := yaml.Marshal(target)
-	checkError(err)
-	file.Write(content)
-	file.Close()
+
 	KUBECONFIG = getKubeConfigOfCurrentTarget()
 }
