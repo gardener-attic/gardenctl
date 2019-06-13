@@ -24,8 +24,10 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
+	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
+	k8s "k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/clientcmd"
 )
 
@@ -33,6 +35,8 @@ const (
 	maxEsLogs             = 100000
 	fourteenDaysInSeconds = 60 * 60 * 24 * 14
 	esLogsPerRequest      = 10000
+	emptyString           = ""
+	unauthorized          = "Unauthorized"
 )
 
 //flags passed to the command
@@ -191,7 +195,16 @@ func logPod(toMatch string, toTarget string, container string) {
 	if !flags.elasticsearch {
 		showLogsFromKubectl(namespace, toMatch, container)
 	} else {
-		showLogsFromElasticsearch(namespace, toMatch, container)
+		credentials, err := getCredentials(namespace)
+
+		if err == nil {
+			username := credentials.Data["username"]
+			password := credentials.Data["password"]
+
+			showLogsFromElasticsearch(namespace, toMatch, container, string(username), string(password))
+		} else {
+			showLogsFromElasticsearch(namespace, toMatch, container, emptyString, emptyString)
+		}
 	}
 }
 
@@ -209,11 +222,27 @@ func showLogsFromKubectl(namespace, toMatch, container string) {
 	}
 }
 
-func showLogsFromElasticsearch(namespace, toMatch, container string) {
-	output, err := ExecCmdReturnOutput("bash", "-c", buildElasticsearchCommand(namespace, toMatch, container))
+func getCredentials(namespace string) (*v1.Secret, error) {
+	oldConfig := KUBECONFIG
+	config, err := clientcmd.BuildConfigFromFlags("", getKubeConfigOfClusterType("seed"))
+	checkError(err)
+	clientset, err := k8s.NewForConfig(config)
+	checkError(err)
+	KUBECONFIG = oldConfig
+
+	return clientset.CoreV1().Secrets(namespace).Get("logging-ingress-credentials", metav1.GetOptions{})
+}
+
+func showLogsFromElasticsearch(namespace, toMatch, container, username, password string) {
+	output, err := ExecCmdReturnOutput("bash", "-c", buildElasticsearchCommand(namespace, toMatch, container, username, password))
 	checkError(err)
 
-	responses := buildElasticsearchResponses(output, namespace, toMatch, container)
+	if output == unauthorized {
+		fmt.Println("You have no permissions to read from elasticsearch")
+		os.Exit(2)
+	}
+
+	responses := buildElasticsearchResponses(output, namespace, toMatch, container, username, password)
 	var logs strings.Builder
 	for i := len(responses) - 1; i >= 0; i-- {
 		logs.WriteString(responses[i].String())
@@ -240,23 +269,33 @@ func buildKubectlCommand(namespace, podName, container string) string {
 	return command.String()
 }
 
-func buildElasticsearchCommand(namespace, podName, container string) string {
+func buildElasticsearchCommand(namespace, podName, container, username, password string) string {
 	query := createElasticQuery(podName, container)
 	bytes, err := json.Marshal(query)
 	checkError(err)
 
-	return fmt.Sprintf("kubectl --kubeconfig=%s exec elasticsearch-logging-0 -n %s -- curl -X GET -H \"Content-Type:application/json\" localhost:9200/_all/_search?scroll=1m -d '%s'", KUBECONFIG, namespace, string(bytes))
+	command := fmt.Sprintf("kubectl --kubeconfig=%s exec elasticsearch-logging-0 -n %s -- curl -X GET -H \"Content-Type:application/json\" localhost:9200/_all/_search?scroll=1m -d '%s'", KUBECONFIG, namespace, string(bytes))
+	if username != emptyString && password != emptyString {
+		command += fmt.Sprintf(" --user %s:%s", username, password)
+	}
+
+	return command
 }
 
-func buildElasticsearchScrollCommand(namespace, podName, container, scrollID string) string {
+func buildElasticsearchScrollCommand(namespace, podName, container, scrollID, username, password string) string {
 	request := scrollRequest{Scroll: "1m", ScrollID: scrollID}
 	bytes, err := json.Marshal(request)
 	checkError(err)
 
-	return fmt.Sprintf("kubectl --kubeconfig=%s exec elasticsearch-logging-0 -n %s -- curl -X POST -H \"Content-Type:application/json\" localhost:9200/_search/scroll -d '%s'", KUBECONFIG, namespace, string(bytes))
+	scrollCommand := fmt.Sprintf("kubectl --kubeconfig=%s exec elasticsearch-logging-0 -n %s -- curl -X POST -H \"Content-Type:application/json\" localhost:9200/_search/scroll -d '%s'", KUBECONFIG, namespace, string(bytes))
+	if username != emptyString && password != emptyString {
+		scrollCommand += fmt.Sprintf(" --user %s:%s", username, password)
+	}
+
+	return scrollCommand
 }
 
-func buildElasticsearchResponses(output, namespace, toMatch, container string) []logResponse {
+func buildElasticsearchResponses(output, namespace, toMatch, container, username, password string) []logResponse {
 	responses := make([]logResponse, 0)
 
 	byteOutput := []byte(output)
@@ -269,7 +308,7 @@ func buildElasticsearchResponses(output, namespace, toMatch, container string) [
 	scrollID := response.ScrollID
 	logsToFetch := flags.tail - esLogsPerRequest
 	for logsToFetch > 0 {
-		output, err := ExecCmdReturnOutput("bash", "-c", buildElasticsearchScrollCommand(namespace, toMatch, container, scrollID))
+		output, err := ExecCmdReturnOutput("bash", "-c", buildElasticsearchScrollCommand(namespace, toMatch, container, scrollID, username, password))
 		checkError(err)
 
 		byteOutput := []byte(output)
