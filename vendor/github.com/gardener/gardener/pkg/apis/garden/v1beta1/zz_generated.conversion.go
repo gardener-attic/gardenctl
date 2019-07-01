@@ -3996,7 +3996,17 @@ func Convert_garden_SeedCloud_To_v1beta1_SeedCloud(in *garden.SeedCloud, out *Se
 
 func autoConvert_v1beta1_SeedList_To_garden_SeedList(in *SeedList, out *garden.SeedList, s conversion.Scope) error {
 	out.ListMeta = in.ListMeta
-	out.Items = *(*[]garden.Seed)(unsafe.Pointer(&in.Items))
+	if in.Items != nil {
+		in, out := &in.Items, &out.Items
+		*out = make([]garden.Seed, len(*in))
+		for i := range *in {
+			if err := Convert_v1beta1_Seed_To_garden_Seed(&(*in)[i], &(*out)[i], s); err != nil {
+				return err
+			}
+		}
+	} else {
+		out.Items = nil
+	}
 	return nil
 }
 
@@ -4007,7 +4017,17 @@ func Convert_v1beta1_SeedList_To_garden_SeedList(in *SeedList, out *garden.SeedL
 
 func autoConvert_garden_SeedList_To_v1beta1_SeedList(in *garden.SeedList, out *SeedList, s conversion.Scope) error {
 	out.ListMeta = in.ListMeta
-	out.Items = *(*[]Seed)(unsafe.Pointer(&in.Items))
+	if in.Items != nil {
+		in, out := &in.Items, &out.Items
+		*out = make([]Seed, len(*in))
+		for i := range *in {
+			if err := Convert_garden_Seed_To_v1beta1_Seed(&(*in)[i], &(*out)[i], s); err != nil {
+				return err
+			}
+		}
+	} else {
+		out.Items = nil
+	}
 	return nil
 }
 
@@ -4049,6 +4069,7 @@ func autoConvert_v1beta1_SeedSpec_To_garden_SeedSpec(in *SeedSpec, out *garden.S
 	if err := Convert_v1beta1_SeedNetworks_To_garden_SeedNetworks(&in.Networks, &out.Networks, s); err != nil {
 		return err
 	}
+	out.BlockCIDRs = *(*[]core.CIDR)(unsafe.Pointer(&in.BlockCIDRs))
 	out.Visible = (*bool)(unsafe.Pointer(in.Visible))
 	out.Protected = (*bool)(unsafe.Pointer(in.Protected))
 	return nil
@@ -4068,6 +4089,7 @@ func autoConvert_garden_SeedSpec_To_v1beta1_SeedSpec(in *garden.SeedSpec, out *S
 	if err := Convert_garden_SeedNetworks_To_v1beta1_SeedNetworks(&in.Networks, &out.Networks, s); err != nil {
 		return err
 	}
+	out.BlockCIDRs = *(*[]v1alpha1.CIDR)(unsafe.Pointer(&in.BlockCIDRs))
 	out.Visible = (*bool)(unsafe.Pointer(in.Visible))
 	out.Protected = (*bool)(unsafe.Pointer(in.Protected))
 	return nil
@@ -4079,7 +4101,11 @@ func Convert_garden_SeedSpec_To_v1beta1_SeedSpec(in *garden.SeedSpec, out *SeedS
 }
 
 func autoConvert_v1beta1_SeedStatus_To_garden_SeedStatus(in *SeedStatus, out *garden.SeedStatus, s conversion.Scope) error {
+	if err := Convert_v1beta1_Gardener_To_garden_Gardener(&in.Gardener, &out.Gardener, s); err != nil {
+		return err
+	}
 	out.Conditions = *(*[]core.Condition)(unsafe.Pointer(&in.Conditions))
+	out.ObservedGeneration = in.ObservedGeneration
 	return nil
 }
 
@@ -4090,6 +4116,10 @@ func Convert_v1beta1_SeedStatus_To_garden_SeedStatus(in *SeedStatus, out *garden
 
 func autoConvert_garden_SeedStatus_To_v1beta1_SeedStatus(in *garden.SeedStatus, out *SeedStatus, s conversion.Scope) error {
 	out.Conditions = *(*[]v1alpha1.Condition)(unsafe.Pointer(&in.Conditions))
+	if err := Convert_garden_Gardener_To_v1beta1_Gardener(&in.Gardener, &out.Gardener, s); err != nil {
+		return err
+	}
+	out.ObservedGeneration = in.ObservedGeneration
 	return nil
 }
 

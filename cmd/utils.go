@@ -78,7 +78,7 @@ func ExecCmd(input []byte, cmd string, suppressedOutput bool, environment ...str
 	parts := strings.Fields(cmd)
 	head := parts[0]
 	if len(parts) > 1 {
-		parts = parts[1:len(parts)]
+		parts = parts[1:]
 	} else {
 		parts = nil
 	}

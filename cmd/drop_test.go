@@ -65,11 +65,11 @@ var _ = Describe("Drop command", func() {
 			var (
 				target = &cmd.Target{
 					Target: []cmd.TargetMeta{
-						cmd.TargetMeta{
+						{
 							Kind: cmd.TargetKindGarden,
 							Name: "test-garden",
 						},
-						cmd.TargetMeta{
+						{
 							Kind: cmd.TargetKindSeed,
 							Name: "test-seed",
 						},
@@ -77,7 +77,7 @@ var _ = Describe("Drop command", func() {
 				}
 				expectedTarget = &cmd.Target{
 					Target: []cmd.TargetMeta{
-						cmd.TargetMeta{
+						{
 							Kind: cmd.TargetKindGarden,
 							Name: "test-garden",
 						},

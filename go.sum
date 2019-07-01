@@ -32,8 +32,8 @@ github.com/evanphx/json-patch v4.1.0+incompatible h1:K1MDoo4AZ4wU0GIU/fPmtZg7Vpz
 github.com/evanphx/json-patch v4.1.0+incompatible/go.mod h1:50XU6AFN0ol/bzJsmQLiYLvXMP4fmwYFNcr97nuDLSk=
 github.com/fsnotify/fsnotify v1.4.7 h1:IXs+QLmnXW2CcXuY+8Mzv/fWEsPGWxqefPtCP5CnV9I=
 github.com/fsnotify/fsnotify v1.4.7/go.mod h1:jwhsz4b93w/PPRr/qN1Yymfu8t87LnFCMoQvtojpjFo=
-github.com/gardener/gardener v0.0.0-20190605055815-b3b8faa6f651 h1:V9lytHbipDjguXbhQvq+3jny1Ujpo8QaI2Vcs50GAYY=
-github.com/gardener/gardener v0.0.0-20190605055815-b3b8faa6f651/go.mod h1:uRS25af8GjLnNo7RErPDKhBsemnJADTldiQhtVbUPHw=
+github.com/gardener/gardener v0.0.0-20190628060349-06358ff44e46 h1:MjM35kTwLZi9BDGxKT/SZl1YJPTCt6rlPn5efLoRmWU=
+github.com/gardener/gardener v0.0.0-20190628060349-06358ff44e46/go.mod h1:uRS25af8GjLnNo7RErPDKhBsemnJADTldiQhtVbUPHw=
 github.com/ghodss/yaml v1.0.0 h1:wQHKEahhL6wmXdzwWG11gIVCkOv05bNOh+Rxn0yngAk=
 github.com/ghodss/yaml v1.0.0/go.mod h1:4dBDuWmgqj2HViK6kFavaiC9ZROes6MMH2rRYeMEF04=
 github.com/go-kit/kit v0.8.0/go.mod h1:xBxKIO96dXMWWy0MnWVtmwkA9/13aqxPnvrjFYMA2as=
