@@ -37,7 +37,7 @@ var _ = Describe("Drop command", func() {
 			return command.Execute()
 		}
 	)
-	
+
 	BeforeEach(func() {
 		ctrl = gomock.NewController(GinkgoT())
 		targetReader = mockcmd.NewMockTargetReader(ctrl)

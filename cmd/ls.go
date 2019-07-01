@@ -29,7 +29,7 @@ import (
 )
 
 // NewLsCmd returns a new ls command.
-func NewLsCmd(reader ConfigReader) *cobra.Command {
+func NewLsCmd(reader ConfigReader, ioStreams IOStreams) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "ls [gardens|projects|seeds|shoots|issues]",
 		Short: "List all resource instances, e.g. list of shoots|issues",
@@ -55,7 +55,7 @@ func NewLsCmd(reader ConfigReader) *cobra.Command {
 				getProjectsWithShoots()
 				KUBECONFIG = tmp
 			case "gardens":
-				getGardens(reader)
+				PrintGardenClusters(reader, outputFormat, ioStreams)
 			case "seeds":
 				Client, err = clientToTarget("garden")
 				checkError(err)
@@ -139,8 +139,8 @@ func getProjectsWithShoots() {
 	}
 }
 
-// getGardens lists all garden cluster in config
-func getGardens(reader ConfigReader) {
+// PrintGardenClusters prints all Garden cluster in the Garden config
+func PrintGardenClusters(reader ConfigReader, outFormat string, ioStreams IOStreams) {
 	config := reader.ReadConfig(pathGardenConfig)
 
 	var gardens GardenClusters
@@ -149,16 +149,14 @@ func getGardens(reader ConfigReader) {
 		gm.Name = garden.Name
 		gardens.GardenClusters = append(gardens.GardenClusters, gm)
 	}
-	if outputFormat == "yaml" {
+	if outFormat == "yaml" {
 		y, err := yaml.Marshal(gardens)
 		checkError(err)
-		os.Stdout.Write(y)
-	} else if outputFormat == "json" {
-		j, err := json.Marshal(gardens)
+		fmt.Fprint(ioStreams.Out, string(y))
+	} else if outFormat == "json" {
+		j, err := json.MarshalIndent(gardens, "", "  ")
 		checkError(err)
-		var out bytes.Buffer
-		json.Indent(&out, j, "", "  ")
-		out.WriteTo(os.Stdout)
+		fmt.Fprint(ioStreams.Out, string(j))
 	}
 }
 
