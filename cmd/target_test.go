@@ -19,7 +19,7 @@ import (
 	mockcmd "github.com/gardener/gardenctl/pkg/mock/cmd"
 	"github.com/golang/mock/gomock"
 	"github.com/spf13/cobra"
-	"k8s.io/api/core/v1"
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes/fake"
 
@@ -61,7 +61,8 @@ var _ = Describe("Target command", func() {
 			targetReader.EXPECT().ReadTarget(gomock.Any()).Return(target)
 			target.EXPECT().Stack().Return([]cmd.TargetMeta{})
 
-			command = cmd.NewTargetCmd(targetReader, targetWriter, configReader)
+			ioStreams, _, _, _ := cmd.NewTestIOStreams()
+			command = cmd.NewTargetCmd(targetReader, targetWriter, configReader, ioStreams)
 			err := execute(command, []string{"project", "bar"})
 
 			Expect(err).To(HaveOccurred())
@@ -78,7 +79,8 @@ var _ = Describe("Target command", func() {
 			}
 			configReader.EXPECT().ReadConfig(gomock.Any()).Return(gardenConfig)
 
-			command = cmd.NewTargetCmd(targetReader, targetWriter, configReader)
+			ioStreams, _, _, _ := cmd.NewTestIOStreams()
+			command = cmd.NewTargetCmd(targetReader, targetWriter, configReader, ioStreams)
 			err := execute(command, []string{"garden", "foo"})
 
 			Expect(err).To(HaveOccurred())
@@ -99,7 +101,8 @@ var _ = Describe("Target command", func() {
 			clientSet := fake.NewSimpleClientset()
 			target.EXPECT().K8SClientToKind(cmd.TargetKindGarden).Return(clientSet, nil)
 
-			command = cmd.NewTargetCmd(targetReader, targetWriter, configReader)
+			ioStreams, _, _, _ := cmd.NewTestIOStreams()
+			command = cmd.NewTargetCmd(targetReader, targetWriter, configReader, ioStreams)
 			err := execute(command, []string{"project", "foo"})
 
 			Expect(err).To(HaveOccurred())
@@ -115,7 +118,7 @@ var _ = Describe("Target command", func() {
 				},
 			}).Times(2)
 
-			clientSet := fake.NewSimpleClientset(&v1.Namespace{
+			clientSet := fake.NewSimpleClientset(&corev1.Namespace{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "garden-myproj",
 					Labels: map[string]string{
@@ -137,7 +140,8 @@ var _ = Describe("Target command", func() {
 			})
 			targetWriter.EXPECT().WriteTarget(gomock.Any(), target)
 
-			command = cmd.NewTargetCmd(targetReader, targetWriter, configReader)
+			ioStreams, _, _, _ := cmd.NewTestIOStreams()
+			command = cmd.NewTargetCmd(targetReader, targetWriter, configReader, ioStreams)
 			err := execute(command, []string{"project", "garden-myproj"})
 
 			Expect(err).NotTo(HaveOccurred())
@@ -152,7 +156,8 @@ var _ = Describe("Target command", func() {
 
 	DescribeTable("validation",
 		func(c targetCase) {
-			command := cmd.NewTargetCmd(targetReader, targetWriter, configReader)
+			ioStreams, _, _, _ := cmd.NewTestIOStreams()
+			command := cmd.NewTargetCmd(targetReader, targetWriter, configReader, ioStreams)
 
 			err := execute(command, c.args)
 
@@ -163,8 +168,8 @@ var _ = Describe("Target command", func() {
 			args:        []string{},
 			expectedErr: "command must be in the format: target <project|garden|seed|shoot> NAME",
 		}),
-		Entry("with missing garden cluster name", targetCase{
-			args:        []string{"garden"},
+		Entry("with 2 garden cluster names", targetCase{
+			args:        []string{"garden", "prod-1", "prod-2"},
 			expectedErr: "command must be in the format: target garden NAME",
 		}),
 		Entry("with missing project name", targetCase{
