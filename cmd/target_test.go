@@ -72,7 +72,7 @@ var _ = Describe("Target command", func() {
 		It("targeting garden with wrong name", func() {
 			gardenConfig := &cmd.GardenConfig{
 				GardenClusters: []cmd.GardenClusterMeta{
-					cmd.GardenClusterMeta{
+					{
 						Name: "prod",
 					},
 				},
@@ -92,7 +92,7 @@ var _ = Describe("Target command", func() {
 		It("targeting project with wrong name", func() {
 			targetReader.EXPECT().ReadTarget(gomock.Any()).Return(target)
 			target.EXPECT().Stack().Return([]cmd.TargetMeta{
-				cmd.TargetMeta{
+				{
 					Kind: cmd.TargetKindGarden,
 					Name: "prod",
 				},
@@ -112,7 +112,7 @@ var _ = Describe("Target command", func() {
 		It("targeting project with correct name", func() {
 			targetReader.EXPECT().ReadTarget(gomock.Any()).Return(target).Times(2)
 			target.EXPECT().Stack().Return([]cmd.TargetMeta{
-				cmd.TargetMeta{
+				{
 					Kind: cmd.TargetKindGarden,
 					Name: "prod",
 				},
@@ -129,11 +129,11 @@ var _ = Describe("Target command", func() {
 			target.EXPECT().K8SClientToKind(cmd.TargetKindGarden).Return(clientSet, nil)
 
 			target.EXPECT().SetStack([]cmd.TargetMeta{
-				cmd.TargetMeta{
+				{
 					Kind: cmd.TargetKindGarden,
 					Name: "prod",
 				},
-				cmd.TargetMeta{
+				{
 					Kind: cmd.TargetKindProject,
 					Name: "garden-myproj",
 				},

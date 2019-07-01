@@ -180,7 +180,7 @@ func buildRootPod(name, namespace, image, hostname string) *corev1.Pod {
 		},
 		Spec: corev1.PodSpec{
 			Containers: []corev1.Container{
-				corev1.Container{
+				{
 					Name:    "root-container",
 					Image:   image,
 					Command: []string{"sleep", "10000000"},
@@ -189,7 +189,7 @@ func buildRootPod(name, namespace, image, hostname string) *corev1.Pod {
 						Privileged: &privileged,
 					},
 					VolumeMounts: []corev1.VolumeMount{
-						corev1.VolumeMount{
+						{
 							Name:      "root-volume",
 							MountPath: "/hostroot",
 						},
@@ -202,14 +202,14 @@ func buildRootPod(name, namespace, image, hostname string) *corev1.Pod {
 				"kubernetes.io/hostname": hostname,
 			},
 			Tolerations: []corev1.Toleration{
-				corev1.Toleration{
+				{
 					Key:      "node-role.kubernetes.io/master",
 					Operator: corev1.TolerationOpExists,
 					Effect:   corev1.TaintEffectNoSchedule,
 				},
 			},
 			Volumes: []corev1.Volume{
-				corev1.Volume{
+				{
 					Name: "root-volume",
 					VolumeSource: corev1.VolumeSource{
 						HostPath: &corev1.HostPathVolumeSource{

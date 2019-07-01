@@ -316,7 +316,7 @@ func resolveNameGarden(reader ConfigReader, name string) (matches []string) {
 func targetGarden(targetWriter TargetWriter, name string) {
 	target := &Target{
 		Target: []TargetMeta{
-			TargetMeta{
+			{
 				Kind: TargetKindGarden,
 				Name: name,
 			},

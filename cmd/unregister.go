@@ -15,6 +15,7 @@
 package cmd
 
 import (
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -28,84 +29,56 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 )
 
-// unregisterCmd represents the unregister command
-var unregisterCmd = &cobra.Command{
-	Use:   "unregister",
-	Short: "Unregister as cluster admin at the end of the operator shift\n",
-	Long:  ``,
-	Run: func(cmd *cobra.Command, args []string) {
-		if len(args) > 1 {
-			fmt.Println("Command must be in the format: unregister (e-mail)")
-			os.Exit(2)
-		}
-		email := ""
-		if len(args) == 1 {
-			email = args[0]
-		}
-		if len(args) < 1 {
-			githubURL := getGithubURL()
-			if email == "" {
-				if githubURL == "" {
-					fmt.Println("No email specified and no github url configured in garden config")
-					os.Exit(2)
-				}
-				email = getEmail(githubURL)
-				if email == "null" {
-					fmt.Println("Could not read github email address")
-					os.Exit(2)
+var (
+	unregisterExample = `
+	# Unregister as cluster admin from Garden cluster named 'prod'.
+	gardenctl target garden prod
+	gardenctl unregister john.doe@example.com
+	
+	# Unregister can also fetch the e-mail from the githubURL property (if set) in the Garden config.
+	gardenctl unregister`
+)
+
+// Unregisters for all clusters as operator if it is set
+var unregisterAll bool
+
+// NewUnregisterCmd returns a new unregister command.
+func NewUnregisterCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:          "unregister",
+		Short:        "Unregister as cluster admin at the end of the operator shift",
+		Example:      unregisterExample,
+		SilenceUsage: true,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if len(args) > 1 {
+				return errors.New("command must be in the format: unregister (e-mail)")
+			}
+			email := ""
+			if len(args) == 1 {
+				email = args[0]
+			}
+			if len(args) < 1 {
+				githubURL := getGithubURL()
+				if email == "" {
+					if githubURL == "" {
+						return errors.New("no email specified and no GitHub url configured in garden config")
+					}
+					email = getEmail(githubURL)
+					if email == "null" {
+						return errors.New("could not read GitHub email address")
+					}
 				}
 			}
-		}
-		err = checkmail.ValidateFormat(email)
-		checkError(err)
-		fmt.Println("Format Validated")
-		if !unregisterAll {
-			config, err := clientcmd.BuildConfigFromFlags("", getKubeConfigOfClusterType("garden"))
+			err = checkmail.ValidateFormat(email)
 			checkError(err)
-			clientset, err := k8s.NewForConfig(config)
-			checkError(err)
-			clusterRoleBinding, err := clientset.RbacV1().ClusterRoleBindings().Get("garden.sapcloud.io:system:administrators", metav1.GetOptions{})
-			if err != nil && strings.Contains(fmt.Sprintln(err.Error()), "garden.sapcloud.io:system:administrators") {
-				kubeSecret, err := clientset.CoreV1().Secrets("garden").Get("virtual-garden-kubeconfig-for-admin", metav1.GetOptions{})
-				checkError(err)
-				virtualPath := pathDefault + "/virtual"
-				os.MkdirAll(virtualPath, os.ModePerm)
-				virtualPathKubeConfig := virtualPath + "/virtualKubeConfig.yaml"
-				err = ioutil.WriteFile(virtualPathKubeConfig, kubeSecret.Data["kubeconfig"], 0644)
-				checkError(err)
-				config, err := clientcmd.BuildConfigFromFlags("", virtualPathKubeConfig)
-				checkError(err)
-				clientset, err = k8s.NewForConfig(config)
-				checkError(err)
-				clusterRoleBinding, err = clientset.RbacV1().ClusterRoleBindings().Get("garden.sapcloud.io:system:administrators", metav1.GetOptions{})
-				checkError(err)
-			} else {
-				checkError(err)
-			}
-			for k, subject := range clusterRoleBinding.Subjects {
-				if subject.Kind == "User" && subject.Name == email {
-					clusterRoleBinding.Subjects = append(clusterRoleBinding.Subjects[:k], clusterRoleBinding.Subjects[k+1:]...)
-					_, err = clientset.RbacV1().ClusterRoleBindings().Update(clusterRoleBinding)
-					checkError(err)
-					fmt.Printf("User %s unregistered \n", email)
-					break
-				}
-			}
-		} else {
-			currentKubeConfig := getGardenKubeConfig()
-			var gardenConfig GardenConfig
-			GetGardenConfig(pathGardenConfig, &gardenConfig)
-			for _, cluster := range gardenConfig.GardenClusters {
-				gardenKubeConfig := cluster.KubeConfig
-				if strings.Contains(gardenKubeConfig, "~") {
-					gardenKubeConfig = filepath.Clean(filepath.Join(HomeDir(), strings.Replace(gardenKubeConfig, "~", "", 1)))
-				}
-				config, err := clientcmd.BuildConfigFromFlags("", gardenKubeConfig)
+			fmt.Println("Format Validated")
+			if !unregisterAll {
+				config, err := clientcmd.BuildConfigFromFlags("", getKubeConfigOfClusterType("garden"))
 				checkError(err)
 				clientset, err := k8s.NewForConfig(config)
 				checkError(err)
-				clusterRoleBinding, err := clientset.RbacV1().ClusterRoleBindings().Get("garden.sapcloud.io:system:administrators", metav1.GetOptions{})
-				if err != nil && strings.Contains(fmt.Sprintln(err.Error()), "garden.sapcloud.io:system:administrators") {
+				clusterRoleBinding, err := clientset.RbacV1().ClusterRoleBindings().Get(AdminClusterRoleBindingName, metav1.GetOptions{})
+				if err != nil && strings.Contains(err.Error(), AdminClusterRoleBindingName) {
 					kubeSecret, err := clientset.CoreV1().Secrets("garden").Get("virtual-garden-kubeconfig-for-admin", metav1.GetOptions{})
 					checkError(err)
 					virtualPath := pathDefault + "/virtual"
@@ -113,11 +86,11 @@ var unregisterCmd = &cobra.Command{
 					virtualPathKubeConfig := virtualPath + "/virtualKubeConfig.yaml"
 					err = ioutil.WriteFile(virtualPathKubeConfig, kubeSecret.Data["kubeconfig"], 0644)
 					checkError(err)
-					config, err = clientcmd.BuildConfigFromFlags("", virtualPathKubeConfig)
+					config, err := clientcmd.BuildConfigFromFlags("", virtualPathKubeConfig)
 					checkError(err)
 					clientset, err = k8s.NewForConfig(config)
 					checkError(err)
-					clusterRoleBinding, err = clientset.RbacV1().ClusterRoleBindings().Get("garden.sapcloud.io:system:administrators", metav1.GetOptions{})
+					clusterRoleBinding, err = clientset.RbacV1().ClusterRoleBindings().Get(AdminClusterRoleBindingName, metav1.GetOptions{})
 					checkError(err)
 				} else {
 					checkError(err)
@@ -127,19 +100,59 @@ var unregisterCmd = &cobra.Command{
 						clusterRoleBinding.Subjects = append(clusterRoleBinding.Subjects[:k], clusterRoleBinding.Subjects[k+1:]...)
 						_, err = clientset.RbacV1().ClusterRoleBindings().Update(clusterRoleBinding)
 						checkError(err)
-						fmt.Printf("User %s unregistered on %s \n", email, cluster.Name)
+						fmt.Printf("User %s unregistered \n", email)
 						break
 					}
 				}
+			} else {
+				currentKubeConfig := getGardenKubeConfig()
+				var gardenConfig GardenConfig
+				GetGardenConfig(pathGardenConfig, &gardenConfig)
+				for _, cluster := range gardenConfig.GardenClusters {
+					gardenKubeConfig := cluster.KubeConfig
+					if strings.Contains(gardenKubeConfig, "~") {
+						gardenKubeConfig = filepath.Clean(filepath.Join(HomeDir(), strings.Replace(gardenKubeConfig, "~", "", 1)))
+					}
+					config, err := clientcmd.BuildConfigFromFlags("", gardenKubeConfig)
+					checkError(err)
+					clientset, err := k8s.NewForConfig(config)
+					checkError(err)
+					clusterRoleBinding, err := clientset.RbacV1().ClusterRoleBindings().Get(AdminClusterRoleBindingName, metav1.GetOptions{})
+					if err != nil && strings.Contains(err.Error(), AdminClusterRoleBindingName) {
+						kubeSecret, err := clientset.CoreV1().Secrets("garden").Get("virtual-garden-kubeconfig-for-admin", metav1.GetOptions{})
+						checkError(err)
+						virtualPath := pathDefault + "/virtual"
+						os.MkdirAll(virtualPath, os.ModePerm)
+						virtualPathKubeConfig := virtualPath + "/virtualKubeConfig.yaml"
+						err = ioutil.WriteFile(virtualPathKubeConfig, kubeSecret.Data["kubeconfig"], 0644)
+						checkError(err)
+						config, err = clientcmd.BuildConfigFromFlags("", virtualPathKubeConfig)
+						checkError(err)
+						clientset, err = k8s.NewForConfig(config)
+						checkError(err)
+						clusterRoleBinding, err = clientset.RbacV1().ClusterRoleBindings().Get(AdminClusterRoleBindingName, metav1.GetOptions{})
+						checkError(err)
+					} else {
+						checkError(err)
+					}
+					for k, subject := range clusterRoleBinding.Subjects {
+						if subject.Kind == "User" && subject.Name == email {
+							clusterRoleBinding.Subjects = append(clusterRoleBinding.Subjects[:k], clusterRoleBinding.Subjects[k+1:]...)
+							_, err = clientset.RbacV1().ClusterRoleBindings().Update(clusterRoleBinding)
+							checkError(err)
+							fmt.Printf("User %s unregistered on %s \n", email, cluster.Name)
+							break
+						}
+					}
+				}
+				kubeconfig = &currentKubeConfig
 			}
-			kubeconfig = &currentKubeConfig
-		}
-	},
-}
 
-//unregisterAll flag unregisters for all clusters as operator if it is set
-var unregisterAll bool
+			return nil
+		},
+	}
 
-func init() {
-	unregisterCmd.PersistentFlags().BoolVarP(&unregisterAll, "all", "a", false, "unregisters as operator for all clusters")
+	cmd.PersistentFlags().BoolVarP(&unregisterAll, "all", "a", false, "unregisters as operator for all clusters")
+
+	return cmd
 }
