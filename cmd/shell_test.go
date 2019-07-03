@@ -19,7 +19,7 @@ import (
 	mockcmd "github.com/gardener/gardenctl/pkg/mock/cmd"
 	"github.com/golang/mock/gomock"
 	"github.com/spf13/cobra"
-	"k8s.io/api/core/v1"
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes/fake"
 
@@ -54,7 +54,7 @@ var _ = Describe("Shell command", func() {
 
 	Context("without args", func() {
 		It("should list the node names", func() {
-			clientSet = fake.NewSimpleClientset(&v1.Node{
+			clientSet = fake.NewSimpleClientset(&corev1.Node{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "minikube",
 				},
@@ -98,7 +98,7 @@ var _ = Describe("Shell command", func() {
 			err := execute(command, []string{"minikube"})
 
 			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(Equal("node \"minikube\" not found"))
+			Expect(err.Error()).To(Equal("nodes \"minikube\" not found"))
 		})
 	})
 
