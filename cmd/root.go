@@ -136,7 +136,7 @@ func init() {
 		NewDropCmd(targetReader, targetWriter, ioStreams),
 		getCmd)
 	RootCmd.AddCommand(downloadCmd, showCmd, logsCmd)
-	RootCmd.AddCommand(registerCmd, unregisterCmd)
+	RootCmd.AddCommand(NewRegisterCmd(), NewUnregisterCmd())
 	RootCmd.AddCommand(completionCmd)
 	RootCmd.AddCommand(NewShellCmd(targetReader, ioStreams))
 	RootCmd.AddCommand(NewSSHCmd(targetReader, ioStreams))

@@ -26,7 +26,7 @@ github.com/davecgh/go-spew/spew
 github.com/dgrijalva/jwt-go
 # github.com/evanphx/json-patch v4.1.0+incompatible
 github.com/evanphx/json-patch
-# github.com/gardener/gardener v0.0.0-20190605055815-b3b8faa6f651
+# github.com/gardener/gardener v0.0.0-20190628060349-06358ff44e46
 github.com/gardener/gardener/pkg/apis/garden/v1beta1
 github.com/gardener/gardener/pkg/client/garden/clientset/versioned
 github.com/gardener/gardener/pkg/apis/core

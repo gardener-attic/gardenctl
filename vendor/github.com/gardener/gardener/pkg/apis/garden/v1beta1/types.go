@@ -462,6 +462,10 @@ type SeedSpec struct {
 	SecretRef corev1.SecretReference `json:"secretRef"`
 	// Networks defines the pod, service and worker network of the Seed cluster.
 	Networks SeedNetworks `json:"networks"`
+	// BlockCIDRs is a list of network addresses tha should be blocked for shoot control plane components running
+	// in the seed cluster.
+	// +optional
+	BlockCIDRs []gardencorev1alpha1.CIDR `json:"blockCIDRs,omitempty"`
 	// Visible labels the Seed cluster as selectable for the seedfinder admission controller.
 	// +optional
 	Visible *bool `json:"visible,omitempty"`
@@ -472,9 +476,16 @@ type SeedSpec struct {
 
 // SeedStatus holds the most recently observed status of the Seed cluster.
 type SeedStatus struct {
+	// Gardener holds information about the Gardener which last acted on the Shoot.
+	// +optional
+	Gardener Gardener `json:"gardener,omitempty"`
 	// Conditions represents the latest available observations of a Seed's current state.
 	// +optional
 	Conditions []gardencorev1alpha1.Condition `json:"conditions,omitempty"`
+	// ObservedGeneration is the most recent generation observed for this Seed. It corresponds to the
+	// Seed's generation, which is updated on mutation by the API Server.
+	// +optional
+	ObservedGeneration int64 `json:"observedGeneration,omitempty"`
 }
 
 // SeedCloud defines the cloud profile and the region this Seed cluster belongs to.
@@ -1503,6 +1514,8 @@ const (
 	EventDeleted = "Deleted"
 	// EventDeleteError indicates that the a Delete operation failed.
 	EventDeleteError = "DeleteError"
+	// EventOperationPending
+	EventOperationPending = "OperationPending"
 
 	// ShootEventMaintenanceDone indicates that a maintenance operation has been performed.
 	ShootEventMaintenanceDone = "MaintenanceDone"
@@ -1517,6 +1530,11 @@ const (
 	ProjectEventNamespaceDeletionFailed = "NamespaceDeletionFailed"
 	// ProjectEventNamespaceMarkedForDeletion indicates that the namespace has been successfully marked for deletion.
 	ProjectEventNamespaceMarkedForDeletion = "NamespaceMarkedForDeletion"
+
+	// ShootEventSchedulingSuccessful
+	ShootEventSchedulingSuccessful = "SchedulingSuccessful"
+	// ShootEventSchedulingFailed
+	ShootEventSchedulingFailed = "SchedulingFailed"
 )
 
 const (
