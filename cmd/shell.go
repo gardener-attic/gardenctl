@@ -17,7 +17,6 @@ package cmd
 import (
 	"errors"
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -85,35 +84,31 @@ func printNodes(client kubernetes.Interface, ioStreams IOStreams) (err error) {
 }
 
 // shellToNode creates a root pod on node
-func shellToNode(client kubernetes.Interface, targetKind TargetKind, name string, ioStreams IOStreams) (err error) {
+func shellToNode(client kubernetes.Interface, targetKind TargetKind, nodeName string, ioStreams IOStreams) (err error) {
 	// Check if the node name was a pod name and we should actually identify the node from the pod (node that runs the pod)
 	var pods *corev1.PodList
-	if pods, err = client.CoreV1().Pods("").List(metav1.ListOptions{}); err != nil {
+	if pods, err = client.CoreV1().Pods(metav1.NamespaceAll).List(metav1.ListOptions{}); err != nil {
 		return err
 	}
-	namespace := "default"
+
+	namespace := metav1.NamespaceDefault
 	for _, p := range pods.Items {
-		if p.Name == name {
-			name = p.Spec.NodeName
+		if p.Name == nodeName {
+			nodeName = p.Spec.NodeName
 			namespace = p.Namespace
 			break
 		}
 	}
 
-	var nodes *corev1.NodeList
-	if nodes, err = client.CoreV1().Nodes().List(metav1.ListOptions{}); err != nil {
+	// Check if node exists
+	var node *corev1.Node
+	if node, err = client.CoreV1().Nodes().Get(nodeName, metav1.GetOptions{}); err != nil {
 		return err
 	}
-	hostname := ""
-	for _, n := range nodes.Items {
-		host := n.Labels
-		if strings.Contains(host["kubernetes.io/hostname"], name) {
-			hostname = host["kubernetes.io/hostname"]
-			break
-		}
-	}
-	if hostname == "" {
-		return fmt.Errorf("node %q not found", name)
+
+	hostname, ok := node.Labels["kubernetes.io/hostname"]
+	if !ok {
+		return fmt.Errorf("label %q not found on node %q", "kubernetes.io/hostname", nodeName)
 	}
 
 	var podName string
@@ -122,7 +117,7 @@ func shellToNode(client kubernetes.Interface, targetKind TargetKind, name string
 	}
 	podName = "rootpod-" + podName
 	if targetKind == TargetKindShoot {
-		namespace = "kube-system"
+		namespace = metav1.NamespaceSystem
 	}
 
 	// Apply root pod
