@@ -465,6 +465,9 @@ type SeedSpec struct {
 	SecretRef corev1.SecretReference
 	// Networks defines the pod, service and worker network of the Seed cluster.
 	Networks SeedNetworks
+	// BlockCIDRs is a list of network addresses tha should be blocked for shoot control plane components running
+	// in the seed cluster.
+	BlockCIDRs []gardencore.CIDR
 	// Visible labels the Seed cluster as selectable for the seedfinder admission controller.
 	// +optional
 	Visible *bool
@@ -478,6 +481,12 @@ type SeedStatus struct {
 	// Conditions represents the latest available observations of a Seed's current state.
 	// +optional
 	Conditions []gardencore.Condition
+	// Gardener holds information about the Gardener which last acted on the Seed.
+	Gardener Gardener
+	// ObservedGeneration is the most recent generation observed for this Seed. It corresponds to the
+	// Seed's generation, which is updated on mutation by the API Server.
+	// +optional
+	ObservedGeneration int64
 }
 
 // SeedCloud defines the cloud profile and the region this Seed cluster belongs to.

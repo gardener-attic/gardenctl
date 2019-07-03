@@ -257,7 +257,7 @@ func getEmail(githubURL string) string {
 		fmt.Println("Cmd was unsuccessful")
 		os.Exit(2)
 	}
-	fmt.Printf("used github email: %s\n", res)
+	fmt.Printf("used GitHub email: %s\n", res)
 	return res
 }
 
