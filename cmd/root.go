@@ -131,8 +131,8 @@ func init() {
 	cobra.EnableCommandSorting = false
 	cobra.EnablePrefixMatching = prefixMatching
 	RootCmd.AddCommand(
-		NewLsCmd(configReader),
-		NewTargetCmd(targetReader, targetWriter, configReader),
+		NewLsCmd(configReader, ioStreams),
+		NewTargetCmd(targetReader, targetWriter, configReader, ioStreams),
 		NewDropCmd(targetReader, targetWriter, ioStreams),
 		getCmd)
 	RootCmd.AddCommand(downloadCmd, showCmd, logsCmd)

@@ -30,7 +30,7 @@ import (
 )
 
 // NewTargetCmd returns a new target command.
-func NewTargetCmd(targetReader TargetReader, targetWriter TargetWriter, configReader ConfigReader) *cobra.Command {
+func NewTargetCmd(targetReader TargetReader, targetWriter TargetWriter, configReader ConfigReader, ioStreams IOStreams) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:          "target <project|garden|seed|shoot> NAME",
 		Short:        "Set scope for next operations",
@@ -41,9 +41,14 @@ func NewTargetCmd(targetReader TargetReader, targetWriter TargetWriter, configRe
 			}
 			switch args[0] {
 			case "garden":
-				if len(args) != 2 {
+				if len(args) == 1 {
+					// Print Garden clusters
+					PrintGardenClusters(configReader, "yaml", ioStreams)
+					return nil
+				} else if len(args) > 2 {
 					return errors.New("command must be in the format: target garden NAME")
 				}
+
 				gardens := resolveNameGarden(configReader, args[1])
 				if len(gardens) == 0 {
 					return fmt.Errorf("no match for %q", args[1])
