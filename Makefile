@@ -14,7 +14,7 @@
 # limitations under the License.
 
 DATE=$(shell date -u +%Y-%m-%d)
-VERSION=$(shell cat VERSION | sed 's/[-dev]//g')
+VERSION=$(shell cat VERSION | sed 's/-dev//g')
 
 .PHONY: build
 build:
