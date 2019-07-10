@@ -20,4 +20,4 @@ GO111MODULE=off go get -u github.com/onsi/ginkgo/ginkgo
 
 ###############################################################################
 
-ginkgo -cover -r cmd
+ginkgo -cover -r -mod=vendor cmd
