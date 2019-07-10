@@ -12,7 +12,7 @@ gardenctl:
         image: 'golang:1.12.4'
       build:
         image: 'golang:1.12.4'
-  variants:
+  jobs:
     head-update:
       traits:
         draft_release: ~
