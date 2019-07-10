@@ -16,7 +16,7 @@ fi
 cd "${SOURCE_PATH}"
 
 # Install Ginkgo (test framework) to be able to execute the tests.
-go get -u github.com/onsi/ginkgo/ginkgo
+GO111MODULE=off go get -u github.com/onsi/ginkgo/ginkgo
 
 ###############################################################################
 
