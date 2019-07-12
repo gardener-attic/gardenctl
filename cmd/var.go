@@ -20,28 +20,30 @@ import (
 	"k8s.io/client-go/kubernetes"
 )
 
-// Client is Clientset to use for specified cluster
-var Client *kubernetes.Clientset
-var err error
-var kubeconfig *string
+const (
+	// configuration for gardenctl
+	suggestionsMinimumDistance int  = 2
+	prefixMatching             bool = true
+)
 
-// KUBECONFIG contains path to file
-var KUBECONFIG string
-var masterURL *string
-var garden bool
-var seed bool
-var project bool
-
-// configuration for gardenctl
-const suggestionsMinimumDistance int = 2
-const prefixMatching bool = true
-
-// credentials
-var username string
-var password string
-
-// file pathes
 var (
+	// Client is Clientset to use for specified cluster
+	Client     *kubernetes.Clientset
+	err        error
+	kubeconfig *string
+
+	// KUBECONFIG contains path to file
+	KUBECONFIG string
+	masterURL  *string
+	garden     bool
+	seed       bool
+	project    bool
+
+	// credentials
+	username string
+	password string
+
+	// file pathes
 	pathSeedCache    string
 	pathProjectCache string
 	pathShootCache   string

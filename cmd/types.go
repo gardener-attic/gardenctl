@@ -14,7 +14,10 @@
 
 package cmd
 
-import "k8s.io/client-go/kubernetes"
+import (
+	clientset "github.com/gardener/gardener/pkg/client/garden/clientset/versioned"
+	"k8s.io/client-go/kubernetes"
+)
 
 // TargetReader reads the current target.
 type TargetReader interface {
@@ -39,6 +42,7 @@ type TargetInterface interface {
 	Kind() (TargetKind, error)
 	K8SClient() (kubernetes.Interface, error)
 	K8SClientToKind(TargetKind) (kubernetes.Interface, error)
+	GardenerClient() (clientset.Interface, error)
 }
 
 // Target contains the current target.
