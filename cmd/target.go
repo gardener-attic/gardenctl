@@ -181,20 +181,14 @@ func NewTargetCmd(targetReader TargetReader, targetWriter TargetWriter, configRe
 						os.Exit(0)
 					}
 				}
-				projectLabel := "garden.sapcloud.io/role=project"
-				projectList, err := Client.CoreV1().Namespaces().List(metav1.ListOptions{
-					LabelSelector: fmt.Sprintf("%s", projectLabel),
-				})
+				gardenClientset, err := target.GardenerClient()
+				checkError(err)
+				projectList, err := gardenClientset.GardenV1beta1().Projects().List(metav1.ListOptions{})
 				checkError(err)
 				match := false
 				for _, project := range projectList.Items {
 					if args[0] == project.Name {
 						targetProject(targetReader, targetWriter, args[0])
-						match = true
-						break
-					}
-					if ("garden-" + args[0]) == project.Name {
-						targetProject(targetReader, targetWriter, "garden-"+args[0])
 						match = true
 						break
 					}
@@ -232,14 +226,17 @@ func NewTargetCmd(targetReader TargetReader, targetWriter TargetWriter, configRe
 
 // resolveNameProject resolves name to project
 func resolveNameProject(target TargetInterface, name string) (matches []string) {
-	tmp := KUBECONFIG
-
-	client, err := target.K8SClientToKind(TargetKindGarden)
+	gardenClientset, err := target.GardenerClient()
 	checkError(err)
-	projectLabel := "garden.sapcloud.io/role=project"
-	projectList, err := client.CoreV1().Namespaces().List(metav1.ListOptions{
-		LabelSelector: projectLabel,
-	})
+	if !strings.Contains(name, "*") {
+		project, err := gardenClientset.GardenV1beta1().Projects().Get(name, metav1.GetOptions{})
+		if err != nil {
+			return []string{}
+		}
+		return []string{project.Name}
+	}
+
+	projectList, err := gardenClientset.GardenV1beta1().Projects().List(metav1.ListOptions{})
 	checkError(err)
 	matcher := ""
 	for _, project := range projectList.Items {
@@ -247,24 +244,23 @@ func resolveNameProject(target TargetInterface, name string) (matches []string) 
 			matcher = strings.Replace(name, "*", "", 2)
 			if strings.Contains(project.Name, matcher) {
 				matches = append(matches, project.Name)
+				continue
 			}
-		} else if strings.HasSuffix(name, "*") {
+		}
+		if strings.HasSuffix(name, "*") {
 			matcher = strings.Replace(name, "*", "", 1)
 			if strings.HasPrefix(project.Name, matcher) {
 				matches = append(matches, project.Name)
+				continue
 			}
-		} else if strings.HasPrefix(name, "*") {
+		}
+		if strings.HasPrefix(name, "*") {
 			matcher = strings.Replace(name, "*", "", 1)
 			if strings.HasSuffix(project.Name, matcher) {
 				matches = append(matches, project.Name)
 			}
-		} else {
-			if project.Name == name {
-				matches = append(matches, project.Name)
-			}
 		}
 	}
-	KUBECONFIG = tmp
 	return matches
 }
 
@@ -277,7 +273,6 @@ func targetProject(targetReader TargetReader, targetWriter TargetWriter, name st
 		Name: name,
 	})
 	target.SetStack(new)
-
 	err = targetWriter.WriteTarget(pathTarget, target)
 	checkError(err)
 }
@@ -285,7 +280,6 @@ func targetProject(targetReader TargetReader, targetWriter TargetWriter, name st
 // resolveNameGarden resolves name to garden
 func resolveNameGarden(reader ConfigReader, name string) (matches []string) {
 	config := reader.ReadConfig(pathGardenConfig)
-
 	matcher := ""
 	for _, garden := range config.GardenClusters {
 		if strings.HasPrefix(name, "*") && strings.HasSuffix(name, "*") {
@@ -485,8 +479,16 @@ func targetShoot(targetWriter TargetWriter, name string) {
 		fmt.Println("Shoot " + name + " not found")
 	} else if len(matchedShoots) == 1 {
 		if len(target.Target) == 1 {
-			target.Target = append(target.Target, TargetMeta{"project", matchedShoots[0].Namespace})
-			target.Target = append(target.Target, TargetMeta{"shoot", matchedShoots[0].Name})
+			gardenClientset, err := target.GardenerClient()
+			checkError(err)
+			projectList, err := gardenClientset.GardenV1beta1().Projects().List(metav1.ListOptions{})
+			checkError(err)
+			for _, project := range projectList.Items {
+				if matchedShoots[0].Namespace == *project.Spec.Namespace {
+					target.Target = append(target.Target, TargetMeta{"project", project.Name})
+					target.Target = append(target.Target, TargetMeta{"shoot", matchedShoots[0].Name})
+				}
+			}
 		} else if len(target.Target) == 2 {
 			drop(targetWriter)
 			if target.Target[1].Kind == "seed" {
@@ -510,7 +512,7 @@ func targetShoot(targetWriter TargetWriter, name string) {
 				target.Target = append(target.Target, TargetMeta{"shoot", matchedShoots[0].Name})
 			}
 		}
-		err := targetWriter.WriteTarget(pathTarget, &target)
+		err = targetWriter.WriteTarget(pathTarget, &target)
 		checkError(err)
 
 		Client, err = clientToTarget("garden")
