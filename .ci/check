@@ -22,16 +22,23 @@ fi
 
 ###############################################################################
 
-PACKAGES="$(go list -e ./...)"
-LINT_FOLDERS="$(echo ${PACKAGES} | sed "s|github.com/gardener/gardenctl|.|g")"
+PACKAGES="$(GO111MODULE=on go list -mod=vendor -e ./...)"
+PACKAGES_DIRS="$(GO111MODULE=on go list -mod=vendor -e -f '{{.Dir}}' ./...)"
 
 # Execute static code checks.
-go vet ${PACKAGES}
+echo "Running go vet..."
+GO111MODULE=on go vet -mod=vendor ${PACKAGES}
+
+# go fmt ignores -mod=vendor and performs module lookup (https://github.com/golang/go/issues/27841).
+# Also go fmt is just alias for gofmt -l -w and does not support flags that gofmt does.
+# That is why gofmt is used.
 
 # Execute automatic code formatting directive.
-go fmt ${PACKAGES}
+echo "Running gofmt..."
+gofmt -s -l -w ${PACKAGES_DIRS}
 
 # Execute lint checks.
-for package in ${LINT_FOLDERS}; do
-  golint -set_exit_status $package
+echo "Running golint..."
+for dir in ${PACKAGES_DIRS}; do
+  golint -set_exit_status $dir
 done
