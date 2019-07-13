@@ -18,7 +18,7 @@ RUN mkdir -p /go/src/github.com/gardener/gardenctl &&\
     cd /go/src/github.com/gardener &&\
     git clone https://github.com/gardener/gardenctl.git &&\
     cd ./gardenctl &&\
-    CGO_ENABLED=0 GOOS=linux GO111MODULE=on go build -mod=vendor -a -installsuffix cgo -o gardenctl .
+    CGO_ENABLED=0 GOOS=linux GO111MODULE=on go build -mod=vendor -a -installsuffix cgo -o gardenctl cmd/gardenctl/main.go
 
 # minimal Ubuntu LTS version
 FROM ubuntu:18.04

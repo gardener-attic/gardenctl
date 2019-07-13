@@ -1,5 +1,6 @@
 /args
 /bin
+/gardenctl
 /.kube-secrets
 /tmp/*
 /dev
@@ -18,7 +19,6 @@ variables.tf
 gardenctl_completion.sh
 key
 bin/*
-gardenctl
 TODO*
 
 clusters
