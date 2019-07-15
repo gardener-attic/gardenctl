@@ -106,21 +106,20 @@ func NewLsCmd(reader ConfigReader, ioStreams IOStreams) *cobra.Command {
 
 // getProjectsWithShoots lists list of projects with shoots
 func getProjectsWithShoots() {
-	projectLabel := "garden.sapcloud.io/role=project"
-	projectList, err := Client.CoreV1().Namespaces().List(metav1.ListOptions{
-		LabelSelector: fmt.Sprintf("%s", projectLabel),
-	})
+	var target Target
+	ReadTarget(pathTarget, &target)
+	gardenClientset, err := target.GardenerClient()
 	checkError(err)
-	gardenClientset, err := clientset.NewForConfig(NewConfigFromBytes(*kubeconfig))
+	projectList, err := gardenClientset.GardenV1beta1().Projects().List(metav1.ListOptions{})
 	checkError(err)
 	shootList, err := gardenClientset.GardenV1beta1().Shoots("").List(metav1.ListOptions{})
 	checkError(err)
 	var projects Projects
 	for _, project := range projectList.Items {
 		var pm ProjectMeta
-		for _, item := range shootList.Items {
-			if item.Namespace == project.Name {
-				pm.Shoots = append(pm.Shoots, item.Name)
+		for _, shoot := range shootList.Items {
+			if shoot.Namespace == *project.Spec.Namespace {
+				pm.Shoots = append(pm.Shoots, shoot.Name)
 			}
 		}
 		pm.Project = project.Name
@@ -174,19 +173,17 @@ func getProjectsWithShootsForSeed() {
 	var target Target
 	ReadTarget(pathTarget, &target)
 	var projects Projects
-	gardenClientset, err := clientset.NewForConfig(NewConfigFromBytes(*kubeconfig))
+	gardenClientset, err := target.GardenerClient()
 	checkError(err)
-	projectLabel := "garden.sapcloud.io/role=project"
-	projectList, err := Client.CoreV1().Namespaces().List(metav1.ListOptions{
-		LabelSelector: fmt.Sprintf("%s", projectLabel),
-	})
+	projectList, err := gardenClientset.GardenV1beta1().Projects().List(metav1.ListOptions{})
+	checkError(err)
 	shootList, err := gardenClientset.GardenV1beta1().Shoots("").List(metav1.ListOptions{})
 	checkError(err)
 	for _, project := range projectList.Items {
 		var pm ProjectMeta
-		for _, item := range shootList.Items {
-			if item.Namespace == project.Name && target.Target[1].Name == *item.Spec.Cloud.Seed {
-				pm.Shoots = append(pm.Shoots, item.Name)
+		for _, shoot := range shootList.Items {
+			if shoot.Namespace == *project.Spec.Namespace && target.Target[1].Name == *shoot.Spec.Cloud.Seed {
+				pm.Shoots = append(pm.Shoots, shoot.Name)
 			}
 		}
 		if len(pm.Shoots) > 0 {

@@ -34,7 +34,9 @@ github.com/gardener/gardener/pkg/apis/core/v1alpha1
 github.com/gardener/gardener/pkg/apis/garden
 github.com/gardener/gardener/pkg/utils
 github.com/gardener/gardener/pkg/client/garden/clientset/versioned/typed/garden/v1beta1
+github.com/gardener/gardener/pkg/client/garden/clientset/versioned/fake
 github.com/gardener/gardener/pkg/client/garden/clientset/versioned/scheme
+github.com/gardener/gardener/pkg/client/garden/clientset/versioned/typed/garden/v1beta1/fake
 # github.com/ghodss/yaml v1.0.0
 github.com/ghodss/yaml
 # github.com/gogo/protobuf v1.2.1
@@ -401,6 +403,7 @@ k8s.io/client-go/util/connrotation
 k8s.io/client-go/util/keyutil
 k8s.io/client-go/tools/clientcmd/api/v1
 k8s.io/client-go/discovery/fake
+k8s.io/client-go/testing
 k8s.io/client-go/kubernetes/typed/admissionregistration/v1beta1/fake
 k8s.io/client-go/kubernetes/typed/apps/v1/fake
 k8s.io/client-go/kubernetes/typed/apps/v1beta1/fake
@@ -437,7 +440,6 @@ k8s.io/client-go/kubernetes/typed/settings/v1alpha1/fake
 k8s.io/client-go/kubernetes/typed/storage/v1/fake
 k8s.io/client-go/kubernetes/typed/storage/v1alpha1/fake
 k8s.io/client-go/kubernetes/typed/storage/v1beta1/fake
-k8s.io/client-go/testing
 # k8s.io/klog v0.3.0
 k8s.io/klog
 # k8s.io/kube-openapi v0.0.0-20190401085232-94e1e7b7574c
