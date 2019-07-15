@@ -56,7 +56,6 @@ var _ = Describe("Ls command", func() {
 
 			ioStreams, _, out, _ := cmd.NewTestIOStreams()
 			cmd.PrintGardenClusters(configReader, "yaml", ioStreams)
-
 			Expect(out.String()).To(Equal("gardenClusters:\n- name: prod-1\n- name: prod-2\n"))
 		})
 	})

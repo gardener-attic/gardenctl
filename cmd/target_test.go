@@ -17,15 +17,14 @@ package cmd_test
 import (
 	"github.com/gardener/gardenctl/cmd"
 	mockcmd "github.com/gardener/gardenctl/pkg/mock/cmd"
+	"github.com/gardener/gardener/pkg/apis/garden/v1beta1"
+	gardenfake "github.com/gardener/gardener/pkg/client/garden/clientset/versioned/fake"
 	"github.com/golang/mock/gomock"
-	"github.com/spf13/cobra"
-	corev1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/client-go/kubernetes/fake"
-
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/ginkgo/extensions/table"
 	. "github.com/onsi/gomega"
+	"github.com/spf13/cobra"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 var _ = Describe("Target command", func() {
@@ -98,8 +97,8 @@ var _ = Describe("Target command", func() {
 				},
 			})
 
-			clientSet := fake.NewSimpleClientset()
-			target.EXPECT().K8SClientToKind(cmd.TargetKindGarden).Return(clientSet, nil)
+			clientSet := gardenfake.NewSimpleClientset()
+			target.EXPECT().GardenerClient().Return(clientSet, nil)
 
 			ioStreams, _, _, _ := cmd.NewTestIOStreams()
 			command = cmd.NewTargetCmd(targetReader, targetWriter, configReader, ioStreams)
@@ -118,15 +117,12 @@ var _ = Describe("Target command", func() {
 				},
 			}).Times(2)
 
-			clientSet := fake.NewSimpleClientset(&corev1.Namespace{
+			clientSet := gardenfake.NewSimpleClientset(&v1beta1.Project{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: "garden-myproj",
-					Labels: map[string]string{
-						"garden.sapcloud.io/role": "project",
-					},
+					Name: "myproject",
 				},
 			})
-			target.EXPECT().K8SClientToKind(cmd.TargetKindGarden).Return(clientSet, nil)
+			target.EXPECT().GardenerClient().Return(clientSet, nil)
 
 			target.EXPECT().SetStack([]cmd.TargetMeta{
 				{
@@ -135,14 +131,14 @@ var _ = Describe("Target command", func() {
 				},
 				{
 					Kind: cmd.TargetKindProject,
-					Name: "garden-myproj",
+					Name: "myproject",
 				},
 			})
 			targetWriter.EXPECT().WriteTarget(gomock.Any(), target)
 
 			ioStreams, _, _, _ := cmd.NewTestIOStreams()
 			command = cmd.NewTargetCmd(targetReader, targetWriter, configReader, ioStreams)
-			err := execute(command, []string{"project", "garden-myproj"})
+			err := execute(command, []string{"project", "myproject"})
 
 			Expect(err).NotTo(HaveOccurred())
 		})

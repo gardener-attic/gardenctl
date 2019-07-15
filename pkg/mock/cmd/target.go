@@ -6,6 +6,7 @@ package cmd
 
 import (
 	cmd "github.com/gardener/gardenctl/cmd"
+	versioned "github.com/gardener/gardener/pkg/client/garden/clientset/versioned"
 	gomock "github.com/golang/mock/gomock"
 	kubernetes "k8s.io/client-go/kubernetes"
 	reflect "reflect"
@@ -32,6 +33,21 @@ func NewMockTargetInterface(ctrl *gomock.Controller) *MockTargetInterface {
 // EXPECT returns an object that allows the caller to indicate expected use
 func (m *MockTargetInterface) EXPECT() *MockTargetInterfaceMockRecorder {
 	return m.recorder
+}
+
+// GardenerClient mocks base method
+func (m *MockTargetInterface) GardenerClient() (versioned.Interface, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GardenerClient")
+	ret0, _ := ret[0].(versioned.Interface)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GardenerClient indicates an expected call of GardenerClient
+func (mr *MockTargetInterfaceMockRecorder) GardenerClient() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GardenerClient", reflect.TypeOf((*MockTargetInterface)(nil).GardenerClient))
 }
 
 // K8SClient mocks base method
