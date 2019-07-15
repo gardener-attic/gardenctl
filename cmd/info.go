@@ -63,6 +63,3 @@ var infoCmd = &cobra.Command{
 		// show node, cpus ...
 	},
 }
-
-func init() {
-}
