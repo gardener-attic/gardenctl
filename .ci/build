@@ -22,7 +22,7 @@ fi
 
 cd "${SOURCE_PATH}"
 
-DATE=$(date -u  +%Y-%m-%d)
+DATE=$(date -u +%Y-%m-%d)
 VERSION=$(cat ${SOURCE_PATH}/VERSION)
 
 ###############################################################################
@@ -30,4 +30,4 @@ VERSION=$(cat ${SOURCE_PATH}/VERSION)
 go build \
   -mod=vendor \
   -ldflags "-w -X github.com/gardener/gardenctl/cmd.version=${VERSION} -w -X github.com/gardener/gardenctl/cmd.buildDate=${DATE}" \
-  -o ${BINARY_PATH}/rel/gardenctl gardenctl.go
+  -o ${BINARY_PATH}/rel/gardenctl cmd/gardenctl/main.go

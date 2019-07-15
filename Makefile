@@ -13,7 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-DATE=$(shell date -u  +%Y-%m-%d)
+DATE=$(shell date -u +%Y-%m-%d)
 VERSION=$(shell cat VERSION | sed 's/[-dev]//g')
 
 .PHONY: build
@@ -21,12 +21,12 @@ build:
 	@CGO_ENABLED=0 GOOS=linux GOARCH=amd64 GO111MODULE=on go build \
 		-mod=vendor \
 		-ldflags "-w -X github.com/gardener/gardenctl/cmd.version=${VERSION} -X github.com/gardener/gardenctl/cmd.buildDate=${DATE}" \
-		-o bin/linux-amd64/gardenctl-linux-amd64 gardenctl.go
+		-o bin/linux-amd64/gardenctl-linux-amd64 cmd/gardenctl/main.go
 
 	@CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 GO111MODULE=on go build \
 		-mod=vendor \
 		-ldflags "-w -X github.com/gardener/gardenctl/cmd.version=${VERSION} -X github.com/gardener/gardenctl/cmd.buildDate=${DATE}" \
-		-o bin/darwin-amd64/gardenctl-darwin-amd64 gardenctl.go
+		-o bin/darwin-amd64/gardenctl-darwin-amd64 cmd/gardenctl/main.go
 
 .PHONY: clean
 clean:
