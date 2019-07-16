@@ -15,10 +15,9 @@
 package cmd
 
 import (
-	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
-	"io/ioutil"
 	"os"
 
 	"github.com/gardener/gardener/pkg/apis/garden/v1beta1"
@@ -29,33 +28,29 @@ import (
 )
 
 // NewLsCmd returns a new ls command.
-func NewLsCmd(reader ConfigReader, ioStreams IOStreams) *cobra.Command {
+func NewLsCmd(targetReader TargetReader, configReader ConfigReader, ioStreams IOStreams) *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "ls [gardens|projects|seeds|shoots|issues]",
-		Short: "List all resource instances, e.g. list of shoots|issues",
-		Run: func(cmd *cobra.Command, args []string) {
+		Use:          "ls [gardens|projects|seeds|shoots|issues]",
+		Short:        "List all resource instances, e.g. list of shoots|issues",
+		SilenceUsage: true,
+		RunE: func(cmd *cobra.Command, args []string) error {
 			if len(args) < 1 || len(args) > 2 {
-				fmt.Println("Command must be in the format: ls [gardens|projects|seeds|shoots|issues]")
-				os.Exit(2)
+				return errors.New("command must be in the format: ls [gardens|projects|seeds|shoots|issues]")
 			}
-			var t Target
-			targetFile, err := ioutil.ReadFile(pathTarget)
-			checkError(err)
-			err = yaml.Unmarshal(targetFile, &t)
-			checkError(err)
-			if (len(t.Target) == 0) && args[0] != "gardens" {
-				fmt.Println("Target stack is empty")
-				os.Exit(2)
+
+			target := targetReader.ReadTarget(pathTarget)
+			if (len(target.Stack()) == 0) && args[0] != "gardens" {
+				return errors.New("target stack is empty")
 			}
 			switch args[0] {
 			case "projects":
 				tmp := KUBECONFIG
 				Client, err = clientToTarget("garden")
 				checkError(err)
-				getProjectsWithShoots()
+				getProjectsWithShoots(ioStreams)
 				KUBECONFIG = tmp
 			case "gardens":
-				PrintGardenClusters(reader, outputFormat, ioStreams)
+				PrintGardenClusters(configReader, outputFormat, ioStreams)
 			case "seeds":
 				Client, err = clientToTarget("garden")
 				checkError(err)
@@ -71,32 +66,31 @@ func NewLsCmd(reader ConfigReader, ioStreams IOStreams) *cobra.Command {
 					checkError(err)
 					os.Stdout.Write(y)
 				} else if outputFormat == "json" {
-					j, err := json.Marshal(seeds)
+					j, err := json.MarshalIndent(seeds, "", "  ")
 					checkError(err)
-					var out bytes.Buffer
-					json.Indent(&out, j, "", "  ")
-					out.WriteTo(os.Stdout)
+					fmt.Fprint(ioStreams.Out, string(j))
 				}
 			case "shoots":
-				var target Target
-				ReadTarget(pathTarget, &target)
 				tmp := KUBECONFIG
 				Client, err = clientToTarget("garden")
-				if len(target.Target) == 1 {
-					getProjectsWithShoots()
-				} else if len(target.Target) == 2 && target.Target[1].Kind == "seed" {
-					getProjectsWithShootsForSeed()
-				} else if len(target.Target) == 2 && target.Target[1].Kind == "project" {
-					getSeedsWithShootsForProject()
+				checkError(err)
+				if len(target.Stack()) == 1 {
+					getProjectsWithShoots(ioStreams)
+				} else if len(target.Stack()) == 2 && target.Stack()[1].Kind == "seed" {
+					getProjectsWithShootsForSeed(ioStreams)
+				} else if len(target.Stack()) == 2 && target.Stack()[1].Kind == "project" {
+					getSeedsWithShootsForProject(ioStreams)
 				}
 				KUBECONFIG = tmp
 			case "issues":
 				Client, err = clientToTarget("garden")
 				checkError(err)
-				getIssues()
+				getIssues(ioStreams)
 			default:
 				fmt.Println("Command must be in the format: ls [gardens|projects|seeds|shoots|issues]")
 			}
+
+			return nil
 		},
 		ValidArgs: []string{"issues", "projects", "gardens", "seeds", "shoots"},
 	}
@@ -105,7 +99,7 @@ func NewLsCmd(reader ConfigReader, ioStreams IOStreams) *cobra.Command {
 }
 
 // getProjectsWithShoots lists list of projects with shoots
-func getProjectsWithShoots() {
+func getProjectsWithShoots(ioStreams IOStreams) {
 	var target Target
 	ReadTarget(pathTarget, &target)
 	gardenClientset, err := target.GardenerClient()
@@ -130,11 +124,9 @@ func getProjectsWithShoots() {
 		checkError(err)
 		os.Stdout.Write(y)
 	} else if outputFormat == "json" {
-		j, err := json.Marshal(projects)
+		j, err := json.MarshalIndent(projects, "", "  ")
 		checkError(err)
-		var out bytes.Buffer
-		json.Indent(&out, j, "", "  ")
-		out.WriteTo(os.Stdout)
+		fmt.Fprint(ioStreams.Out, string(j))
 	}
 }
 
@@ -169,7 +161,7 @@ func getSeeds() *v1beta1.SeedList {
 }
 
 // getProjectsWithShootsForSeed
-func getProjectsWithShootsForSeed() {
+func getProjectsWithShootsForSeed(ioStreams IOStreams) {
 	var target Target
 	ReadTarget(pathTarget, &target)
 	var projects Projects
@@ -200,16 +192,14 @@ func getProjectsWithShootsForSeed() {
 		checkError(err)
 		os.Stdout.Write(y)
 	} else if outputFormat == "json" {
-		j, err := json.Marshal(projects)
+		j, err := json.MarshalIndent(projects, "", "  ")
 		checkError(err)
-		var out bytes.Buffer
-		json.Indent(&out, j, "", "  ")
-		out.WriteTo(os.Stdout)
+		fmt.Fprint(ioStreams.Out, string(j))
 	}
 }
 
 // getIssues lists broken shoot clusters
-func getIssues() {
+func getIssues(ioStreams IOStreams) {
 	gardenClientset, err := clientset.NewForConfig(NewConfigFromBytes(*kubeconfig))
 	checkError(err)
 	shootList, err := gardenClientset.GardenV1beta1().Shoots("").List(metav1.ListOptions{})
@@ -283,22 +273,28 @@ func getIssues() {
 		checkError(err)
 		os.Stdout.Write(y)
 	} else if outputFormat == "json" {
-		j, err := json.Marshal(issues)
+		j, err := json.MarshalIndent(issues, "", "  ")
 		checkError(err)
-		var out bytes.Buffer
-		json.Indent(&out, j, "", "  ")
-		out.WriteTo(os.Stdout)
+		fmt.Fprint(ioStreams.Out, string(j))
 	}
 }
 
 // getSeedsWithShootsForProject
-func getSeedsWithShootsForProject() {
+func getSeedsWithShootsForProject(ioStreams IOStreams) {
 	var target Target
 	ReadTarget(pathTarget, &target)
+
 	gardenClientset, err := clientset.NewForConfig(NewConfigFromBytes(*kubeconfig))
 	checkError(err)
-	shootList, err := gardenClientset.GardenV1beta1().Shoots(target.Target[1].Name).List(metav1.ListOptions{})
+
+	projectName := target.Target[1].Name
+	project, err := gardenClientset.GardenV1beta1().Projects().Get(projectName, metav1.GetOptions{})
 	checkError(err)
+
+	projectNamespace := project.Spec.Namespace
+	shootList, err := gardenClientset.GardenV1beta1().Shoots(*projectNamespace).List(metav1.ListOptions{})
+	checkError(err)
+
 	var seeds, seedsFiltered Seeds
 	seedList := getSeeds()
 	for _, seed := range seedList.Items {
@@ -327,10 +323,8 @@ func getSeedsWithShootsForProject() {
 		checkError(err)
 		os.Stdout.Write(y)
 	} else if outputFormat == "json" {
-		j, err := json.Marshal(seedsFiltered)
+		j, err := json.MarshalIndent(seedsFiltered, "", "  ")
 		checkError(err)
-		var out bytes.Buffer
-		json.Indent(&out, j, "", "  ")
-		out.WriteTo(os.Stdout)
+		fmt.Fprint(ioStreams.Out, string(j))
 	}
 }
