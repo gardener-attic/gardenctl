@@ -31,6 +31,7 @@ require (
 	github.com/spf13/cobra v0.0.0-20190109003409-7547e83b2d85
 	github.com/spf13/pflag v1.0.3 // indirect
 	golang.org/x/crypto v0.0.0-20190411191339-88737f569e3a // indirect
+	golang.org/x/lint v0.0.0-20190313153728-d0100b6bd8b3
 	golang.org/x/net v0.0.0-20190404232315-eb5bcb51f2a3 // indirect
 	golang.org/x/oauth2 v0.0.0-20190402181905-9f3314589c9a // indirect
 	golang.org/x/sys v0.0.0-20190411185658-b44545bcd369 // indirect
@@ -47,4 +48,11 @@ require (
 	k8s.io/kube-openapi v0.0.0-20190401085232-94e1e7b7574c // indirect
 	k8s.io/utils v0.0.0-20190308190857-21c4ce38f2a7 // indirect
 	sigs.k8s.io/yaml v1.1.0 // indirect
+)
+
+replace (
+	github.com/gardener/gardener => github.com/gardener/gardener v0.0.0-20190628060349-06358ff44e46 // 0.26.1
+	github.com/onsi/ginkgo => github.com/onsi/ginkgo v1.8.0
+	github.com/onsi/gomega => github.com/onsi/gomega v1.5.0
+	golang.org/x/lint => golang.org/x/lint v0.0.0-20190313153728-d0100b6bd8b3
 )

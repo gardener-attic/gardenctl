@@ -39,3 +39,8 @@ check:
 .PHONY: test
 test:
 	@.ci/test
+
+.PHONY: revendor
+revendor:
+	@GO111MODULE=on go mod vendor
+	@GO111MODULE=on go mod tidy
