@@ -402,7 +402,12 @@ func resolveNameShoot(target TargetInterface, name string) (matches []string) {
 	checkError(err)
 	var shootList *v1beta1.ShootList
 	if len(target.Stack()) > 1 && target.Stack()[1].Kind == TargetKindProject {
-		shootList, err = gardenClientset.GardenV1beta1().Shoots(target.Stack()[1].Name).List(metav1.ListOptions{})
+		projectName := target.Stack()[1].Name
+		project, err := gardenClientset.GardenV1beta1().Projects().Get(projectName, metav1.GetOptions{})
+		checkError(err)
+
+		projectNamespace := project.Spec.Namespace
+		shootList, err = gardenClientset.GardenV1beta1().Shoots(*projectNamespace).List(metav1.ListOptions{})
 		checkError(err)
 	} else if len(target.Stack()) > 1 && target.Stack()[1].Kind == TargetKindSeed {
 		shootList, err = gardenClientset.GardenV1beta1().Shoots("").List(metav1.ListOptions{})
@@ -464,13 +469,10 @@ func targetShoot(targetWriter TargetWriter, name string) {
 		} else if len(target.Target) == 2 && item.Name == name && *item.Spec.Cloud.Seed == target.Target[1].Name {
 			seedName = target.Target[1].Name
 			matchedShoots = append(matchedShoots, item)
-		} else if len(target.Target) == 2 && item.Name == name && item.Namespace == target.Target[1].Name {
-			seedName = *item.Spec.Cloud.Seed
-			matchedShoots = append(matchedShoots, item)
 		} else if len(target.Target) == 3 && item.Name == name && *item.Spec.Cloud.Seed == target.Target[1].Name {
 			matchedShoots = append(matchedShoots, item)
 			seedName = *item.Spec.Cloud.Seed
-		} else if len(target.Target) == 3 && item.Name == name && item.Namespace == target.Target[1].Name {
+		} else if len(target.Target) >= 2 && item.Name == name {
 			matchedShoots = append(matchedShoots, item)
 			seedName = *item.Spec.Cloud.Seed
 		}
@@ -478,17 +480,14 @@ func targetShoot(targetWriter TargetWriter, name string) {
 	if len(matchedShoots) == 0 {
 		fmt.Println("Shoot " + name + " not found")
 	} else if len(matchedShoots) == 1 {
+		gardenClientset, err := target.GardenerClient()
+		checkError(err)
+		project, err := getProjectByShootNamespace(gardenClientset, matchedShoots[0].Namespace)
+		checkError(err)
+
 		if len(target.Target) == 1 {
-			gardenClientset, err := target.GardenerClient()
-			checkError(err)
-			projectList, err := gardenClientset.GardenV1beta1().Projects().List(metav1.ListOptions{})
-			checkError(err)
-			for _, project := range projectList.Items {
-				if matchedShoots[0].Namespace == *project.Spec.Namespace {
-					target.Target = append(target.Target, TargetMeta{"project", project.Name})
-					target.Target = append(target.Target, TargetMeta{"shoot", matchedShoots[0].Name})
-				}
-			}
+			target.Target = append(target.Target, TargetMeta{"project", project.Name})
+			target.Target = append(target.Target, TargetMeta{"shoot", matchedShoots[0].Name})
 		} else if len(target.Target) == 2 {
 			drop(targetWriter)
 			if target.Target[1].Kind == "seed" {
@@ -496,7 +495,7 @@ func targetShoot(targetWriter TargetWriter, name string) {
 				target.Target[1].Name = *matchedShoots[0].Spec.Cloud.Seed
 			} else if target.Target[1].Kind == "project" {
 				target.Target[1].Kind = "project"
-				target.Target[1].Name = matchedShoots[0].Namespace
+				target.Target[1].Name = project.Name
 			}
 			target.Target = append(target.Target, TargetMeta{"shoot", matchedShoots[0].Name})
 		} else if len(target.Target) == 3 {
@@ -508,7 +507,7 @@ func targetShoot(targetWriter TargetWriter, name string) {
 				target.Target = append(target.Target, TargetMeta{"shoot", matchedShoots[0].Name})
 			} else if len(target.Target) > 2 && target.Target[1].Kind == "project" {
 				target.Target = target.Target[:len(target.Target)-2]
-				target.Target = append(target.Target, TargetMeta{"project", matchedShoots[0].Namespace})
+				target.Target = append(target.Target, TargetMeta{"project", project.Name})
 				target.Target = append(target.Target, TargetMeta{"shoot", matchedShoots[0].Name})
 			}
 		}
@@ -554,6 +553,21 @@ func targetShoot(targetWriter TargetWriter, name string) {
 		}
 		fmt.Println("Target a project first")
 	}
+}
+
+func getProjectByShootNamespace(gardenClientset clientset.Interface, shootNamespace string) (*v1beta1.Project, error) {
+	projectList, err := gardenClientset.GardenV1beta1().Projects().List(metav1.ListOptions{})
+	if err != nil {
+		return nil, err
+	}
+
+	for _, project := range projectList.Items {
+		if shootNamespace == *project.Spec.Namespace {
+			return &project, nil
+		}
+	}
+
+	return nil, fmt.Errorf("project with namespace %q not found", shootNamespace)
 }
 
 // getSeedForProject
