@@ -18,6 +18,7 @@ import (
 	"github.com/gardener/gardenctl/cmd"
 	mockcmd "github.com/gardener/gardenctl/pkg/mock/cmd"
 	"github.com/golang/mock/gomock"
+	"github.com/spf13/cobra"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -25,8 +26,55 @@ import (
 
 var _ = Describe("Ls command", func() {
 
-	Describe("#PrintGardenClusters", func() {
+	Describe("#NewLsCmd", func() {
+		var (
+			ctrl         *gomock.Controller
+			targetReader *mockcmd.MockTargetReader
+			configReader *mockcmd.MockConfigReader
+			target       *mockcmd.MockTargetInterface
+			command      *cobra.Command
+		)
 
+		BeforeEach(func() {
+			ctrl = gomock.NewController(GinkgoT())
+			targetReader = mockcmd.NewMockTargetReader(ctrl)
+			configReader = mockcmd.NewMockConfigReader(ctrl)
+			target = mockcmd.NewMockTargetInterface(ctrl)
+		})
+
+		AfterEach(func() {
+			ctrl.Finish()
+		})
+
+		Context("with invalid number of args", func() {
+			It("should return error", func() {
+				ioStreams, _, _, _ := cmd.NewTestIOStreams()
+				command = cmd.NewLsCmd(targetReader, configReader, ioStreams)
+				command.SetArgs([]string{})
+				err := command.Execute()
+
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(Equal("command must be in the format: ls [gardens|projects|seeds|shoots|issues]"))
+			})
+		})
+
+		Context("list shoots", func() {
+			It("shout return error for empty target", func() {
+				targetReader.EXPECT().ReadTarget(gomock.Any()).Return(target)
+				target.EXPECT().Stack().Return([]cmd.TargetMeta{})
+
+				ioStreams, _, _, _ := cmd.NewTestIOStreams()
+				command = cmd.NewLsCmd(targetReader, configReader, ioStreams)
+				command.SetArgs([]string{"shoots"})
+				err := command.Execute()
+
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(Equal("target stack is empty"))
+			})
+		})
+	})
+
+	Describe("#PrintGardenClusters", func() {
 		var (
 			ctrl         *gomock.Controller
 			configReader *mockcmd.MockConfigReader
