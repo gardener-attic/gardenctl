@@ -2,6 +2,8 @@
 
 set -e
 
+export GO111MODULE=on
+
 # For the check step concourse will set the following environment variables:
 # SOURCE_PATH - path to component repository root directory.
 
@@ -13,21 +15,17 @@ fi
 
 cd "${SOURCE_PATH}"
 
-# Install Golint.
-if ! which golint 1>/dev/null; then
-  echo -n "Installing golint... "
-  GO111MODULE=off go get -u golang.org/x/lint/golint
-  echo "done."
-fi
+# Build Golint.
+go install -mod=vendor ./vendor/golang.org/x/lint/golint
 
 ###############################################################################
 
-PACKAGES="$(GO111MODULE=on go list -mod=vendor -e ./...)"
-PACKAGES_DIRS="$(GO111MODULE=on go list -mod=vendor -e -f '{{.Dir}}' ./...)"
+PACKAGES="$(go list -mod=vendor -e ./...)"
+PACKAGES_DIRS="$(go list -mod=vendor -e -f '{{.Dir}}' ./...)"
 
 # Execute static code checks.
 echo "Running go vet..."
-GO111MODULE=on go vet -mod=vendor ${PACKAGES}
+go vet -mod=vendor ${PACKAGES}
 
 # go fmt ignores -mod=vendor and performs module lookup (https://github.com/golang/go/issues/27841).
 # Also go fmt is just alias for gofmt -l -w and does not support flags that gofmt does.
