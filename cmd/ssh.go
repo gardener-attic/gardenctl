@@ -61,6 +61,8 @@ func NewSSHCmd(reader TargetReader, ioStreams IOStreams) *cobra.Command {
 				kind = "external"
 			case "az":
 				kind = "internal"
+			case "alicloud":
+				kind = "internal"
 			case "openstack":
 			default:
 				return fmt.Errorf("infrastructure type %q not found", infraType)
@@ -71,10 +73,12 @@ func NewSSHCmd(reader TargetReader, ioStreams IOStreams) *cobra.Command {
 				printNodeIPs(kind)
 				return nil
 			} else if len(args) != 1 || !isIP(args[0]) {
-				fmt.Printf("Select a valid node ip\n\n")
-				fmt.Printf("Node ips:\n")
-				printNodeIPs(kind)
-				os.Exit(2)
+				if !(infraType == "alicloud" && args[0] == "clean") {
+					fmt.Printf("Select a valid node ip or use 'gardenctl ssh clean' to clean up settings for alicloud\n\n")
+					fmt.Printf("Node ips:\n")
+					printNodeIPs(kind)
+					os.Exit(2)
+				}
 			}
 			path := downloadTerraformFiles("infra")
 			if path != "" {
@@ -94,6 +98,8 @@ func NewSSHCmd(reader TargetReader, ioStreams IOStreams) *cobra.Command {
 				sshToGCPNode(args[0], path)
 			case "az":
 				sshToAZNode(args[0], path)
+			case "alicloud":
+				sshToAlicloudNode(args[0], path)
 			case "openstack":
 			default:
 				return fmt.Errorf("infrastructure type %q not found", infraType)
