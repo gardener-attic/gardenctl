@@ -72,6 +72,16 @@ func sshToAlicloudNode(nodeIP, path string) {
 
 	fmt.Println("(1/5) Configuring aliyun cli")
 	configureAliyunCLI()
+	var target Target
+	ReadTarget(pathTarget, &target)
+	aliyunPathSSHKey := ""
+	if target.Target[1].Kind == "project" {
+		aliyunPathSSHKey = pathGardenHome + "/cache/projects/" + target.Target[1].Name + "/" + target.Target[2].Name + "/.aliyun/"
+	} else if target.Target[1].Kind == "seed" {
+		aliyunPathSSHKey = pathGardenHome + "/cache/seeds/" + target.Target[1].Name + "/" + target.Target[2].Name + "/.aliyun/"
+	}
+	err = ExecCmd(nil, "mv key "+aliyunPathSSHKey, false)
+	checkError(err)
 	fmt.Println("Aliyun cli configured.")
 
 	a := &AliyunInstanceAttribute{}
@@ -98,13 +108,13 @@ func sshToAlicloudNode(nodeIP, path string) {
 
 	fmt.Println("")
 	fmt.Println("- Run following command to ssh onto the target node:")
-	fmt.Println("ssh -i key -o \"ProxyCommand ssh -i key -W " + nodeIP + ":22 root@" + a.BastionIP + "\" root@" + nodeIP)
+	fmt.Println("ssh -i " + aliyunPathSSHKey + "key -o \"ProxyCommand ssh -i " + aliyunPathSSHKey + "key -W " + nodeIP + ":22 root@" + a.BastionIP + "\" root@" + nodeIP)
 	fmt.Println("")
 	fmt.Println("- Run following command to hibernate bastion host:")
 	fmt.Println("gardenctl aliyun ecs StopInstance -- --InstanceId=" + a.BastionInstanceID)
 	fmt.Println("")
 	fmt.Println("- Run following command before shoot deletion:")
-	fmt.Println("g ssh clean")
+	fmt.Println("gardenctl ssh clean")
 }
 
 // cleanupAlicloudBastionHost cleans up the bastion host for the targeted cluster.
