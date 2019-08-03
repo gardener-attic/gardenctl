@@ -20,12 +20,12 @@ VERSION=$(shell cat VERSION | sed 's/[-dev]//g')
 build:
 	@CGO_ENABLED=0 GOOS=linux GOARCH=amd64 GO111MODULE=on go build \
 		-mod=vendor \
-		-ldflags "-w -X github.com/gardener/gardenctl/cmd.version=${VERSION} -X github.com/gardener/gardenctl/cmd.buildDate=${DATE}" \
+		-ldflags "-w -X github.com/gardener/gardenctl/pkg/cmd.version=${VERSION} -X github.com/gardener/gardenctl/pkg/cmd.buildDate=${DATE}" \
 		-o bin/linux-amd64/gardenctl-linux-amd64 cmd/gardenctl/main.go
 
 	@CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 GO111MODULE=on go build \
 		-mod=vendor \
-		-ldflags "-w -X github.com/gardener/gardenctl/cmd.version=${VERSION} -X github.com/gardener/gardenctl/cmd.buildDate=${DATE}" \
+		-ldflags "-w -X github.com/gardener/gardenctl/pkg/cmd.version=${VERSION} -X github.com/gardener/gardenctl/pkg/cmd.buildDate=${DATE}" \
 		-o bin/darwin-amd64/gardenctl-darwin-amd64 cmd/gardenctl/main.go
 
 .PHONY: clean
