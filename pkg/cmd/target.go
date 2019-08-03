@@ -27,7 +27,11 @@ import (
 	"github.com/spf13/cobra"
 	"gopkg.in/yaml.v2"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/kubernetes"
 )
+
+// ProjectName is they key of a label on namespaces whose value holds the project name.
+const ProjectName = "project.garden.sapcloud.io/name"
 
 // NewTargetCmd returns a new target command.
 func NewTargetCmd(targetReader TargetReader, targetWriter TargetWriter, configReader ConfigReader, ioStreams IOStreams) *cobra.Command {
@@ -59,7 +63,6 @@ func NewTargetCmd(targetReader TargetReader, targetWriter TargetWriter, configRe
 					for _, val := range gardens {
 						fmt.Println("- garden: " + val)
 					}
-					os.Exit(2)
 				}
 			case "project":
 				if len(args) != 2 {
@@ -79,7 +82,6 @@ func NewTargetCmd(targetReader TargetReader, targetWriter TargetWriter, configRe
 					for _, val := range projects {
 						fmt.Println("- project: " + val)
 					}
-					os.Exit(2)
 				}
 			case "seed":
 				if len(args) != 2 {
@@ -99,7 +101,6 @@ func NewTargetCmd(targetReader TargetReader, targetWriter TargetWriter, configRe
 					for _, val := range seeds {
 						fmt.Println("- seed: " + val)
 					}
-					os.Exit(2)
 				}
 			case "shoot":
 				if len(args) != 2 {
@@ -115,11 +116,16 @@ func NewTargetCmd(targetReader TargetReader, targetWriter TargetWriter, configRe
 				} else if len(shoots) == 1 {
 					targetShoot(targetWriter, shoots[0])
 				} else if len(shoots) > 1 {
-					fmt.Println("shoots:")
-					for _, val := range shoots {
-						fmt.Println("- shoot: " + val)
+					k8sClientToGarden, err := target.K8SClientToKind(TargetKindGarden)
+					checkError(err)
+					fmt.Fprintln(ioStreams.Out, "shoots:")
+					for _, shoot := range shoots {
+						projectName, err := getProjectNameByShootNamespace(k8sClientToGarden, shoot.Namespace)
+						checkError(err)
+
+						fmt.Fprintln(ioStreams.Out, "- project: "+projectName)
+						fmt.Fprintln(ioStreams.Out, "  shoot: "+shoot.Name)
 					}
-					os.Exit(2)
 				}
 			default:
 				target := targetReader.ReadTarget(pathTarget)
@@ -200,15 +206,19 @@ func NewTargetCmd(targetReader TargetReader, targetWriter TargetWriter, configRe
 				shoots := resolveNameShoot(target, args[0])
 				if len(shoots) == 0 {
 					fmt.Println("No match for " + args[0])
-					os.Exit(2)
 				} else if len(shoots) == 1 {
 					targetShoot(targetWriter, shoots[0])
 				} else if len(shoots) > 1 {
-					fmt.Println("shoots:")
-					for _, val := range shoots {
-						fmt.Println("- shoot: " + val)
+					k8sClientToGarden, err := target.K8SClientToKind(TargetKindGarden)
+					checkError(err)
+					fmt.Fprintln(ioStreams.Out, "shoots:")
+					for _, shoot := range shoots {
+						projectName, err := getProjectNameByShootNamespace(k8sClientToGarden, shoot.Namespace)
+						checkError(err)
+
+						fmt.Fprintln(ioStreams.Out, "- project: "+projectName)
+						fmt.Fprintln(ioStreams.Out, "  shoot: "+shoot.Name)
 					}
-					os.Exit(2)
 				}
 			}
 
@@ -394,12 +404,10 @@ func targetSeed(targetReader TargetReader, targetWriter TargetWriter, name strin
 }
 
 // resolveNameShoot resolves name to shoot
-func resolveNameShoot(target TargetInterface, name string) (matches []string) {
-	tmp := KUBECONFIG
-	Client, err = clientToTarget("garden")
+func resolveNameShoot(target TargetInterface, name string) (matches []v1beta1.Shoot) {
+	gardenClientset, err := target.GardenerClient()
 	checkError(err)
-	gardenClientset, err := clientset.NewForConfig(NewConfigFromBytes(*kubeconfig))
-	checkError(err)
+
 	var shootList *v1beta1.ShootList
 	if len(target.Stack()) > 1 && target.Stack()[1].Kind == TargetKindProject {
 		projectName := target.Stack()[1].Name
@@ -430,144 +438,115 @@ func resolveNameShoot(target TargetInterface, name string) (matches []string) {
 		if strings.HasPrefix(name, "*") && strings.HasSuffix(name, "*") {
 			matcher = strings.Replace(name, "*", "", 2)
 			if strings.Contains(shootName, matcher) {
-				matches = append(matches, shootName)
+				matches = append(matches, shoot)
 			}
 		} else if strings.HasSuffix(name, "*") {
 			matcher = strings.Replace(name, "*", "", 1)
 			if strings.HasPrefix(shootName, matcher) {
-				matches = append(matches, shootName)
+				matches = append(matches, shoot)
 			}
 		} else if strings.HasPrefix(name, "*") {
 			matcher = strings.Replace(name, "*", "", 1)
 			if strings.HasSuffix(shootName, matcher) {
-				matches = append(matches, shootName)
+				matches = append(matches, shoot)
 			}
 		} else {
 			if shootName == name {
-				matches = append(matches, shootName)
+				matches = append(matches, shoot)
 			}
 		}
 	}
-	KUBECONFIG = tmp
+
 	return matches
 }
 
 // targetShoot targets shoot cluster with project as default value in stack
-func targetShoot(targetWriter TargetWriter, name string) {
-	Client, err = clientToTarget("garden")
-	gardenClientset, err := clientset.NewForConfig(NewConfigFromBytes(*kubeconfig))
-	shootList, err := gardenClientset.GardenV1beta1().Shoots("").List(metav1.ListOptions{})
-	checkError(err)
+func targetShoot(targetWriter TargetWriter, shoot v1beta1.Shoot) {
 	var target Target
 	ReadTarget(pathTarget, &target)
-	var matchedShoots []v1beta1.Shoot
-	seedName := ""
-	for _, item := range shootList.Items {
-		if len(target.Target) == 1 && item.Name == name {
-			matchedShoots = append(matchedShoots, item)
-			seedName = *item.Spec.Cloud.Seed
-		} else if len(target.Target) == 2 && item.Name == name && *item.Spec.Cloud.Seed == target.Target[1].Name {
-			seedName = target.Target[1].Name
-			matchedShoots = append(matchedShoots, item)
-		} else if len(target.Target) == 3 && item.Name == name && *item.Spec.Cloud.Seed == target.Target[1].Name {
-			matchedShoots = append(matchedShoots, item)
-			seedName = *item.Spec.Cloud.Seed
-		} else if len(target.Target) >= 2 && item.Name == name {
-			matchedShoots = append(matchedShoots, item)
-			seedName = *item.Spec.Cloud.Seed
-		}
-	}
-	if len(matchedShoots) == 0 {
-		fmt.Println("Shoot " + name + " not found")
-	} else if len(matchedShoots) == 1 {
-		gardenClientset, err := target.GardenerClient()
-		checkError(err)
-		project, err := getProjectByShootNamespace(gardenClientset, matchedShoots[0].Namespace)
-		checkError(err)
 
-		if len(target.Target) == 1 {
-			target.Target = append(target.Target, TargetMeta{"project", project.Name})
-			target.Target = append(target.Target, TargetMeta{"shoot", matchedShoots[0].Name})
-		} else if len(target.Target) == 2 {
-			drop(targetWriter)
-			if target.Target[1].Kind == "seed" {
-				target.Target[1].Kind = "seed"
-				target.Target[1].Name = *matchedShoots[0].Spec.Cloud.Seed
-			} else if target.Target[1].Kind == "project" {
-				target.Target[1].Kind = "project"
-				target.Target[1].Name = project.Name
-			}
-			target.Target = append(target.Target, TargetMeta{"shoot", matchedShoots[0].Name})
-		} else if len(target.Target) == 3 {
-			drop(targetWriter)
-			drop(targetWriter)
-			if len(target.Target) > 2 && target.Target[1].Kind == "seed" {
-				target.Target = target.Target[:len(target.Target)-2]
-				target.Target = append(target.Target, TargetMeta{"seed", *matchedShoots[0].Spec.Cloud.Seed})
-				target.Target = append(target.Target, TargetMeta{"shoot", matchedShoots[0].Name})
-			} else if len(target.Target) > 2 && target.Target[1].Kind == "project" {
-				target.Target = target.Target[:len(target.Target)-2]
-				target.Target = append(target.Target, TargetMeta{"project", project.Name})
-				target.Target = append(target.Target, TargetMeta{"shoot", matchedShoots[0].Name})
-			}
-		}
-		err = targetWriter.WriteTarget(pathTarget, &target)
-		checkError(err)
+	k8sClientToGarden, err := target.K8SClientToKind(TargetKindGarden)
+	checkError(err)
+	projectName, err := getProjectNameByShootNamespace(k8sClientToGarden, shoot.Namespace)
+	checkError(err)
 
-		Client, err = clientToTarget("garden")
-		checkError(err)
-		seed, err := gardenClientset.GardenV1beta1().Seeds().Get(seedName, metav1.GetOptions{})
-		checkError(err)
-		kubeSecret, err := Client.CoreV1().Secrets(seed.Spec.SecretRef.Namespace).Get(seed.Spec.SecretRef.Name, metav1.GetOptions{})
-		checkError(err)
-		pathSeed := pathSeedCache + "/" + *matchedShoots[0].Spec.Cloud.Seed
-		os.MkdirAll(pathSeed, os.ModePerm)
-		err = ioutil.WriteFile(pathSeed+"/kubeconfig.yaml", kubeSecret.Data["kubeconfig"], 0644)
-		checkError(err)
-		KUBECONFIG = pathSeed + "/kubeconfig.yaml"
-		namespace := matchedShoots[0].Status.TechnicalID
-
-		Client, err = clientToTarget("seed")
-		checkError(err)
-		kubeSecret, err = Client.CoreV1().Secrets(namespace).Get("kubecfg", metav1.GetOptions{})
-		checkError(err)
+	if len(target.Target) == 1 {
+		target.Target = append(target.Target, TargetMeta{"project", projectName})
+		target.Target = append(target.Target, TargetMeta{"shoot", shoot.Name})
+	} else if len(target.Target) == 2 {
+		drop(targetWriter)
 		if target.Target[1].Kind == "seed" {
-			pathShootKubeconfig := pathSeedCache + "/" + target.Target[1].Name + "/" + name
-			os.MkdirAll(pathShootKubeconfig, os.ModePerm)
-			err = ioutil.WriteFile(pathShootKubeconfig+"/kubeconfig.yaml", kubeSecret.Data["kubeconfig"], 0644)
-			checkError(err)
+			target.Target[1].Kind = "seed"
+			target.Target[1].Name = *shoot.Spec.Cloud.Seed
 		} else if target.Target[1].Kind == "project" {
-			pathProjectKubeconfig := pathProjectCache + "/" + target.Target[1].Name + "/" + name
-			os.MkdirAll(pathProjectKubeconfig, os.ModePerm)
-			err = ioutil.WriteFile(pathProjectKubeconfig+"/kubeconfig.yaml", kubeSecret.Data["kubeconfig"], 0644)
-			checkError(err)
+			target.Target[1].Kind = "project"
+			target.Target[1].Name = projectName
 		}
-		KUBECONFIG = getKubeConfigOfCurrentTarget()
-		fmt.Println("KUBECONFIG=" + getKubeConfigOfCurrentTarget())
-	} else if len(matchedShoots) > 1 {
-		fmt.Println("Multiple Shoots found")
-		fmt.Println("projects:")
-		for _, shoot := range matchedShoots {
-			fmt.Println("- project: " + shoot.Namespace)
-			fmt.Println("  shoots: " + shoot.Name)
+		target.Target = append(target.Target, TargetMeta{"shoot", shoot.Name})
+	} else if len(target.Target) == 3 {
+		drop(targetWriter)
+		drop(targetWriter)
+		if len(target.Target) > 2 && target.Target[1].Kind == "seed" {
+			target.Target = target.Target[:len(target.Target)-2]
+			target.Target = append(target.Target, TargetMeta{"seed", *shoot.Spec.Cloud.Seed})
+			target.Target = append(target.Target, TargetMeta{"shoot", shoot.Name})
+		} else if len(target.Target) > 2 && target.Target[1].Kind == "project" {
+			target.Target = target.Target[:len(target.Target)-2]
+			target.Target = append(target.Target, TargetMeta{"project", projectName})
+			target.Target = append(target.Target, TargetMeta{"shoot", shoot.Name})
 		}
-		fmt.Println("Target a project first")
 	}
+
+	// Write target
+	err = targetWriter.WriteTarget(pathTarget, &target)
+	checkError(err)
+
+	Client, err = clientToTarget("garden")
+	checkError(err)
+	gardenClientset, err := target.GardenerClient()
+	checkError(err)
+	seed, err := gardenClientset.GardenV1beta1().Seeds().Get(*shoot.Spec.Cloud.Seed, metav1.GetOptions{})
+	checkError(err)
+	kubeSecret, err := Client.CoreV1().Secrets(seed.Spec.SecretRef.Namespace).Get(seed.Spec.SecretRef.Name, metav1.GetOptions{})
+	checkError(err)
+	pathSeed := pathSeedCache + "/" + *shoot.Spec.Cloud.Seed
+	os.MkdirAll(pathSeed, os.ModePerm)
+	err = ioutil.WriteFile(pathSeed+"/kubeconfig.yaml", kubeSecret.Data["kubeconfig"], 0644)
+	checkError(err)
+	KUBECONFIG = pathSeed + "/kubeconfig.yaml"
+	namespace := shoot.Status.TechnicalID
+
+	Client, err = clientToTarget("seed")
+	checkError(err)
+	kubeSecret, err = Client.CoreV1().Secrets(namespace).Get("kubecfg", metav1.GetOptions{})
+	checkError(err)
+	if target.Target[1].Kind == "seed" {
+		pathShootKubeconfig := pathSeedCache + "/" + target.Target[1].Name + "/" + shoot.Name
+		os.MkdirAll(pathShootKubeconfig, os.ModePerm)
+		err = ioutil.WriteFile(pathShootKubeconfig+"/kubeconfig.yaml", kubeSecret.Data["kubeconfig"], 0644)
+		checkError(err)
+	} else if target.Target[1].Kind == "project" {
+		pathProjectKubeconfig := pathProjectCache + "/" + target.Target[1].Name + "/" + shoot.Name
+		os.MkdirAll(pathProjectKubeconfig, os.ModePerm)
+		err = ioutil.WriteFile(pathProjectKubeconfig+"/kubeconfig.yaml", kubeSecret.Data["kubeconfig"], 0644)
+		checkError(err)
+	}
+	KUBECONFIG = getKubeConfigOfCurrentTarget()
+	fmt.Println("KUBECONFIG=" + getKubeConfigOfCurrentTarget())
 }
 
-func getProjectByShootNamespace(gardenClientset clientset.Interface, shootNamespace string) (*v1beta1.Project, error) {
-	projectList, err := gardenClientset.GardenV1beta1().Projects().List(metav1.ListOptions{})
+func getProjectNameByShootNamespace(k8sClientToGarden kubernetes.Interface, shootNamespace string) (string, error) {
+	namespace, err := k8sClientToGarden.CoreV1().Namespaces().Get(shootNamespace, metav1.GetOptions{})
 	if err != nil {
-		return nil, err
+		return "", err
 	}
 
-	for _, project := range projectList.Items {
-		if shootNamespace == *project.Spec.Namespace {
-			return &project, nil
-		}
+	labelValue, ok := namespace.Labels[ProjectName]
+	if !ok {
+		return "", fmt.Errorf("label %q on namespace %q not found", ProjectName, namespace.Name)
 	}
 
-	return nil, fmt.Errorf("project with namespace %q not found", shootNamespace)
+	return labelValue, nil
 }
 
 // getSeedForProject

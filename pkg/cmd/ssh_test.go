@@ -15,16 +15,21 @@
 package cmd_test
 
 import (
-	"github.com/gardener/gardenctl/cmd"
+	"github.com/gardener/gardenctl/pkg/cmd"
+	mockcmd "github.com/gardener/gardenctl/pkg/mock/cmd"
+	"github.com/golang/mock/gomock"
 	"github.com/spf13/cobra"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 )
 
-var _ = Describe("Register command", func() {
+var _ = Describe("SSH command", func() {
 
 	var (
+		ctrl    *gomock.Controller
+		reader  *mockcmd.MockTargetReader
+		target  *mockcmd.MockTargetInterface
 		command *cobra.Command
 
 		execute = func(command *cobra.Command, args []string) error {
@@ -33,13 +38,29 @@ var _ = Describe("Register command", func() {
 		}
 	)
 
-	Context("with >= 2 args", func() {
-		It("should return error", func() {
-			command = cmd.NewRegisterCmd()
-			err := execute(command, []string{"john.doe@example.com", "alice.doe@example.com"})
+	BeforeEach(func() {
+		ctrl = gomock.NewController(GinkgoT())
+		reader = mockcmd.NewMockTargetReader(ctrl)
+		target = mockcmd.NewMockTargetInterface(ctrl)
+	})
 
-			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(Equal("command must be in the format: register (e-mail)"))
+	AfterEach(func() {
+		ctrl.Finish()
+	})
+
+	Context("without args", func() {
+		Context("when target is not shoot", func() {
+			It("should return error", func() {
+				reader.EXPECT().ReadTarget(gomock.Any()).Return(target)
+				target.EXPECT().Stack().Return([]cmd.TargetMeta{})
+
+				ioStreams, _, _, _ := cmd.NewTestIOStreams()
+				command = cmd.NewSSHCmd(reader, ioStreams)
+				err := execute(command, []string{})
+
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(Equal("no shoot targeted"))
+			})
 		})
 	})
 })

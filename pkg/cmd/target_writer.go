@@ -12,34 +12,29 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package cmd_test
+package cmd
 
 import (
-	"github.com/gardener/gardenctl/cmd"
-	"github.com/spf13/cobra"
+	"os"
 
-	. "github.com/onsi/ginkgo"
-	. "github.com/onsi/gomega"
+	"gopkg.in/yaml.v2"
 )
 
-var _ = Describe("Unregister command", func() {
+// WriteTarget writes <target> to <targetPath>.
+func (w *GardenctlTargetWriter) WriteTarget(targetPath string, target TargetInterface) (err error) {
+	var content []byte
+	if content, err = yaml.Marshal(target); err != nil {
+		return err
+	}
 
-	var (
-		command *cobra.Command
+	var file *os.File
+	if file, err = os.OpenFile(targetPath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0644); err != nil {
+		return err
+	}
+	defer file.Close()
 
-		execute = func(command *cobra.Command, args []string) error {
-			command.SetArgs(args)
-			return command.Execute()
-		}
-	)
+	file.Write(content)
+	file.Sync()
 
-	Context("with >= 2 args", func() {
-		It("should return error", func() {
-			command = cmd.NewUnregisterCmd()
-			err := execute(command, []string{"john.doe@example.com", "alice.doe@example.com"})
-
-			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(Equal("command must be in the format: unregister (e-mail)"))
-		})
-	})
-})
+	return
+}

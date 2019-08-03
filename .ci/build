@@ -29,5 +29,5 @@ VERSION=$(cat ${SOURCE_PATH}/VERSION)
 
 go build \
   -mod=vendor \
-  -ldflags "-w -X github.com/gardener/gardenctl/cmd.version=${VERSION} -w -X github.com/gardener/gardenctl/cmd.buildDate=${DATE}" \
+  -ldflags "-w -X github.com/gardener/gardenctl/pkg/cmd.version=${VERSION} -w -X github.com/gardener/gardenctl/pkg/cmd.buildDate=${DATE}" \
   -o ${BINARY_PATH}/rel/gardenctl cmd/gardenctl/main.go
