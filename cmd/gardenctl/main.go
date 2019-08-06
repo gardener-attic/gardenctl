@@ -14,7 +14,7 @@
 
 package main
 
-import "github.com/gardener/gardenctl/cmd"
+import "github.com/gardener/gardenctl/pkg/cmd"
 
 func main() {
 	cmd.Execute()

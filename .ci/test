@@ -20,4 +20,4 @@ go install -mod=vendor ./vendor/github.com/onsi/ginkgo/ginkgo
 
 ###############################################################################
 
-ginkgo -cover -r -mod=vendor cmd
+ginkgo -cover -r -mod=vendor pkg/...

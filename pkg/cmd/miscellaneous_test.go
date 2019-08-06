@@ -17,7 +17,7 @@ package cmd_test
 import (
 	"os"
 
-	. "github.com/gardener/gardenctl/cmd"
+	. "github.com/gardener/gardenctl/pkg/cmd"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"

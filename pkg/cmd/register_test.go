@@ -12,9 +12,34 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//go:generate mockgen -package cmd -destination=target.go github.com/gardener/gardenctl/pkg/cmd TargetInterface
-//go:generate mockgen -package cmd -destination=target_reader.go github.com/gardener/gardenctl/pkg/cmd TargetReader
-//go:generate mockgen -package cmd -destination=target_writer.go github.com/gardener/gardenctl/pkg/cmd TargetWriter
-//go:generate mockgen -package cmd -destination=config_reader.go github.com/gardener/gardenctl/pkg/cmd ConfigReader
+package cmd_test
 
-package cmd
+import (
+	"github.com/gardener/gardenctl/pkg/cmd"
+	"github.com/spf13/cobra"
+
+	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/gomega"
+)
+
+var _ = Describe("Register command", func() {
+
+	var (
+		command *cobra.Command
+
+		execute = func(command *cobra.Command, args []string) error {
+			command.SetArgs(args)
+			return command.Execute()
+		}
+	)
+
+	Context("with >= 2 args", func() {
+		It("should return error", func() {
+			command = cmd.NewRegisterCmd()
+			err := execute(command, []string{"john.doe@example.com", "alice.doe@example.com"})
+
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(Equal("command must be in the format: register (e-mail)"))
+		})
+	})
+})

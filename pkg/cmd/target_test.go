@@ -15,7 +15,7 @@
 package cmd_test
 
 import (
-	"github.com/gardener/gardenctl/cmd"
+	"github.com/gardener/gardenctl/pkg/cmd"
 	mockcmd "github.com/gardener/gardenctl/pkg/mock/cmd"
 	"github.com/gardener/gardener/pkg/apis/garden/v1beta1"
 	gardenfake "github.com/gardener/gardener/pkg/client/garden/clientset/versioned/fake"
@@ -24,7 +24,9 @@ import (
 	. "github.com/onsi/ginkgo/extensions/table"
 	. "github.com/onsi/gomega"
 	"github.com/spf13/cobra"
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	kubernetesfake "k8s.io/client-go/kubernetes/fake"
 )
 
 var _ = Describe("Target command", func() {
@@ -141,6 +143,76 @@ var _ = Describe("Target command", func() {
 			err := execute(command, []string{"project", "myproject"})
 
 			Expect(err).NotTo(HaveOccurred())
+		})
+
+		It("targeting shoot with wrong name", func() {
+			targetReader.EXPECT().ReadTarget(gomock.Any()).Return(target)
+			target.EXPECT().Stack().Return([]cmd.TargetMeta{
+				{
+					Kind: cmd.TargetKindGarden,
+					Name: "prod",
+				},
+			}).Times(3)
+			clientSet := gardenfake.NewSimpleClientset()
+			target.EXPECT().GardenerClient().Return(clientSet, nil)
+
+			ioStreams, _, _, _ := cmd.NewTestIOStreams()
+			command = cmd.NewTargetCmd(targetReader, targetWriter, configReader, ioStreams)
+			err := execute(command, []string{"shoot", "foo"})
+
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(Equal("no match for \"foo\""))
+		})
+
+		It("targeting shoot name with multiple matches across projects", func() {
+			targetReader.EXPECT().ReadTarget(gomock.Any()).Return(target)
+			target.EXPECT().Stack().Return([]cmd.TargetMeta{
+				{
+					Kind: cmd.TargetKindGarden,
+					Name: "prod",
+				},
+			}).Times(3)
+			clientSet := gardenfake.NewSimpleClientset(
+				&v1beta1.Shoot{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "foo",
+						Namespace: "garden-validation",
+					},
+				},
+				&v1beta1.Shoot{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "foo",
+						Namespace: "garden-prod",
+					},
+				},
+			)
+			target.EXPECT().GardenerClient().Return(clientSet, nil)
+			k8sClientToGarden := kubernetesfake.NewSimpleClientset(
+				&corev1.Namespace{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "garden-validation",
+						Labels: map[string]string{
+							cmd.ProjectName: "validation",
+						},
+					},
+				},
+				&corev1.Namespace{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "garden-prod",
+						Labels: map[string]string{
+							cmd.ProjectName: "prod",
+						},
+					},
+				})
+			target.EXPECT().K8SClientToKind(cmd.TargetKindGarden).Return(k8sClientToGarden, nil)
+
+			ioStreams, _, out, _ := cmd.NewTestIOStreams()
+			command = cmd.NewTargetCmd(targetReader, targetWriter, configReader, ioStreams)
+			err := execute(command, []string{"shoot", "foo"})
+
+			Expect(err).NotTo(HaveOccurred())
+			Expect(out.String()).To(ContainSubstring("- project: validation"))
+			Expect(out.String()).To(ContainSubstring("- project: prod"))
 		})
 	})
 
