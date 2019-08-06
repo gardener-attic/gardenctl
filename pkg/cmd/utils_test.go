@@ -19,7 +19,7 @@ import (
 	"os"
 	"strings"
 
-	. "github.com/gardener/gardenctl/cmd"
+	. "github.com/gardener/gardenctl/pkg/cmd"
 	yaml "gopkg.in/yaml.v2"
 
 	. "github.com/onsi/ginkgo"
