@@ -501,38 +501,43 @@ func targetShoot(targetWriter TargetWriter, shoot v1beta1.Shoot) {
 	err = targetWriter.WriteTarget(pathTarget, &target)
 	checkError(err)
 
-	Client, err = clientToTarget("garden")
-	checkError(err)
+	// Get and cache seed kubeconfig for future commands
 	gardenClientset, err := target.GardenerClient()
 	checkError(err)
 	seed, err := gardenClientset.GardenV1beta1().Seeds().Get(*shoot.Spec.Cloud.Seed, metav1.GetOptions{})
 	checkError(err)
-	kubeSecret, err := Client.CoreV1().Secrets(seed.Spec.SecretRef.Namespace).Get(seed.Spec.SecretRef.Name, metav1.GetOptions{})
+	gardenClient, err := target.K8SClientToKind(TargetKindGarden)
 	checkError(err)
-	pathSeed := pathSeedCache + "/" + *shoot.Spec.Cloud.Seed
-	os.MkdirAll(pathSeed, os.ModePerm)
-	err = ioutil.WriteFile(pathSeed+"/kubeconfig.yaml", kubeSecret.Data["kubeconfig"], 0644)
+	seedKubeconfigSecret, err := gardenClient.CoreV1().Secrets(seed.Spec.SecretRef.Namespace).Get(seed.Spec.SecretRef.Name, metav1.GetOptions{})
 	checkError(err)
-	KUBECONFIG = pathSeed + "/kubeconfig.yaml"
-	namespace := shoot.Status.TechnicalID
+	var seedCacheDir = filepath.Join(pathSeedCache, *shoot.Spec.Cloud.Seed)
+	err = os.MkdirAll(seedCacheDir, os.ModePerm)
+	checkError(err)
+	var seedKubeconfigPath = filepath.Join(seedCacheDir, "kubeconfig.yaml")
+	err = ioutil.WriteFile(seedKubeconfigPath, seedKubeconfigSecret.Data["kubeconfig"], 0644)
+	checkError(err)
 
-	Client, err = clientToTarget("seed")
+	// Get shoot kubeconfig
+	var shootKubeconfigSecretName = fmt.Sprintf("%s.kubeconfig", shoot.Name)
+	shootKubeconfigSecret, err := gardenClient.CoreV1().Secrets(shoot.Namespace).Get(shootKubeconfigSecretName, metav1.GetOptions{})
 	checkError(err)
-	kubeSecret, err = Client.CoreV1().Secrets(namespace).Get("kubecfg", metav1.GetOptions{})
-	checkError(err)
+
+	// Cache shoot kubeconfig
+	var shootCacheDir string
 	if target.Target[1].Kind == "seed" {
-		pathShootKubeconfig := pathSeedCache + "/" + target.Target[1].Name + "/" + shoot.Name
-		os.MkdirAll(pathShootKubeconfig, os.ModePerm)
-		err = ioutil.WriteFile(pathShootKubeconfig+"/kubeconfig.yaml", kubeSecret.Data["kubeconfig"], 0644)
-		checkError(err)
+		shootCacheDir = filepath.Join(pathSeedCache, target.Target[1].Name, shoot.Name)
 	} else if target.Target[1].Kind == "project" {
-		pathProjectKubeconfig := pathProjectCache + "/" + target.Target[1].Name + "/" + shoot.Name
-		os.MkdirAll(pathProjectKubeconfig, os.ModePerm)
-		err = ioutil.WriteFile(pathProjectKubeconfig+"/kubeconfig.yaml", kubeSecret.Data["kubeconfig"], 0644)
-		checkError(err)
+		shootCacheDir = filepath.Join(pathProjectCache, target.Target[1].Name, shoot.Name)
 	}
-	KUBECONFIG = getKubeConfigOfCurrentTarget()
-	fmt.Println("KUBECONFIG=" + getKubeConfigOfCurrentTarget())
+
+	err = os.MkdirAll(shootCacheDir, os.ModePerm)
+	checkError(err)
+	var shootKubeconfigPath = filepath.Join(shootCacheDir, "kubeconfig.yaml")
+	err = ioutil.WriteFile(shootKubeconfigPath, shootKubeconfigSecret.Data["kubeconfig"], 0644)
+	checkError(err)
+
+	KUBECONFIG = shootKubeconfigPath
+	fmt.Println("KUBECONFIG=" + KUBECONFIG)
 }
 
 func getProjectNameByShootNamespace(k8sClientToGarden kubernetes.Interface, shootNamespace string) (string, error) {

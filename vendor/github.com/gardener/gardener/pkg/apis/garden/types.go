@@ -39,10 +39,8 @@ import (
 type CloudProfile struct {
 	metav1.TypeMeta
 	// Standard object metadata.
-	// +optional
 	metav1.ObjectMeta
 	// Spec defines the cloud environment properties.
-	// +optional
 	Spec CloudProfileSpec
 }
 
@@ -52,7 +50,6 @@ type CloudProfile struct {
 type CloudProfileList struct {
 	metav1.TypeMeta
 	// Standard list object metadata.
-	// +optional
 	metav1.ListMeta
 	// Items is the list of CloudProfiles.
 	Items []CloudProfile
@@ -62,25 +59,18 @@ type CloudProfileList struct {
 // It must contain exactly one of its defined keys.
 type CloudProfileSpec struct {
 	// AWS is the profile specification for the Amazon Web Services cloud.
-	// +optional
 	AWS *AWSProfile
 	// Azure is the profile specification for the Microsoft Azure cloud.
-	// +optional
 	Azure *AzureProfile
 	// GCP is the profile specification for the Google Cloud Platform cloud.
-	// +optional
 	GCP *GCPProfile
 	// OpenStack is the profile specification for the OpenStack cloud.
-	// +optional
 	OpenStack *OpenStackProfile
 	// Alicloud is the profile specification for the Alibaba cloud.
-	// +optional
 	Alicloud *AlicloudProfile
 	// Packet is the profile specification for the Packet cloud.
-	// +optional
 	Packet *PacketProfile
 	// CABundle is a certificate bundle which will be installed onto every host machine of the Shoot cluster.
-	// +optional
 	CABundle *string
 }
 
@@ -106,12 +96,22 @@ type AWSConstraints struct {
 	Zones []Zone
 }
 
-// MachineImage defines the name and the version of the machine image in any environment.
+// MachineImage defines the name and multiple versions of the machine image in any environment.
 type MachineImage struct {
 	// Name is the name of the image.
 	Name string
+	// Versions contains versions and expiration dates of the machine image
+	Versions []MachineImageVersion
+}
+
+// MachineImageVersion contains a version and an expiration date of a machine image
+type MachineImageVersion struct {
 	// Version is the version of the image.
 	Version string
+	// ExpirationDate defines the time at which a shoot that opted out of automatic operating system updates and
+	// that is running this image version will be forcefully updated to the latest version specified in the referenced
+	// cloud profile.
+	ExpirationDate *metav1.Time
 }
 
 // AzureProfile defines certain constraints and definitions for the Azure cloud.
@@ -175,14 +175,11 @@ type OpenStackProfile struct {
 	// KeyStoneURL is the URL for auth{n,z} in OpenStack (pointing to KeyStone).
 	KeyStoneURL string
 	// DNSServers is a list of IPs of DNS servers used while creating subnets.
-	// +optional
 	DNSServers []string
 	// DHCPDomain is the dhcp domain of the OpenStack system configured in nova.conf. Only meaningful for
 	// Kubernetes 1.10.1+. See https://github.com/kubernetes/kubernetes/pull/61890 for details.
-	// +optional
 	DHCPDomain *string
 	// RequestTimeout specifies the HTTP timeout against the OpenStack API.
-	// +optional
 	RequestTimeout *string
 }
 
@@ -208,9 +205,11 @@ type OpenStackConstraints struct {
 type OpenStackFloatingPool struct {
 	// Name is the name of the floating pool.
 	Name string
+	// LoadBalancerClasses contains a list of supported labeled load balancer network settings.
+	LoadBalancerClasses []OpenStackLoadBalancerClass
 }
 
-// LoadBalancerProviders contains constraints regarding allowed values of the 'loadBalancerProvider' block in the Shoot specification.
+// OpenStackLoadBalancerProvider contains constraints regarding allowed values of the 'loadBalancerProvider' block in the Shoot specification.
 type OpenStackLoadBalancerProvider struct {
 	// Name is the name of the load balancer provider.
 	Name string
@@ -289,7 +288,6 @@ type MachineType struct {
 	// Name is the name of the machine type.
 	Name string
 	// Usable defines if the machine type can be used for shoot clusters.
-	// +optional
 	Usable *bool
 	// CPU is the number of CPUs for this machine type.
 	CPU resource.Quantity
@@ -313,7 +311,6 @@ type VolumeType struct {
 	// Name is the name of the volume type.
 	Name string
 	// Usable defines if the volume type can be used for shoot clusters.
-	// +optional
 	Usable *bool
 	// Class is the class of the volume type.
 	Class string
@@ -346,13 +343,10 @@ type Zone struct {
 type Project struct {
 	metav1.TypeMeta
 	// Standard object metadata.
-	// +optional
 	metav1.ObjectMeta
 	// Spec defines the project properties.
-	// +optional
 	Spec ProjectSpec
 	// Most recently observed status of the Project.
-	// +optional
 	Status ProjectStatus
 }
 
@@ -362,7 +356,6 @@ type Project struct {
 type ProjectList struct {
 	metav1.TypeMeta
 	// Standard list object metadata.
-	// +optional
 	metav1.ListMeta
 	// Items is the list of Projects.
 	Items []Project
@@ -372,24 +365,18 @@ type ProjectList struct {
 type ProjectSpec struct {
 	// CreatedBy is a subject representing a user name, an email address, or any other identifier of a user
 	// who created the project.
-	// +optional
 	CreatedBy *rbacv1.Subject
 	// Description is a human-readable description of what the project is used for.
-	// +optional
 	Description *string
 	// Owner is a subject representing a user name, an email address, or any other identifier of a user owning
 	// the project.
-	// +optional
 	Owner *rbacv1.Subject
 	// Purpose is a human-readable explanation of the project's purpose.
-	// +optional
 	Purpose *string
 	// Members is a list of subjects representing a user name, an email address, or any other identifier of a user
 	// that should be part of this project with full permissions to manage it.
-	// +optional
 	Members []rbacv1.Subject
 	// Namespace is the name of the namespace that has been created for the Project object.
-	// +optional
 	Namespace *string
 	// Viewers is a list of subjects representing a user name, an email address, or any other identifier of a user
 	// that should be part of this project with limited permissions to only view some resources.
@@ -399,7 +386,6 @@ type ProjectSpec struct {
 // ProjectStatus holds the most recently observed status of the project.
 type ProjectStatus struct {
 	// ObservedGeneration is the most recent generation observed for this project.
-	// +optional
 	ObservedGeneration int64
 	// Phase is the current phase of the project.
 	Phase ProjectPhase
@@ -431,13 +417,10 @@ const (
 type Seed struct {
 	metav1.TypeMeta
 	// Standard object metadata.
-	// +optional
 	metav1.ObjectMeta
 	// Spec defines the Seed cluster properties.
-	// +optional
 	Spec SeedSpec
 	// Most recently observed status of the Seed cluster.
-	// +optional
 	Status SeedStatus
 }
 
@@ -447,7 +430,6 @@ type Seed struct {
 type SeedList struct {
 	metav1.TypeMeta
 	// Standard list object metadata.
-	// +optional
 	metav1.ListMeta
 	// Items is the list of Seeds.
 	Items []Seed
@@ -469,23 +451,19 @@ type SeedSpec struct {
 	// in the seed cluster.
 	BlockCIDRs []gardencore.CIDR
 	// Visible labels the Seed cluster as selectable for the seedfinder admission controller.
-	// +optional
 	Visible *bool
 	// Protected prevent that the Seed Cluster can be used for regular Shoot cluster control planes.
-	// +optional
 	Protected *bool
 }
 
 // SeedStatus holds the most recently observed status of the Seed cluster.
 type SeedStatus struct {
 	// Conditions represents the latest available observations of a Seed's current state.
-	// +optional
 	Conditions []gardencore.Condition
 	// Gardener holds information about the Gardener which last acted on the Seed.
 	Gardener Gardener
 	// ObservedGeneration is the most recent generation observed for this Seed. It corresponds to the
 	// Seed's generation, which is updated on mutation by the API Server.
-	// +optional
 	ObservedGeneration int64
 }
 
@@ -518,10 +496,8 @@ type SeedNetworks struct {
 type Quota struct {
 	metav1.TypeMeta
 	// Standard object metadata.
-	// +optional
 	metav1.ObjectMeta
 	// Spec defines the Quota constraints.
-	// +optional
 	Spec QuotaSpec
 }
 
@@ -531,7 +507,6 @@ type Quota struct {
 type QuotaList struct {
 	metav1.TypeMeta
 	// Standard list object metadata.
-	// +optional
 	metav1.ListMeta
 	// Items is the list of Quotas.
 	Items []Quota
@@ -540,7 +515,6 @@ type QuotaList struct {
 // QuotaSpec is the specification of a Quota.
 type QuotaSpec struct {
 	// ClusterLifetimeDays is the lifetime of a Shoot cluster in days before it will be terminated automatically.
-	// +optional
 	ClusterLifetimeDays *int
 	// Metrics is a list of resources which will be put under constraints.
 	Metrics corev1.ResourceList
@@ -583,12 +557,10 @@ const (
 type SecretBinding struct {
 	metav1.TypeMeta
 	// Standard object metadata.
-	// +optional
 	metav1.ObjectMeta
 	// SecretRef is a reference to a secret object in the same or another namespace.
 	SecretRef corev1.SecretReference
 	// Quotas is a list of references to Quota objects in the same or another namespace.
-	// +optional
 	Quotas []corev1.ObjectReference
 }
 
@@ -598,7 +570,6 @@ type SecretBinding struct {
 type SecretBindingList struct {
 	metav1.TypeMeta
 	// Standard list object metadata.
-	// +optional
 	metav1.ListMeta
 	// Items is the list of SecretBindings.
 	Items []SecretBinding
@@ -614,13 +585,10 @@ type SecretBindingList struct {
 type Shoot struct {
 	metav1.TypeMeta
 	// Standard object metadata.
-	// +optional
 	metav1.ObjectMeta
 	// Specification of the Shoot cluster.
-	// +optional
 	Spec ShootSpec
 	// Most recently observed status of the Shoot cluster.
-	// +optional
 	Status ShootStatus
 }
 
@@ -630,7 +598,6 @@ type Shoot struct {
 type ShootList struct {
 	metav1.TypeMeta
 	// Standard list object metadata.
-	// +optional
 	metav1.ListMeta
 	// Items is the list of Shoots.
 	Items []Shoot
@@ -639,10 +606,8 @@ type ShootList struct {
 // ShootSpec is the specification of a Shoot.
 type ShootSpec struct {
 	// Addons contains information about enabled/disabled addons and their configuration.
-	// +optional
 	Addons *Addons
 	// DEPRECATED: This field will be removed in a future version.
-	// +optional
 	Backup *Backup
 	// Cloud contains information about the cloud environment and their specific settings.
 	Cloud Cloud
@@ -651,40 +616,35 @@ type ShootSpec struct {
 	// Extensions contain type and provider information for Shoot extensions.
 	Extensions []Extension
 	// Hibernation contains information whether the Shoot is suspended or not.
-	// +optional
 	Hibernation *Hibernation
 	// Kubernetes contains the version and configuration settings of the control plane components.
 	Kubernetes Kubernetes
 	// Maintenance contains information about the time window for maintenance operations and which
 	// operations should be performed.
-	// +optional
 	Maintenance *Maintenance
 }
 
 // ShootStatus holds the most recently observed status of the Shoot cluster.
 type ShootStatus struct {
 	// Conditions represents the latest available observations of a Shoots's current state.
-	// +optional
 	Conditions []gardencore.Condition
 	// Gardener holds information about the Gardener which last acted on the Shoot.
 	Gardener Gardener
 	// LastOperation holds information about the last operation on the Shoot.
-	// +optional
 	LastOperation *gardencore.LastOperation
 	// LastError holds information about the last occurred error during an operation.
-	// +optional
 	LastError *gardencore.LastError
 	// ObservedGeneration is the most recent generation observed for this Shoot. It corresponds to the
 	// Shoot's generation, which is updated on mutation by the API Server.
-	// +optional
 	ObservedGeneration int64
 	// RetryCycleStartTime is the start time of the last retry cycle (used to determine how often an operation
 	// must be retried until we give up).
-	// +optional
 	RetryCycleStartTime *metav1.Time
 	// Seed is the name of the seed cluster that runs the control plane of the Shoot. This value is only written
 	// after a successful create/reconcile operation. It will be used when control planes are moved between Seeds.
 	Seed string
+	// IsHibernated indicates whether the Shoot is currently hibernated.
+	IsHibernated *bool
 	// TechnicalID is the name that is used for creating the Seed namespace, the infrastructure resources, and
 	// basically everything that is related to this particular Shoot.
 	TechnicalID string
@@ -707,36 +667,28 @@ type Cloud struct {
 	// SecretBindingRef is a reference to a SecretBinding object.
 	SecretBindingRef corev1.LocalObjectReference
 	// Seed is the name of a Seed object.
-	// +optional
 	Seed *string
 	// AWS contains the Shoot specification for the Amazon Web Services cloud.
-	// +optional
 	AWS *AWSCloud
 	// Azure contains the Shoot specification for the Microsoft Azure cloud.
-	// +optional
 	Azure *AzureCloud
 	// GCP contains the Shoot specification for the Google Cloud Platform cloud.
-	// +optional
 	GCP *GCPCloud
 	// OpenStack contains the Shoot specification for the OpenStack cloud.
-	// +optional
 	OpenStack *OpenStackCloud
 	// Alicloud contains the Shoot specification for the Alibaba cloud.
-	// +optional
 	Alicloud *Alicloud
 	// PacketCloud contains the Shoot specification for the Packet cloud.
-	// +optional
 	Packet *PacketCloud
 }
 
 // AWSCloud contains the Shoot specification for AWS.
 
 type AWSCloud struct {
-	// MachineImage holds information about the machine image to use for all workers.
-	// It will default to the first image stated in the referenced CloudProfile if no
+	// ShootMachineImage holds information about the machine image to use for all workers.
+	// It will default to the latest version of the first image stated in the referenced CloudProfile if no
 	// value has been provided.
-	// +optional
-	MachineImage *MachineImage
+	MachineImage *ShootMachineImage
 	// Networks holds information about the Kubernetes and infrastructure networks.
 	Networks AWSNetworks
 	// Workers is a list of worker groups.
@@ -761,10 +713,8 @@ type AWSNetworks struct {
 // AWSVPC contains either an id (of an existing VPC) or the CIDR (for a VPC to be created).
 type AWSVPC struct {
 	// ID is the AWS VPC id of an existing VPC.
-	// +optional
 	ID *string
 	// CIDR is a CIDR range for a new VPC.
-	// +optional
 	CIDR *gardencore.CIDR
 }
 
@@ -779,11 +729,10 @@ type AWSWorker struct {
 
 // Alicloud contains the Shoot specification for Alibaba cloud
 type Alicloud struct {
-	// MachineImage holds information about the machine image to use for all workers.
-	// It will default to the first image stated in the referenced CloudProfile if no
+	// ShootMachineImage holds information about the machine image to use for all workers.
+	// It will default to the latest version of the first image stated in the referenced CloudProfile if no
 	// value has been provided.
-	// +optional
-	MachineImage *MachineImage
+	MachineImage *ShootMachineImage
 	// Networks holds information about the Kubernetes and infrastructure networks.
 	Networks AlicloudNetworks
 	// Workers is a list of worker groups.
@@ -795,10 +744,8 @@ type Alicloud struct {
 // AlicloudVPC contains either an id (of an existing VPC) or the CIDR (for a VPC to be created).
 type AlicloudVPC struct {
 	// ID is the Alicloud VPC id of an existing VPC.
-	// +optional
 	ID *string
 	// CIDR is a CIDR range for a new VPC.
-	// +optional
 	CIDR *gardencore.CIDR
 }
 
@@ -822,11 +769,10 @@ type AlicloudWorker struct {
 
 // PacketCloud contains the Shoot specification for Packet cloud
 type PacketCloud struct {
-	// MachineImage holds information about the machine image to use for all workers.
-	// It will default to the first image stated in the referenced CloudProfile if no
+	// ShootMachineImage holds information about the machine image to use for all workers.
+	// It will default to the latest version of the first image stated in the referenced CloudProfile if no
 	// value has been provided.
-	// +optional
-	MachineImage *MachineImage
+	MachineImage *ShootMachineImage
 	// Networks holds information about the Kubernetes and infrastructure networks.
 	Networks PacketNetworks
 	// Workers is a list of worker groups.
@@ -851,15 +797,13 @@ type PacketWorker struct {
 
 // AzureCloud contains the Shoot specification for Azure.
 type AzureCloud struct {
-	// MachineImage holds information about the machine image to use for all workers.
-	// It will default to the first image stated in the referenced CloudProfile if no
+	// ShootMachineImage holds information about the machine image to use for all workers.
+	// It will default to the latest version of the first image stated in the referenced CloudProfile if no
 	// value has been provided.
-	// +optional
-	MachineImage *MachineImage
+	MachineImage *ShootMachineImage
 	// Networks holds information about the Kubernetes and infrastructure networks.
 	Networks AzureNetworks
 	// ResourceGroup indicates whether to use an existing resource group or create a new one.
-	// +optional
 	ResourceGroup *AzureResourceGroup
 	// Workers is a list of worker groups.
 	Workers []AzureWorker
@@ -883,10 +827,8 @@ type AzureNetworks struct {
 // AzureVNet indicates whether to use an existing VNet or create a new one.
 type AzureVNet struct {
 	// Name is the AWS VNet name of an existing VNet.
-	// +optional
 	Name *string
 	// CIDR is a CIDR range for a new VNet.
-	// +optional
 	CIDR *gardencore.CIDR
 }
 
@@ -901,11 +843,10 @@ type AzureWorker struct {
 
 // GCPCloud contains the Shoot specification for GCP.
 type GCPCloud struct {
-	// MachineImage holds information about the machine image to use for all workers.
-	// It will default to the first image stated in the referenced CloudProfile if no
+	// ShootMachineImage holds information about the machine image to use for all workers.
+	// It will default to the latest version of the first image stated in the referenced CloudProfile if no
 	// value has been provided.
-	// +optional
-	MachineImage *MachineImage
+	MachineImage *ShootMachineImage
 	// Networks holds information about the Kubernetes and infrastructure networks.
 	Networks GCPNetworks
 	// Workers is a list of worker groups.
@@ -918,7 +859,6 @@ type GCPCloud struct {
 type GCPNetworks struct {
 	gardencore.K8SNetworks
 	// VPC indicates whether to use an existing VPC or create a new one.
-	// +optional
 	VPC *GCPVPC
 	// Internal is a private subnet (used for internal load balancers).
 	Internal *gardencore.CIDR
@@ -947,11 +887,12 @@ type OpenStackCloud struct {
 	FloatingPoolName string
 	// LoadBalancerProvider is the name of the load balancer provider in the OpenStack environment.
 	LoadBalancerProvider string
-	// MachineImage holds information about the machine image to use for all workers.
-	// It will default to the first image stated in the referenced CloudProfile if no
+	// LoadBalancerClasses available for a dedicated Shoot.
+	LoadBalancerClasses []OpenStackLoadBalancerClass
+	// ShootMachineImage holds information about the machine image to use for all workers.
+	// It will default to the latest version of the first image stated in the referenced CloudProfile if no
 	// value has been provided.
-	// +optional
-	MachineImage *MachineImage
+	MachineImage *ShootMachineImage
 	// Networks holds information about the Kubernetes and infrastructure networks.
 	Networks OpenStackNetworks
 	// Workers is a list of worker groups.
@@ -960,11 +901,23 @@ type OpenStackCloud struct {
 	Zones []string
 }
 
+// OpenStackLoadBalancerClass defines a restricted network setting for generic LoadBalancer classes usable in CloudProfiles.
+type OpenStackLoadBalancerClass struct {
+	// Name is the name of the LB class
+	Name string
+	// FloatingSubnetID is the subnetwork ID of a dedicated subnet in floating network pool.
+	FloatingSubnetID *string
+	// FloatingNetworkID is the network ID of the floating network pool.
+	FloatingNetworkID *string
+	// SubnetID is the ID of a local subnet used for LoadBalancer provisioning. Only usable if no FloatingPool
+	// configuration is done.
+	SubnetID *string
+}
+
 // OpenStackNetworks holds information about the Kubernetes and infrastructure networks.
 type OpenStackNetworks struct {
 	gardencore.K8SNetworks
 	// Router indicates whether to use an existing router or create a new one.
-	// +optional
 	Router *OpenStackRouter
 	// Workers is a list of CIDRs of worker subnets (private) to create (used for the VMs).
 	Workers []gardencore.CIDR
@@ -987,6 +940,10 @@ type Worker struct {
 	Name string
 	// MachineType is the machine type of the worker group.
 	MachineType string
+	// ShootMachineImage holds information about the machine image to use for all workers.
+	// It will default to the latest version of the first image stated in the referenced CloudProfile if no
+	// value has been provided.
+	MachineImage *ShootMachineImage
 	// AutoScalerMin is the minimum number of VMs to create.
 	AutoScalerMin int
 	// AutoScalerMin is the maximum number of VMs to create.
@@ -1014,32 +971,25 @@ type Extension struct {
 // Addons is a collection of configuration for specific addons which are managed by the Gardener.
 type Addons struct {
 	// KubernetesDashboard holds configuration settings for the kubernetes dashboard addon.
-	// +optional
 	KubernetesDashboard *KubernetesDashboard
 	// NginxIngress holds configuration settings for the nginx-ingress addon.
 	// DEPRECATED: This field will be removed in a future version.
-	// +optional
 	NginxIngress *NginxIngress
 
 	// ClusterAutoscaler holds configuration settings for the cluster autoscaler addon.
 	// DEPRECATED: This field will be removed in a future version.
-	// +optional
 	ClusterAutoscaler *AddonClusterAutoscaler
 	// Heapster holds configuration settings for the heapster addon.
 	// DEPRECATED: This field will be removed in a future version.
-	// +optional
 	Heapster *Heapster
 	// Kube2IAM holds configuration settings for the kube2iam addon (only AWS).
 	// DEPRECATED: This field will be removed in a future version.
-	// +optional
 	Kube2IAM *Kube2IAM
 	// KubeLego holds configuration settings for the kube-lego addon.
 	// DEPRECATED: This field will be removed in a future version.
-	// +optional
 	KubeLego *KubeLego
 	// Monocular holds configuration settings for the monocular addon.
 	// DEPRECATED: This field will be removed in a future version.
-	// +optional
 	Monocular *Monocular
 }
 
@@ -1063,7 +1013,6 @@ type Heapster struct {
 type KubernetesDashboard struct {
 	Addon
 	// AuthenticationMode defines the authentication mode for the kubernetes-dashboard.
-	// +optional
 	AuthenticationMode *string
 }
 
@@ -1076,7 +1025,6 @@ type AddonClusterAutoscaler struct {
 type NginxIngress struct {
 	Addon
 	// LoadBalancerSourceRanges is list of whitelist IP sources for NginxIngress
-	// +optional
 	LoadBalancerSourceRanges []string
 }
 
@@ -1089,7 +1037,6 @@ type Monocular struct {
 type KubeLego struct {
 	Addon
 	// Mail is the email address to register at Let's Encrypt.
-	// +optional
 	Mail string
 }
 
@@ -1097,7 +1044,6 @@ type KubeLego struct {
 type Kube2IAM struct {
 	Addon
 	// Roles is list of AWS IAM roles which should be created by the Gardener.
-	// +optional
 	Roles []Kube2IAMRole
 }
 
@@ -1122,20 +1068,16 @@ type Backup struct {
 // DNS holds information about the provider, the hosted zone id and the domain.
 type DNS struct {
 	// Provider is the DNS provider type for the Shoot.
-	// +optional
 	Provider *string
 	// HostedZoneID is the ID of an existing DNS Hosted Zone used to create the DNS records in.
-	// +optional
 	// deprecated
 	HostedZoneID *string
 	// Domain is the external available domain of the Shoot cluster.
-	// +optional
 	Domain *string
 	// SecretName is a name of a secret containing credentials for the stated domain and the
 	// provider. When not specified, the Gardener will use the cloud provider credentials referenced
 	// by the Shoot and try to find respective credentials there. Specifying this field may override
 	// this behavior, i.e. forcing the Gardener to only look into the given secret.
-	// +optional
 	SecretName *string
 }
 
@@ -1162,10 +1104,9 @@ const (
 
 // Hibernation contains information whether the Shoot is suspended or not.
 type Hibernation struct {
-	// Enabled is true if Shoot is hibernated, false otherwise.
-	Enabled bool
+	// Enabled is true if the Shoot's desired state is hibernated, false otherwise.
+	Enabled *bool
 	// Schedules determines the hibernation schedules.
-	// +optional
 	Schedules []HibernationSchedule
 }
 
@@ -1174,38 +1115,28 @@ type Hibernation struct {
 // Start or End can be omitted, though at least one of each has to be specified.
 type HibernationSchedule struct {
 	// Start is a Cron spec at which time a Shoot will be hibernated.
-	// +optional
 	Start *string
 	// End is a Cron spec at which time a Shoot will be woken up.
-	// +optional
 	End *string
 	// Location is the time location in which both start and and shall be evaluated.
-	// +optional
 	Location *string
 }
 
 // Kubernetes contains the version and configuration variables for the Shoot control plane.
 type Kubernetes struct {
 	// AllowPrivilegedContainers indicates whether privileged containers are allowed in the Shoot (default: true).
-	// +optional
 	AllowPrivilegedContainers *bool
 	// KubeAPIServer contains configuration settings for the kube-apiserver.
-	// +optional
 	KubeAPIServer *KubeAPIServerConfig
 	// CloudControllerManager contains configuration settings for the cloud-controller-manager.
-	// +optional
 	CloudControllerManager *CloudControllerManagerConfig
 	// KubeControllerManager contains configuration settings for the kube-controller-manager.
-	// +optional
 	KubeControllerManager *KubeControllerManagerConfig
 	// KubeScheduler contains configuration settings for the kube-scheduler.
-	// +optional
 	KubeScheduler *KubeSchedulerConfig
 	// KubeProxy contains configuration settings for the kube-proxy.
-	// +optional
 	KubeProxy *KubeProxyConfig
 	// Kubelet contains configuration settings for the kubelet.
-	// +optional
 	Kubelet *KubeletConfig
 	// Version is the semantic Kubernetes version to use for the Shoot cluster.
 	Version string
@@ -1216,29 +1147,22 @@ type Kubernetes struct {
 // ClusterAutoscaler contains the configration flags for the Kubernetes cluster autoscaler.
 type ClusterAutoscaler struct {
 	// ScaleDownUtilizationThreshold defines the threshold in % under which a node is being removed
-	// +optional
 	ScaleDownUtilizationThreshold *float64
 	// ScaleDownUnneededTime defines how long a node should be unneeded before it is eligible for scale down (default: 10 mins).
-	// +optional
 	ScaleDownUnneededTime *metav1.Duration
 	// ScaleDownDelayAfterAdd defines how long after scale up that scale down evaluation resumes (default: 10 mins).
-	// +optional
 	ScaleDownDelayAfterAdd *metav1.Duration
 	// ScaleDownDelayAfterFailure how long after scale down failure that scale down evaluation resumes (default: 3 mins).
-	// +optional
 	ScaleDownDelayAfterFailure *metav1.Duration
 	// ScaleDownDelayAfterDelete how long after node deletion that scale down evaluation resumes, defaults to scanInterval (defaults to ScanInterval).
-	// +optional
 	ScaleDownDelayAfterDelete *metav1.Duration
 	// ScanInterval how often cluster is reevaluated for scale up or down (default: 10 secs).
-	// +optional
 	ScanInterval *metav1.Duration
 }
 
 // KubernetesConfig contains common configuration fields for the control plane components.
 type KubernetesConfig struct {
 	// FeatureGates contains information about enabled feature gates.
-	// +optional
 	FeatureGates map[string]bool
 }
 
@@ -1246,24 +1170,19 @@ type KubernetesConfig struct {
 type KubeAPIServerConfig struct {
 	KubernetesConfig
 	// RuntimeConfig contains information about enabled or disabled APIs.
-	// +optional
 	RuntimeConfig map[string]bool
 	// OIDCConfig contains configuration settings for the OIDC provider.
-	// +optional
 	OIDCConfig *OIDCConfig
 	// AdmissionPlugins contains the list of user-defined admission plugins (additional to those managed by Gardener), and, if desired, the corresponding
 	// configuration.
-	// +optional
 	AdmissionPlugins []AdmissionPlugin
 	// AuditConfig contains configuration settings for the audit of the kube-apiserver.
-	// +optional
 	AuditConfig *AuditConfig
 }
 
 // AuditConfig contains settings for audit of the api server
 type AuditConfig struct {
 	// AuditPolicy contains configuration settings for audit policy of the kube-apiserver.
-	// +optional
 	AuditPolicy *AuditPolicy
 }
 
@@ -1271,7 +1190,6 @@ type AuditConfig struct {
 type AuditPolicy struct {
 	// ConfigMapRef is a reference to a ConfigMap object in the same namespace,
 	// which contains the audit policy for the kube-apiserver.
-	// +optional
 	ConfigMapRef *corev1.LocalObjectReference
 }
 
@@ -1279,32 +1197,23 @@ type AuditPolicy struct {
 // Note: Descriptions were taken from the Kubernetes documentation.
 type OIDCConfig struct {
 	// If set, the OpenID server's certificate will be verified by one of the authorities in the oidc-ca-file, otherwise the host's root CA set will be used.
-	// +optional
 	CABundle *string
 	// The client ID for the OpenID Connect client, must be set if oidc-issuer-url is set.
-	// +optional
 	ClientID *string
 	// If provided, the name of a custom OpenID Connect claim for specifying user groups. The claim value is expected to be a string or array of strings. This flag is experimental, please see the authentication documentation for further details.
-	// +optional
 	GroupsClaim *string
 	// If provided, all groups will be prefixed with this value to prevent conflicts with other authentication strategies.
-	// +optional
 	GroupsPrefix *string
 	// The URL of the OpenID issuer, only HTTPS scheme will be accepted. If set, it will be used to verify the OIDC JSON Web Token (JWT).
-	// +optional
 	IssuerURL *string
 	// ATTENTION: Only meaningful for Kubernetes >= 1.11
 	// key=value pairs that describes a required claim in the ID Token. If set, the claim is verified to be present in the ID Token with a matching value.
-	// +optional
 	RequiredClaims map[string]string
 	// List of allowed JOSE asymmetric signing algorithms. JWTs with a 'alg' header value not in this list will be rejected. Values are defined by RFC 7518 https://tools.ietf.org/html/rfc7518#section-3.1
-	// +optional
 	SigningAlgs []string
 	// The OpenID claim to use as the user name. Note that claims other than the default ('sub') is not guaranteed to be unique and immutable. This flag is experimental, please see the authentication documentation for further details. (default "sub")
-	// +optional
 	UsernameClaim *string
 	// If provided, all usernames will be prefixed with this value. If not provided, username claims other than 'email' are prefixed by the issuer URL to avoid clashes. To skip any prefixing, provide the value '-'.
-	// +optional
 	UsernamePrefix *string
 }
 
@@ -1318,7 +1227,6 @@ type AdmissionPlugin struct {
 	// the objects (see also https://github.com/kubernetes-sigs/cluster-api/issues/137). We keep it as string for now
 	// and will later migrate the Go type to runtime.RawExtension once the issues have been resolved.
 	// SEE ALSO: https://github.com/gardener/gardener/pull/322
-	// +optional
 	Config *string
 }
 
@@ -1331,7 +1239,6 @@ type CloudControllerManagerConfig struct {
 type KubeControllerManagerConfig struct {
 	KubernetesConfig
 	// HorizontalPodAutoscalerConfig contains horizontal pod autoscaler configuration settings for the kube-controller-manager.
-	// +optional
 	HorizontalPodAutoscalerConfig *HorizontalPodAutoscalerConfig
 }
 
@@ -1339,25 +1246,18 @@ type KubeControllerManagerConfig struct {
 // Note: Descriptions were taken from the Kubernetes documentation.
 type HorizontalPodAutoscalerConfig struct {
 	// DownscaleDelay is the period since last downscale, before another downscale can be performed in horizontal pod autoscaler.
-	// +optional
 	DownscaleDelay *metav1.Duration
 	// SyncPeriod is the period for syncing the number of pods in horizontal pod autoscaler.
-	// +optional
 	SyncPeriod *metav1.Duration
 	// Tolerance is the minimum change (from 1.0) in the desired-to-actual metrics ratio for the horizontal pod autoscaler to consider scaling.
-	// +optional
 	Tolerance *float64
 	// UpscaleDelay is the period since last upscale, before another upscale can be performed in horizontal pod autoscaler.
-	// +optional
 	UpscaleDelay *metav1.Duration
 	// DownscaleStabilization is the period for which autoscaler will look backwards and not scale down below any recommendation it made during that period.
-	// +optional
 	DownscaleStabilization *metav1.Duration
 	// InitialReadinessDelay is the  period after pod start during which readiness changes will be treated as initial readiness.
-	// +optional
 	InitialReadinessDelay *metav1.Duration
 	// CPUInitializationPeriod is the period after pod start when CPU samples might be skipped.
-	// +optional
 	CPUInitializationPeriod *metav1.Duration
 }
 
@@ -1397,10 +1297,8 @@ type KubeletConfig struct {
 	// PodPIDsLimit is the maximum number of process IDs per pod allowed by the kubelet.
 	PodPIDsLimit *int64
 	// CPUCFSQuota allows you to disable/enable CPU throttling for Pods.
-	// +optional
 	CPUCFSQuota *bool
 	// CPUManagerPolicy allows to set alternative CPU management policies (default: none).
-	// +optional
 	CPUManagerPolicy *string
 }
 
@@ -1408,10 +1306,8 @@ type KubeletConfig struct {
 // operations should be performed.
 type Maintenance struct {
 	// AutoUpdate contains information about which constraints should be automatically updated.
-	// +optional
 	AutoUpdate *MaintenanceAutoUpdate
 	// TimeWindow contains information about the time window for maintenance operations.
-	// +optional
 	TimeWindow *MaintenanceTimeWindow
 }
 
@@ -1419,6 +1315,8 @@ type Maintenance struct {
 type MaintenanceAutoUpdate struct {
 	// KubernetesVersion indicates whether the patch Kubernetes version may be automatically updated.
 	KubernetesVersion bool
+	// MachineImageVersion indicates whether the machine image version may be automatically updated (default: true).
+	MachineImageVersion *bool
 }
 
 // MaintenanceTimeWindow contains information about the time window for maintenance operations.
@@ -1429,6 +1327,16 @@ type MaintenanceTimeWindow struct {
 	// End is the end of the time window in the format HHMMSS+ZONE, e.g. "220000+0100".
 	// If not present, the value will be computed based on the "Begin" value.
 	End string
+}
+
+// MachineImage defines the name and the version of the shoot's machine image in any environment. Has to be defined in the respective CloudProfile.
+type ShootMachineImage struct {
+	// Name is the name of the image.
+	Name string
+	// Version is the version of the shoot's image.
+	Version string
+	// ProviderConfig is the shoot's individual configuration passed to an extension resource.
+	ProviderConfig *gardencore.ProviderConfig
 }
 
 const (
@@ -1521,13 +1429,10 @@ const (
 type BackupInfrastructure struct {
 	metav1.TypeMeta
 	// Standard object metadata.
-	// +optional
 	metav1.ObjectMeta
 	// Specification of the Backup Infrastructure.
-	// +optional
 	Spec BackupInfrastructureSpec
 	// Most recently observed status of the Backup Infrastructure.
-	// +optional
 	Status BackupInfrastructureStatus
 }
 
@@ -1536,7 +1441,6 @@ type BackupInfrastructure struct {
 type BackupInfrastructureList struct {
 	metav1.TypeMeta
 	// Standard list object metadata.
-	// +optional
 	metav1.ListMeta
 	// Items is the list of BackupInfrastructure.
 	Items []BackupInfrastructure
@@ -1553,13 +1457,10 @@ type BackupInfrastructureSpec struct {
 // BackupInfrastructureStatus holds the most recently observed status of the Backup Infrastructure.
 type BackupInfrastructureStatus struct {
 	// LastOperation holds information about the last operation on the BackupInfrastructure.
-	// +optional
 	LastOperation *gardencore.LastOperation
 	// LastError holds information about the last occurred error during an operation.
-	// +optional
 	LastError *gardencore.LastError
 	// ObservedGeneration is the most recent generation observed for this BackupInfrastructure. It corresponds to the
 	// BackupInfrastructure's generation, which is updated on mutation by the API Server.
-	// +optional
 	ObservedGeneration *int64
 }
