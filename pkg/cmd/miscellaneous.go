@@ -26,6 +26,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/gardener/gardener/pkg/apis/garden/v1beta1"
 	clientset "github.com/gardener/gardener/pkg/client/garden/clientset/versioned"
 
 	yaml "gopkg.in/yaml.v2"
@@ -191,17 +192,23 @@ func getSeedNamespaceNameForShoot(shootName string) (namespaceSeed string) {
 	checkError(err)
 	gardenClientset, err := clientset.NewForConfig(NewConfigFromBytes(*kubeconfig))
 	checkError(err)
-	shootList, err := gardenClientset.GardenV1beta1().Shoots("").List(metav1.ListOptions{})
-	checkError(err)
-	var ind int
-	for index, shoot := range shootList.Items {
-		if shoot.Name == shootName && (shoot.Namespace == target.Target[1].Name || *shoot.Spec.Cloud.Seed == target.Target[1].Name) {
-			ind = index
-			break
+	var shoot *v1beta1.Shoot
+	if target.Stack()[1].Kind == "project" {
+		project, err := gardenClientset.GardenV1beta1().Projects().Get(target.Stack()[1].Name, metav1.GetOptions{})
+		checkError(err)
+		shoot, err = gardenClientset.GardenV1beta1().Shoots(*project.Spec.Namespace).Get(target.Stack()[2].Name, metav1.GetOptions{})
+		checkError(err)
+	} else {
+		shootList, err := gardenClientset.GardenV1beta1().Shoots("").List(metav1.ListOptions{})
+		checkError(err)
+		for index, s := range shootList.Items {
+			if s.Name == target.Stack()[2].Name && *s.Spec.Cloud.Seed == target.Stack()[1].Name {
+				shoot = &shootList.Items[index]
+				break
+			}
 		}
 	}
-	return shootList.Items[ind].Status.TechnicalID
-
+	return shoot.Status.TechnicalID
 }
 
 // getProjectForShoot returns projectName for Shoot

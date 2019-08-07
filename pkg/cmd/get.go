@@ -23,6 +23,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/gardener/gardener/pkg/apis/garden/v1beta1"
 	clientset "github.com/gardener/gardener/pkg/client/garden/clientset/versioned"
 	yaml2 "github.com/ghodss/yaml"
 	"github.com/spf13/cobra"
@@ -216,22 +217,40 @@ func getShoot(name string) {
 	checkError(err)
 	gardenClientset, err := clientset.NewForConfig(NewConfigFromBytes(*kubeconfig))
 	checkError(err)
-	shootList, err := gardenClientset.GardenV1beta1().Shoots("").List(metav1.ListOptions{})
-	var ind int
 	var namespace string
-	for index, shoot := range shootList.Items {
-		if (name == "") && (shoot.Name == target.Target[2].Name) && (shoot.Namespace == target.Target[1].Name || *shoot.Spec.Cloud.Seed == target.Target[1].Name) {
-			ind = index
-			namespace = shootList.Items[ind].Status.TechnicalID
-			break
+	var shoot *v1beta1.Shoot
+	if target.Stack()[1].Kind == "project" {
+		project, err := gardenClientset.GardenV1beta1().Projects().Get(target.Stack()[1].Name, metav1.GetOptions{})
+		checkError(err)
+		if name == "" {
+			shoot, err = gardenClientset.GardenV1beta1().Shoots(*project.Spec.Namespace).Get(target.Stack()[2].Name, metav1.GetOptions{})
+			checkError(err)
 		}
-		if (name != "") && (shoot.Name == name) && (shoot.Namespace == target.Target[1].Name || *shoot.Spec.Cloud.Seed == target.Target[1].Name) {
-			ind = index
-			namespace = shootList.Items[ind].Status.TechnicalID
-			break
+		if name != "" {
+			shoot, err = gardenClientset.GardenV1beta1().Shoots(*project.Spec.Namespace).Get(name, metav1.GetOptions{})
+			checkError(err)
+		}
+		namespace = shoot.Status.TechnicalID
+	}
+	if target.Stack()[1].Kind == "seed" {
+		shootList, err := gardenClientset.GardenV1beta1().Shoots("").List(metav1.ListOptions{})
+		checkError(err)
+		for index, s := range shootList.Items {
+			if s.Name == target.Stack()[2].Name && *s.Spec.Cloud.Seed == target.Stack()[1].Name {
+				if (name == "") && (s.Name == target.Target[2].Name) {
+					shoot = &shootList.Items[index]
+					namespace = shootList.Items[index].Status.TechnicalID
+					break
+				}
+				if (name != "") && (s.Name == name) {
+					shoot = &shootList.Items[index]
+					namespace = shootList.Items[index].Status.TechnicalID
+					break
+				}
+			}
 		}
 	}
-	seed, err := gardenClientset.GardenV1beta1().Seeds().Get(*shootList.Items[ind].Spec.Cloud.Seed, metav1.GetOptions{})
+	seed, err := gardenClientset.GardenV1beta1().Seeds().Get(*shoot.Spec.Cloud.Seed, metav1.GetOptions{})
 	checkError(err)
 	kubeSecret, err := Client.CoreV1().Secrets(seed.Spec.SecretRef.Namespace).Get(seed.Spec.SecretRef.Name, metav1.GetOptions{})
 	checkError(err)
