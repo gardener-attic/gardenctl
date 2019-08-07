@@ -107,12 +107,27 @@ type AWSConstraints struct {
 	Zones []Zone `json:"zones"`
 }
 
-// MachineImage defines the name and the version of the machine image in any environment.
+// MachineImage defines the name and multiple versions of the machine image in any environment.
 type MachineImage struct {
 	// Name is the name of the image.
 	Name string `json:"name"`
+	// DEPRECATED: This field will be removed in a future version.
+	// +optional
+	Version string `json:"version,omitempty"`
+	// Versions contains versions and expiration dates of the machine image
+	// +optional
+	Versions []MachineImageVersion `json:"versions,omitempty"`
+}
+
+// MachineImageVersion contains a version and an expiration date of a machine image
+type MachineImageVersion struct {
 	// Version is the version of the image.
 	Version string `json:"version"`
+	// ExpirationDate defines the time at which a shoot that opted out of automatic operating system updates and
+	// that is running this image version will be forcefully updated to the latest version specified in the referenced
+	// cloud profile.
+	// +optional
+	ExpirationDate *metav1.Time `json:"expirationDate,omitempty"`
 }
 
 // AzureProfile defines certain constraints and definitions for the Azure cloud.
@@ -209,9 +224,12 @@ type OpenStackConstraints struct {
 type OpenStackFloatingPool struct {
 	// Name is the name of the floating pool.
 	Name string `json:"name"`
+	// LoadBalancerClasses contains a list of supported labeled load balancer network settings.
+	// +optional
+	LoadBalancerClasses []OpenStackLoadBalancerClass `json:"loadBalancerClasses,omitempty"`
 }
 
-// LoadBalancerProviders contains constraints regarding allowed values of the 'loadBalancerProvider' block in the Shoot specification.
+// OpenStackLoadBalancerProvider contains constraints regarding allowed values of the 'loadBalancerProvider' block in the Shoot specification.
 type OpenStackLoadBalancerProvider struct {
 	// Name is the name of the load balancer provider.
 	Name string `json:"name"`
@@ -671,6 +689,9 @@ type ShootStatus struct {
 	// Seed is the name of the seed cluster that runs the control plane of the Shoot. This value is only written
 	// after a successful create/reconcile operation. It will be used when control planes are moved between Seeds.
 	Seed string `json:"seed,omitempty"`
+	// IsHibernated indicates whether the Shoot is currently hibernated.
+	// +optional
+	IsHibernated *bool `json:"hibernated,omitempty"`
 	// TechnicalID is the name that is used for creating the Seed namespace, the infrastructure resources, and
 	// basically everything that is related to this particular Shoot.
 	TechnicalID string `json:"technicalID"`
@@ -718,11 +739,11 @@ type Cloud struct {
 // AWSCloud contains the Shoot specification for AWS.
 
 type AWSCloud struct {
-	// MachineImage holds information about the machine image to use for all workers.
-	// It will default to the first image stated in the referenced CloudProfile if no
+	// ShootMachineImage holds information about the machine image to use for all workers.
+	// It will default to the latest version of the first image stated in the referenced CloudProfile if no
 	// value has been provided.
 	// +optional
-	MachineImage *MachineImage `json:"machineImage,omitempty"`
+	MachineImage *ShootMachineImage `json:"machineImage,omitempty"`
 	// Networks holds information about the Kubernetes and infrastructure networks.
 	Networks AWSNetworks `json:"networks"`
 	// Workers is a list of worker groups.
@@ -765,11 +786,11 @@ type AWSWorker struct {
 
 // Alicloud contains the Shoot specification for Alibaba cloud
 type Alicloud struct {
-	// MachineImage holds information about the machine image to use for all workers.
-	// It will default to the first image stated in the referenced CloudProfile if no
+	// ShootMachineImage holds information about the machine image to use for all workers.
+	// It will default to the latest version of the first image stated in the referenced CloudProfile if no
 	// value has been provided.
 	// +optional
-	MachineImage *MachineImage `json:"machineImage,omitempty"`
+	MachineImage *ShootMachineImage `json:"machineImage,omitempty"`
 	// Networks holds information about the Kubernetes and infrastructure networks.
 	Networks AlicloudNetworks `json:"networks"`
 	// Workers is a list of worker groups.
@@ -808,11 +829,11 @@ type AlicloudWorker struct {
 
 // PacketCloud contains the Shoot specification for Packet cloud
 type PacketCloud struct {
-	// MachineImage holds information about the machine image to use for all workers.
-	// It will default to the first image stated in the referenced CloudProfile if no
+	// ShootMachineImage holds information about the machine image to use for all workers.
+	// It will default to the latest version of the first image stated in the referenced CloudProfile if no
 	// value has been provided.
 	// +optional
-	MachineImage *MachineImage `json:"machineImage,omitempty"`
+	MachineImage *ShootMachineImage `json:"machineImage,omitempty"`
 	// Networks holds information about the Kubernetes and infrastructure networks.
 	Networks PacketNetworks `json:"networks"`
 	// Workers is a list of worker groups.
@@ -837,11 +858,11 @@ type PacketWorker struct {
 
 // AzureCloud contains the Shoot specification for Azure.
 type AzureCloud struct {
-	// MachineImage holds information about the machine image to use for all workers.
-	// It will default to the first image stated in the referenced CloudProfile if no
+	// ShootMachineImage holds information about the machine image to use for all workers.
+	// It will default to the latest version of the first image stated in the referenced CloudProfile if no
 	// value has been provided.
 	// +optional
-	MachineImage *MachineImage `json:"machineImage,omitempty"`
+	MachineImage *ShootMachineImage `json:"machineImage,omitempty"`
 	// Networks holds information about the Kubernetes and infrastructure networks.
 	Networks AzureNetworks `json:"networks"`
 	// ResourceGroup indicates whether to use an existing resource group or create a new one.
@@ -887,11 +908,11 @@ type AzureWorker struct {
 
 // GCPCloud contains the Shoot specification for GCP.
 type GCPCloud struct {
-	// MachineImage holds information about the machine image to use for all workers.
-	// It will default to the first image stated in the referenced CloudProfile if no
+	// ShootMachineImage holds information about the machine image to use for all workers.
+	// It will default to the latest version of the first image stated in the referenced CloudProfile if no
 	// value has been provided.
 	// +optional
-	MachineImage *MachineImage `json:"machineImage,omitempty"`
+	MachineImage *ShootMachineImage `json:"machineImage,omitempty"`
 	// Networks holds information about the Kubernetes and infrastructure networks.
 	Networks GCPNetworks `json:"networks"`
 	// Workers is a list of worker groups.
@@ -934,17 +955,36 @@ type OpenStackCloud struct {
 	FloatingPoolName string `json:"floatingPoolName"`
 	// LoadBalancerProvider is the name of the load balancer provider in the OpenStack environment.
 	LoadBalancerProvider string `json:"loadBalancerProvider"`
-	// MachineImage holds information about the machine image to use for all workers.
-	// It will default to the first image stated in the referenced CloudProfile if no
+	// LoadBalancerClasses available for a dedicated Shoot.
+	// +optional
+	LoadBalancerClasses []OpenStackLoadBalancerClass `json:"loadBalancerClasses,omitempty"`
+	// ShootMachineImage holds information about the machine image to use for all workers.
+	// It will default to the latest version of the first image stated in the referenced CloudProfile if no
 	// value has been provided.
 	// +optional
-	MachineImage *MachineImage `json:"machineImage,omitempty"`
+	MachineImage *ShootMachineImage `json:"machineImage,omitempty"`
 	// Networks holds information about the Kubernetes and infrastructure networks.
 	Networks OpenStackNetworks `json:"networks"`
 	// Workers is a list of worker groups.
 	Workers []OpenStackWorker `json:"workers"`
 	// Zones is a list of availability zones to deploy the Shoot cluster to.
 	Zones []string `json:"zones"`
+}
+
+// OpenStackLoadBalancerClass defines a restricted network setting for generic LoadBalancer classes usable in CloudProfiles.
+type OpenStackLoadBalancerClass struct {
+	// Name is the name of the LB class
+	Name string `json:"name"`
+	// FloatingSubnetID is the subnetwork ID of a dedicated subnet in floating network pool.
+	// +optional
+	FloatingSubnetID *string `json:"floatingSubnetID,omitempty"`
+	// FloatingNetworkID is the network ID of the floating network pool.
+	// +optional
+	FloatingNetworkID *string `json:"floatingNetworkID,omitempty"`
+	// SubnetID is the ID of a local subnet used for LoadBalancer provisioning. Only usable if no FloatingPool
+	// configuration is done.
+	// +optional
+	SubnetID *string `json:"subnetID,omitempty"`
 }
 
 // OpenStackNetworks holds information about the Kubernetes and infrastructure networks.
@@ -974,6 +1014,11 @@ type Worker struct {
 	Name string `json:"name"`
 	// MachineType is the machine type of the worker group.
 	MachineType string `json:"machineType"`
+	// ShootMachineImage holds information about the machine image to use for all workers.
+	// It will default to the latest version of the first image stated in the referenced CloudProfile if no
+	// value has been provided.
+	// +optional
+	MachineImage *ShootMachineImage `json:"machineImage,omitempty"`
 	// AutoScalerMin is the minimum number of VMs to create.
 	AutoScalerMin int `json:"autoScalerMin"`
 	// AutoScalerMin is the maximum number of VMs to create.
@@ -1163,8 +1208,9 @@ const (
 
 // Hibernation contains information whether the Shoot is suspended or not.
 type Hibernation struct {
-	// Enabled is true if Shoot is hibernated, false otherwise.
-	Enabled bool `json:"enabled"`
+	// Enabled is true if the Shoot's desired state is hibernated, false otherwise.
+	// +optional
+	Enabled *bool `json:"enabled,omitempty"`
 	// Schedules determine the hibernation schedules.
 	// +optional
 	Schedules []HibernationSchedule `json:"schedules,omitempty"`
@@ -1475,6 +1521,9 @@ type Maintenance struct {
 type MaintenanceAutoUpdate struct {
 	// KubernetesVersion indicates whether the patch Kubernetes version may be automatically updated.
 	KubernetesVersion bool `json:"kubernetesVersion"`
+	// MachineImageVersion indicates whether the machine image version may be automatically updated (default: true).
+	// +optional
+	MachineImageVersion *bool `json:"machineImageVersion,omitempty"`
 }
 
 // MaintenanceTimeWindow contains information about the time window for maintenance operations.
@@ -1485,6 +1534,17 @@ type MaintenanceTimeWindow struct {
 	// End is the end of the time window in the format HHMMSS+ZONE, e.g. "220000+0100".
 	// If not present, the value will be computed based on the "Begin" value.
 	End string `json:"end"`
+}
+
+// MachineImage defines the name and the version of the shoot's machine image in any environment. Has to be defined in the respective CloudProfile.
+type ShootMachineImage struct {
+	// Name is the name of the image.
+	Name string `json:"name"`
+	// Version is the version of the shoot's image.
+	Version string `json:"version"`
+	// ProviderConfig is the shoot's individual configuration passed to an extension resource.
+	// +optional
+	ProviderConfig *gardencorev1alpha1.ProviderConfig `json:"providerConfig,omitempty"`
 }
 
 ////////////////////////

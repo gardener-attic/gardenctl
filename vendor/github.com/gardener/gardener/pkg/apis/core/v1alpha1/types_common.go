@@ -42,6 +42,21 @@ type LastError struct {
 	LastUpdateTime *metav1.Time `json:"lastUpdateTime,omitempty"`
 }
 
+// GetDescription implements LastError.
+func (l *LastError) GetDescription() string {
+	return l.Description
+}
+
+// GetCodes implements LastError.
+func (l *LastError) GetCodes() []ErrorCode {
+	return l.Codes
+}
+
+// GetLastUpdateTime implements LastError.
+func (l *LastError) GetLastUpdateTime() *metav1.Time {
+	return l.LastUpdateTime
+}
+
 // LastOperationType is a string alias.
 type LastOperationType string
 
@@ -85,4 +100,29 @@ type LastOperation struct {
 	State LastOperationState `json:"state"`
 	// Type of the last operation, one of Create, Reconcile, Delete.
 	Type LastOperationType `json:"type"`
+}
+
+// GetDescription implements LastOperation.
+func (l *LastOperation) GetDescription() string {
+	return l.Description
+}
+
+// GetLastUpdateTime implements LastOperation.
+func (l *LastOperation) GetLastUpdateTime() metav1.Time {
+	return l.LastUpdateTime
+}
+
+// GetProgress implements LastOperation.
+func (l *LastOperation) GetProgress() int {
+	return l.Progress
+}
+
+// GetState implements LastOperation.
+func (l *LastOperation) GetState() LastOperationState {
+	return l.State
+}
+
+// GetType implements LastOperation.
+func (l *LastOperation) GetType() LastOperationType {
+	return l.Type
 }
