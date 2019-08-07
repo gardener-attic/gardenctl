@@ -22,6 +22,8 @@ import (
 	"os"
 	"strings"
 
+	v1beta1 "github.com/gardener/gardener/pkg/apis/garden/v1beta1"
+
 	clientset "github.com/gardener/gardener/pkg/client/garden/clientset/versioned"
 	"github.com/jmoiron/jsonq"
 	"github.com/spf13/cobra"
@@ -44,15 +46,24 @@ func NewSSHCmd(reader TargetReader, ioStreams IOStreams) *cobra.Command {
 			checkError(err)
 			gardenClientset, err := clientset.NewForConfig(NewConfigFromBytes(*kubeconfig))
 			checkError(err)
-			shootList, err := gardenClientset.GardenV1beta1().Shoots("").List(metav1.ListOptions{})
-			var ind int
-			for index, shoot := range shootList.Items {
-				if shoot.Name == target.Stack()[2].Name && (shoot.Namespace == target.Stack()[1].Name || *shoot.Spec.Cloud.Seed == target.Stack()[1].Name) {
-					ind = index
-					break
+			var shoot *v1beta1.Shoot
+			if target.Stack()[1].Kind == "project" {
+				project, err := gardenClientset.GardenV1beta1().Projects().Get(target.Stack()[1].Name, metav1.GetOptions{})
+				checkError(err)
+				shoot, err = gardenClientset.GardenV1beta1().Shoots(*project.Spec.Namespace).Get(target.Stack()[2].Name, metav1.GetOptions{})
+				checkError(err)
+			} else {
+				shootList, err := gardenClientset.GardenV1beta1().Shoots("").List(metav1.ListOptions{})
+				checkError(err)
+				for index, s := range shootList.Items {
+					if s.Name == target.Stack()[2].Name && *s.Spec.Cloud.Seed == target.Stack()[1].Name {
+						shoot = &shootList.Items[index]
+						break
+					}
 				}
 			}
-			infraType := shootList.Items[ind].Spec.Cloud.Profile
+
+			infraType := shoot.Spec.Cloud.Profile
 			var kind string
 			switch infraType {
 			case "aws":
