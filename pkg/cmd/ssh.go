@@ -159,8 +159,10 @@ func sshToAWSNode(imageID, nodeIP, path string) {
 			break
 		}
 	}
-	bastionNode := "core@" + ip
-	node := "core@" + nodeIP
+	bastionNode := "<user>@" + ip
+	node := "<user>@" + nodeIP
+	fmt.Println("- Fill in the placeholders and run the following command to ssh onto the target node. For more information about the user, you can check the documentation of the cloud provider:")
+	fmt.Println()
 	fmt.Println("Connect: ssh -i key -o \"ProxyCommand ssh -W %h:%p -i key " + bastionNode + "\" " + node)
 	fmt.Printf("Cleanup: gardenctl aws ec2 terminate-instances -- --instance-ids %s\n", instanceID)
 }
@@ -172,7 +174,9 @@ func sshToGCPNode(nodeIP, path string) {
 	fmt.Println("Add ssh rule")
 	arguments := "gcloud " + fmt.Sprintf("compute firewall-rules update %s --allow tcp:22,tcp:80,tcp:443", securityGroupID)
 	operate("gcp", arguments)
-	node := "core@" + nodeIP
+	node := "<user>@" + nodeIP
+	fmt.Println("- Fill in the placeholders and run the following command to ssh onto the target node. For more information about the user, you can check the documentation of the cloud provider:")
+	fmt.Println()
 	fmt.Println("Connect: ssh -i key " + node)
 	fmt.Printf("Cleanup: gardenctl gcloud compute firewall-rules update %s -- --allow tcp:80,tcp:443\n", securityGroupID)
 }
@@ -218,7 +222,9 @@ func sshToAZNode(nodeIP, path string) {
 	// azure adds invisible control character -> Bad Request'. Details: 400 Client Error
 	//arguments = "az " + fmt.Sprintf("network nic ip-config update -g %s --nic-name %s -n %s --public-ip-address %s", resourceGroup, nicName, nicName, name)
 	//operate("az", arguments)
-	node := "core@" + nodeIP
+	node := "<user>@" + nodeIP
+	fmt.Println("- Fill in the placeholders and run the following command to ssh onto the target node. For more information about the user, you can check the documentation of the cloud provider:")
+	fmt.Println()
 	fmt.Println("         ssh -i key " + node)
 	// remove ssh rule
 	fmt.Printf("Cleanup: gardenctl az network nsg rule delete -- --resource-group %s  --nsg-name %s --name ssh\n", resourceGroup, nsgName)
