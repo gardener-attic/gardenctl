@@ -14,7 +14,7 @@ require (
 	github.com/onsi/ginkgo v1.8.0
 	github.com/onsi/gomega v1.5.0
 	github.com/pkg/browser v0.0.0-20180916011732-0a3d74bf9ce4
-	github.com/spf13/cobra v0.0.3
+	github.com/spf13/cobra v0.0.5
 	golang.org/x/lint v0.0.0-20190313153728-d0100b6bd8b3
 	google.golang.org/api v0.3.2 // indirect
 	gopkg.in/yaml.v2 v2.2.2
