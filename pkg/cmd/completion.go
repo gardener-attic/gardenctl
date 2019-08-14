@@ -15,24 +15,39 @@
 package cmd
 
 import (
+	"os"
+
 	"github.com/spf13/cobra"
 )
 
 // completionCmd represents the completion command
 var completionCmd = &cobra.Command{
-	Use:   "completion",
-	Short: "Generate bash-completion file\n",
+	Use:   "completion <bash|zsh>",
+	Short: "Generate bash or zsh completion script\n",
+	Long:  ``,
+}
+
+var bashCompletionCmd = &cobra.Command{
+	Use:   "bash",
+	Short: "Generate bash completion script",
 	Long:  ``,
 	Run: func(cmd *cobra.Command, args []string) {
-		generateBashCompletion()
+		err := RootCmd.GenBashCompletion(os.Stdout)
+		checkError(err)
+	},
+}
+
+var zshCompletionCmd = &cobra.Command{
+	Use:   "zsh",
+	Short: "Generate zsh completion script",
+	Long:  ``,
+	Run: func(cmd *cobra.Command, args []string) {
+		err := RootCmd.GenZshCompletion(os.Stdout)
+		checkError(err)
 	},
 }
 
 func init() {
-}
-
-//generate bash-completion file for gardenctl
-func generateBashCompletion() {
-	err := RootCmd.GenBashCompletionFile("gardenctl_completion.sh")
-	checkError(err)
+	completionCmd.AddCommand(bashCompletionCmd)
+	completionCmd.AddCommand(zshCompletionCmd)
 }
