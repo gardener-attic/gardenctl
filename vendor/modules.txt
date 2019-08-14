@@ -137,7 +137,7 @@ github.com/onsi/gomega/matchers/support/goraph/util
 github.com/pkg/browser
 # github.com/sirupsen/logrus v1.4.1
 github.com/sirupsen/logrus
-# github.com/spf13/cobra v0.0.3
+# github.com/spf13/cobra v0.0.5
 github.com/spf13/cobra
 # github.com/spf13/pflag v1.0.3
 github.com/spf13/pflag
