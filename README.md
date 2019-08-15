@@ -63,7 +63,7 @@ sudo mv bin/darwin-amd64/gardenctl-darwin-amd64 /usr/local/bin/gardenctl
 `gardenctl` supports auto completion. This recommended feature is bound to `gardenctl` or the alias `g`. To configure it you can run:
 
 ```bash
-echo "gardenctl completion && source gardenctl_completion.sh && rm gardenctl_completion.sh" >> ~/.bashrc
+echo "source <(gardenctl completion bash)" >> ~/.bashrc
 source ~/.bashrc
 ```
 
@@ -100,11 +100,11 @@ Please check the IaaS provider documentation for more details about their CLIs.
 
 Moreover, `gardenctl` offers auto completion. To use it, the command
 ```bash
-gardenctl completion
+gardenctl completion bash
 ``` 
-creates the file `gardenctl_completion.sh` which can then be sourced later on via 
+print on the standard output a completion script which can be sourced via
 ```bash
-source gardenctl_completion.sh
+source <(gardenctl completion bash)
 ```
 Please keep in mind that the auto completion is bound to `gardenctl` or the alias `g`.
 
