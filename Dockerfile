@@ -101,6 +101,6 @@ RUN pip install python-novaclient python-glanceclient python-cinderclient python
 RUN mkdir -p /opt/gardenctl/bin &&\
     mv gardenctl /opt/gardenctl/bin/gardenctl &&\
     ln -s /opt/gardenctl/bin/gardenctl /usr/local/bin/gardenctl &&\
-    gardenctl completion; mv gardenctl_completion.sh /root/gardenctl_completion.sh &&\
+    gardenctl completion bash > /root/gardenctl_bash_completion.sh &&\
     echo ". /etc/profile" >> /root/.bashrc &&\
-    echo ". /root/gardenctl_completion.sh" >> /root/.bashrc
+    echo ". /root/gardenctl_bash_completion.sh" >> /root/.bashrc
