@@ -24,25 +24,23 @@ import (
 	yaml "gopkg.in/yaml.v2"
 )
 
-// gcloudCmd represents the gcloud command
-var gcloudCmd = &cobra.Command{
-	Use:   "gcloud <args>",
-	Short: "",
-	Long:  ``,
-	Run: func(cmd *cobra.Command, args []string) {
-		var t Target
-		targetFile, err := ioutil.ReadFile(pathTarget)
-		checkError(err)
-		err = yaml.Unmarshal(targetFile, &t)
-		checkError(err)
-		if len(t.Target) < 3 {
-			fmt.Println("No shoot targeted")
-			os.Exit(2)
-		}
-		arguments := "gcloud " + strings.Join(args[:], " ")
-		operate("gcp", arguments)
-	},
-}
-
-func init() {
+// NewGcloudCmd return a new gcloud command.
+func NewGcloudCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "gcloud <args>",
+		Short: "",
+		Run: func(cmd *cobra.Command, args []string) {
+			var t Target
+			targetFile, err := ioutil.ReadFile(pathTarget)
+			checkError(err)
+			err = yaml.Unmarshal(targetFile, &t)
+			checkError(err)
+			if len(t.Target) < 3 {
+				fmt.Println("No shoot targeted")
+				os.Exit(2)
+			}
+			arguments := "gcloud " + strings.Join(args[:], " ")
+			operate("gcp", arguments)
+		},
+	}
 }

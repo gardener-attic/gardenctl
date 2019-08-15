@@ -24,25 +24,23 @@ import (
 	yaml "gopkg.in/yaml.v2"
 )
 
-// azCmd represents the az command
-var azCmd = &cobra.Command{
-	Use:   "az <args>",
-	Short: "",
-	Long:  ``,
-	Run: func(cmd *cobra.Command, args []string) {
-		var t Target
-		targetFile, err := ioutil.ReadFile(pathTarget)
-		checkError(err)
-		err = yaml.Unmarshal(targetFile, &t)
-		checkError(err)
-		if len(t.Target) < 3 {
-			fmt.Println("No shoot targeted")
-			os.Exit(2)
-		}
-		arguments := "az " + strings.Join(args[:], " ")
-		operate("az", arguments)
-	},
-}
-
-func init() {
+// NewAzCmd returns a new az command.
+func NewAzCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "az <args>",
+		Short: "",
+		Run: func(cmd *cobra.Command, args []string) {
+			var t Target
+			targetFile, err := ioutil.ReadFile(pathTarget)
+			checkError(err)
+			err = yaml.Unmarshal(targetFile, &t)
+			checkError(err)
+			if len(t.Target) < 3 {
+				fmt.Println("No shoot targeted")
+				os.Exit(2)
+			}
+			arguments := "az " + strings.Join(args[:], " ")
+			operate("az", arguments)
+		},
+	}
 }

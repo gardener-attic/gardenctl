@@ -29,30 +29,28 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// downloadCmd represents the download command
-var downloadCmd = &cobra.Command{
-	Use:   "download tf + (infra|internal-dns|external-dns|ingress|backup)\n  gardenctl download logs vpn\n ",
-	Short: "Download terraform configuration/state for local execution for the targeted shoot or log files",
-	Long:  ``,
-	Run: func(cmd *cobra.Command, args []string) {
-		if len(args) != 2 || !(args[1] == "infra" || args[1] == "internal-dns" || args[1] == "external-dns" || args[1] == "ingress" || args[1] == "backup" || args[1] == "vpn") {
-			fmt.Println("Command must be in the format:\n  download tf + (infra|internal-dns|external-dns|ingress|backup)\n  download logs vpn")
-			os.Exit(2)
-		}
-		switch args[0] {
-		case "tf":
-			path := downloadTerraformFiles(args[1])
-			fmt.Println("Downloaded to " + path)
-		case "logs":
-			downloadLogs(args[1])
-		default:
-			fmt.Println("Command must be in the format:\n  download tf + (infra|internal-dns|external-dns|ingress|backup)\n  download logs vpn")
-		}
-	},
-	ValidArgs: []string{"tf"},
-}
-
-func init() {
+// NewDownloadCmd returns a new download command.
+func NewDownloadCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "download tf + (infra|internal-dns|external-dns|ingress|backup)\n  gardenctl download logs vpn\n ",
+		Short: "Download terraform configuration/state for local execution for the targeted shoot or log files",
+		Run: func(cmd *cobra.Command, args []string) {
+			if len(args) != 2 || !(args[1] == "infra" || args[1] == "internal-dns" || args[1] == "external-dns" || args[1] == "ingress" || args[1] == "backup" || args[1] == "vpn") {
+				fmt.Println("Command must be in the format:\n  download tf + (infra|internal-dns|external-dns|ingress|backup)\n  download logs vpn")
+				os.Exit(2)
+			}
+			switch args[0] {
+			case "tf":
+				path := downloadTerraformFiles(args[1])
+				fmt.Println("Downloaded to " + path)
+			case "logs":
+				downloadLogs(args[1])
+			default:
+				fmt.Println("Command must be in the format:\n  download tf + (infra|internal-dns|external-dns|ingress|backup)\n  download logs vpn")
+			}
+		},
+		ValidArgs: []string{"tf"},
+	}
 }
 
 // downloadTerraformFiles downloads the corresponding tf file

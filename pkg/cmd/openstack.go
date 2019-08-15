@@ -24,25 +24,23 @@ import (
 	yaml "gopkg.in/yaml.v2"
 )
 
-// openstackCmd represents the openstack command
-var openstackCmd = &cobra.Command{
-	Use:   "openstack <args>",
-	Short: "\n",
-	Long:  ``,
-	Run: func(cmd *cobra.Command, args []string) {
-		var t Target
-		targetFile, err := ioutil.ReadFile(pathTarget)
-		checkError(err)
-		err = yaml.Unmarshal(targetFile, &t)
-		checkError(err)
-		if len(t.Target) < 3 {
-			fmt.Println("No shoot targeted")
-			os.Exit(2)
-		}
-		arguments := "openstack " + strings.Join(args[:], " ")
-		operate("openstack", arguments)
-	},
-}
-
-func init() {
+// NewOpenstackCmd returns a new openstack cmd.
+func NewOpenstackCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "openstack <args>",
+		Short: "\n",
+		Run: func(cmd *cobra.Command, args []string) {
+			var t Target
+			targetFile, err := ioutil.ReadFile(pathTarget)
+			checkError(err)
+			err = yaml.Unmarshal(targetFile, &t)
+			checkError(err)
+			if len(t.Target) < 3 {
+				fmt.Println("No shoot targeted")
+				os.Exit(2)
+			}
+			arguments := "openstack " + strings.Join(args[:], " ")
+			operate("openstack", arguments)
+		},
+	}
 }

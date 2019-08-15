@@ -20,34 +20,36 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// completionCmd represents the completion command
-var completionCmd = &cobra.Command{
-	Use:   "completion <bash|zsh>",
-	Short: "Generate bash or zsh completion script\n",
-	Long:  ``,
+// NewCompletionCmd returns a new completion command.
+func NewCompletionCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "completion <bash|zsh>",
+		Short: "Generate bash or zsh completion script",
+	}
+
+	cmd.AddCommand(NewBashCompletionCmd(), NewZshCompletionCmd())
+
+	return cmd
 }
 
-var bashCompletionCmd = &cobra.Command{
-	Use:   "bash",
-	Short: "Generate bash completion script",
-	Long:  ``,
-	Run: func(cmd *cobra.Command, args []string) {
-		err := RootCmd.GenBashCompletion(os.Stdout)
-		checkError(err)
-	},
+// NewBashCompletionCmd returns a new bash completion command.
+func NewBashCompletionCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "bash",
+		Short: "Generate bash completion script",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return RootCmd.GenBashCompletion(os.Stdout)
+		},
+	}
 }
 
-var zshCompletionCmd = &cobra.Command{
-	Use:   "zsh",
-	Short: "Generate zsh completion script",
-	Long:  ``,
-	Run: func(cmd *cobra.Command, args []string) {
-		err := RootCmd.GenZshCompletion(os.Stdout)
-		checkError(err)
-	},
-}
-
-func init() {
-	completionCmd.AddCommand(bashCompletionCmd)
-	completionCmd.AddCommand(zshCompletionCmd)
+// NewZshCompletionCmd returns a new zsh completion command.
+func NewZshCompletionCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "zsh",
+		Short: "Generate zsh completion script",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return RootCmd.GenZshCompletion(os.Stdout)
+		},
+	}
 }
