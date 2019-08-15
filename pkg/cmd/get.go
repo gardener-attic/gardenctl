@@ -33,55 +33,53 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 )
 
-// getCmd represents the get command
-var getCmd = &cobra.Command{
-	Use:   "get [(garden|project|seed|shoot|target) <name>]",
-	Short: "Get single resource instance or target stack, e.g. CRD of a shoot (default: current target)\n",
-	Long:  ``,
-	Run: func(cmd *cobra.Command, args []string) {
-		if len(args) < 1 || len(args) > 2 {
-			fmt.Println("Command must be in the format: get [(garden|project|seed|shoot|target) <name>]")
-			os.Exit(2)
-		}
-		switch args[0] {
-		case "project":
-			if len(args) == 1 {
-				getProject("")
-			} else if len(args) == 2 {
-				getProject(args[1])
+// NewGetCmd returns a new get command.
+func NewGetCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "get [(garden|project|seed|shoot|target) <name>]",
+		Short: "Get single resource instance or target stack, e.g. CRD of a shoot (default: current target)\n",
+		Run: func(cmd *cobra.Command, args []string) {
+			if len(args) < 1 || len(args) > 2 {
+				fmt.Println("Command must be in the format: get [(garden|project|seed|shoot|target) <name>]")
+				os.Exit(2)
 			}
-			tmp := KUBECONFIG
-			Client, err = clientToTarget("garden")
-			checkError(err)
-			KUBECONFIG = tmp
-		case "garden":
-			if len(args) == 1 {
-				getGarden("")
-			} else if len(args) == 2 {
-				getGarden(args[1])
+			switch args[0] {
+			case "project":
+				if len(args) == 1 {
+					getProject("")
+				} else if len(args) == 2 {
+					getProject(args[1])
+				}
+				tmp := KUBECONFIG
+				Client, err = clientToTarget("garden")
+				checkError(err)
+				KUBECONFIG = tmp
+			case "garden":
+				if len(args) == 1 {
+					getGarden("")
+				} else if len(args) == 2 {
+					getGarden(args[1])
+				}
+			case "seed":
+				if len(args) == 1 {
+					getSeed("")
+				} else if len(args) == 2 {
+					getSeed(args[1])
+				}
+			case "shoot":
+				if len(args) == 1 {
+					getShoot("")
+				} else if len(args) == 2 {
+					getShoot(args[1])
+				}
+			case "target":
+				getTarget()
+			default:
+				fmt.Println("Command must be in the format: get [project|garden|seed|shoot|target] + <NAME>")
 			}
-		case "seed":
-			if len(args) == 1 {
-				getSeed("")
-			} else if len(args) == 2 {
-				getSeed(args[1])
-			}
-		case "shoot":
-			if len(args) == 1 {
-				getShoot("")
-			} else if len(args) == 2 {
-				getShoot(args[1])
-			}
-		case "target":
-			getTarget()
-		default:
-			fmt.Println("Command must be in the format: get [project|garden|seed|shoot|target] + <NAME>")
-		}
-	},
-	ValidArgs: []string{"project", "garden", "seed", "shoot", "target"},
-}
-
-func init() {
+		},
+		ValidArgs: []string{"project", "garden", "seed", "shoot", "target"},
+	}
 }
 
 // getProject lists

@@ -35,7 +35,6 @@ var pathGardenHome string
 var RootCmd = &cobra.Command{
 	Use:   "gardenctl",
 	Short: "g",
-	Long:  ``,
 }
 
 const (
@@ -125,24 +124,27 @@ func init() {
 		}
 	)
 
-	cobra.OnInitialize(initConfig)
 	RootCmd.PersistentFlags().BoolVarP(&cachevar, "no-cache", "n", false, "no caching")
 	RootCmd.PersistentFlags().StringVarP(&outputFormat, "output", "o", "yaml", "output format yaml or json")
 	cobra.EnableCommandSorting = false
 	cobra.EnablePrefixMatching = prefixMatching
+
+	// Commands
 	RootCmd.AddCommand(
 		NewLsCmd(targetReader, configReader, ioStreams),
 		NewTargetCmd(targetReader, targetWriter, configReader, ioStreams),
 		NewDropCmd(targetReader, targetWriter, ioStreams),
-		getCmd)
-	RootCmd.AddCommand(downloadCmd, showCmd, logsCmd)
+		NewGetCmd())
+	RootCmd.AddCommand(NewDownloadCmd(), NewShowCmd(), NewLogsCmd())
 	RootCmd.AddCommand(NewRegisterCmd(), NewUnregisterCmd())
-	RootCmd.AddCommand(completionCmd)
+	RootCmd.AddCommand(NewCompletionCmd())
 	RootCmd.AddCommand(NewShellCmd(targetReader, ioStreams))
 	RootCmd.AddCommand(NewSSHCmd(targetReader, ioStreams))
-	RootCmd.AddCommand(kubectlCmd, kaCmd, ksCmd, kgCmd, knCmd, aliyunCmd, awsCmd, azCmd, gcloudCmd, openstackCmd)
-	RootCmd.AddCommand(infoCmd)
-	RootCmd.AddCommand(versionCmd)
+	RootCmd.AddCommand(NewKubectlCmd(), NewKaCmd(), NewKsCmd(), NewKgCmd(), NewKnCmd())
+	RootCmd.AddCommand(NewAliyunCmd(), NewAwsCmd(), NewAzCmd(), NewGcloudCmd(), NewOpenstackCmd())
+	RootCmd.AddCommand(NewInfoCmd())
+	RootCmd.AddCommand(NewVersionCmd())
+
 	RootCmd.SuggestionsMinimumDistance = suggestionsMinimumDistance
 	RootCmd.BashCompletionFunction = bashCompletionFunc
 	RootCmd.SetUsageTemplate(`Usage:{{if .Runnable}}
@@ -176,8 +178,4 @@ Gardenctl configuration file must be provided in $GARDENCONFIG or ~/.garden/conf
 Find more information and an example configuration at https://github.com/gardener/gardenctl
 {{end}}
 `)
-}
-
-// initConfig reads in config file and ENV variables if set.
-func initConfig() {
 }

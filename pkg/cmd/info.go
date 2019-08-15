@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
+	"sort"
 
 	clientset "github.com/gardener/gardener/pkg/client/garden/clientset/versioned"
 	"github.com/spf13/cobra"
@@ -25,41 +26,46 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-// infoCmd represents the info command
-var infoCmd = &cobra.Command{
-	Use:   "info",
-	Short: "Get landscape informations\n",
-	Long:  ``,
-	Run: func(cmd *cobra.Command, args []string) {
-		var t Target
-		targetFile, err := ioutil.ReadFile(pathTarget)
-		checkError(err)
-		err = yaml.Unmarshal(targetFile, &t)
-		checkError(err)
-		if len(t.Target) < 1 {
-			fmt.Println("No garden targeted")
-			os.Exit(2)
-		}
-		// show landscape
-		Client, err = clientToTarget("garden")
-		gardenClientset, err := clientset.NewForConfig(NewConfigFromBytes(*kubeconfig))
-		checkError(err)
-		shootList, err := gardenClientset.GardenV1beta1().Shoots("").List(metav1.ListOptions{})
-		checkError(err)
-		fmt.Printf("Garden: %s\n", t.Target[0].Name)
-		fmt.Printf("Shoots:\n")
-		fmt.Printf("    total: %d \n", len(shootList.Items))
-		seedList, err := gardenClientset.GardenV1beta1().Seeds().List(metav1.ListOptions{})
-		for _, seed := range seedList.Items {
-			numberShootsPerInfrastructure := 0
-			for _, shoot := range shootList.Items {
-				if *shoot.Spec.Cloud.Seed == seed.Name {
-					numberShootsPerInfrastructure++
-				}
+// NewInfoCmd returns a new info command.
+func NewInfoCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "info",
+		Short: "Get landscape informations\n",
+		Run: func(cmd *cobra.Command, args []string) {
+			var t Target
+			targetFile, err := ioutil.ReadFile(pathTarget)
+			checkError(err)
+			err = yaml.Unmarshal(targetFile, &t)
+			checkError(err)
+			if len(t.Target) < 1 {
+				fmt.Println("No garden targeted")
+				os.Exit(2)
 			}
-			fmt.Printf("    %s: %d \n", seed.Name, numberShootsPerInfrastructure)
-		}
-		// show number shoots
-		// show node, cpus ...
-	},
+			// show landscape
+			Client, err = clientToTarget("garden")
+			gardenClientset, err := clientset.NewForConfig(NewConfigFromBytes(*kubeconfig))
+			checkError(err)
+			shootList, err := gardenClientset.GardenV1beta1().Shoots("").List(metav1.ListOptions{})
+			checkError(err)
+			fmt.Printf("Garden: %s\n", t.Target[0].Name)
+			fmt.Printf("Shoots:\n")
+			fmt.Printf("    total: %d \n", len(shootList.Items))
+
+			shootsCountPerSeed := make(map[string]int)
+			for _, shoot := range shootList.Items {
+				shootsCountPerSeed[*shoot.Spec.Cloud.Seed]++
+			}
+			var sortedSeeds []string
+			for seed := range shootsCountPerSeed {
+				sortedSeeds = append(sortedSeeds, seed)
+			}
+			sort.Strings(sortedSeeds)
+
+			for _, seed := range sortedSeeds {
+				fmt.Printf("    %s: %d \n", seed, shootsCountPerSeed[seed])
+			}
+			// show number shoots
+			// show node, cpus ...
+		},
+	}
 }
