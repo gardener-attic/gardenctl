@@ -29,89 +29,87 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 )
 
-// showCmd represents the show command
-var showCmd = &cobra.Command{
-	Use:   "show (operator|gardener-dashboard|api|scheduler|controller-manager|etcd-operator|etcd-main|etcd-events|addon-manager|vpn-seed|vpn-shoot|machine-controller-manager|kubernetes-dashboard|prometheus|grafana|alertmanager|tf (infra|dns|ingress))",
-	Short: `Show details about endpoint/service and open in default browser if applicable`,
-	Long:  ``,
-	Run: func(cmd *cobra.Command, args []string) {
-		if len(args) < 1 || len(args) > 2 {
-			fmt.Println("Command must be in the format: show (operator|gardener-dashboard|api|scheduler|controller-manager|etcd-operator|etcd-main|etcd-events|addon-manager|vpn-seed|vpn-shoot|machine-controller-manager|kubernetes-dashboard|prometheus|grafana|alertmanager|tf (infra|dns|ingress)")
-			os.Exit(2)
-		}
-		var t Target
-		targetFile, err := ioutil.ReadFile(pathTarget)
-		checkError(err)
-		err = yaml.Unmarshal(targetFile, &t)
-		checkError(err)
-		if len(t.Target) < 3 && (args[0] != "operator") && (args[0] != "tf") && (args[0] != "kubernetes-dashboard") && (args[0] != "etcd-operator") && (args[0] != "kibana") {
-			fmt.Println("No shoot targeted")
-			os.Exit(2)
-		} else if (len(t.Target) < 2 && (args[0] == "tf")) || len(t.Target) < 3 && (args[0] == "tf") && (t.Target[1].Kind != "seed") || (len(t.Target) < 2 && (args[0] == "kibana")) {
-			fmt.Println("No seed or shoot targeted")
-			os.Exit(2)
-		} else if len(t.Target) == 0 {
-			fmt.Println("Target stack is empty")
-			os.Exit(2)
-		}
-		switch args[0] {
-		case "operator":
-			showOperator()
-		case "gardener-dashboard":
-			showGardenerDashboard()
-		case "api":
-			showAPIServer()
-		case "scheduler":
-			showScheduler()
-		case "controller-manager":
-			showControllerManager()
-		case "etcd-operator":
-			showEtcdOperator()
-		case "etcd-main":
-			showEtcdMain()
-		case "etcd-events":
-			showEtcdEvents()
-		case "addon-manager":
-			showAddonManager()
-		case "vpn-seed":
-			showVpnSeed()
-		case "vpn-shoot":
-			showVpnShoot()
-		case "machine-controller-manager":
-			showMachineControllerManager()
-		case "kubernetes-dashboard":
-			showKubernetesDashboard()
-		case "prometheus":
-			showPrometheus()
-		case "grafana":
-			showGrafana()
-		case "alertmanager":
-			showAltermanager()
-		case "kibana":
-			showKibana()
-		case "tf":
-			if len(args) == 1 {
-				showTf()
-				break
+// NewShowCmd returns a new show command.
+func NewShowCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "show (operator|gardener-dashboard|api|scheduler|controller-manager|etcd-operator|etcd-main|etcd-events|addon-manager|vpn-seed|vpn-shoot|machine-controller-manager|kubernetes-dashboard|prometheus|grafana|alertmanager|tf (infra|dns|ingress))",
+		Short: `Show details about endpoint/service and open in default browser if applicable`,
+		Run: func(cmd *cobra.Command, args []string) {
+			if len(args) < 1 || len(args) > 2 {
+				fmt.Println("Command must be in the format: show (operator|gardener-dashboard|api|scheduler|controller-manager|etcd-operator|etcd-main|etcd-events|addon-manager|vpn-seed|vpn-shoot|machine-controller-manager|kubernetes-dashboard|prometheus|grafana|alertmanager|tf (infra|dns|ingress)")
+				os.Exit(2)
 			}
-			switch args[1] {
-			case "infra":
-				showInfra()
-			case "dns":
-				showDNS()
-			case "ingress":
-				showIngress()
+			var t Target
+			targetFile, err := ioutil.ReadFile(pathTarget)
+			checkError(err)
+			err = yaml.Unmarshal(targetFile, &t)
+			checkError(err)
+			if len(t.Target) < 3 && (args[0] != "operator") && (args[0] != "tf") && (args[0] != "kubernetes-dashboard") && (args[0] != "etcd-operator") && (args[0] != "kibana") {
+				fmt.Println("No shoot targeted")
+				os.Exit(2)
+			} else if (len(t.Target) < 2 && (args[0] == "tf")) || len(t.Target) < 3 && (args[0] == "tf") && (t.Target[1].Kind != "seed") || (len(t.Target) < 2 && (args[0] == "kibana")) {
+				fmt.Println("No seed or shoot targeted")
+				os.Exit(2)
+			} else if len(t.Target) == 0 {
+				fmt.Println("Target stack is empty")
+				os.Exit(2)
+			}
+			switch args[0] {
+			case "operator":
+				showOperator()
+			case "gardener-dashboard":
+				showGardenerDashboard()
+			case "api":
+				showAPIServer()
+			case "scheduler":
+				showScheduler()
+			case "controller-manager":
+				showControllerManager()
+			case "etcd-operator":
+				showEtcdOperator()
+			case "etcd-main":
+				showEtcdMain()
+			case "etcd-events":
+				showEtcdEvents()
+			case "addon-manager":
+				showAddonManager()
+			case "vpn-seed":
+				showVpnSeed()
+			case "vpn-shoot":
+				showVpnShoot()
+			case "machine-controller-manager":
+				showMachineControllerManager()
+			case "kubernetes-dashboard":
+				showKubernetesDashboard()
+			case "prometheus":
+				showPrometheus()
+			case "grafana":
+				showGrafana()
+			case "alertmanager":
+				showAltermanager()
+			case "kibana":
+				showKibana()
+			case "tf":
+				if len(args) == 1 {
+					showTf()
+					break
+				}
+				switch args[1] {
+				case "infra":
+					showInfra()
+				case "dns":
+					showDNS()
+				case "ingress":
+					showIngress()
+				default:
+					fmt.Println("Command must be in the format: show (operator|gardener-dashboard|api|scheduler|controller-manager|etcd-operator|etcd-main|etcd-events|addon-manager|vpn-seed|vpn-shoot|machine-controller-manager|kubernetes-dashboard|prometheus|grafana|alertmanager|tf (infra|dns|ingress)")
+				}
 			default:
 				fmt.Println("Command must be in the format: show (operator|gardener-dashboard|api|scheduler|controller-manager|etcd-operator|etcd-main|etcd-events|addon-manager|vpn-seed|vpn-shoot|machine-controller-manager|kubernetes-dashboard|prometheus|grafana|alertmanager|tf (infra|dns|ingress)")
 			}
-		default:
-			fmt.Println("Command must be in the format: show (operator|gardener-dashboard|api|scheduler|controller-manager|etcd-operator|etcd-main|etcd-events|addon-manager|vpn-seed|vpn-shoot|machine-controller-manager|kubernetes-dashboard|prometheus|grafana|alertmanager|tf (infra|dns|ingress)")
-		}
-	},
-	ValidArgs: []string{"operator", "gardener-dashboard", "api", "scheduler", "controller-manager", "etcd-operator", "etcd-main", "etcd-events", "addon-manager", "vpn-seed", "vpn-shoot", "machine-controller-manager", "kubernetes-dashboard", "prometheus", "grafana", "alertmanager", "tf"},
-}
-
-func init() {
+		},
+		ValidArgs: []string{"operator", "gardener-dashboard", "api", "scheduler", "controller-manager", "etcd-operator", "etcd-main", "etcd-events", "addon-manager", "vpn-seed", "vpn-shoot", "machine-controller-manager", "kubernetes-dashboard", "prometheus", "grafana", "alertmanager", "tf"},
+	}
 }
 
 // showPodGarden
