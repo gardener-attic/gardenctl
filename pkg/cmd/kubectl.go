@@ -23,55 +23,65 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// kubectlCmd represents the kubectl command
-var kubectlCmd = &cobra.Command{
-	Use:     "kubectl <args>",
-	Aliases: []string{"k"},
-	Short:   "",
-	Long:    ``,
-	Run: func(cmd *cobra.Command, args []string) {
-		arguments := "kubectl " + strings.Join(args[:], " ")
-		kube(arguments)
-	},
+// NewKubectlCmd returns a new kubectl command.
+func NewKubectlCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:     "kubectl <args>",
+		Aliases: []string{"k"},
+		Short:   "",
+		Run: func(cmd *cobra.Command, args []string) {
+			arguments := "kubectl " + strings.Join(args[:], " ")
+			kube(arguments)
+		},
+	}
 }
 
-var kaCmd = &cobra.Command{
-	Use:    "ka",
-	Hidden: true,
-	Run: func(cmd *cobra.Command, args []string) {
-		arguments := "kubectl " + strings.Join(args[:], " ") + " --all-namespaces=true"
-		kube(arguments)
-	},
+// NewKaCmd returns a new 'kubectl --all-namespaces' command.
+func NewKaCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:    "ka",
+		Hidden: true,
+		Run: func(cmd *cobra.Command, args []string) {
+			arguments := "kubectl " + strings.Join(args[:], " ") + " --all-namespaces=true"
+			kube(arguments)
+		},
+	}
 }
 
-var ksCmd = &cobra.Command{
-	Use:    "ks",
-	Hidden: true,
-	Run: func(cmd *cobra.Command, args []string) {
-		arguments := "kubectl " + strings.Join(args[:], " ") + " --namespace=kube-system"
-		kube(arguments)
-	},
+// NewKsCmd returns a new 'kubectl --namespace=kube-system' command.
+func NewKsCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:    "ks",
+		Hidden: true,
+		Run: func(cmd *cobra.Command, args []string) {
+			arguments := "kubectl " + strings.Join(args[:], " ") + " --namespace=kube-system"
+			kube(arguments)
+		},
+	}
 }
 
-var kgCmd = &cobra.Command{
-	Use:    "kg",
-	Hidden: true,
-	Run: func(cmd *cobra.Command, args []string) {
-		arguments := "kubectl " + strings.Join(args[:], " ") + " --namespace=garden"
-		kube(arguments)
-	},
+// NewKgCmd returns a new 'kubectl --namespace=garden' command.
+func NewKgCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:    "kg",
+		Hidden: true,
+		Run: func(cmd *cobra.Command, args []string) {
+			arguments := "kubectl " + strings.Join(args[:], " ") + " --namespace=garden"
+			kube(arguments)
+		},
+	}
 }
 
-var knCmd = &cobra.Command{
-	Use:    "kn",
-	Hidden: true,
-	Run: func(cmd *cobra.Command, args []string) {
-		arguments := "kubectl --namespace=" + strings.Join(args[:], " ")
-		kube(arguments)
-	},
-}
-
-func init() {
+// NewKnCmd returns a new 'kubectl --namespace=<arg>' command.
+func NewKnCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:    "kn",
+		Hidden: true,
+		Run: func(cmd *cobra.Command, args []string) {
+			arguments := "kubectl --namespace=" + strings.Join(args[:], " ")
+			kube(arguments)
+		},
+	}
 }
 
 // kube executes a kubectl command on targeted cluster

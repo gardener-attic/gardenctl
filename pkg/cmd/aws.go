@@ -24,25 +24,23 @@ import (
 	yaml "gopkg.in/yaml.v2"
 )
 
-// awsCmd represents the aws command
-var awsCmd = &cobra.Command{
-	Use:   "aws <args>",
-	Short: "",
-	Long:  ``,
-	Run: func(cmd *cobra.Command, args []string) {
-		var t Target
-		targetFile, err := ioutil.ReadFile(pathTarget)
-		checkError(err)
-		err = yaml.Unmarshal(targetFile, &t)
-		checkError(err)
-		if len(t.Target) < 3 {
-			fmt.Println("No shoot targeted")
-			os.Exit(2)
-		}
-		arguments := "aws " + strings.Join(args[:], " ")
-		operate("aws", arguments)
-	},
-}
-
-func init() {
+// NewAwsCmd returns a new aws command.
+func NewAwsCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "aws <args>",
+		Short: "",
+		Run: func(cmd *cobra.Command, args []string) {
+			var t Target
+			targetFile, err := ioutil.ReadFile(pathTarget)
+			checkError(err)
+			err = yaml.Unmarshal(targetFile, &t)
+			checkError(err)
+			if len(t.Target) < 3 {
+				fmt.Println("No shoot targeted")
+				os.Exit(2)
+			}
+			arguments := "aws " + strings.Join(args[:], " ")
+			operate("aws", arguments)
+		},
+	}
 }

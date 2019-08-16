@@ -24,22 +24,23 @@ import (
 	yaml "gopkg.in/yaml.v2"
 )
 
-// aliyunCmd represents the aliyun command
-var aliyunCmd = &cobra.Command{
-	Use:   "aliyun <args>",
-	Short: "",
-	Long:  ``,
-	Run: func(cmd *cobra.Command, args []string) {
-		var t Target
-		targetFile, err := ioutil.ReadFile(pathTarget)
-		checkError(err)
-		err = yaml.Unmarshal(targetFile, &t)
-		checkError(err)
-		if len(t.Target) < 3 {
-			fmt.Println("No shoot targeted")
-			os.Exit(2)
-		}
-		arguments := "aliyun " + strings.Join(args[:], " ")
-		operate("aliyun", arguments)
-	},
+// NewAliyunCmd returns a new aliyun command.
+func NewAliyunCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "aliyun <args>",
+		Short: "",
+		Run: func(cmd *cobra.Command, args []string) {
+			var t Target
+			targetFile, err := ioutil.ReadFile(pathTarget)
+			checkError(err)
+			err = yaml.Unmarshal(targetFile, &t)
+			checkError(err)
+			if len(t.Target) < 3 {
+				fmt.Println("No shoot targeted")
+				os.Exit(2)
+			}
+			arguments := "aliyun " + strings.Join(args[:], " ")
+			operate("aliyun", arguments)
+		},
+	}
 }
