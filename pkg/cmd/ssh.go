@@ -22,12 +22,26 @@ import (
 	"os"
 	"strings"
 
+	v1alpha1 "github.com/gardener/gardener/pkg/client/core/clientset/versioned/typed/core/v1alpha1"
+
 	v1beta1 "github.com/gardener/gardener/pkg/apis/garden/v1beta1"
 
 	clientset "github.com/gardener/gardener/pkg/client/garden/clientset/versioned"
 	"github.com/jmoiron/jsonq"
 	"github.com/spf13/cobra"
+	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+)
+
+const (
+	//BastionOSName is the name of the operation system used for creating bastion
+	BastionOSName = "coreos"
+
+	//ControllerRegistrationAwsName is name of controller registration for AWS
+	ControllerRegistrationAwsName = "provider-aws"
+
+	//NodeRegionLabel is the label name for the node region
+	NodeRegionLabel = "failure-domain.beta.kubernetes.io/region"
 )
 
 // NewSSHCmd returns a new ssh command.
@@ -99,12 +113,7 @@ func NewSSHCmd(reader TargetReader, ioStreams IOStreams) *cobra.Command {
 			fmt.Printf(pathToKey)
 			switch infraType {
 			case "aws":
-				var imageID string
-				if imageID, err = fetchAWSImageIDByInstancePrivateIP(args[0]); err != nil {
-					return err
-				}
-
-				sshToAWSNode(imageID, args[0], path)
+				sshToAWSNode(args[0], path)
 			case "gcp":
 				sshToGCPNode(args[0], path)
 			case "az":
@@ -124,7 +133,11 @@ func NewSSHCmd(reader TargetReader, ioStreams IOStreams) *cobra.Command {
 }
 
 // sshToAWSNode provides cmds to ssh to aws via a bastions host and clean it up afterwards
-func sshToAWSNode(imageID, nodeIP, path string) {
+func sshToAWSNode(nodeIP, path string) {
+	var imageID string
+	fmt.Println("Fetching coreos AMI")
+	imageID = fetchAWSImageIDByInstancePrivateIP(nodeIP)
+
 	// create bastion host
 	clustername := getShootClusterName()
 	name := clustername + "-bastions"
@@ -159,7 +172,7 @@ func sshToAWSNode(imageID, nodeIP, path string) {
 			break
 		}
 	}
-	bastionNode := "<user>@" + ip
+	bastionNode := "core@" + ip
 	node := "<user>@" + nodeIP
 	fmt.Println("- Fill in the placeholders and run the following command to ssh onto the target node. For more information about the user, you can check the documentation of the cloud provider:")
 	fmt.Println()
@@ -188,12 +201,12 @@ func sshToAZNode(nodeIP, path string) {
 	checkError(err)
 	nsgName, err := ExecCmdReturnOutput("bash", "-c", "cat "+path+" | jq -r '.modules[].outputs.securityGroupName.value'")
 	checkError(err)
-	nodeName := getNodeNameForIP(nodeIP)
-	if nodeName == "" {
+	targetNode := getNodeForIP(nodeIP)
+	if targetNode == nil {
 		fmt.Println("No node found for ip")
 		os.Exit(2)
 	}
-	nicName := fmt.Sprintf("%s-nic", nodeName)
+	nicName := fmt.Sprintf("%s-nic", targetNode.Name)
 
 	// add ssh rule
 	fmt.Println("Add ssh rule")
@@ -269,8 +282,8 @@ func printNodeIPs(kindIP string) {
 	}
 }
 
-// getNodeNameForIP extract node name for ip address
-func getNodeNameForIP(ip string) string {
+// getNodeForIP extract node for ip address
+func getNodeForIP(ip string) *v1.Node {
 	typeName, err := getTargetType()
 	checkError(err)
 	Client, err = clientToTarget(typeName)
@@ -279,22 +292,65 @@ func getNodeNameForIP(ip string) string {
 	checkError(err)
 	for _, node := range nodes.Items {
 		if ip == node.Status.Addresses[0].Address {
-			return node.Name
+			return &node
 		}
 	}
-	return ""
+	return nil
 }
 
 // fetchAWSImageIDByInstancePrivateIP returns the image ID (AMI) for instance with the given <privateIP>.
-func fetchAWSImageIDByInstancePrivateIP(privateIP string) (string, error) {
-	command := fmt.Sprintf("aws ec2 describe-instances --filters Name=private-ip-address,Values=%s --query Reservations[0].Instances[0].ImageId", privateIP)
-	captured := capture()
-	operate("aws", command)
-	output, err := captured()
+func fetchAWSImageIDByInstancePrivateIP(privateIP string) string {
+	clientToTarget("garden")
+	checkError(err)
+	clientset, err := v1alpha1.NewForConfig(NewConfigFromBytes(*kubeconfig))
+	checkError(err)
+	controllerRegistration, err := clientset.ControllerRegistrations().Get(ControllerRegistrationAwsName, metav1.GetOptions{})
+	checkError(err)
 
-	if err != nil || output == "None" {
-		return "", fmt.Errorf("could not fetch image ID (AMI) of instance with private IP address %q", privateIP)
+	//var data string
+	var controllerRegistrationSpec AWSControllerRegistrationSpec
+	err = json.Unmarshal(controllerRegistration.Spec.Deployment.ProviderConfig.Raw, &controllerRegistrationSpec)
+	checkError(err)
+	machineImages := controllerRegistrationSpec.Values.Config.MachineImages
+
+	nodeRegion := getNodeForIP(privateIP).Labels[NodeRegionLabel]
+	var ami string
+	for _, machineImage := range machineImages {
+		if machineImage.Name == BastionOSName {
+			for _, region := range machineImage.Regions {
+				if region.Name == nodeRegion {
+					ami = region.Ami
+					break
+				}
+			}
+		}
 	}
 
-	return output, nil
+	if ami == "" {
+		fmt.Println(fmt.Sprintf("Cannot find AMI with coreos image for region: %s", nodeRegion))
+		os.Exit(2)
+	}
+
+	return ami
+}
+
+// AWSControllerRegistrationSpec is a struct which is used for deserialization of ControllerRegistration
+type AWSControllerRegistrationSpec struct {
+	Values struct {
+		Config struct {
+			MachineImages []AWSMachineImageSpec `json:"machineImages,omitempty"`
+		} `json:"config,omitempty"`
+	} `json:"values,omitempty"`
+}
+
+// AWSMachineImageSpec is a struct which is used for deserialization of MachineImage
+type AWSMachineImageSpec struct {
+	Name    string          `json:"name,omitempty"`
+	Regions []AWSRegionSpec `json:"regions,omitempty"`
+}
+
+// AWSRegionSpec is a struct which is used for deserialization of Region
+type AWSRegionSpec struct {
+	Name string `json:"name,omitempty"`
+	Ami  string `json:"ami,omitempty"`
 }

@@ -21,8 +21,14 @@ import (
 	"strings"
 	"time"
 
+	v1alpha1 "github.com/gardener/gardener/pkg/client/core/clientset/versioned/typed/core/v1alpha1"
 	"github.com/jmoiron/jsonq"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+)
+
+const (
+	//ControllerRegistrationAlicloudName is name of controller registration for Alicloud
+	ControllerRegistrationAlicloudName = "provider-alicloud"
 )
 
 // AliyunInstanceAttribute stores all the critical information for creating a instance on Alicloud.
@@ -108,7 +114,7 @@ func sshToAlicloudNode(nodeIP, path string) {
 
 	fmt.Println("")
 	fmt.Println("- Fill in the placeholders and run the following command to ssh onto the target node. For more information about the user, you can check the documentation of the cloud provider:")
-	fmt.Println("ssh -i " + aliyunPathSSHKey + "key -o \"ProxyCommand ssh -i " + aliyunPathSSHKey + "key -W " + nodeIP + ":22 <user>@" + a.BastionIP + "\" <user>@" + nodeIP)
+	fmt.Println("ssh -i " + aliyunPathSSHKey + "key -o \"ProxyCommand ssh -i " + aliyunPathSSHKey + "key -W " + nodeIP + ":22 root@" + a.BastionIP + "\" <user>@" + nodeIP)
 	fmt.Println("")
 	fmt.Println("- Run following command to hibernate bastion host:")
 	fmt.Println("gardenctl aliyun ecs StopInstance -- --InstanceId=" + a.BastionInstanceID)
@@ -168,8 +174,9 @@ func (a *AliyunInstanceAttribute) fetchAttributes(nodeIP string) {
 	checkError(err)
 	a.VSwitchID, err = decodedQuery.String("VpcAttributes", "VSwitchId")
 	checkError(err)
-	a.ImageID, err = decodedQuery.String("ImageId")
-	checkError(err)
+	fmt.Println("Fetching coreos imageID")
+	a.ImageID = fetchAlicloudImageID()
+	fmt.Println(a.ImageID)
 	a.ShootName = getShootClusterName()
 	a.BastionSecurityGroupName = a.ShootName + "-bsg"
 	a.BastionInstanceName = a.ShootName + "-bastion"
@@ -583,4 +590,44 @@ func (a *AliyunInstanceAttribute) getMinimumInstanceSpec() string {
 	}
 
 	return currentMinimumSpec.InstanceTypeID
+}
+
+// fetchAlicloudImageID returns the image ID.
+func fetchAlicloudImageID() string {
+	clientToTarget("garden")
+	checkError(err)
+	clientset, err := v1alpha1.NewForConfig(NewConfigFromBytes(*kubeconfig))
+	checkError(err)
+	controllerRegistration, err := clientset.ControllerRegistrations().Get(ControllerRegistrationAlicloudName, metav1.GetOptions{})
+	checkError(err)
+
+	//var data string
+	var controllerRegistrationSpec AlicloudControllerRegistrationSpec
+	err = json.Unmarshal(controllerRegistration.Spec.Deployment.ProviderConfig.Raw, &controllerRegistrationSpec)
+	checkError(err)
+	machineImages := controllerRegistrationSpec.Values.Config.MachineImages
+	imageID := machineImages[0].ID
+
+	if imageID == "" {
+		fmt.Println("Can not find imageID")
+		os.Exit(2)
+	}
+
+	return imageID
+}
+
+// AlicloudControllerRegistrationSpec is a struct which is used for deserialization of ControllerRegistration
+type AlicloudControllerRegistrationSpec struct {
+	Values struct {
+		Config struct {
+			MachineImages []AlicloudMachineImageSpec `json:"machineImages,omitempty"`
+		} `json:"config,omitempty"`
+	} `json:"values,omitempty"`
+}
+
+//AlicloudMachineImageSpec is a struct which is used for deserialization of MachineImage
+type AlicloudMachineImageSpec struct {
+	ID      string `json:"id,omitempty"`
+	Name    string `json:"name,omitempty"`
+	Version string `json:"version,omitempty"`
 }
