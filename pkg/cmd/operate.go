@@ -68,6 +68,11 @@ func operate(provider, arguments string) {
 	}
 	secret, err := Client.CoreV1().Secrets(namespaceSecret).Get((secretName), metav1.GetOptions{})
 	checkError(err)
+
+	gardenName := target.Stack()[0].Name
+	projectsPath := filepath.Join("cache", gardenName, "projects", target.Target[1].Name, target.Target[2].Name)
+	seedsPath := filepath.Join("cache", gardenName, "seeds", target.Target[1].Name, target.Target[2].Name)
+
 	switch provider {
 	case "aws":
 		accessKeyID := []byte(secret.Data["accessKeyID"])
@@ -76,13 +81,13 @@ func operate(provider, arguments string) {
 			awsPathCredentials := ""
 			awsPathConfig := ""
 			if target.Target[1].Kind == "project" {
-				CreateDir(pathGardenHome+"/cache/projects/"+target.Target[1].Name+"/"+target.Target[2].Name+"/.aws", 0751)
-				awsPathCredentials = "cache/projects/" + target.Target[1].Name + "/" + target.Target[2].Name + "/.aws/credentials"
-				awsPathConfig = "cache/projects/" + target.Target[1].Name + "/" + target.Target[2].Name + "/.aws/config"
+				CreateDir(filepath.Join(pathGardenHome, projectsPath, ".aws"), 0751)
+				awsPathCredentials = filepath.Join(projectsPath, ".aws", "credentials")
+				awsPathConfig = filepath.Join(projectsPath, ".aws", "config")
 			} else if target.Target[1].Kind == "seed" {
-				CreateDir(pathGardenHome+"/cache/seeds/"+target.Target[1].Name+"/"+target.Target[2].Name+"/.aws", 0751)
-				awsPathCredentials = "cache/seeds/" + target.Target[1].Name + "/" + target.Target[2].Name + "/.aws/credentials"
-				awsPathConfig = "cache/seeds/" + target.Target[1].Name + "/" + target.Target[2].Name + "/.aws/config"
+				CreateDir(filepath.Join(pathGardenHome, seedsPath, ".aws"), 0751)
+				awsPathCredentials = filepath.Join(seedsPath, ".aws", "credentials")
+				awsPathConfig = filepath.Join(seedsPath, ".aws", "config")
 			}
 			CreateFileIfNotExists(pathGardenHome+"/"+awsPathCredentials, 0644)
 			CreateFileIfNotExists(pathGardenHome+"/"+awsPathConfig, 0644)
@@ -111,11 +116,11 @@ func operate(provider, arguments string) {
 		if !cachevar {
 			gcpPathCredentials := ""
 			if target.Target[1].Kind == "project" {
-				CreateDir(pathGardenHome+"/cache/projects/"+target.Target[1].Name+"/"+target.Target[2].Name+"/.gcp", 0751)
-				gcpPathCredentials = "cache/projects/" + target.Target[1].Name + "/" + target.Target[2].Name + "/.gcp/credentials"
+				CreateDir(filepath.Join(pathGardenHome, projectsPath, ".gcp"), 0751)
+				gcpPathCredentials = filepath.Join(projectsPath, ".gcp", "credentials")
 			} else if target.Target[1].Kind == "seed" {
-				CreateDir(pathGardenHome+"/cache/seeds/"+target.Target[1].Name+"/"+target.Target[2].Name+"/.gcp", 0751)
-				gcpPathCredentials = "cache/seeds/" + target.Target[1].Name + "/" + target.Target[2].Name + "/.gcp/credentials"
+				CreateDir(filepath.Join(pathGardenHome, seedsPath, ".gcp"), 0751)
+				gcpPathCredentials = filepath.Join(seedsPath, ".gcp", "credentials")
 			}
 			CreateFileIfNotExists(pathGardenHome+"/"+gcpPathCredentials, 0644)
 			originalCredentials, err := os.OpenFile(filepath.Join(pathGardenHome, gcpPathCredentials), os.O_WRONLY, 0644)
@@ -167,11 +172,11 @@ func operate(provider, arguments string) {
 		if !cachevar {
 			azurePathCredentials := ""
 			if target.Target[1].Kind == "project" {
-				CreateDir(pathGardenHome+"/cache/projects/"+target.Target[1].Name+"/"+target.Target[2].Name+"/.azure", 0751)
-				azurePathCredentials = "cache/projects/" + target.Target[1].Name + "/" + target.Target[2].Name + "/.azure/credentials"
+				CreateDir(filepath.Join(pathGardenHome, projectsPath, ".azure"), 0751)
+				azurePathCredentials = filepath.Join(projectsPath, ".azure", "credentials")
 			} else if target.Target[1].Kind == "seed" {
-				CreateDir(pathGardenHome+"/cache/seeds/"+target.Target[1].Name+"/"+target.Target[2].Name+"/.azure", 0751)
-				azurePathCredentials = "cache/seeds/" + target.Target[1].Name + "/" + target.Target[2].Name + "/.azure/credentials"
+				CreateDir(filepath.Join(pathGardenHome, seedsPath, ".azure"), 0751)
+				azurePathCredentials = filepath.Join(seedsPath, ".azure", "credentials")
 			}
 			CreateFileIfNotExists(pathGardenHome+"/"+azurePathCredentials, 0644)
 			originalCredentials, err := os.OpenFile(filepath.Join(pathGardenHome, azurePathCredentials), os.O_WRONLY, 0644)
@@ -204,11 +209,11 @@ func operate(provider, arguments string) {
 		if !cachevar {
 			openstackPathCredentials := ""
 			if target.Target[1].Kind == "project" {
-				CreateDir(pathGardenHome+"/cache/projects/"+target.Target[1].Name+"/"+target.Target[2].Name+"/.openstack", 0751)
-				openstackPathCredentials = "cache/projects/" + target.Target[1].Name + "/" + target.Target[2].Name + "/.openstack/credentials"
+				CreateDir(filepath.Join(pathGardenHome, projectsPath, ".openstack"), 0751)
+				openstackPathCredentials = filepath.Join(projectsPath, ".openstack", "credentials")
 			} else if target.Target[1].Kind == "seed" {
-				CreateDir(pathGardenHome+"/cache/seeds/"+target.Target[1].Name+"/"+target.Target[2].Name+"/.openstack", 0751)
-				openstackPathCredentials = "cache/seeds/" + target.Target[1].Name + "/" + target.Target[2].Name + "/.openstack/credentials"
+				CreateDir(filepath.Join(pathGardenHome, seedsPath, ".openstack"), 0751)
+				openstackPathCredentials = filepath.Join(seedsPath, ".openstack", "credentials")
 			}
 			CreateFileIfNotExists(pathGardenHome+"/"+openstackPathCredentials, 0644)
 			originalCredentials, err := os.OpenFile(filepath.Join(pathGardenHome, openstackPathCredentials), os.O_WRONLY, 0644)
@@ -230,13 +235,13 @@ func operate(provider, arguments string) {
 			aliyunPathCredentials := ""
 			aliyunPathConfig := ""
 			if target.Target[1].Kind == "project" {
-				CreateDir(pathGardenHome+"/cache/projects/"+target.Target[1].Name+"/"+target.Target[2].Name+"/.aliyun", 0751)
-				aliyunPathCredentials = "cache/projects/" + target.Target[1].Name + "/" + target.Target[2].Name + "/.aliyun/credentials"
-				aliyunPathConfig = "cache/projects/" + target.Target[1].Name + "/" + target.Target[2].Name + "/.aliyun/config"
+				CreateDir(filepath.Join(pathGardenHome, projectsPath, ".aliyun"), 0751)
+				aliyunPathCredentials = filepath.Join(projectsPath, ".aliyun", "credentials")
+				aliyunPathConfig = filepath.Join(projectsPath, ".aliyun", "config")
 			} else if target.Target[1].Kind == "seed" {
-				CreateDir(pathGardenHome+"/cache/seeds/"+target.Target[1].Name+"/"+target.Target[2].Name+"/.aliyun", 0751)
-				aliyunPathCredentials = "cache/seeds/" + target.Target[1].Name + "/" + target.Target[2].Name + "/.aliyun/credentials"
-				aliyunPathConfig = "cache/seeds/" + target.Target[1].Name + "/" + target.Target[2].Name + "/.aliyun/config"
+				CreateDir(filepath.Join(pathGardenHome, seedsPath, ".aliyun"), 0751)
+				aliyunPathCredentials = filepath.Join(seedsPath, ".aliyun", "credentials")
+				aliyunPathConfig = filepath.Join(seedsPath, ".aliyun", "config")
 			}
 			CreateFileIfNotExists(pathGardenHome+"/"+aliyunPathCredentials, 0644)
 			CreateFileIfNotExists(pathGardenHome+"/"+aliyunPathConfig, 0644)

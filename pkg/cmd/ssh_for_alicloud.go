@@ -80,11 +80,12 @@ func sshToAlicloudNode(nodeIP, path string) {
 	configureAliyunCLI()
 	var target Target
 	ReadTarget(pathTarget, &target)
+	gardenName := target.Stack()[0].Name
 	aliyunPathSSHKey := ""
 	if target.Target[1].Kind == "project" {
-		aliyunPathSSHKey = pathGardenHome + "/cache/projects/" + target.Target[1].Name + "/" + target.Target[2].Name + "/.aliyun/"
+		aliyunPathSSHKey = pathGardenHome + "/cache/" + gardenName + "/projects/" + target.Target[1].Name + "/" + target.Target[2].Name + "/.aliyun/"
 	} else if target.Target[1].Kind == "seed" {
-		aliyunPathSSHKey = pathGardenHome + "/cache/seeds/" + target.Target[1].Name + "/" + target.Target[2].Name + "/.aliyun/"
+		aliyunPathSSHKey = pathGardenHome + "/cache/" + gardenName + "/seeds/" + target.Target[1].Name + "/" + target.Target[2].Name + "/.aliyun/"
 	}
 	err = ExecCmd(nil, "mv key "+aliyunPathSSHKey, false)
 	checkError(err)

@@ -252,12 +252,13 @@ func getShoot(name string) {
 	checkError(err)
 	kubeSecret, err := Client.CoreV1().Secrets(seed.Spec.SecretRef.Namespace).Get(seed.Spec.SecretRef.Name, metav1.GetOptions{})
 	checkError(err)
-	pathSeed := pathSeedCache + "/" + seed.Spec.SecretRef.Name
+	gardenName := target.Stack()[0].Name
+	pathSeed := filepath.Join(pathGardenHome, "cache", gardenName, "seeds", seed.Spec.SecretRef.Name)
 	os.MkdirAll(pathSeed, os.ModePerm)
 	err = ioutil.WriteFile(pathSeed+"/kubeconfig.yaml", kubeSecret.Data["kubeconfig"], 0644)
 	checkError(err)
-	KUBECONFIG = pathSeed + "/kubeconfig.yaml"
-	pathToKubeconfig := pathGardenHome + "/cache/seeds" + "/" + seed.Spec.SecretRef.Name + "/" + "kubeconfig.yaml"
+	KUBECONFIG = filepath.Join(pathSeed, "kubeconfig.yaml")
+	pathToKubeconfig := filepath.Join(pathSeed, "kubeconfig.yaml")
 	config, err := clientcmd.BuildConfigFromFlags("", pathToKubeconfig)
 	checkError(err)
 	Client, err := k8s.NewForConfig(config)
