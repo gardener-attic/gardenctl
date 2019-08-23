@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/gardener/gardener/pkg/apis/garden/v1beta1"
@@ -59,6 +60,9 @@ func downloadTerraformFiles(option string) string {
 	var target Target
 	ReadTarget(pathTarget, &target)
 	Client, err = clientToTarget("garden")
+	gardenName := target.Stack()[0].Name
+	pathSeedCache := filepath.Join("cache", gardenName, "seeds")
+	pathProjectCache := filepath.Join("cache", gardenName, "projects")
 	if len(target.Target) < 3 && (option == "infra" || option == "internal-dns" || option == "external-dns" || option == "ingress" || option == "backup") {
 		fmt.Println("No Shoot targeted")
 		os.Exit(2)
@@ -91,12 +95,12 @@ func downloadTerraformFiles(option string) string {
 		checkError(err)
 		kubeSecret, err := Client.CoreV1().Secrets(seed.Spec.SecretRef.Namespace).Get(seed.Spec.SecretRef.Name, metav1.GetOptions{})
 		checkError(err)
-		pathSeed := pathSeedCache + "/" + seed.Spec.SecretRef.Name
+		pathSeed := filepath.Join(pathGardenHome, pathSeedCache, seed.Spec.SecretRef.Name)
+		pathToKubeconfig := filepath.Join(pathSeed, "kubeconfig.yaml")
 		os.MkdirAll(pathSeed, os.ModePerm)
-		err = ioutil.WriteFile(pathSeed+"/kubeconfig.yaml", kubeSecret.Data["kubeconfig"], 0644)
+		err = ioutil.WriteFile(pathToKubeconfig, kubeSecret.Data["kubeconfig"], 0644)
 		checkError(err)
-		KUBECONFIG = pathSeed + "/kubeconfig.yaml"
-		pathToKubeconfig := pathGardenHome + "/cache/seeds" + "/" + seed.Spec.SecretRef.Name + "/" + "kubeconfig.yaml"
+		KUBECONFIG = pathToKubeconfig
 		config, err := clientcmd.BuildConfigFromFlags("", pathToKubeconfig)
 		checkError(err)
 		Client, err = k8s.NewForConfig(config)
@@ -110,12 +114,12 @@ func downloadTerraformFiles(option string) string {
 	checkError(err)
 	pathTerraform := ""
 	if target.Target[1].Kind == "project" {
-		CreateDir(pathGardenHome+"/cache/projects/"+target.Target[1].Name+"/"+target.Target[2].Name+"/terraform", 0751)
-		pathTerraform = "cache/projects/" + target.Target[1].Name + "/" + target.Target[2].Name + "/terraform"
+		CreateDir(filepath.Join(pathGardenHome, pathProjectCache, target.Target[1].Name, target.Target[2].Name, "terraform"), 0751)
+		pathTerraform = "cache/" + gardenName + "/projects/" + target.Target[1].Name + "/" + target.Target[2].Name + "/terraform"
 
 	} else if target.Target[1].Kind == "seed" {
-		CreateDir(pathGardenHome+"/cache/seeds/"+target.Target[1].Name+"/"+target.Target[2].Name+"/terraform", 0751)
-		pathTerraform = "cache/seeds/" + target.Target[1].Name + "/" + target.Target[2].Name + "/terraform"
+		CreateDir(filepath.Join(pathGardenHome, pathSeedCache, target.Target[1].Name, target.Target[2].Name, "terraform"), 0751)
+		pathTerraform = "cache/" + gardenName + "/seeds/" + target.Target[1].Name + "/" + target.Target[2].Name + "/terraform"
 	}
 	err = ioutil.WriteFile(pathGardenHome+"/"+pathTerraform+"/main.tf", []byte(cmTfConfig.Data["main.tf"]), 0644)
 	checkError(err)
@@ -135,6 +139,8 @@ func downloadLogs(option string) {
 	ReadTarget(pathTarget, &target)
 	Client, err = clientToTarget("garden")
 	checkError(err)
+	gardenName := target.Stack()[0].Name
+	pathSeedCache := filepath.Join("cache", gardenName, "seeds")
 	gardenClientset, err := clientset.NewForConfig(NewConfigFromBytes(*kubeconfig))
 	checkError(err)
 	shootList, err := gardenClientset.GardenV1beta1().Shoots("").List(metav1.ListOptions{})
@@ -149,14 +155,14 @@ func downloadLogs(option string) {
 			fmt.Println("Could not get kubeSecret")
 			continue
 		}
-		pathSeed := pathSeedCache + "/" + seed.Spec.SecretRef.Name
+		pathSeed := filepath.Join(pathGardenHome, pathSeedCache, seed.Spec.SecretRef.Name)
 		os.MkdirAll(pathSeed, os.ModePerm)
 		err = ioutil.WriteFile(pathSeed+"/kubeconfig.yaml", kubeSecret.Data["kubeconfig"], 0644)
 		if err != nil {
 			fmt.Println("Could not write logs")
 			continue
 		}
-		pathToKubeconfig := pathGardenHome + "/cache/seeds" + "/" + seed.Spec.SecretRef.Name + "/" + "kubeconfig.yaml"
+		pathToKubeconfig := filepath.Join(pathGardenHome, pathSeedCache, seed.Spec.SecretRef.Name, "kubeconfig.yaml")
 		KUBECONFIG = pathToKubeconfig
 		config, err := clientcmd.BuildConfigFromFlags("", pathToKubeconfig)
 		if err != nil {
@@ -208,7 +214,7 @@ func downloadLogs(option string) {
 			fmt.Println("Could not get kubeSecret")
 			continue
 		}
-		pathShootKubeconfig := pathShootCache + "/" + seed.Name + "/" + shoot.Name
+		pathShootKubeconfig := filepath.Join(pathGardenHome, pathSeedCache, seed.Name, shoot.Name)
 		os.MkdirAll(pathShootKubeconfig, os.ModePerm)
 		err = ioutil.WriteFile(pathShootKubeconfig+"/kubeconfig.yaml", kubeSecretShoot.Data["kubeconfig"], 0644)
 		if err != nil {

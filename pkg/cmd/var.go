@@ -44,9 +44,6 @@ var (
 	password string
 
 	// file pathes
-	pathSeedCache    string
-	pathProjectCache string
-	pathShootCache   string
 	pathGardenConfig string
 	pathTarget       string
 	pathDefault      = filepath.Join(HomeDir(), ".garden")

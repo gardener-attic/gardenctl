@@ -25,7 +25,7 @@ import (
 	"github.com/gardener/gardener/pkg/apis/garden/v1beta1"
 	clientset "github.com/gardener/gardener/pkg/client/garden/clientset/versioned"
 	"github.com/spf13/cobra"
-	"gopkg.in/yaml.v2"
+	yaml "gopkg.in/yaml.v2"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 )
@@ -370,6 +370,8 @@ func resolveNameSeed(name string) (matches []string) {
 func targetSeed(targetReader TargetReader, targetWriter TargetWriter, name string, cache bool) {
 	Client, err = clientToTarget("garden")
 	checkError(err)
+	target := targetReader.ReadTarget(pathTarget)
+	gardenName := target.Stack()[0].Name
 	gardenClientset, err := clientset.NewForConfig(NewConfigFromBytes(*kubeconfig))
 	checkError(err)
 	seed, err := gardenClientset.GardenV1beta1().Seeds().Get(name, metav1.GetOptions{})
@@ -379,7 +381,7 @@ func targetSeed(targetReader TargetReader, targetWriter TargetWriter, name strin
 	}
 	kubeSecret, err := Client.CoreV1().Secrets(seed.Spec.SecretRef.Namespace).Get(seed.Spec.SecretRef.Name, metav1.GetOptions{})
 	checkError(err)
-	pathSeed := pathSeedCache + "/" + name
+	pathSeed := filepath.Join(pathGardenHome, "cache", gardenName, "seeds", name)
 	os.MkdirAll(pathSeed, os.ModePerm)
 	err = ioutil.WriteFile(pathSeed+"/kubeconfig.yaml", kubeSecret.Data["kubeconfig"], 0644)
 	checkError(err)
@@ -389,7 +391,6 @@ func targetSeed(targetReader TargetReader, targetWriter TargetWriter, name strin
 		checkError(err)
 	}
 
-	target := targetReader.ReadTarget(pathTarget)
 	new := target.Stack()[:1]
 	new = append(new, TargetMeta{
 		Kind: TargetKindSeed,
@@ -502,6 +503,10 @@ func targetShoot(targetWriter TargetWriter, shoot v1beta1.Shoot) {
 	checkError(err)
 
 	// Get and cache seed kubeconfig for future commands
+	gardenName := target.Stack()[0].Name
+	pathSeedCache := filepath.Join(pathGardenHome, "cache", gardenName, "seeds")
+	pathProjectCache := filepath.Join(pathGardenHome, "cache", gardenName, "projects")
+
 	gardenClientset, err := target.GardenerClient()
 	checkError(err)
 	seed, err := gardenClientset.GardenV1beta1().Seeds().Get(*shoot.Spec.Cloud.Seed, metav1.GetOptions{})
@@ -574,6 +579,7 @@ func getSeedForProject(shootName string) (seedName string) {
 func getKubeConfigOfClusterType(clusterType TargetKind) (pathToKubeconfig string) {
 	var target Target
 	ReadTarget(pathTarget, &target)
+	gardenName := target.Stack()[0].Name
 	switch clusterType {
 	case TargetKindGarden:
 		if strings.Contains(getGardenKubeConfig(), "~") {
@@ -583,15 +589,15 @@ func getKubeConfigOfClusterType(clusterType TargetKind) (pathToKubeconfig string
 		}
 	case TargetKindSeed:
 		if target.Target[1].Kind == "seed" {
-			pathToKubeconfig = pathGardenHome + "/cache/seeds/" + target.Target[1].Name + "/kubeconfig.yaml"
+			pathToKubeconfig = filepath.Join(pathGardenHome, "cache", gardenName, "seeds", target.Target[1].Name, "kubeconfig.yaml")
 		} else {
-			pathToKubeconfig = pathGardenHome + "/cache/seeds/" + getSeedForProject(target.Target[2].Name) + "/kubeconfig.yaml"
+			pathToKubeconfig = filepath.Join(pathGardenHome, "cache", gardenName, "seeds", getSeedForProject(target.Target[2].Name), "kubeconfig.yaml")
 		}
 	case TargetKindShoot:
 		if target.Target[1].Kind == "seed" {
-			pathToKubeconfig = pathGardenHome + "/cache/seeds/" + getSeedForProject(target.Target[2].Name) + "/" + target.Target[2].Name + "/kubeconfig.yaml"
+			pathToKubeconfig = filepath.Join(pathGardenHome, "cache", gardenName, "seeds", getSeedForProject(target.Target[2].Name), target.Target[2].Name, "kubeconfig.yaml")
 		} else if target.Target[1].Kind == "project" {
-			pathToKubeconfig = pathGardenHome + "/cache/projects/" + target.Target[1].Name + "/" + target.Target[2].Name + "/kubeconfig.yaml"
+			pathToKubeconfig = filepath.Join(pathGardenHome, "cache", gardenName, "projects", target.Target[1].Name, target.Target[2].Name, "kubeconfig.yaml")
 		}
 	}
 	return pathToKubeconfig
@@ -601,6 +607,7 @@ func getKubeConfigOfClusterType(clusterType TargetKind) (pathToKubeconfig string
 func getKubeConfigOfCurrentTarget() (pathToKubeconfig string) {
 	var target Target
 	ReadTarget(pathTarget, &target)
+	gardenName := target.Stack()[0].Name
 	if len(target.Target) == 1 {
 		if strings.Contains(getGardenKubeConfig(), "~") {
 			pathToKubeconfig = filepath.Clean(filepath.Join(HomeDir(), strings.Replace(getGardenKubeConfig(), "~", "", 1)))
@@ -608,12 +615,12 @@ func getKubeConfigOfCurrentTarget() (pathToKubeconfig string) {
 			pathToKubeconfig = getGardenKubeConfig()
 		}
 	} else if (len(target.Target) == 2) && (target.Target[1].Kind != "project") {
-		pathToKubeconfig = pathGardenHome + "/cache/seeds/" + target.Target[1].Name + "/kubeconfig.yaml"
+		pathToKubeconfig = filepath.Join(pathGardenHome, "cache", gardenName, "seeds", target.Target[1].Name, "kubeconfig.yaml")
 	} else if len(target.Target) == 3 {
 		if target.Target[1].Kind == "seed" {
-			pathToKubeconfig = pathGardenHome + "/cache/seeds/" + target.Target[1].Name + "/" + target.Target[2].Name + "/kubeconfig.yaml"
+			pathToKubeconfig = filepath.Join(pathGardenHome, "cache", gardenName, "seeds", target.Target[1].Name, target.Target[2].Name, "kubeconfig.yaml")
 		} else if target.Target[1].Kind == "project" {
-			pathToKubeconfig = pathGardenHome + "/cache/projects/" + target.Target[1].Name + "/" + target.Target[2].Name + "/kubeconfig.yaml"
+			pathToKubeconfig = filepath.Join(pathGardenHome, "cache", gardenName, "projects", target.Target[1].Name, target.Target[2].Name, "kubeconfig.yaml")
 		}
 	}
 	return pathToKubeconfig
