@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 
@@ -292,6 +293,7 @@ func showMachineControllerManager() {
 func showKubernetesDashboard() {
 	var target Target
 	ReadTarget(pathTarget, &target)
+	gardenName := target.Stack()[0].Name
 	if len(target.Target) == 1 {
 		Client, err = clientToTarget("garden")
 		checkError(err)
@@ -305,7 +307,7 @@ func showKubernetesDashboard() {
 	} else if len(target.Target) == 2 {
 		namespace := "kube-system"
 		if len(target.Target) == 2 && target.Target[1].Kind == "seed" {
-			KUBECONFIG = pathGardenHome + "/cache/seeds" + "/" + target.Target[1].Name + "/" + "kubeconfig.yaml"
+			KUBECONFIG = filepath.Join(pathGardenHome, "cache", gardenName, "seeds", target.Target[1].Name, "kubeconfig.yaml")
 		} else if len(target.Target) == 2 && target.Target[1].Kind == "project" {
 			fmt.Println("Project targeted")
 			os.Exit(2)

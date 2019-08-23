@@ -18,6 +18,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"text/tabwriter"
@@ -449,7 +450,8 @@ func logsKubernetesDashboard() {
 		Client, err = clientToTarget("shoot")
 		checkError(err)
 	} else if len(target.Target) == 2 && target.Target[1].Kind == "seed" {
-		KUBECONFIG = pathGardenHome + "/cache/seeds" + "/" + target.Target[1].Name + "/" + "kubeconfig.yaml"
+		gardenName := target.Stack()[0].Name
+		KUBECONFIG = filepath.Join(pathGardenHome, "cache", gardenName, "seeds", target.Target[1].Name, "kubeconfig.yaml")
 		config, err := clientcmd.BuildConfigFromFlags("", KUBECONFIG)
 		checkError(err)
 		Client, err = kubernetes.NewForConfig(config)

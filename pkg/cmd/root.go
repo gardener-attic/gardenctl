@@ -89,9 +89,6 @@ func Execute() {
 	} else if strings.Contains(pathGardenHome, "~") {
 		pathGardenHome = strings.Replace(pathGardenHome, "~", HomeDir(), 1)
 	}
-	pathSeedCache = filepath.Join(pathGardenHome, "cache", "seeds")
-	pathProjectCache = filepath.Join(pathGardenHome, "cache", "projects")
-	pathShootCache = filepath.Join(pathGardenHome, "cache", "shoots")
 	pathGardenConfig = filepath.Join(pathGardenHome, "config")
 	pathTarget = filepath.Join(pathGardenHome, "target")
 	CreateDir(pathGardenHome, 0751)
@@ -103,9 +100,6 @@ func Execute() {
 	if _, err := os.Stat(pathGardenConfig); err != nil {
 		CreateFileIfNotExists(pathGardenConfig, 0644)
 	}
-	CreateDir(pathGardenHome+"/cache", 0751)
-	CreateDir(pathGardenHome+"/cache/seeds", 0751)
-	CreateDir(pathGardenHome+"/cache/projects", 0751)
 	GetGardenClusterKubeConfigFromConfig(pathGardenConfig, pathTarget)
 	if err := RootCmd.Execute(); err != nil {
 		os.Exit(1)
