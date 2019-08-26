@@ -18,6 +18,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -83,9 +84,9 @@ func sshToAlicloudNode(nodeIP, path string) {
 	gardenName := target.Stack()[0].Name
 	aliyunPathSSHKey := ""
 	if target.Target[1].Kind == "project" {
-		aliyunPathSSHKey = pathGardenHome + "/cache/" + gardenName + "/projects/" + target.Target[1].Name + "/" + target.Target[2].Name + "/.aliyun/"
+		aliyunPathSSHKey = filepath.Join(pathGardenHome, "cache", gardenName, "projects", target.Target[1].Name, target.Target[2].Name, ".aliyun") + string(filepath.Separator)
 	} else if target.Target[1].Kind == "seed" {
-		aliyunPathSSHKey = pathGardenHome + "/cache/" + gardenName + "/seeds/" + target.Target[1].Name + "/" + target.Target[2].Name + "/.aliyun/"
+		aliyunPathSSHKey = filepath.Join(pathGardenHome, "cache", gardenName, "seeds", target.Target[1].Name, target.Target[2].Name, ".aliyun") + string(filepath.Separator)
 	}
 	err = ExecCmd(nil, "mv key "+aliyunPathSSHKey, false)
 	checkError(err)

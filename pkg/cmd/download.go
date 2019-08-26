@@ -115,21 +115,21 @@ func downloadTerraformFiles(option string) string {
 	pathTerraform := ""
 	if target.Target[1].Kind == "project" {
 		CreateDir(filepath.Join(pathGardenHome, pathProjectCache, target.Target[1].Name, target.Target[2].Name, "terraform"), 0751)
-		pathTerraform = "cache/" + gardenName + "/projects/" + target.Target[1].Name + "/" + target.Target[2].Name + "/terraform"
+		pathTerraform = filepath.Join("cache", gardenName, "projects", target.Target[1].Name, target.Target[2].Name, "terraform")
 
 	} else if target.Target[1].Kind == "seed" {
 		CreateDir(filepath.Join(pathGardenHome, pathSeedCache, target.Target[1].Name, target.Target[2].Name, "terraform"), 0751)
-		pathTerraform = "cache/" + gardenName + "/seeds/" + target.Target[1].Name + "/" + target.Target[2].Name + "/terraform"
+		pathTerraform = filepath.Join("cache", gardenName, "seeds", target.Target[1].Name, target.Target[2].Name, "terraform")
 	}
-	err = ioutil.WriteFile(pathGardenHome+"/"+pathTerraform+"/main.tf", []byte(cmTfConfig.Data["main.tf"]), 0644)
+	err = ioutil.WriteFile(filepath.Join(pathGardenHome, pathTerraform, "main.tf"), []byte(cmTfConfig.Data["main.tf"]), 0644)
 	checkError(err)
-	err = ioutil.WriteFile(pathGardenHome+"/"+pathTerraform+"/variables.tf", []byte(cmTfConfig.Data["variables.tf"]), 0644)
+	err = ioutil.WriteFile(filepath.Join(pathGardenHome, pathTerraform, "variables.tf"), []byte(cmTfConfig.Data["variables.tf"]), 0644)
 	checkError(err)
-	err = ioutil.WriteFile(pathGardenHome+"/"+pathTerraform+"/terraform.tfstate", []byte(cmTfState.Data["terraform.tfstate"]), 0644)
+	err = ioutil.WriteFile(filepath.Join(pathGardenHome, pathTerraform, "terraform.tfstate"), []byte(cmTfState.Data["terraform.tfstate"]), 0644)
 	checkError(err)
-	err = ioutil.WriteFile(pathGardenHome+"/"+pathTerraform+"/terraform.tfvars", []byte(secret.Data["terraform.tfvars"]), 0644)
+	err = ioutil.WriteFile(filepath.Join(pathGardenHome, pathTerraform, "terraform.tfvars"), []byte(secret.Data["terraform.tfvars"]), 0644)
 	checkError(err)
-	return (pathGardenHome + "/" + pathTerraform)
+	return (filepath.Join(pathGardenHome, pathTerraform))
 }
 
 func downloadLogs(option string) {
@@ -157,7 +157,7 @@ func downloadLogs(option string) {
 		}
 		pathSeed := filepath.Join(pathGardenHome, pathSeedCache, seed.Spec.SecretRef.Name)
 		os.MkdirAll(pathSeed, os.ModePerm)
-		err = ioutil.WriteFile(pathSeed+"/kubeconfig.yaml", kubeSecret.Data["kubeconfig"], 0644)
+		err = ioutil.WriteFile(filepath.Join(pathSeed, "kubeconfig.yaml"), kubeSecret.Data["kubeconfig"], 0644)
 		if err != nil {
 			fmt.Println("Could not write logs")
 			continue
@@ -179,8 +179,8 @@ func downloadLogs(option string) {
 			fmt.Println("Shoot " + shoot.Name + " has no pods in " + shoot.Status.TechnicalID + " namespace")
 			continue
 		}
-		CreateDir(dir+"/seeds/"+*shoot.Spec.Cloud.Seed+"/"+shoot.ObjectMeta.GetNamespace()+"/"+shoot.Name+"/logs/vpn", 0751)
-		pathLogsSeeds := dir + "/seeds/" + *shoot.Spec.Cloud.Seed + "/" + shoot.ObjectMeta.GetNamespace() + "/" + shoot.Name + "/logs/vpn"
+		CreateDir(filepath.Join(dir, "seeds", *shoot.Spec.Cloud.Seed, shoot.ObjectMeta.GetNamespace(), shoot.Name, "logs", "vpn"), 0751)
+		pathLogsSeeds := filepath.Join(dir, "seeds", *shoot.Spec.Cloud.Seed, shoot.ObjectMeta.GetNamespace(), shoot.Name, "logs", "vpn")
 		for _, pod := range pods.Items {
 			if strings.Contains(pod.Name, "prometheus-0") {
 				fmt.Println("bash", "-c", "export KUBECONFIG="+KUBECONFIG+"; kubectl logs "+pod.Name+" -c "+"vpn-seed"+" -n "+shoot.Status.TechnicalID)
@@ -189,7 +189,7 @@ func downloadLogs(option string) {
 					fmt.Println("Could not execute cmd")
 					continue
 				}
-				err = ioutil.WriteFile(pathLogsSeeds+"/vpn-seed-prometheus", []byte(output), 0644)
+				err = ioutil.WriteFile(filepath.Join(pathLogsSeeds, "vpn-seed-prometheus"), []byte(output), 0644)
 				if err != nil {
 					fmt.Println("Could not write logs")
 					continue
@@ -202,7 +202,7 @@ func downloadLogs(option string) {
 					fmt.Println("Could not execute cmd")
 					continue
 				}
-				err = ioutil.WriteFile(pathLogsSeeds+"/vpn-seed-"+pod.Name, []byte(output), 0644)
+				err = ioutil.WriteFile(filepath.Join(pathLogsSeeds, "vpn-seed-", pod.Name), []byte(output), 0644)
 				if err != nil {
 					fmt.Println("Could not write logs")
 					continue
@@ -216,12 +216,12 @@ func downloadLogs(option string) {
 		}
 		pathShootKubeconfig := filepath.Join(pathGardenHome, pathSeedCache, seed.Name, shoot.Name)
 		os.MkdirAll(pathShootKubeconfig, os.ModePerm)
-		err = ioutil.WriteFile(pathShootKubeconfig+"/kubeconfig.yaml", kubeSecretShoot.Data["kubeconfig"], 0644)
+		err = ioutil.WriteFile(filepath.Join(pathShootKubeconfig, "kubeconfig.yaml"), kubeSecretShoot.Data["kubeconfig"], 0644)
 		if err != nil {
 			fmt.Println("Could not write kubeconfig")
 			continue
 		}
-		pathToKubeconfig = pathShootKubeconfig + "/" + "kubeconfig.yaml"
+		pathToKubeconfig = filepath.Join(pathShootKubeconfig, "kubeconfig.yaml")
 		KUBECONFIG = pathToKubeconfig
 		config, err = clientcmd.BuildConfigFromFlags("", pathToKubeconfig)
 		if err != nil {
@@ -234,7 +234,7 @@ func downloadLogs(option string) {
 			fmt.Println("Shoot " + shoot.Name + " has no pods in kube-system namespace")
 			continue
 		}
-		pathLogsShoots := dir + "/seeds/" + *shoot.Spec.Cloud.Seed + "/" + shoot.ObjectMeta.GetNamespace() + "/" + shoot.Name + "/logs/vpn"
+		pathLogsShoots := filepath.Join(dir, "seeds", *shoot.Spec.Cloud.Seed, shoot.ObjectMeta.GetNamespace(), shoot.Name, "logs", "vpn")
 		for _, pod := range pods.Items {
 			if strings.Contains(pod.Name, "vpn-shoot-") {
 				fmt.Println("bash", "-c", "export KUBECONFIG="+KUBECONFIG+"; kubectl logs "+pod.Name+" -n "+"kube-system")
@@ -243,7 +243,7 @@ func downloadLogs(option string) {
 					fmt.Println("Could not execute cmd")
 					continue
 				}
-				err = ioutil.WriteFile(pathLogsShoots+"/"+pod.Name, []byte(output), 0644)
+				err = ioutil.WriteFile(filepath.Join(pathLogsShoots, pod.Name), []byte(output), 0644)
 				if err != nil {
 					fmt.Println("Could not write logs")
 					continue
