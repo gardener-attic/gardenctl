@@ -81,9 +81,9 @@ func NewUnregisterCmd() *cobra.Command {
 				if err != nil && strings.Contains(err.Error(), AdminClusterRoleBindingName) {
 					kubeSecret, err := clientset.CoreV1().Secrets("garden").Get("virtual-garden-kubeconfig-for-admin", metav1.GetOptions{})
 					checkError(err)
-					virtualPath := pathDefault + "/virtual"
+					virtualPath := filepath.Join(pathDefault, "virtual")
 					os.MkdirAll(virtualPath, os.ModePerm)
-					virtualPathKubeConfig := virtualPath + "/virtualKubeConfig.yaml"
+					virtualPathKubeConfig := filepath.Join(virtualPath, "virtualKubeConfig.yaml")
 					err = ioutil.WriteFile(virtualPathKubeConfig, kubeSecret.Data["kubeconfig"], 0644)
 					checkError(err)
 					config, err := clientcmd.BuildConfigFromFlags("", virtualPathKubeConfig)
@@ -121,9 +121,9 @@ func NewUnregisterCmd() *cobra.Command {
 					if err != nil && strings.Contains(err.Error(), AdminClusterRoleBindingName) {
 						kubeSecret, err := clientset.CoreV1().Secrets("garden").Get("virtual-garden-kubeconfig-for-admin", metav1.GetOptions{})
 						checkError(err)
-						virtualPath := pathDefault + "/virtual"
+						virtualPath := filepath.Join(pathDefault, "virtual")
 						os.MkdirAll(virtualPath, os.ModePerm)
-						virtualPathKubeConfig := virtualPath + "/virtualKubeConfig.yaml"
+						virtualPathKubeConfig := filepath.Join(virtualPath, "virtualKubeConfig.yaml")
 						err = ioutil.WriteFile(virtualPathKubeConfig, kubeSecret.Data["kubeconfig"], 0644)
 						checkError(err)
 						config, err = clientcmd.BuildConfigFromFlags("", virtualPathKubeConfig)
