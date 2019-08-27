@@ -466,6 +466,31 @@ func targetShoot(targetWriter TargetWriter, shoot v1beta1.Shoot) {
 	var target Target
 	ReadTarget(pathTarget, &target)
 
+	// Get and cache seed kubeconfig for future commands
+	gardenName := target.Stack()[0].Name
+	pathSeedCache := filepath.Join(pathGardenHome, "cache", gardenName, "seeds")
+	pathProjectCache := filepath.Join(pathGardenHome, "cache", gardenName, "projects")
+
+	gardenClientset, err := target.GardenerClient()
+	checkError(err)
+	seed, err := gardenClientset.GardenV1beta1().Seeds().Get(*shoot.Spec.Cloud.Seed, metav1.GetOptions{})
+	checkError(err)
+	gardenClient, err := target.K8SClientToKind(TargetKindGarden)
+	checkError(err)
+	seedKubeconfigSecret, err := gardenClient.CoreV1().Secrets(seed.Spec.SecretRef.Namespace).Get(seed.Spec.SecretRef.Name, metav1.GetOptions{})
+	checkError(err)
+	var seedCacheDir = filepath.Join(pathSeedCache, *shoot.Spec.Cloud.Seed)
+	err = os.MkdirAll(seedCacheDir, os.ModePerm)
+	checkError(err)
+	var seedKubeconfigPath = filepath.Join(seedCacheDir, "kubeconfig.yaml")
+	err = ioutil.WriteFile(seedKubeconfigPath, seedKubeconfigSecret.Data["kubeconfig"], 0644)
+	checkError(err)
+
+	// Get shoot kubeconfig
+	var shootKubeconfigSecretName = fmt.Sprintf("%s.kubeconfig", shoot.Name)
+	shootKubeconfigSecret, err := gardenClient.CoreV1().Secrets(shoot.Namespace).Get(shootKubeconfigSecretName, metav1.GetOptions{})
+	checkError(err)
+
 	k8sClientToGarden, err := target.K8SClientToKind(TargetKindGarden)
 	checkError(err)
 	projectName, err := getProjectNameByShootNamespace(k8sClientToGarden, shoot.Namespace)
@@ -500,31 +525,6 @@ func targetShoot(targetWriter TargetWriter, shoot v1beta1.Shoot) {
 
 	// Write target
 	err = targetWriter.WriteTarget(pathTarget, &target)
-	checkError(err)
-
-	// Get and cache seed kubeconfig for future commands
-	gardenName := target.Stack()[0].Name
-	pathSeedCache := filepath.Join(pathGardenHome, "cache", gardenName, "seeds")
-	pathProjectCache := filepath.Join(pathGardenHome, "cache", gardenName, "projects")
-
-	gardenClientset, err := target.GardenerClient()
-	checkError(err)
-	seed, err := gardenClientset.GardenV1beta1().Seeds().Get(*shoot.Spec.Cloud.Seed, metav1.GetOptions{})
-	checkError(err)
-	gardenClient, err := target.K8SClientToKind(TargetKindGarden)
-	checkError(err)
-	seedKubeconfigSecret, err := gardenClient.CoreV1().Secrets(seed.Spec.SecretRef.Namespace).Get(seed.Spec.SecretRef.Name, metav1.GetOptions{})
-	checkError(err)
-	var seedCacheDir = filepath.Join(pathSeedCache, *shoot.Spec.Cloud.Seed)
-	err = os.MkdirAll(seedCacheDir, os.ModePerm)
-	checkError(err)
-	var seedKubeconfigPath = filepath.Join(seedCacheDir, "kubeconfig.yaml")
-	err = ioutil.WriteFile(seedKubeconfigPath, seedKubeconfigSecret.Data["kubeconfig"], 0644)
-	checkError(err)
-
-	// Get shoot kubeconfig
-	var shootKubeconfigSecretName = fmt.Sprintf("%s.kubeconfig", shoot.Name)
-	shootKubeconfigSecret, err := gardenClient.CoreV1().Secrets(shoot.Namespace).Get(shootKubeconfigSecretName, metav1.GetOptions{})
 	checkError(err)
 
 	// Cache shoot kubeconfig
