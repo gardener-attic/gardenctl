@@ -383,11 +383,11 @@ func targetSeed(targetReader TargetReader, targetWriter TargetWriter, name strin
 	checkError(err)
 	pathSeed := filepath.Join(pathGardenHome, "cache", gardenName, "seeds", name)
 	os.MkdirAll(pathSeed, os.ModePerm)
-	err = ioutil.WriteFile(pathSeed+"/kubeconfig.yaml", kubeSecret.Data["kubeconfig"], 0644)
+	err = ioutil.WriteFile(filepath.Join(pathSeed, "kubeconfig.yaml"), kubeSecret.Data["kubeconfig"], 0644)
 	checkError(err)
-	KUBECONFIG = pathSeed + "/kubeconfig.yaml"
+	KUBECONFIG = filepath.Join(pathSeed, "kubeconfig.yaml")
 	if !cachevar && cache {
-		err = ioutil.WriteFile(pathSeed+"/kubeconfig.yaml", kubeSecret.Data["kubeconfig"], 0644)
+		err = ioutil.WriteFile(filepath.Join(pathSeed, "kubeconfig.yaml"), kubeSecret.Data["kubeconfig"], 0644)
 		checkError(err)
 	}
 

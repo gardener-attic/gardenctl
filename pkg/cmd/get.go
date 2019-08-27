@@ -255,7 +255,7 @@ func getShoot(name string) {
 	gardenName := target.Stack()[0].Name
 	pathSeed := filepath.Join(pathGardenHome, "cache", gardenName, "seeds", seed.Spec.SecretRef.Name)
 	os.MkdirAll(pathSeed, os.ModePerm)
-	err = ioutil.WriteFile(pathSeed+"/kubeconfig.yaml", kubeSecret.Data["kubeconfig"], 0644)
+	err = ioutil.WriteFile(filepath.Join(pathSeed, "kubeconfig.yaml"), kubeSecret.Data["kubeconfig"], 0644)
 	checkError(err)
 	KUBECONFIG = filepath.Join(pathSeed, "kubeconfig.yaml")
 	pathToKubeconfig := filepath.Join(pathSeed, "kubeconfig.yaml")

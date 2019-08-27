@@ -89,18 +89,18 @@ func operate(provider, arguments string) {
 				awsPathCredentials = filepath.Join(seedsPath, ".aws", "credentials")
 				awsPathConfig = filepath.Join(seedsPath, ".aws", "config")
 			}
-			CreateFileIfNotExists(pathGardenHome+"/"+awsPathCredentials, 0644)
-			CreateFileIfNotExists(pathGardenHome+"/"+awsPathConfig, 0644)
-			removeOldEntry(pathGardenHome+"/"+awsPathCredentials, "[gardenctl]")
-			removeOldEntry(pathGardenHome+"/"+awsPathConfig, "[profile gardenctl]")
+			CreateFileIfNotExists(filepath.Join(pathGardenHome, awsPathCredentials), 0644)
+			CreateFileIfNotExists(filepath.Join(pathGardenHome, awsPathConfig), 0644)
+			removeOldEntry(filepath.Join(pathGardenHome, awsPathCredentials), "[gardenctl]")
+			removeOldEntry(filepath.Join(pathGardenHome, awsPathConfig), "[profile gardenctl]")
 			credentials := "[gardenctl]\n" + "aws_access_key_id=" + string(accessKeyID[:]) + "\n" + "aws_secret_access_key=" + string(secretAccessKey[:]) + "\n"
-			originalCredentials, err := os.OpenFile(pathGardenHome+"/"+awsPathCredentials, os.O_APPEND|os.O_WRONLY, 0644)
+			originalCredentials, err := os.OpenFile(filepath.Join(pathGardenHome, awsPathCredentials), os.O_APPEND|os.O_WRONLY, 0644)
 			checkError(err)
 			_, err = originalCredentials.WriteString(credentials)
 			checkError(err)
 			originalCredentials.Close()
 			config := "[profile gardenctl]\n" + "region=" + region + "\n" + "output=text\n"
-			originalConfig, err := os.OpenFile(pathGardenHome+"/"+awsPathConfig, os.O_APPEND|os.O_WRONLY, 0644)
+			originalConfig, err := os.OpenFile(filepath.Join(pathGardenHome, awsPathConfig), os.O_APPEND|os.O_WRONLY, 0644)
 			_, err = originalConfig.WriteString(config)
 			originalConfig.Close()
 			checkError(err)
@@ -122,7 +122,7 @@ func operate(provider, arguments string) {
 				CreateDir(filepath.Join(pathGardenHome, seedsPath, ".gcp"), 0751)
 				gcpPathCredentials = filepath.Join(seedsPath, ".gcp", "credentials")
 			}
-			CreateFileIfNotExists(pathGardenHome+"/"+gcpPathCredentials, 0644)
+			CreateFileIfNotExists(filepath.Join(pathGardenHome, gcpPathCredentials), 0644)
 			originalCredentials, err := os.OpenFile(filepath.Join(pathGardenHome, gcpPathCredentials), os.O_WRONLY, 0644)
 			checkError(err)
 			_, err = originalCredentials.WriteString(string(serviceaccount))
@@ -140,7 +140,7 @@ func operate(provider, arguments string) {
 			if err != nil {
 				os.Exit(2)
 			}
-			err = ExecCmd(nil, "gcloud auth activate-service-account --key-file="+pathGardenHome+"/"+gcpPathCredentials, false)
+			err = ExecCmd(nil, "gcloud auth activate-service-account --key-file="+filepath.Join(pathGardenHome, gcpPathCredentials), false)
 			if err != nil {
 				os.Exit(2)
 			}
@@ -178,7 +178,7 @@ func operate(provider, arguments string) {
 				CreateDir(filepath.Join(pathGardenHome, seedsPath, ".azure"), 0751)
 				azurePathCredentials = filepath.Join(seedsPath, ".azure", "credentials")
 			}
-			CreateFileIfNotExists(pathGardenHome+"/"+azurePathCredentials, 0644)
+			CreateFileIfNotExists(filepath.Join(pathGardenHome, azurePathCredentials), 0644)
 			originalCredentials, err := os.OpenFile(filepath.Join(pathGardenHome, azurePathCredentials), os.O_WRONLY, 0644)
 			checkError(err)
 			credentials := "clientID: " + string(clientID[:]) + "\n" + "clientSecret: " + string(clientSecret[:]) + "\n" + "tenantID: " + string(tenantID[:]) + "\n"
@@ -215,7 +215,7 @@ func operate(provider, arguments string) {
 				CreateDir(filepath.Join(pathGardenHome, seedsPath, ".openstack"), 0751)
 				openstackPathCredentials = filepath.Join(seedsPath, ".openstack", "credentials")
 			}
-			CreateFileIfNotExists(pathGardenHome+"/"+openstackPathCredentials, 0644)
+			CreateFileIfNotExists(filepath.Join(pathGardenHome, openstackPathCredentials), 0644)
 			originalCredentials, err := os.OpenFile(filepath.Join(pathGardenHome, openstackPathCredentials), os.O_WRONLY, 0644)
 			checkError(err)
 			credentials := "authURL: " + authURL + "\n" + "domainName: " + string(domainName[:]) + "\n" + "password: " + string(password[:]) + "\n" + "tenantName: " + string(tenantName[:]) + "\n" + "username: " + string(username[:]) + "\n"
@@ -243,18 +243,18 @@ func operate(provider, arguments string) {
 				aliyunPathCredentials = filepath.Join(seedsPath, ".aliyun", "credentials")
 				aliyunPathConfig = filepath.Join(seedsPath, ".aliyun", "config")
 			}
-			CreateFileIfNotExists(pathGardenHome+"/"+aliyunPathCredentials, 0644)
-			CreateFileIfNotExists(pathGardenHome+"/"+aliyunPathConfig, 0644)
-			removeOldEntry(pathGardenHome+"/"+aliyunPathCredentials, "[gardenctl]")
-			removeOldEntry(pathGardenHome+"/"+aliyunPathConfig, "[profile gardenctl]")
+			CreateFileIfNotExists(filepath.Join(pathGardenHome, aliyunPathCredentials), 0644)
+			CreateFileIfNotExists(filepath.Join(pathGardenHome, aliyunPathConfig), 0644)
+			removeOldEntry(filepath.Join(pathGardenHome, aliyunPathCredentials), "[gardenctl]")
+			removeOldEntry(filepath.Join(pathGardenHome, aliyunPathConfig), "[profile gardenctl]")
 			credentials := "[gardenctl]\n" + "accessKeyId=" + string(accessKeyID[:]) + "\n" + "accessKeySecret=" + string(accessKeySecret[:]) + "\n"
-			originalCredentials, err := os.OpenFile(pathGardenHome+"/"+aliyunPathCredentials, os.O_APPEND|os.O_WRONLY, 0644)
+			originalCredentials, err := os.OpenFile(filepath.Join(pathGardenHome, aliyunPathCredentials), os.O_APPEND|os.O_WRONLY, 0644)
 			checkError(err)
 			defer originalCredentials.Close()
 			_, err = originalCredentials.WriteString(credentials)
 			checkError(err)
 			config := "[profile gardenctl]\n" + "region=" + region + "\n" + "output=json\n"
-			originalConfig, err := os.OpenFile(pathGardenHome+"/"+aliyunPathConfig, os.O_APPEND|os.O_WRONLY, 0644)
+			originalConfig, err := os.OpenFile(filepath.Join(pathGardenHome, aliyunPathConfig), os.O_APPEND|os.O_WRONLY, 0644)
 			checkError(err)
 			defer originalConfig.Close()
 			_, err = originalConfig.WriteString(config)

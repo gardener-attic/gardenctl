@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
+	"path/filepath"
 	"strings"
 
 	v1alpha1 "github.com/gardener/gardener/pkg/client/core/clientset/versioned/typed/core/v1alpha1"
@@ -107,7 +108,7 @@ func NewSSHCmd(reader TargetReader, ioStreams IOStreams) *cobra.Command {
 			}
 			path := downloadTerraformFiles("infra")
 			if path != "" {
-				path += "/terraform.tfstate"
+				path = filepath.Join(path, "terraform.tfstate")
 			}
 			pathToKey := downloadSSHKeypair()
 			fmt.Printf(pathToKey)
@@ -260,7 +261,7 @@ func downloadSSHKeypair() string {
 	checkError(err)
 	pathSSKeypair, err := os.Getwd()
 	checkError(err)
-	err = ioutil.WriteFile(pathSSKeypair+"/key", []byte(secret.Data["id_rsa"]), 0600)
+	err = ioutil.WriteFile(filepath.Join(pathSSKeypair, "key"), []byte(secret.Data["id_rsa"]), 0600)
 	checkError(err)
 	return "Downloaded id_rsa key\n"
 }
