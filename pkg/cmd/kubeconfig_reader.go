@@ -12,10 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//go:generate mockgen -package cmd -destination=target.go github.com/gardener/gardenctl/pkg/cmd TargetInterface
-//go:generate mockgen -package cmd -destination=target_reader.go github.com/gardener/gardenctl/pkg/cmd TargetReader
-//go:generate mockgen -package cmd -destination=target_writer.go github.com/gardener/gardenctl/pkg/cmd TargetWriter
-//go:generate mockgen -package cmd -destination=kubeconfig_reader.go github.com/gardener/gardenctl/pkg/cmd KubeconfigReader
-//go:generate mockgen -package cmd -destination=config_reader.go github.com/gardener/gardenctl/pkg/cmd ConfigReader
-
 package cmd
+
+import "io/ioutil"
+
+// ReadKubeconfig returns the kubeconfig from given path.
+func (r *GardenctlKubeconfigReader) ReadKubeconfig(kubeconfigPath string) ([]byte, error) {
+	return ioutil.ReadFile(kubeconfigPath)
+}
