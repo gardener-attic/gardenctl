@@ -29,11 +29,19 @@ type TargetWriter interface {
 	WriteTarget(targetPath string, target TargetInterface) error
 }
 
+// KubeconfigReader reads kubeconfig from given path.
+type KubeconfigReader interface {
+	ReadKubeconfig(kubeconfigPath string) ([]byte, error)
+}
+
 // GardenctlTargetReader implements TargetReader.
 type GardenctlTargetReader struct{}
 
 // GardenctlTargetWriter implements TargetWriter.
 type GardenctlTargetWriter struct{}
+
+// GardenctlKubeconfigReader implements TargetWriter.
+type GardenctlKubeconfigReader struct{}
 
 // TargetInterface defines target operations.
 type TargetInterface interface {
