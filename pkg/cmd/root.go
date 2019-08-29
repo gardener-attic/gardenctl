@@ -108,10 +108,11 @@ func Execute() {
 
 func init() {
 	var (
-		configReader = &GardenConfigReader{}
-		targetReader = &GardenctlTargetReader{}
-		targetWriter = &GardenctlTargetWriter{}
-		ioStreams    = IOStreams{
+		configReader     = &GardenConfigReader{}
+		targetReader     = &GardenctlTargetReader{}
+		kubeconfigReader = &GardenctlKubeconfigReader{}
+		targetWriter     = &GardenctlTargetWriter{}
+		ioStreams        = IOStreams{
 			In:     os.Stdin,
 			Out:    os.Stdout,
 			ErrOut: os.Stderr,
@@ -128,7 +129,7 @@ func init() {
 		NewLsCmd(targetReader, configReader, ioStreams),
 		NewTargetCmd(targetReader, targetWriter, configReader, ioStreams),
 		NewDropCmd(targetReader, targetWriter, ioStreams),
-		NewGetCmd())
+		NewGetCmd(targetReader, configReader, kubeconfigReader, ioStreams))
 	RootCmd.AddCommand(NewDownloadCmd(), NewShowCmd(), NewLogsCmd())
 	RootCmd.AddCommand(NewRegisterCmd(), NewUnregisterCmd())
 	RootCmd.AddCommand(NewCompletionCmd())
