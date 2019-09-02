@@ -137,7 +137,7 @@ func init() {
 	RootCmd.AddCommand(NewSSHCmd(targetReader, ioStreams))
 	RootCmd.AddCommand(NewKubectlCmd(), NewKaCmd(), NewKsCmd(), NewKgCmd(), NewKnCmd())
 	RootCmd.AddCommand(NewAliyunCmd(), NewAwsCmd(), NewAzCmd(), NewGcloudCmd(), NewOpenstackCmd())
-	RootCmd.AddCommand(NewInfoCmd())
+	RootCmd.AddCommand(NewInfoCmd(targetReader, ioStreams))
 	RootCmd.AddCommand(NewVersionCmd())
 
 	RootCmd.SuggestionsMinimumDistance = suggestionsMinimumDistance
