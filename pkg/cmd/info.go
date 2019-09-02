@@ -15,57 +15,63 @@
 package cmd
 
 import (
+	"errors"
 	"fmt"
-	"io/ioutil"
-	"os"
 	"sort"
 
-	clientset "github.com/gardener/gardener/pkg/client/garden/clientset/versioned"
 	"github.com/spf13/cobra"
-	yaml "gopkg.in/yaml.v2"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 // NewInfoCmd returns a new info command.
-func NewInfoCmd() *cobra.Command {
+func NewInfoCmd(targetReader TargetReader, ioStreams IOStreams) *cobra.Command {
 	return &cobra.Command{
-		Use:   "info",
-		Short: "Get landscape informations\n",
-		Run: func(cmd *cobra.Command, args []string) {
-			var t Target
-			targetFile, err := ioutil.ReadFile(pathTarget)
-			checkError(err)
-			err = yaml.Unmarshal(targetFile, &t)
-			checkError(err)
-			if len(t.Target) < 1 {
-				fmt.Println("No garden targeted")
-				os.Exit(2)
+		Use:          "info",
+		Short:        "Get landscape informations",
+		SilenceUsage: true,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			target := targetReader.ReadTarget(pathTarget)
+			targetStack := target.Stack()
+			if len(targetStack) < 1 {
+				return errors.New("no garden cluster targeted")
 			}
-			// show landscape
-			Client, err = clientToTarget("garden")
-			gardenClientset, err := clientset.NewForConfig(NewConfigFromBytes(*kubeconfig))
-			checkError(err)
-			shootList, err := gardenClientset.GardenV1beta1().Shoots("").List(metav1.ListOptions{})
-			checkError(err)
-			fmt.Printf("Garden: %s\n", t.Target[0].Name)
-			fmt.Printf("Shoots:\n")
-			fmt.Printf("    total: %d \n", len(shootList.Items))
 
+			// Show landscape
+			gardenClientset, err := target.GardenerClient()
+			if err != nil {
+				return err
+			}
+
+			shootList, err := gardenClientset.GardenV1beta1().Shoots(metav1.NamespaceAll).List(metav1.ListOptions{})
+			if err != nil {
+				return err
+			}
+
+			var unscheduled = 0
 			shootsCountPerSeed := make(map[string]int)
 			for _, shoot := range shootList.Items {
+				if shoot.Spec.Cloud.Seed == nil {
+					unscheduled++
+					continue
+				}
 				shootsCountPerSeed[*shoot.Spec.Cloud.Seed]++
 			}
+
 			var sortedSeeds []string
 			for seed := range shootsCountPerSeed {
 				sortedSeeds = append(sortedSeeds, seed)
 			}
 			sort.Strings(sortedSeeds)
 
+			fmt.Fprintf(ioStreams.Out, "Garden: %s\n", targetStack[0].Name)
+			fmt.Fprintf(ioStreams.Out, "Shoots:\n")
+			fmt.Fprintf(ioStreams.Out, "\ttotal: %d\n", len(shootList.Items))
+			fmt.Fprintf(ioStreams.Out, "\tunscheduled: %d\n", unscheduled)
 			for _, seed := range sortedSeeds {
-				fmt.Printf("    %s: %d \n", seed, shootsCountPerSeed[seed])
+				fmt.Fprintf(ioStreams.Out, "\t%s: %d\n", seed, shootsCountPerSeed[seed])
 			}
-			// show number shoots
-			// show node, cpus ...
+
+			return nil
 		},
 	}
 }
