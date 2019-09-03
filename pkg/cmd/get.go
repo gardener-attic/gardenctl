@@ -326,11 +326,7 @@ func getShoot(name string, targetReader TargetReader, ioStreams IOStreams) error
 		return err
 	}
 	KUBECONFIG = filepath.Join(pathSeed, "kubeconfig.yaml")
-	//pathToKubeconfig := filepath.Join(pathSeed, "kubeconfig.yaml")
-	// config, err := clientcmd.BuildConfigFromFlags("", pathToKubeconfig)
-	// if err != nil {
-	// 	return err
-	// }
+
 	Client, err := target.K8SClientToKind(TargetKindSeed)
 	if err != nil {
 		return err
