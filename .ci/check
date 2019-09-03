@@ -2,8 +2,6 @@
 
 set -e
 
-export GO111MODULE=on
-
 # For the check step concourse will set the following environment variables:
 # SOURCE_PATH - path to component repository root directory.
 
