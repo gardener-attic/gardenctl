@@ -17,16 +17,16 @@ package cmd_test
 import (
 	"github.com/gardener/gardenctl/pkg/cmd"
 	mockcmd "github.com/gardener/gardenctl/pkg/mock/cmd"
-	"github.com/gardener/gardener/pkg/apis/garden/v1beta1"
-	gardenfake "github.com/gardener/gardener/pkg/client/garden/clientset/versioned/fake"
+
+	gardencorev1alpha1 "github.com/gardener/gardener/pkg/apis/core/v1alpha1"
+	gardencorefake "github.com/gardener/gardener/pkg/client/core/clientset/versioned/fake"
 	"github.com/golang/mock/gomock"
+	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/gomega"
 	"github.com/spf13/cobra"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	kubernetesfake "k8s.io/client-go/kubernetes/fake"
-
-	. "github.com/onsi/ginkgo"
-	. "github.com/onsi/gomega"
 )
 
 var _ = Describe("Get command", func() {
@@ -37,6 +37,7 @@ var _ = Describe("Get command", func() {
 			targetReader     *mockcmd.MockTargetReader
 			configReader     *mockcmd.MockConfigReader
 			kubeconfigReader *mockcmd.MockKubeconfigReader
+			kubeconfigWriter *mockcmd.MockKubeconfigWriter
 			target           *mockcmd.MockTargetInterface
 			command          *cobra.Command
 		)
@@ -46,6 +47,7 @@ var _ = Describe("Get command", func() {
 			targetReader = mockcmd.NewMockTargetReader(ctrl)
 			configReader = mockcmd.NewMockConfigReader(ctrl)
 			kubeconfigReader = mockcmd.NewMockKubeconfigReader(ctrl)
+			kubeconfigWriter = mockcmd.NewMockKubeconfigWriter(ctrl)
 			target = mockcmd.NewMockTargetInterface(ctrl)
 		})
 
@@ -56,7 +58,7 @@ var _ = Describe("Get command", func() {
 		Context("with invalid number of args", func() {
 			It("should return error", func() {
 				ioStreams, _, _, _ := cmd.NewTestIOStreams()
-				command = cmd.NewGetCmd(targetReader, configReader, kubeconfigReader, ioStreams)
+				command = cmd.NewGetCmd(targetReader, configReader, kubeconfigReader, kubeconfigWriter, ioStreams)
 				command.SetArgs([]string{})
 				err := command.Execute()
 
@@ -71,7 +73,7 @@ var _ = Describe("Get command", func() {
 				target.EXPECT().Stack().Return([]cmd.TargetMeta{})
 
 				ioStreams, _, _, _ := cmd.NewTestIOStreams()
-				command = cmd.NewGetCmd(targetReader, configReader, kubeconfigReader, ioStreams)
+				command = cmd.NewGetCmd(targetReader, configReader, kubeconfigReader, kubeconfigWriter, ioStreams)
 				command.SetArgs([]string{"shoot"})
 				err := command.Execute()
 
@@ -84,7 +86,7 @@ var _ = Describe("Get command", func() {
 				target.EXPECT().Stack().Return([]cmd.TargetMeta{})
 
 				ioStreams, _, _, _ := cmd.NewTestIOStreams()
-				command = cmd.NewGetCmd(targetReader, configReader, kubeconfigReader, ioStreams)
+				command = cmd.NewGetCmd(targetReader, configReader, kubeconfigReader, kubeconfigWriter, ioStreams)
 				command.SetArgs([]string{"target"})
 				err := command.Execute()
 
@@ -117,27 +119,24 @@ var _ = Describe("Get command", func() {
 						Namespace: "test-namespace",
 					},
 				})
-			clientSet := gardenfake.NewSimpleClientset(
-				&v1beta1.Seed{
+			clientSet := gardencorefake.NewSimpleClientset(
+				&gardencorev1alpha1.Seed{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: seedName,
 					},
-					Spec: v1beta1.SeedSpec{
+					Spec: gardencorev1alpha1.SeedSpec{
 						SecretRef: corev1.SecretReference{
 							Name:      "test-secret-name",
 							Namespace: "test-namespace",
 						},
 					},
 				},
-				&v1beta1.Shoot{
+				&gardencorev1alpha1.Shoot{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: "test-shoot",
 					},
-					Spec: v1beta1.ShootSpec{
-
-						Cloud: v1beta1.Cloud{
-							Seed: &seedName,
-						},
+					Spec: gardencorev1alpha1.ShootSpec{
+						SeedName: &seedName,
 					},
 				})
 
@@ -173,7 +172,7 @@ var _ = Describe("Get command", func() {
 				target.EXPECT().Stack().Return(targetMeta).AnyTimes()
 
 				ioStreams, _, _, _ := cmd.NewTestIOStreams()
-				command = cmd.NewGetCmd(targetReader, configReader, kubeconfigReader, ioStreams)
+				command = cmd.NewGetCmd(targetReader, configReader, kubeconfigReader, kubeconfigWriter, ioStreams)
 				command.SetArgs([]string{"garden"})
 				err := command.Execute()
 
@@ -187,7 +186,7 @@ var _ = Describe("Get command", func() {
 				target.EXPECT().GardenerClient().Return(clientSet, nil)
 
 				ioStreams, _, _, _ := cmd.NewTestIOStreams()
-				command = cmd.NewGetCmd(targetReader, configReader, kubeconfigReader, ioStreams)
+				command = cmd.NewGetCmd(targetReader, configReader, kubeconfigReader, kubeconfigWriter, ioStreams)
 				command.SetArgs([]string{"seed"})
 				err := command.Execute()
 
@@ -200,9 +199,10 @@ var _ = Describe("Get command", func() {
 				target.EXPECT().K8SClientToKind(cmd.TargetKindSeed).Return(k8sClientToGarden, nil)
 				target.EXPECT().Stack().Return(targetMeta).AnyTimes()
 				target.EXPECT().GardenerClient().Return(clientSet, nil)
+				kubeconfigWriter.EXPECT().Write(gomock.Any(), gomock.Any()).Return(nil)
 
 				ioStreams, _, _, _ := cmd.NewTestIOStreams()
-				command = cmd.NewGetCmd(targetReader, configReader, kubeconfigReader, ioStreams)
+				command = cmd.NewGetCmd(targetReader, configReader, kubeconfigReader, kubeconfigWriter, ioStreams)
 				command.SetArgs([]string{"shoot"})
 				err := command.Execute()
 
@@ -215,7 +215,7 @@ var _ = Describe("Get command", func() {
 				target.EXPECT().Stack().Return(targetMeta).AnyTimes()
 
 				ioStreams, _, _, _ := cmd.NewTestIOStreams()
-				command = cmd.NewGetCmd(targetReader, configReader, kubeconfigReader, ioStreams)
+				command = cmd.NewGetCmd(targetReader, configReader, kubeconfigReader, kubeconfigWriter, ioStreams)
 				command.SetArgs([]string{"target"})
 				err := command.Execute()
 
@@ -227,7 +227,7 @@ var _ = Describe("Get command", func() {
 				target.EXPECT().Stack().Return(targetMeta).AnyTimes()
 
 				ioStreams, _, _, _ := cmd.NewTestIOStreams()
-				command = cmd.NewGetCmd(targetReader, configReader, kubeconfigReader, ioStreams)
+				command = cmd.NewGetCmd(targetReader, configReader, kubeconfigReader, kubeconfigWriter, ioStreams)
 				command.SetArgs([]string{"project"})
 				err := command.Execute()
 

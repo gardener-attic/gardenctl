@@ -42,7 +42,10 @@ gardenClusters:
   kubeConfig: /tmp/kubeconfig.yaml
 `
 	content := []byte(gConfig)
-	file.Write(content)
+	_, err = file.Write(content)
+	if err != nil {
+		panic(err)
+	}
 	err = file.Close()
 	if err != nil {
 		panic(err)
@@ -52,7 +55,10 @@ gardenClusters:
 	if err != nil {
 		panic(err)
 	}
-	file.Write(content)
+	_, err = file.Write(content)
+	if err != nil {
+		panic(err)
+	}
 	err = file.Close()
 	if err != nil {
 		panic(err)

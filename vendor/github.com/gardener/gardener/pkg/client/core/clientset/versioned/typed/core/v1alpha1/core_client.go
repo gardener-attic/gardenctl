@@ -11,14 +11,34 @@ import (
 
 type CoreV1alpha1Interface interface {
 	RESTClient() rest.Interface
+	BackupBucketsGetter
+	BackupEntriesGetter
+	CloudProfilesGetter
 	ControllerInstallationsGetter
 	ControllerRegistrationsGetter
 	PlantsGetter
+	ProjectsGetter
+	QuotasGetter
+	SecretBindingsGetter
+	SeedsGetter
+	ShootsGetter
 }
 
 // CoreV1alpha1Client is used to interact with features provided by the core.gardener.cloud group.
 type CoreV1alpha1Client struct {
 	restClient rest.Interface
+}
+
+func (c *CoreV1alpha1Client) BackupBuckets() BackupBucketInterface {
+	return newBackupBuckets(c)
+}
+
+func (c *CoreV1alpha1Client) BackupEntries(namespace string) BackupEntryInterface {
+	return newBackupEntries(c, namespace)
+}
+
+func (c *CoreV1alpha1Client) CloudProfiles() CloudProfileInterface {
+	return newCloudProfiles(c)
 }
 
 func (c *CoreV1alpha1Client) ControllerInstallations() ControllerInstallationInterface {
@@ -31,6 +51,26 @@ func (c *CoreV1alpha1Client) ControllerRegistrations() ControllerRegistrationInt
 
 func (c *CoreV1alpha1Client) Plants(namespace string) PlantInterface {
 	return newPlants(c, namespace)
+}
+
+func (c *CoreV1alpha1Client) Projects() ProjectInterface {
+	return newProjects(c)
+}
+
+func (c *CoreV1alpha1Client) Quotas(namespace string) QuotaInterface {
+	return newQuotas(c, namespace)
+}
+
+func (c *CoreV1alpha1Client) SecretBindings(namespace string) SecretBindingInterface {
+	return newSecretBindings(c, namespace)
+}
+
+func (c *CoreV1alpha1Client) Seeds() SeedInterface {
+	return newSeeds(c)
+}
+
+func (c *CoreV1alpha1Client) Shoots(namespace string) ShootInterface {
+	return newShoots(c, namespace)
 }
 
 // NewForConfig creates a new CoreV1alpha1Client for the given config.

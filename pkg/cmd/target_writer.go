@@ -33,8 +33,12 @@ func (w *GardenctlTargetWriter) WriteTarget(targetPath string, target TargetInte
 	}
 	defer file.Close()
 
-	file.Write(content)
-	file.Sync()
+	if _, err = file.Write(content); err != nil {
+		return err
+	}
+	if err = file.Sync(); err != nil {
+		return err
+	}
 
 	return
 }

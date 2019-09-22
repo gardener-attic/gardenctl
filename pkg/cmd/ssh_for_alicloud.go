@@ -88,7 +88,7 @@ func sshToAlicloudNode(nodeIP, path string) {
 	} else if target.Target[1].Kind == "seed" {
 		aliyunPathSSHKey = filepath.Join(pathGardenHome, "cache", gardenName, "seeds", target.Target[1].Name, target.Target[2].Name, ".aliyun") + string(filepath.Separator)
 	}
-	err = ExecCmd(nil, "mv key "+aliyunPathSSHKey, false)
+	err := ExecCmd(nil, "mv key "+aliyunPathSSHKey, false)
 	checkError(err)
 	fmt.Println("Aliyun cli configured.")
 
@@ -200,19 +200,19 @@ func (a *AliyunInstanceAttribute) createBastionHostSecurityGroup() {
 
 	securityGroupNames, err := decodedQuery.Array("SecurityGroups", "SecurityGroup")
 	checkError(err)
-	checkSecurityGroupExists := false
+	securityGroupExists := false
 	for _, iter := range securityGroupNames {
 		securityGroup := jsonq.NewQuery(iter)
 		name, err := securityGroup.String("SecurityGroupName")
 		checkError(err)
 		if name == a.BastionSecurityGroupName {
-			checkSecurityGroupExists = true
+			securityGroupExists = true
 			a.BastionSecurityGroupID, err = securityGroup.String("SecurityGroupId")
 			checkError(err)
 		}
 	}
 
-	if checkSecurityGroupExists == false {
+	if !securityGroupExists {
 		res, err = ExecCmdReturnOutput("bash", "-c", "aliyun ecs CreateSecurityGroup --RegionId="+a.RegionID+" --VpcId="+a.VpcID+" --SecurityGroupName="+a.BastionSecurityGroupName)
 		checkError(err)
 		decodedQuery = decodeAndQueryFromJSONString(res)
@@ -239,9 +239,9 @@ func (a *AliyunInstanceAttribute) createBastionHostSecurityGroup() {
 			os.Exit(2)
 		}
 		fmt.Println("Configuring bastion host security group rules...")
-		res, err = ExecCmdReturnOutput("bash", "-c", "aliyun ecs AuthorizeSecurityGroup --Policy Accept --NicType intranet --Priority 1 --SourceCidrIp 0.0.0.0/0 --PortRange 22/22 --IpProtocol udp --SecurityGroupId="+a.BastionSecurityGroupID)
+		_, err = ExecCmdReturnOutput("bash", "-c", "aliyun ecs AuthorizeSecurityGroup --Policy Accept --NicType intranet --Priority 1 --SourceCidrIp 0.0.0.0/0 --PortRange 22/22 --IpProtocol udp --SecurityGroupId="+a.BastionSecurityGroupID)
 		checkError(err)
-		res, err = ExecCmdReturnOutput("bash", "-c", "aliyun ecs AuthorizeSecurityGroup --Policy Accept --NicType intranet --Priority 1 --SourceCidrIp 0.0.0.0/0 --PortRange 22/22 --IpProtocol tcp --SecurityGroupId="+a.BastionSecurityGroupID)
+		_, err = ExecCmdReturnOutput("bash", "-c", "aliyun ecs AuthorizeSecurityGroup --Policy Accept --NicType intranet --Priority 1 --SourceCidrIp 0.0.0.0/0 --PortRange 22/22 --IpProtocol tcp --SecurityGroupId="+a.BastionSecurityGroupID)
 		checkError(err)
 		time.Sleep(time.Second * 10)
 		fmt.Println("Bastion host security group rules configured.")
@@ -256,19 +256,19 @@ func (a *AliyunInstanceAttribute) createBastionHostInstance() {
 
 	instances, err := decodedQuery.Array("Instances", "Instance")
 	checkError(err)
-	checkBastionServerExists := false
+	bastionServerExists := false
 	for _, iter := range instances {
 		instance := jsonq.NewQuery(iter)
 		instanceName, err := instance.String("InstanceName")
 		checkError(err)
 		if instanceName == a.BastionInstanceName {
-			checkBastionServerExists = true
+			bastionServerExists = true
 			a.BastionInstanceID, err = instance.String("InstanceId")
 			checkError(err)
 		}
 	}
 
-	if checkBastionServerExists == false {
+	if !bastionServerExists {
 		arguments := "aliyun ecs CreateInstance --ImageId=" + a.ImageID + " --InstanceType=" + a.InstanceType + " --RegionId=" + a.RegionID + " --ZoneId=" + a.ZoneID + " --VSwitchId=" + a.VSwitchID + " --InstanceChargeType=" + a.InstanceChargeType + " --InternetChargeType=" + a.InternetChargeType + " --InternetMaxBandwidthIn=" + a.InternetMaxBandwidthIn + " --InternetMaxBandwidthOut=" + a.InternetMaxBandwidthOut + " --IoOptimized=" + a.IoOptimized + " --KeyPairName=" + a.KeyPairName + " --InstanceName=" + a.BastionInstanceName + " --SecurityGroupId=" + a.BastionSecurityGroupID
 		res, err = ExecCmdReturnOutput("bash", "-c", arguments)
 		checkError(err)
@@ -313,7 +313,7 @@ func (a *AliyunInstanceAttribute) startBastionHostInstance() {
 			break
 		} else if status == "Stopped" {
 			fmt.Println("Starting bastion host...")
-			res, err = ExecCmdReturnOutput("bash", "-c", "aliyun ecs StartInstance --InstanceId="+a.BastionInstanceID)
+			_, err = ExecCmdReturnOutput("bash", "-c", "aliyun ecs StartInstance --InstanceId="+a.BastionInstanceID)
 			checkError(err)
 		} else if status == "Starting" {
 			fmt.Println("Waiting for bastion host to start...")
@@ -372,7 +372,7 @@ func (a *AliyunInstanceAttribute) deleteBastionHostInstance() {
 				break
 			} else if status == "Running" {
 				fmt.Println("Stopping bastion server instance...")
-				res, err = ExecCmdReturnOutput("bash", "-c", "aliyun ecs StopInstance --InstanceId="+a.BastionInstanceID)
+				_, err = ExecCmdReturnOutput("bash", "-c", "aliyun ecs StopInstance --InstanceId="+a.BastionInstanceID)
 				checkError(err)
 			} else if status == "Starting" {
 				fmt.Println("Bastion server instance is currently starting...")
@@ -400,7 +400,7 @@ func (a *AliyunInstanceAttribute) deleteBastionHostInstance() {
 				break
 			} else if totalCount == 1 {
 				fmt.Println("Deleting bastion server instance...")
-				res, err = ExecCmdReturnOutput("bash", "-c", "aliyun ecs DeleteInstance --Force true --InstanceId="+a.BastionInstanceID)
+				_, err = ExecCmdReturnOutput("bash", "-c", "aliyun ecs DeleteInstance --Force true --InstanceId="+a.BastionInstanceID)
 				checkError(err)
 			}
 			fmt.Println("Waiting for bastion server instance to be deleted...")
@@ -417,7 +417,10 @@ func (a *AliyunInstanceAttribute) deleteBastionHostInstance() {
 
 // deleteBastionHostSecurityGroup deletes the security group of the bastion host.
 func (a *AliyunInstanceAttribute) deleteBastionHostSecurityGroup() {
-	var res string
+	var (
+		res string
+		err error
+	)
 	if a.VpcID != "" {
 		res, err = ExecCmdReturnOutput("bash", "-c", "aliyun ecs DescribeSecurityGroups --VpcId="+a.VpcID)
 	} else {
@@ -453,7 +456,7 @@ func (a *AliyunInstanceAttribute) deleteBastionHostSecurityGroup() {
 				break
 			} else if totalCount == 1 {
 				fmt.Println("Deleting bastion server security group...")
-				res, err = ExecCmdReturnOutput("bash", "-c", "aliyun ecs DeleteSecurityGroup --SecurityGroupId="+a.BastionSecurityGroupID)
+				_, err = ExecCmdReturnOutput("bash", "-c", "aliyun ecs DeleteSecurityGroup --SecurityGroupId="+a.BastionSecurityGroupID)
 				checkError(err)
 			}
 			fmt.Println("Waiting for bastion server security group to be deleted...")
@@ -477,7 +480,8 @@ func configureAliyunCLI() {
 func decodeAndQueryFromJSONString(jsonString string) *jsonq.JsonQuery {
 	data := map[string]interface{}{}
 	decoder := json.NewDecoder(strings.NewReader(jsonString))
-	decoder.Decode(&data)
+	err := decoder.Decode(&data)
+	checkError(err)
 	return jsonq.NewQuery(data)
 }
 
@@ -500,6 +504,7 @@ func getAlicloudInstanceIDForIP(ip string) string {
 // parseAliyunInstanceTypeSpec parses instance type spec with given interface <data>.
 func (spec *AliyunInstanceTypeSpec) parseAliyunInstanceTypeSpec(data interface{}) {
 	instanceType := jsonq.NewQuery(data)
+	var err error
 	spec.CPUCoreCount, err = instanceType.Int("CpuCoreCount")
 	checkError(err)
 	spec.InstanceTypeFamily, err = instanceType.String("InstanceTypeFamily")
@@ -528,10 +533,8 @@ func getInstanceTypeSpecScore(spec AliyunInstanceTypeSpec) float64 {
 	switch spec.InstanceFamilyLevel {
 	case "CreditEntryLevel":
 		score += 100
-		break
 	case "EnterpriseLevel":
 		score += 500
-		break
 	default:
 		score += 200
 	}
@@ -564,6 +567,7 @@ func (a *AliyunInstanceAttribute) getMinimumInstanceSpec() string {
 
 	specs := map[string]AliyunInstanceTypeSpec{}
 	instanceTypes, err := decodedQuery.Array("InstanceTypes", "InstanceType")
+	checkError(err)
 	for _, iter := range instanceTypes {
 		spec := &AliyunInstanceTypeSpec{}
 		spec.parseAliyunInstanceTypeSpec(iter)
@@ -596,7 +600,7 @@ func (a *AliyunInstanceAttribute) getMinimumInstanceSpec() string {
 
 // fetchAlicloudImageID returns the image ID.
 func fetchAlicloudImageID() string {
-	clientToTarget("garden")
+	_, err := clientToTarget("garden")
 	checkError(err)
 	clientset, err := v1alpha1.NewForConfig(NewConfigFromBytes(*kubeconfig))
 	checkError(err)

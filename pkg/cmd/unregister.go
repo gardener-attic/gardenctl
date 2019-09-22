@@ -69,7 +69,7 @@ func NewUnregisterCmd() *cobra.Command {
 					}
 				}
 			}
-			err = checkmail.ValidateFormat(email)
+			err := checkmail.ValidateFormat(email)
 			checkError(err)
 			fmt.Println("Format Validated")
 			if !unregisterAll {
@@ -82,7 +82,8 @@ func NewUnregisterCmd() *cobra.Command {
 					kubeSecret, err := clientset.CoreV1().Secrets("garden").Get("virtual-garden-kubeconfig-for-admin", metav1.GetOptions{})
 					checkError(err)
 					virtualPath := filepath.Join(pathDefault, "virtual")
-					os.MkdirAll(virtualPath, os.ModePerm)
+					err = os.MkdirAll(virtualPath, os.ModePerm)
+					checkError(err)
 					virtualPathKubeConfig := filepath.Join(virtualPath, "virtualKubeConfig.yaml")
 					err = ioutil.WriteFile(virtualPathKubeConfig, kubeSecret.Data["kubeconfig"], 0644)
 					checkError(err)
@@ -122,7 +123,8 @@ func NewUnregisterCmd() *cobra.Command {
 						kubeSecret, err := clientset.CoreV1().Secrets("garden").Get("virtual-garden-kubeconfig-for-admin", metav1.GetOptions{})
 						checkError(err)
 						virtualPath := filepath.Join(pathDefault, "virtual")
-						os.MkdirAll(virtualPath, os.ModePerm)
+						err = os.MkdirAll(virtualPath, os.ModePerm)
+						checkError(err)
 						virtualPathKubeConfig := filepath.Join(virtualPath, "virtualKubeConfig.yaml")
 						err = ioutil.WriteFile(virtualPathKubeConfig, kubeSecret.Data["kubeconfig"], 0644)
 						checkError(err)
