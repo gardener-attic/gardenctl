@@ -17,8 +17,9 @@ package cmd_test
 import (
 	"github.com/gardener/gardenctl/pkg/cmd"
 	mockcmd "github.com/gardener/gardenctl/pkg/mock/cmd"
-	"github.com/gardener/gardener/pkg/apis/garden/v1beta1"
-	gardenfake "github.com/gardener/gardener/pkg/client/garden/clientset/versioned/fake"
+
+	gardencorev1alpha1 "github.com/gardener/gardener/pkg/apis/core/v1alpha1"
+	gardencorefake "github.com/gardener/gardener/pkg/client/core/clientset/versioned/fake"
 	"github.com/golang/mock/gomock"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/ginkgo/extensions/table"
@@ -99,7 +100,7 @@ var _ = Describe("Target command", func() {
 				},
 			})
 
-			clientSet := gardenfake.NewSimpleClientset()
+			clientSet := gardencorefake.NewSimpleClientset()
 			target.EXPECT().GardenerClient().Return(clientSet, nil)
 
 			ioStreams, _, _, _ := cmd.NewTestIOStreams()
@@ -119,7 +120,7 @@ var _ = Describe("Target command", func() {
 				},
 			}).Times(2)
 
-			clientSet := gardenfake.NewSimpleClientset(&v1beta1.Project{
+			clientSet := gardencorefake.NewSimpleClientset(&gardencorev1alpha1.Project{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "myproject",
 				},
@@ -153,7 +154,7 @@ var _ = Describe("Target command", func() {
 					Name: "prod",
 				},
 			}).Times(3)
-			clientSet := gardenfake.NewSimpleClientset()
+			clientSet := gardencorefake.NewSimpleClientset()
 			target.EXPECT().GardenerClient().Return(clientSet, nil)
 
 			ioStreams, _, _, _ := cmd.NewTestIOStreams()
@@ -172,14 +173,14 @@ var _ = Describe("Target command", func() {
 					Name: "prod",
 				},
 			}).Times(3)
-			clientSet := gardenfake.NewSimpleClientset(
-				&v1beta1.Shoot{
+			clientSet := gardencorefake.NewSimpleClientset(
+				&gardencorev1alpha1.Shoot{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      "foo",
 						Namespace: "garden-validation",
 					},
 				},
-				&v1beta1.Shoot{
+				&gardencorev1alpha1.Shoot{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      "foo",
 						Namespace: "garden-prod",
@@ -218,7 +219,6 @@ var _ = Describe("Target command", func() {
 
 	type targetCase struct {
 		args        []string
-		flags       []string
 		expectedErr string
 	}
 

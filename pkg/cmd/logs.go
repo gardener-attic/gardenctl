@@ -182,6 +182,7 @@ func logPod(toMatch string, toTarget string, container string) {
 		os.Exit(2)
 	}
 	namespace := getSeedNamespaceNameForShoot(target.Target[2].Name)
+	var err error
 	Client, err = clientToTarget("seed")
 	checkError(err)
 	if toTarget == "shoot" {
@@ -297,7 +298,7 @@ func buildElasticsearchResponses(output, namespace, toMatch, container, username
 
 	byteOutput := []byte(output)
 	var response logResponse
-	err = json.Unmarshal(byteOutput, &response)
+	err := json.Unmarshal(byteOutput, &response)
 	checkError(err)
 
 	responses = append(responses, response)
@@ -329,6 +330,7 @@ func buildElasticsearchResponses(output, namespace, toMatch, container, username
 
 // logPodGarden print logfiles for garden pods
 func logPodGarden(toMatch, namespace string) {
+	var err error
 	Client, err = clientToTarget("garden")
 	checkError(err)
 	showLogsFromKubectl(namespace, toMatch, "")
@@ -353,7 +355,7 @@ func logPodGardenImproved(podName string) {
 			lines := strings.Split("time="+output, `time=`)
 			for _, line := range lines {
 				if strings.Contains(line, ("shoot=" + projectName + "/" + target.Target[2].Name)) {
-					fmt.Printf(line)
+					fmt.Print(line)
 				}
 			}
 		}
@@ -447,6 +449,7 @@ func logsKubernetesDashboard() {
 	ReadTarget(pathTarget, &target)
 	namespace := "kube-system"
 	if len(target.Target) == 3 {
+		var err error
 		Client, err = clientToTarget("shoot")
 		checkError(err)
 	} else if len(target.Target) == 2 && target.Target[1].Kind == "seed" {
@@ -460,6 +463,7 @@ func logsKubernetesDashboard() {
 		fmt.Println("Project targeted")
 		os.Exit(2)
 	} else if len(target.Target) == 1 {
+		var err error
 		Client, err = clientToTarget("garden")
 		checkError(err)
 	} else {
@@ -496,6 +500,7 @@ func logsTerraform(toMatch string) {
 	var latestTime int64
 	var podName [100]string
 	var podNamespace [100]string
+	var err error
 	Client, err = clientToTarget("seed")
 	checkError(err)
 	pods, err := Client.CoreV1().Pods("").List(metav1.ListOptions{})
@@ -589,10 +594,6 @@ type containerNameMatchPhrase struct {
 	MatchPhrase struct {
 		Value string `json:"kubernetes.container_name"`
 	} `json:"match_phrase"`
-}
-
-type mustQuery struct {
-	MatchPhrases []interface{} `json:"must"`
 }
 
 type query struct {

@@ -38,3 +38,11 @@ echo "Running golint..."
 for dir in ${PACKAGES_DIRS}; do
   golint -set_exit_status $dir
 done
+
+# Install golangci-lint
+if ! which golangci-lint 1>/dev/null; then
+  curl -sfL "https://install.goreleaser.com/github.com/golangci/golangci-lint.sh" | sh -s -- -b $(go env GOPATH)/bin v1.18.0
+fi
+
+echo "Running golangci-lint..."
+golangci-lint run ./...

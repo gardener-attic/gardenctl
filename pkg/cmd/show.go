@@ -115,13 +115,15 @@ func NewShowCmd() *cobra.Command {
 
 // showPodGarden
 func showPodGarden(podName string, namespace string) {
+	var err error
 	Client, err = clientToTarget("garden")
 	checkError(err)
 	pods, err := Client.CoreV1().Pods(namespace).List(metav1.ListOptions{})
 	checkError(err)
 	for _, pod := range pods.Items {
 		if strings.Contains(pod.Name, podName) {
-			ExecCmd(nil, "kubectl get pods "+pod.Name+" -o wide -n "+namespace, false, "KUBECONFIG="+KUBECONFIG)
+			err := ExecCmd(nil, "kubectl get pods "+pod.Name+" -o wide -n "+namespace, false, "KUBECONFIG="+KUBECONFIG)
+			checkError(err)
 		}
 	}
 }
@@ -161,7 +163,8 @@ func showGardenerDashboard() {
 			filteredUrls = append(filteredUrls, url)
 			fmt.Println("URL-" + strconv.Itoa(index+1) + ": " + "https://" + url)
 			if !opened {
-				browser.OpenURL("https://" + url)
+				err := browser.OpenURL("https://" + url)
+				checkError(err)
 				opened = true
 			}
 		}
@@ -180,6 +183,7 @@ func showPod(toMatch string, toTarget TargetKind) {
 		namespace = getSeedNamespaceNameForShoot(target.Target[2].Name)
 	}
 
+	var err error
 	Client, err = clientToTarget("seed")
 	checkError(err)
 	if toTarget == TargetKindShoot {
@@ -191,7 +195,8 @@ func showPod(toMatch string, toTarget TargetKind) {
 	checkError(err)
 	for _, pod := range pods.Items {
 		if strings.Contains(pod.Name, toMatch) {
-			ExecCmd(nil, "kubectl get pods "+pod.Name+" -o wide -n "+namespace, false, "KUBECONFIG="+KUBECONFIG)
+			err := ExecCmd(nil, "kubectl get pods "+pod.Name+" -o wide -n "+namespace, false, "KUBECONFIG="+KUBECONFIG)
+			checkError(err)
 		}
 	}
 }
@@ -260,7 +265,8 @@ func showPrometheus() {
 	}
 	url = "https://" + username + ":" + password + "@" + url
 	fmt.Println("URL: " + url)
-	browser.OpenURL(url)
+	err = browser.OpenURL(url)
+	checkError(err)
 }
 
 // showAltermanager shows the prometheus pods in the targeted seed cluster
@@ -281,7 +287,8 @@ func showAltermanager() {
 	}
 	url = "https://" + username + ":" + password + "@" + url
 	fmt.Println("URL: " + url)
-	browser.OpenURL(url)
+	err = browser.OpenURL(url)
+	checkError(err)
 }
 
 // showMachineControllerManager shows the prometheus pods in the targeted seed cluster
@@ -295,13 +302,15 @@ func showKubernetesDashboard() {
 	ReadTarget(pathTarget, &target)
 	gardenName := target.Stack()[0].Name
 	if len(target.Target) == 1 {
+		var err error
 		Client, err = clientToTarget("garden")
 		checkError(err)
 		pods, err := Client.CoreV1().Pods("kube-system").List(metav1.ListOptions{})
 		checkError(err)
 		for _, pod := range pods.Items {
 			if strings.Contains(pod.Name, "kubernetes-dashboard") {
-				ExecCmd(nil, "kubectl get pods "+pod.Name+" -o wide -n kube-system", false, "KUBECONFIG="+KUBECONFIG)
+				err := ExecCmd(nil, "kubectl get pods "+pod.Name+" -o wide -n kube-system", false, "KUBECONFIG="+KUBECONFIG)
+				checkError(err)
 			}
 		}
 	} else if len(target.Target) == 2 {
@@ -320,7 +329,8 @@ func showKubernetesDashboard() {
 		checkError(err)
 		for _, pod := range pods.Items {
 			if strings.Contains(pod.Name, "kubernetes-dashboard") {
-				ExecCmd(nil, "kubectl get pods "+pod.Name+" -o wide -n "+namespace, false, "KUBECONFIG="+KUBECONFIG)
+				err := ExecCmd(nil, "kubectl get pods "+pod.Name+" -o wide -n "+namespace, false, "KUBECONFIG="+KUBECONFIG)
+				checkError(err)
 			}
 		}
 	} else if len(target.Target) == 3 {
@@ -330,8 +340,10 @@ func showKubernetesDashboard() {
 		os.Exit(2)
 	}
 	url := "http://127.0.0.1:8002/api/v1/namespaces/kube-system/services/https:kubernetes-dashboard:/proxy/"
-	browser.OpenURL(url)
-	ExecCmd(nil, "kubectl proxy -p 8002", false, "KUBECONFIG="+KUBECONFIG)
+	err := browser.OpenURL(url)
+	checkError(err)
+	err = ExecCmd(nil, "kubectl proxy -p 8002", false, "KUBECONFIG="+KUBECONFIG)
+	checkError(err)
 }
 
 // showGrafana shows the grafana dashboard for the targeted cluster
@@ -352,7 +364,8 @@ func showGrafana() {
 	}
 	url = "https://" + username + ":" + password + "@" + url
 	fmt.Println("URL: " + url)
-	browser.OpenURL(url)
+	err = browser.OpenURL(url)
+	checkError(err)
 }
 
 // showKibana shows the kibana dashboard for the targeted cluster
@@ -384,11 +397,13 @@ func showKibana() {
 	}
 	url = "https://" + username + ":" + password + "@" + url
 	fmt.Println("URL: " + url)
-	browser.OpenURL(url)
+	err = browser.OpenURL(url)
+	checkError(err)
 }
 
 // showTerraform pods for specified name
 func showTerraform(name string) {
+	var err error
 	Client, err = clientToTarget("seed")
 	checkError(err)
 	pods, err := Client.CoreV1().Pods("").List(metav1.ListOptions{})

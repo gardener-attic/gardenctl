@@ -19,9 +19,9 @@ curl -LO https://github.com/gardener/gardenctl/releases/download/$(curl -s https
 
 To download a specific version, replace the `$(curl -s https://raw.githubusercontent.com/gardener/gardenctl/master/LATEST)` portion of the command with the specific version.
 
-For example, to download version 0.7.0 on macOS, type:
+For example, to download version 0.13.0 on macOS, type:
 ```bash
-curl -LO https://github.com/gardener/gardenctl/releases/download/0.7.0/gardenctl-darwin-amd64
+curl -LO https://github.com/gardener/gardenctl/releases/download/0.13.0/gardenctl-darwin-amd64
 ```
 
 2. Make the gardenctl binary executable.
@@ -138,7 +138,7 @@ Targets represent a hierarchical structure of resources. On top, there is/are th
 `gardenctl aws ec2 describe-instances --no-cache` without locally caching credentials
 - Target a shoot directly and get all kube-dns pods in kube-system namespace  
 `gardenctl target myshoot`  
-`gardenctl kubectl get pods -- -n kube-system | grep kube-dns`  
+`gardenctl kubectl get pods -- -n kube-system -l k8s-app=kube-dns`
 - List all cluster with an issue  
 `gardenctl ls issues`
 - Drop an element from target stack  
