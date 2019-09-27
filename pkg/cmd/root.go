@@ -110,8 +110,9 @@ func init() {
 	var (
 		configReader     = &GardenConfigReader{}
 		targetReader     = &GardenctlTargetReader{}
-		kubeconfigReader = &GardenctlKubeconfigReader{}
 		targetWriter     = &GardenctlTargetWriter{}
+		kubeconfigReader = &GardenctlKubeconfigReader{}
+		kubeconfigWriter = &GardenctlKubeconfigWriter{}
 		ioStreams        = IOStreams{
 			In:     os.Stdin,
 			Out:    os.Stdout,
@@ -129,14 +130,14 @@ func init() {
 		NewLsCmd(targetReader, configReader, ioStreams),
 		NewTargetCmd(targetReader, targetWriter, configReader, ioStreams),
 		NewDropCmd(targetReader, targetWriter, ioStreams),
-		NewGetCmd(targetReader, configReader, kubeconfigReader, ioStreams))
+		NewGetCmd(targetReader, configReader, kubeconfigReader, kubeconfigWriter, ioStreams))
 	RootCmd.AddCommand(NewDownloadCmd(), NewShowCmd(), NewLogsCmd())
 	RootCmd.AddCommand(NewRegisterCmd(), NewUnregisterCmd())
 	RootCmd.AddCommand(NewCompletionCmd())
 	RootCmd.AddCommand(NewShellCmd(targetReader, ioStreams))
 	RootCmd.AddCommand(NewSSHCmd(targetReader, ioStreams))
 	RootCmd.AddCommand(NewKubectlCmd(), NewKaCmd(), NewKsCmd(), NewKgCmd(), NewKnCmd())
-	RootCmd.AddCommand(NewAliyunCmd(), NewAwsCmd(), NewAzCmd(), NewGcloudCmd(), NewOpenstackCmd())
+	RootCmd.AddCommand(NewAliyunCmd(targetReader), NewAwsCmd(targetReader), NewAzCmd(targetReader), NewGcloudCmd(targetReader), NewOpenstackCmd(targetReader))
 	RootCmd.AddCommand(NewInfoCmd(targetReader, ioStreams))
 	RootCmd.AddCommand(NewVersionCmd())
 

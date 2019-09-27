@@ -17,8 +17,7 @@ package cmd
 import (
 	"errors"
 
-	clientset "github.com/gardener/gardener/pkg/client/garden/clientset/versioned"
-
+	gardencoreclientset "github.com/gardener/gardener/pkg/client/core/clientset/versioned"
 	"k8s.io/client-go/kubernetes"
 )
 
@@ -60,8 +59,8 @@ func (t *Target) Kind() (TargetKind, error) {
 
 // K8SClient returns a kubernetes client configured against the current target.
 func (t *Target) K8SClient() (kubernetes.Interface, error) {
-	var kind TargetKind
-	if kind, err = t.Kind(); err != nil {
+	kind, err := t.Kind()
+	if err != nil {
 		return nil, err
 	}
 
@@ -74,6 +73,6 @@ func (t *Target) K8SClientToKind(kind TargetKind) (kubernetes.Interface, error) 
 }
 
 // GardenerClient returns a gardener client
-func (t *Target) GardenerClient() (clientset.Interface, error) {
-	return clientset.NewForConfig(NewConfigFromBytes(getKubeConfigOfClusterType(TargetKindGarden)))
+func (t *Target) GardenerClient() (gardencoreclientset.Interface, error) {
+	return gardencoreclientset.NewForConfig(NewConfigFromBytes(getKubeConfigOfClusterType(TargetKindGarden)))
 }

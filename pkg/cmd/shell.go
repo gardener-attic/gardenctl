@@ -43,7 +43,10 @@ func NewShellCmd(reader TargetReader, ioStreams IOStreams) *cobra.Command {
 
 			target := reader.ReadTarget(pathTarget)
 
-			var targetKind TargetKind
+			var (
+				targetKind TargetKind
+				err        error
+			)
 			if targetKind, err = target.Kind(); err != nil {
 				return err
 			}

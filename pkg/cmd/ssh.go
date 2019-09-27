@@ -23,11 +23,8 @@ import (
 	"path/filepath"
 	"strings"
 
+	gardencorev1alpha1 "github.com/gardener/gardener/pkg/apis/core/v1alpha1"
 	v1alpha1 "github.com/gardener/gardener/pkg/client/core/clientset/versioned/typed/core/v1alpha1"
-
-	v1beta1 "github.com/gardener/gardener/pkg/apis/garden/v1beta1"
-
-	clientset "github.com/gardener/gardener/pkg/client/garden/clientset/versioned"
 	"github.com/jmoiron/jsonq"
 	"github.com/spf13/cobra"
 	v1 "k8s.io/api/core/v1"
@@ -57,28 +54,26 @@ func NewSSHCmd(reader TargetReader, ioStreams IOStreams) *cobra.Command {
 				return errors.New("no shoot targeted")
 			}
 
-			Client, err = clientToTarget("garden")
+			gardenClientset, err := target.GardenerClient()
 			checkError(err)
-			gardenClientset, err := clientset.NewForConfig(NewConfigFromBytes(*kubeconfig))
-			checkError(err)
-			var shoot *v1beta1.Shoot
+			var shoot *gardencorev1alpha1.Shoot
 			if target.Stack()[1].Kind == "project" {
-				project, err := gardenClientset.GardenV1beta1().Projects().Get(target.Stack()[1].Name, metav1.GetOptions{})
+				project, err := gardenClientset.CoreV1alpha1().Projects().Get(target.Stack()[1].Name, metav1.GetOptions{})
 				checkError(err)
-				shoot, err = gardenClientset.GardenV1beta1().Shoots(*project.Spec.Namespace).Get(target.Stack()[2].Name, metav1.GetOptions{})
+				shoot, err = gardenClientset.CoreV1alpha1().Shoots(*project.Spec.Namespace).Get(target.Stack()[2].Name, metav1.GetOptions{})
 				checkError(err)
 			} else {
-				shootList, err := gardenClientset.GardenV1beta1().Shoots("").List(metav1.ListOptions{})
+				shootList, err := gardenClientset.CoreV1alpha1().Shoots("").List(metav1.ListOptions{})
 				checkError(err)
 				for index, s := range shootList.Items {
-					if s.Name == target.Stack()[2].Name && *s.Spec.Cloud.Seed == target.Stack()[1].Name {
+					if s.Name == target.Stack()[2].Name && *s.Spec.SeedName == target.Stack()[1].Name {
 						shoot = &shootList.Items[index]
 						break
 					}
 				}
 			}
 
-			infraType := shoot.Spec.Cloud.Profile
+			infraType := shoot.Spec.Provider.Type
 			var kind string
 			switch infraType {
 			case "aws":
@@ -111,7 +106,7 @@ func NewSSHCmd(reader TargetReader, ioStreams IOStreams) *cobra.Command {
 				path = filepath.Join(path, "terraform.tfstate")
 			}
 			pathToKey := downloadSSHKeypair()
-			fmt.Printf(pathToKey)
+			fmt.Print(pathToKey)
 			switch infraType {
 			case "aws":
 				sshToAWSNode(args[0], path)
@@ -219,11 +214,13 @@ func sshToAZNode(nodeIP, path string) {
 	captured := capture()
 	operate("az", arguments)
 	nodeIP, err = captured()
+	checkError(err)
 	fmt.Println(nodeIP)
 
 	data := map[string]interface{}{}
 	dec := json.NewDecoder(strings.NewReader(nodeIP))
-	dec.Decode(&data)
+	err = dec.Decode(&data)
+	checkError(err)
 	jq := jsonq.NewQuery(data)
 	nodeIP, err = jq.String("publicIp", "ipAddress")
 	if err != nil {
@@ -255,6 +252,7 @@ func downloadSSHKeypair() string {
 	ReadTarget(pathTarget, &target)
 	shootName := target.Target[2].Name
 	shootNamespace := getSeedNamespaceNameForShoot(shootName)
+	var err error
 	Client, err = clientToTarget("seed")
 	checkError(err)
 	secret, err := Client.CoreV1().Secrets(shootNamespace).Get("ssh-keypair", metav1.GetOptions{})
@@ -301,14 +299,13 @@ func getNodeForIP(ip string) *v1.Node {
 
 // fetchAWSImageIDByInstancePrivateIP returns the image ID (AMI) for instance with the given <privateIP>.
 func fetchAWSImageIDByInstancePrivateIP(privateIP string) string {
-	clientToTarget("garden")
+	_, err := clientToTarget("garden")
 	checkError(err)
 	clientset, err := v1alpha1.NewForConfig(NewConfigFromBytes(*kubeconfig))
 	checkError(err)
 	controllerRegistration, err := clientset.ControllerRegistrations().Get(ControllerRegistrationAwsName, metav1.GetOptions{})
 	checkError(err)
 
-	//var data string
 	var controllerRegistrationSpec AWSControllerRegistrationSpec
 	err = json.Unmarshal(controllerRegistration.Spec.Deployment.ProviderConfig.Raw, &controllerRegistrationSpec)
 	checkError(err)

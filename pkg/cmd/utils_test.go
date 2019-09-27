@@ -49,7 +49,10 @@ var _ = Describe("Utils", func() {
 	if err != nil {
 		panic(err)
 	}
-	file.Write(content)
+	_, err = file.Write(content)
+	if err != nil {
+		panic(err)
+	}
 	err = file.Close()
 	if err != nil {
 		panic(err)

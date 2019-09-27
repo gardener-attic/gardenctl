@@ -37,7 +37,7 @@ func NewVersionCmd() *cobra.Command {
 		go version  : %s
 		go compiler : %s
 		platform    : %s/%s
-	`, version, buildDate, runtime.Version(), runtime.Compiler, runtime.GOOS, runtime.GOARCH)
+`, version, buildDate, runtime.Version(), runtime.Compiler, runtime.GOOS, runtime.GOARCH)
 		},
 	}
 }

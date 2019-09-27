@@ -59,7 +59,8 @@ func CreateDir(dirname string, permission os.FileMode) {
 	exists, err := FileExists(dirname)
 	checkError(err)
 	if !exists {
-		os.MkdirAll(dirname, permission)
+		err := os.MkdirAll(dirname, permission)
+		checkError(err)
 	}
 }
 
@@ -68,7 +69,8 @@ func CreateFileIfNotExists(filename string, permission os.FileMode) {
 	exists, err := FileExists(filename)
 	checkError(err)
 	if !exists {
-		ioutil.WriteFile(filename, []byte{}, permission)
+		err = ioutil.WriteFile(filename, []byte{}, permission)
+		checkError(err)
 	}
 }
 
@@ -102,7 +104,8 @@ func ExecCmd(input []byte, cmd string, suppressedOutput bool, environment ...str
 		}
 		defer r.Close()
 		go func() {
-			w.Write([]byte(input))
+			_, err = w.Write([]byte(input))
+			checkError(err)
 			w.Close()
 		}()
 		stdin = r
@@ -131,6 +134,7 @@ func ExecCmdReturnOutput(cmd string, args ...string) (output string, err error) 
 }
 
 // ReadTarget file into Target
+// DEPRECATED: Use `TargetReader` instead.
 func ReadTarget(pathTarget string, target *Target) {
 	targetFile, err := ioutil.ReadFile(pathTarget)
 	checkError(err)
@@ -141,6 +145,7 @@ func ReadTarget(pathTarget string, target *Target) {
 // NewConfigFromBytes returns a client from the given kubeconfig path
 func NewConfigFromBytes(kubeconfig string) *restclient.Config {
 	kubecf, err := ioutil.ReadFile(kubeconfig)
+	checkError(err)
 	configObj, err := clientcmd.Load(kubecf)
 	if err != nil {
 		fmt.Println("Could not load config")

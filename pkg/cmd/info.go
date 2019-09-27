@@ -42,7 +42,7 @@ func NewInfoCmd(targetReader TargetReader, ioStreams IOStreams) *cobra.Command {
 				return err
 			}
 
-			shootList, err := gardenClientset.GardenV1beta1().Shoots(metav1.NamespaceAll).List(metav1.ListOptions{})
+			shootList, err := gardenClientset.CoreV1alpha1().Shoots(metav1.NamespaceAll).List(metav1.ListOptions{})
 			if err != nil {
 				return err
 			}
@@ -50,11 +50,11 @@ func NewInfoCmd(targetReader TargetReader, ioStreams IOStreams) *cobra.Command {
 			var unscheduled = 0
 			shootsCountPerSeed := make(map[string]int)
 			for _, shoot := range shootList.Items {
-				if shoot.Spec.Cloud.Seed == nil {
+				if shoot.Spec.SeedName == nil {
 					unscheduled++
 					continue
 				}
-				shootsCountPerSeed[*shoot.Spec.Cloud.Seed]++
+				shootsCountPerSeed[*shoot.Spec.SeedName]++
 			}
 
 			var sortedSeeds []string

@@ -26,11 +26,9 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/gardener/gardener/pkg/apis/garden/v1beta1"
-	clientset "github.com/gardener/gardener/pkg/client/garden/clientset/versioned"
-
-	yaml "gopkg.in/yaml.v2"
-
+	gardencorev1alpha1 "github.com/gardener/gardener/pkg/apis/core/v1alpha1"
+	gardencoreclientset "github.com/gardener/gardener/pkg/client/core/clientset/versioned"
+	"gopkg.in/yaml.v2"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	k8s "k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/clientcmd"
@@ -56,6 +54,7 @@ func GetGardenClusterKubeConfigFromConfig(pathGardenConfig, pathTarget string) {
 	if i.Size() == 0 {
 		// if no garden cluster is selected take the first as default cluster
 		i, err := os.Stat(pathGardenConfig)
+		checkError(err)
 		if i.Size() == 0 {
 			fmt.Println("Please provide a gardenctl configuration before usage")
 			return
@@ -67,11 +66,13 @@ func GetGardenClusterKubeConfigFromConfig(pathGardenConfig, pathTarget string) {
 		defer file.Close()
 		content, err := yaml.Marshal(target)
 		checkError(err)
-		file.Write(content)
+		_, err = file.Write(content)
+		checkError(err)
 	}
 }
 
 // clientToTarget returns the client to target e.g. garden, seed
+// DEPRECATED: Use `target.K8SClientToKind()` instead.
 func clientToTarget(target TargetKind) (*k8s.Clientset, error) {
 	switch target {
 	case TargetKindGarden:
@@ -81,7 +82,7 @@ func clientToTarget(target TargetKind) (*k8s.Clientset, error) {
 	case TargetKindShoot:
 		KUBECONFIG = getKubeConfigOfClusterType("shoot")
 	}
-	var pathToKubeconfig = ""
+	var pathToKubeconfig string
 	if kubeconfig == nil {
 		if home := HomeDir(); home != "" {
 			if target == TargetKindSeed || target == TargetKindShoot {
@@ -100,7 +101,8 @@ func clientToTarget(target TargetKind) (*k8s.Clientset, error) {
 		masterURL = flag.String("master", "", "The address of the Kubernetes API server. Overrides any value in kubeconfig. Only required if out-of-cluster.")
 		flag.Parse()
 	} else {
-		flag.Set("kubeconfig", KUBECONFIG)
+		err := flag.Set("kubeconfig", KUBECONFIG)
+		checkError(err)
 	}
 	// use the current context in kubeconfig
 	config, err := clientcmd.BuildConfigFromFlags("", *kubeconfig)
@@ -109,16 +111,6 @@ func clientToTarget(target TargetKind) (*k8s.Clientset, error) {
 	clientset, err := k8s.NewForConfig(config)
 	checkError(err)
 	return clientset, err
-}
-
-// nameOfTargetedCluster returns the full clustername of the currently targeted cluster
-func nameOfTargetedCluster() (clustername string) {
-	clustername, err = ExecCmdReturnOutput("bash", "-c", "export KUBECONFIG="+KUBECONFIG+"; kubectl config current-context")
-	if err != nil {
-		fmt.Println("Cmd was unsuccessful")
-		os.Exit(2)
-	}
-	return clustername
 }
 
 // getShootClusterName returns the clustername of the shoot cluster
@@ -153,6 +145,7 @@ func getMonitoringCredentials() (username, password string) {
 	ReadTarget(pathTarget, &target)
 	shootName := target.Target[2].Name
 	shootNamespace := getSeedNamespaceNameForShoot(shootName)
+	var err error
 	Client, err = clientToTarget("seed")
 	checkError(err)
 	secretName := "monitoring-ingress-credentials"
@@ -175,6 +168,7 @@ func getLoggingCredentials() (username, password string) {
 		namespace = getSeedNamespaceNameForShoot(target.Target[2].Name)
 		secretName = "logging-ingress-credentials"
 	}
+	var err error
 	Client, err = clientToTarget("seed")
 	checkError(err)
 	monitoringSecret, err := Client.CoreV1().Secrets(namespace).Get((secretName), metav1.GetOptions{})
@@ -188,21 +182,22 @@ func getLoggingCredentials() (username, password string) {
 func getSeedNamespaceNameForShoot(shootName string) (namespaceSeed string) {
 	var target Target
 	ReadTarget(pathTarget, &target)
+	var err error
 	Client, err = clientToTarget("garden")
 	checkError(err)
-	gardenClientset, err := clientset.NewForConfig(NewConfigFromBytes(*kubeconfig))
+	gardenClientset, err := gardencoreclientset.NewForConfig(NewConfigFromBytes(*kubeconfig))
 	checkError(err)
-	var shoot *v1beta1.Shoot
+	var shoot *gardencorev1alpha1.Shoot
 	if target.Stack()[1].Kind == "project" {
-		project, err := gardenClientset.GardenV1beta1().Projects().Get(target.Stack()[1].Name, metav1.GetOptions{})
+		project, err := gardenClientset.CoreV1alpha1().Projects().Get(target.Stack()[1].Name, metav1.GetOptions{})
 		checkError(err)
-		shoot, err = gardenClientset.GardenV1beta1().Shoots(*project.Spec.Namespace).Get(target.Stack()[2].Name, metav1.GetOptions{})
+		shoot, err = gardenClientset.CoreV1alpha1().Shoots(*project.Spec.Namespace).Get(target.Stack()[2].Name, metav1.GetOptions{})
 		checkError(err)
 	} else {
-		shootList, err := gardenClientset.GardenV1beta1().Shoots("").List(metav1.ListOptions{})
+		shootList, err := gardenClientset.CoreV1alpha1().Shoots("").List(metav1.ListOptions{})
 		checkError(err)
 		for index, s := range shootList.Items {
-			if s.Name == target.Stack()[2].Name && *s.Spec.Cloud.Seed == target.Stack()[1].Name {
+			if s.Name == target.Stack()[2].Name && *s.Spec.SeedName == target.Stack()[1].Name {
 				shoot = &shootList.Items[index]
 				break
 			}
@@ -218,14 +213,15 @@ func getProjectForShoot() (projectName string) {
 	if target.Target[1].Kind == "project" {
 		projectName = target.Target[1].Name
 	} else {
+		var err error
 		Client, err = clientToTarget("garden")
 		checkError(err)
-		gardenClientset, err := clientset.NewForConfig(NewConfigFromBytes(*kubeconfig))
+		gardenClientset, err := gardencoreclientset.NewForConfig(NewConfigFromBytes(*kubeconfig))
 		checkError(err)
-		shootList, err := gardenClientset.GardenV1beta1().Shoots("").List(metav1.ListOptions{})
+		shootList, err := gardenClientset.CoreV1alpha1().Shoots("").List(metav1.ListOptions{})
 		checkError(err)
 		for _, shoot := range shootList.Items {
-			if shoot.Name == target.Target[2].Name && *shoot.Spec.Cloud.Seed == target.Target[1].Name {
+			if shoot.Name == target.Target[2].Name && *shoot.Spec.SeedName == target.Target[1].Name {
 				projectName = shoot.Namespace
 				break
 			}
