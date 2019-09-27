@@ -15,7 +15,7 @@
 package cmd
 
 import (
-	clientset "github.com/gardener/gardener/pkg/client/garden/clientset/versioned"
+	gardencoreclientset "github.com/gardener/gardener/pkg/client/core/clientset/versioned"
 	"k8s.io/client-go/kubernetes"
 )
 
@@ -34,14 +34,22 @@ type KubeconfigReader interface {
 	ReadKubeconfig(kubeconfigPath string) ([]byte, error)
 }
 
+// KubeconfigWriter writes kubeconfig to given path.
+type KubeconfigWriter interface {
+	Write(path string, kubeconfig []byte) error
+}
+
 // GardenctlTargetReader implements TargetReader.
 type GardenctlTargetReader struct{}
 
 // GardenctlTargetWriter implements TargetWriter.
 type GardenctlTargetWriter struct{}
 
-// GardenctlKubeconfigReader implements TargetWriter.
+// GardenctlKubeconfigReader implements KubeconfigReader.
 type GardenctlKubeconfigReader struct{}
+
+// GardenctlKubeconfigWriter implements KubeconfigWriter.
+type GardenctlKubeconfigWriter struct{}
 
 // TargetInterface defines target operations.
 type TargetInterface interface {
@@ -50,7 +58,7 @@ type TargetInterface interface {
 	Kind() (TargetKind, error)
 	K8SClient() (kubernetes.Interface, error)
 	K8SClientToKind(TargetKind) (kubernetes.Interface, error)
-	GardenerClient() (clientset.Interface, error)
+	GardenerClient() (gardencoreclientset.Interface, error)
 }
 
 // Target contains the current target.

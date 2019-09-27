@@ -29,7 +29,6 @@ const (
 var (
 	// Client is Clientset to use for specified cluster
 	Client     *kubernetes.Clientset
-	err        error
 	kubeconfig *string
 
 	// KUBECONFIG contains path to file

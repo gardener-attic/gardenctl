@@ -15,32 +15,27 @@
 package cmd
 
 import (
-	"fmt"
-	"io/ioutil"
-	"os"
+	"errors"
 	"strings"
 
 	"github.com/spf13/cobra"
-	yaml "gopkg.in/yaml.v2"
 )
 
 // NewAwsCmd returns a new aws command.
-func NewAwsCmd() *cobra.Command {
+func NewAwsCmd(targetReader TargetReader) *cobra.Command {
 	return &cobra.Command{
-		Use:   "aws <args>",
-		Short: "",
-		Run: func(cmd *cobra.Command, args []string) {
-			var t Target
-			targetFile, err := ioutil.ReadFile(pathTarget)
-			checkError(err)
-			err = yaml.Unmarshal(targetFile, &t)
-			checkError(err)
-			if len(t.Target) < 3 {
-				fmt.Println("No shoot targeted")
-				os.Exit(2)
+		Use:          "aws <args>",
+		SilenceUsage: true,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			target := targetReader.ReadTarget(pathTarget)
+			if len(target.Stack()) < 3 {
+				return errors.New("no shoot targeted")
 			}
+
 			arguments := "aws " + strings.Join(args[:], " ")
 			operate("aws", arguments)
+
+			return nil
 		},
 	}
 }

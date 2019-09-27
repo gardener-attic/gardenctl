@@ -6,7 +6,7 @@ package cmd
 
 import (
 	cmd "github.com/gardener/gardenctl/pkg/cmd"
-	versioned "github.com/gardener/gardener/pkg/client/garden/clientset/versioned"
+	versioned "github.com/gardener/gardener/pkg/client/core/clientset/versioned"
 	gomock "github.com/golang/mock/gomock"
 	kubernetes "k8s.io/client-go/kubernetes"
 	reflect "reflect"

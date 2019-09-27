@@ -19,12 +19,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io/ioutil"
-	"os"
 	"path/filepath"
 	"strings"
 
-	"github.com/gardener/gardener/pkg/apis/garden/v1beta1"
+	gardencorev1alpha1 "github.com/gardener/gardener/pkg/apis/core/v1alpha1"
 	yaml2 "github.com/ghodss/yaml"
 	"github.com/spf13/cobra"
 	yaml "gopkg.in/yaml.v2"
@@ -32,12 +30,13 @@ import (
 )
 
 // NewGetCmd returns a new get command.
-func NewGetCmd(targetReader TargetReader, reader ConfigReader, kubeconfigReader KubeconfigReader, ioStreams IOStreams) *cobra.Command {
+func NewGetCmd(targetReader TargetReader, configReader ConfigReader,
+	kubeconfigReader KubeconfigReader, kubeconfigWriter KubeconfigWriter, ioStreams IOStreams) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:          "get [(garden|project|seed|shoot|target) <name>]",
 		Short:        "Get single resource instance or target stack, e.g. CRD of a shoot (default: current target)\n",
 		SilenceUsage: true,
-		RunE: func(cmd *cobra.Command, args []string) error {
+		RunE: func(cmd *cobra.Command, args []string) (err error) {
 			if len(args) < 1 || len(args) > 2 {
 				return errors.New("command must be in the format: get [(garden|project|seed|shoot|target) <name>]")
 			}
@@ -55,21 +54,14 @@ func NewGetCmd(targetReader TargetReader, reader ConfigReader, kubeconfigReader 
 						return err
 					}
 				}
-				tmp := KUBECONFIG
-				Client, err = clientToTarget("garden")
-				if err != nil {
-					return err
-				}
-
-				KUBECONFIG = tmp
 			case "garden":
 				if len(args) == 1 {
-					err = getGarden("", reader, targetReader, kubeconfigReader, ioStreams)
+					err = getGarden("", configReader, targetReader, kubeconfigReader, ioStreams)
 					if err != nil {
 						return err
 					}
 				} else if len(args) == 2 {
-					err = getGarden(args[1], reader, targetReader, kubeconfigReader, ioStreams)
+					err = getGarden(args[1], configReader, targetReader, kubeconfigReader, ioStreams)
 					if err != nil {
 						return err
 					}
@@ -88,12 +80,12 @@ func NewGetCmd(targetReader TargetReader, reader ConfigReader, kubeconfigReader 
 				}
 			case "shoot":
 				if len(args) == 1 {
-					err = getShoot("", targetReader, ioStreams)
+					err = getShoot("", targetReader, kubeconfigWriter, ioStreams)
 					if err != nil {
 						return err
 					}
 				} else if len(args) == 2 {
-					err = getShoot(args[1], targetReader, ioStreams)
+					err = getShoot(args[1], targetReader, kubeconfigWriter, ioStreams)
 					if err != nil {
 						return err
 					}
@@ -117,8 +109,8 @@ func NewGetCmd(targetReader TargetReader, reader ConfigReader, kubeconfigReader 
 
 // getProject lists
 func getProject(name string, targetReader TargetReader, ioStreams IOStreams) error {
+	target := targetReader.ReadTarget(pathTarget)
 	if name == "" {
-		target := targetReader.ReadTarget(pathTarget)
 		if len(target.Stack()) < 2 {
 			return errors.New("no project targeted")
 		} else if len(target.Stack()) > 1 && target.Stack()[1].Kind == "project" {
@@ -127,40 +119,33 @@ func getProject(name string, targetReader TargetReader, ioStreams IOStreams) err
 			return errors.New("seed targeted, project expected")
 		}
 	}
-	Client, err = clientToTarget("garden")
+	clientset, err := target.GardenerClient()
 	if err != nil {
 		return err
 	}
-	namespace, err := Client.CoreV1().Namespaces().Get(name, metav1.GetOptions{})
+	project, err := clientset.CoreV1alpha1().Projects().Get(name, metav1.GetOptions{})
 	if err != nil {
 		return err
 	}
 	if outputFormat == "yaml" {
-		j, err := json.Marshal(namespace)
-		if err != nil {
+		var output []byte
+		if output, err = yaml.Marshal(project); err != nil {
 			return err
 		}
-		y, err := yaml2.JSONToYAML(j)
-		if err != nil {
-			return err
-		}
-
-		fmt.Fprint(ioStreams.Out, string(y))
+		fmt.Fprint(ioStreams.Out, string(output))
 	} else if outputFormat == "json" {
-		j, err := json.Marshal(namespace)
-		if err != nil {
+		var output []byte
+		if output, err = json.MarshalIndent(project, "", "  "); err != nil {
 			return err
 		}
-		var out bytes.Buffer
-		json.Indent(&out, j, "", "  ")
-		out.WriteTo(ioStreams.Out)
+		fmt.Fprint(ioStreams.Out, string(output))
 	}
 
 	return nil
 }
 
 // getGarden lists kubeconfig of garden cluster
-func getGarden(name string, reader ConfigReader, targetReader TargetReader, kubeconfigReader KubeconfigReader, ioStreams IOStreams) error {
+func getGarden(name string, configReader ConfigReader, targetReader TargetReader, kubeconfigReader KubeconfigReader, ioStreams IOStreams) error {
 	if name == "" {
 		target := targetReader.ReadTarget(pathTarget)
 		if len(target.Stack()) > 0 {
@@ -170,7 +155,7 @@ func getGarden(name string, reader ConfigReader, targetReader TargetReader, kube
 		}
 	}
 
-	config := reader.ReadConfig(pathGardenConfig)
+	config := configReader.ReadConfig(pathGardenConfig)
 	match := false
 	for index, garden := range config.GardenClusters {
 		if garden.Name == name {
@@ -185,13 +170,15 @@ func getGarden(name string, reader ConfigReader, targetReader TargetReader, kube
 			if outputFormat == "yaml" {
 				fmt.Fprint(ioStreams.Out, fmt.Sprintf("%s\n", kubeconfig))
 			} else if outputFormat == "json" {
-				y, err := yaml2.YAMLToJSON([]byte(kubeconfig))
+				y, err := yaml2.YAMLToJSON(kubeconfig)
 				if err != nil {
 					return err
 				}
 				var out bytes.Buffer
-				json.Indent(&out, y, "", "  ")
-				out.WriteTo(ioStreams.Out)
+				if err = json.Indent(&out, y, "", "  "); err != nil {
+					return err
+				}
+				fmt.Fprint(ioStreams.Out, out.String())
 			}
 			match = true
 		}
@@ -223,7 +210,7 @@ func getSeed(name string, targetReader TargetReader, ioStreams IOStreams) error 
 	if err != nil {
 		return err
 	}
-	seed, err := gardenClientset.GardenV1beta1().Seeds().Get(name, metav1.GetOptions{})
+	seed, err := gardenClientset.CoreV1alpha1().Seeds().Get(name, metav1.GetOptions{})
 	if err != nil {
 		return err
 	}
@@ -231,26 +218,25 @@ func getSeed(name string, targetReader TargetReader, ioStreams IOStreams) error 
 	if err != nil {
 		return err
 	}
-	if err != nil {
-		return err
-	}
 	if outputFormat == "yaml" {
 		fmt.Fprint(ioStreams.Out, fmt.Sprintf("%s\n", kubeSecret.Data["kubeconfig"]))
 	} else if outputFormat == "json" {
-		y, err := yaml2.YAMLToJSON([]byte(kubeSecret.Data["kubeconfig"]))
+		y, err := yaml2.YAMLToJSON(kubeSecret.Data["kubeconfig"])
 		if err != nil {
 			return err
 		}
 		var out bytes.Buffer
-		json.Indent(&out, y, "", "  ")
-		out.WriteTo(ioStreams.Out)
+		if err = json.Indent(&out, y, "", "  "); err != nil {
+			return err
+		}
+		fmt.Fprint(ioStreams.Out, out.String())
 	}
 
 	return nil
 }
 
 // getShoot lists kubeconfig of shoot
-func getShoot(name string, targetReader TargetReader, ioStreams IOStreams) error {
+func getShoot(name string, targetReader TargetReader, kubeconfigWriter KubeconfigWriter, ioStreams IOStreams) error {
 	target := targetReader.ReadTarget(pathTarget)
 	if name == "" {
 		if len(target.Stack()) < 3 {
@@ -270,20 +256,20 @@ func getShoot(name string, targetReader TargetReader, ioStreams IOStreams) error
 		return err
 	}
 	var namespace string
-	var shoot *v1beta1.Shoot
+	var shoot *gardencorev1alpha1.Shoot
 	if target.Stack()[1].Kind == "project" {
-		project, err := gardenClientset.GardenV1beta1().Projects().Get(target.Stack()[1].Name, metav1.GetOptions{})
+		project, err := gardenClientset.CoreV1alpha1().Projects().Get(target.Stack()[1].Name, metav1.GetOptions{})
 		if err != nil {
 			return err
 		}
 		if name == "" {
-			shoot, err = gardenClientset.GardenV1beta1().Shoots(*project.Spec.Namespace).Get(target.Stack()[2].Name, metav1.GetOptions{})
+			shoot, err = gardenClientset.CoreV1alpha1().Shoots(*project.Spec.Namespace).Get(target.Stack()[2].Name, metav1.GetOptions{})
 			if err != nil {
 				return err
 			}
 		}
 		if name != "" {
-			shoot, err = gardenClientset.GardenV1beta1().Shoots(*project.Spec.Namespace).Get(name, metav1.GetOptions{})
+			shoot, err = gardenClientset.CoreV1alpha1().Shoots(*project.Spec.Namespace).Get(name, metav1.GetOptions{})
 			if err != nil {
 				return err
 			}
@@ -291,12 +277,12 @@ func getShoot(name string, targetReader TargetReader, ioStreams IOStreams) error
 		namespace = shoot.Status.TechnicalID
 	}
 	if target.Stack()[1].Kind == "seed" {
-		shootList, err := gardenClientset.GardenV1beta1().Shoots("").List(metav1.ListOptions{})
+		shootList, err := gardenClientset.CoreV1alpha1().Shoots("").List(metav1.ListOptions{})
 		if err != nil {
 			return err
 		}
 		for index, s := range shootList.Items {
-			if s.Name == target.Stack()[2].Name && *s.Spec.Cloud.Seed == target.Stack()[1].Name {
+			if s.Name == target.Stack()[2].Name && *s.Spec.SeedName == target.Stack()[1].Name {
 				if (name == "") && (s.Name == target.Stack()[2].Name) {
 					shoot = &shootList.Items[index]
 					namespace = shootList.Items[index].Status.TechnicalID
@@ -310,7 +296,7 @@ func getShoot(name string, targetReader TargetReader, ioStreams IOStreams) error
 			}
 		}
 	}
-	seed, err := gardenClientset.GardenV1beta1().Seeds().Get(*shoot.Spec.Cloud.Seed, metav1.GetOptions{})
+	seed, err := gardenClientset.CoreV1alpha1().Seeds().Get(*shoot.Spec.SeedName, metav1.GetOptions{})
 	if err != nil {
 		return err
 	}
@@ -319,57 +305,55 @@ func getShoot(name string, targetReader TargetReader, ioStreams IOStreams) error
 		return err
 	}
 	gardenName := target.Stack()[0].Name
-	pathSeed := filepath.Join(pathGardenHome, "cache", gardenName, "seeds", seed.Spec.SecretRef.Name)
-	os.MkdirAll(pathSeed, os.ModePerm)
-	err = ioutil.WriteFile(filepath.Join(pathSeed, "kubeconfig.yaml"), kubeSecret.Data["kubeconfig"], 0644)
-	if err != nil {
-		return err
-	}
-	KUBECONFIG = filepath.Join(pathSeed, "kubeconfig.yaml")
+	kubeconfigPath := filepath.Join(pathGardenHome, "cache", gardenName, "seeds", seed.Spec.SecretRef.Name, "kubeconfig.yaml")
+	err = kubeconfigWriter.Write(kubeconfigPath, kubeSecret.Data["kubeconfig"])
+	checkError(err)
+	KUBECONFIG = kubeconfigPath
 
-	Client, err := target.K8SClientToKind(TargetKindSeed)
+	seedClient, err := target.K8SClientToKind(TargetKindSeed)
 	if err != nil {
 		return err
 	}
-	kubeSecret, err = Client.CoreV1().Secrets(namespace).Get("kubecfg", metav1.GetOptions{})
+	kubeSecret, err = seedClient.CoreV1().Secrets(namespace).Get("kubecfg", metav1.GetOptions{})
 	if err != nil {
 		return err
 	}
 	if outputFormat == "yaml" {
 		fmt.Fprint(ioStreams.Out, fmt.Sprintf("%s\n", kubeSecret.Data["kubeconfig"]))
 	} else if outputFormat == "json" {
-		y, err := yaml2.YAMLToJSON([]byte(kubeSecret.Data["kubeconfig"]))
+		y, err := yaml2.YAMLToJSON(kubeSecret.Data["kubeconfig"])
 		if err != nil {
 			return err
 		}
 		var out bytes.Buffer
-		json.Indent(&out, y, "", "  ")
-		out.WriteTo(ioStreams.Out)
+		if err = json.Indent(&out, y, "", "  "); err != nil {
+			return err
+		}
+		fmt.Fprint(ioStreams.Out, out.String())
 	}
 
 	return nil
 }
 
-// getTarget prints target stack
-func getTarget(targetReader TargetReader, ioStreams IOStreams) error {
+// getTarget prints the target stack.
+func getTarget(targetReader TargetReader, ioStreams IOStreams) (err error) {
 	target := targetReader.ReadTarget(pathTarget)
 	if len(target.Stack()) == 0 {
 		return errors.New("target stack is empty")
-	} else if outputFormat == "yaml" {
-		y, err := yaml.Marshal(target)
-		if err != nil {
-			return err
-		}
+	}
 
-		fmt.Fprint(ioStreams.Out, string(y))
-	} else if outputFormat == "json" {
-		j, err := json.Marshal(target)
-		if err != nil {
+	if outputFormat == "yaml" {
+		var output []byte
+		if output, err = yaml.Marshal(target); err != nil {
 			return err
 		}
-		var out bytes.Buffer
-		json.Indent(&out, j, "", "  ")
-		out.WriteTo(ioStreams.Out)
+		fmt.Fprint(ioStreams.Out, string(output))
+	} else if outputFormat == "json" {
+		var output []byte
+		if output, err = json.MarshalIndent(target, "", "  "); err != nil {
+			return err
+		}
+		fmt.Fprint(ioStreams.Out, string(output))
 	}
 
 	return nil

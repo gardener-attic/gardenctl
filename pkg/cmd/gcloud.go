@@ -15,32 +15,27 @@
 package cmd
 
 import (
-	"fmt"
-	"io/ioutil"
-	"os"
+	"errors"
 	"strings"
 
 	"github.com/spf13/cobra"
-	yaml "gopkg.in/yaml.v2"
 )
 
 // NewGcloudCmd return a new gcloud command.
-func NewGcloudCmd() *cobra.Command {
+func NewGcloudCmd(targetReader TargetReader) *cobra.Command {
 	return &cobra.Command{
-		Use:   "gcloud <args>",
-		Short: "",
-		Run: func(cmd *cobra.Command, args []string) {
-			var t Target
-			targetFile, err := ioutil.ReadFile(pathTarget)
-			checkError(err)
-			err = yaml.Unmarshal(targetFile, &t)
-			checkError(err)
-			if len(t.Target) < 3 {
-				fmt.Println("No shoot targeted")
-				os.Exit(2)
+		Use:          "gcloud <args>",
+		SilenceUsage: true,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			target := targetReader.ReadTarget(pathTarget)
+			if len(target.Stack()) < 3 {
+				return errors.New("no shoot targeted")
 			}
+
 			arguments := "gcloud " + strings.Join(args[:], " ")
 			operate("gcp", arguments)
+
+			return nil
 		},
 	}
 }

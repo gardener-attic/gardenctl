@@ -15,6 +15,7 @@
 package core
 
 import (
+	"github.com/gardener/gardener/pkg/apis/garden"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 )
@@ -45,12 +46,28 @@ var (
 // Adds the list of known types to the given scheme.
 func addKnownTypes(scheme *runtime.Scheme) error {
 	scheme.AddKnownTypes(SchemeGroupVersion,
+		&BackupBucket{},
+		&BackupBucketList{},
+		&BackupEntry{},
+		&BackupEntryList{},
+		&garden.CloudProfile{},
+		&garden.CloudProfileList{},
 		&ControllerRegistration{},
 		&ControllerRegistrationList{},
 		&ControllerInstallation{},
 		&ControllerInstallationList{},
 		&Plant{},
 		&PlantList{},
+		&garden.Project{},
+		&garden.ProjectList{},
+		&garden.Quota{},
+		&garden.QuotaList{},
+		&garden.SecretBinding{},
+		&garden.SecretBindingList{},
+		&garden.Seed{},
+		&garden.SeedList{},
+		&garden.Shoot{},
+		&garden.ShootList{},
 	)
 	return nil
 }

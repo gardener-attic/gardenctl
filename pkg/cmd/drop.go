@@ -41,7 +41,7 @@ func NewDropCmd(targetReader TargetReader, targetWriter TargetWriter, ioStreams 
 				fmt.Fprintf(ioStreams.Out, "Dropped %s %s\n", target.Stack()[stackLength-1].Kind, target.Stack()[stackLength-1].Name)
 
 				target.SetStack(target.Stack()[:stackLength-1])
-				if err = targetWriter.WriteTarget(pathTarget, target); err != nil {
+				if err := targetWriter.WriteTarget(pathTarget, target); err != nil {
 					return err
 				}
 			} else if len(args) == 1 {
@@ -95,7 +95,7 @@ func drop(targetWriter TargetWriter) {
 		fmt.Println("Target stack is empty")
 	}
 
-	err = targetWriter.WriteTarget(pathTarget, &target)
+	err := targetWriter.WriteTarget(pathTarget, &target)
 	checkError(err)
 
 	KUBECONFIG = getKubeConfigOfCurrentTarget()

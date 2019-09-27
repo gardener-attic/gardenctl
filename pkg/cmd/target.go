@@ -22,10 +22,10 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/gardener/gardener/pkg/apis/garden/v1beta1"
-	clientset "github.com/gardener/gardener/pkg/client/garden/clientset/versioned"
+	gardencorev1alpha1 "github.com/gardener/gardener/pkg/apis/core/v1alpha1"
+	gardencoreclientset "github.com/gardener/gardener/pkg/client/core/clientset/versioned"
 	"github.com/spf13/cobra"
-	yaml "gopkg.in/yaml.v2"
+	"gopkg.in/yaml.v2"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 )
@@ -91,7 +91,7 @@ func NewTargetCmd(targetReader TargetReader, targetWriter TargetWriter, configRe
 				if len(target.Stack()) < 1 {
 					return errors.New("no garden cluster targeted")
 				}
-				seeds := resolveNameSeed(args[1])
+				seeds := resolveNameSeed(target, args[1])
 				if len(seeds) == 0 {
 					return fmt.Errorf("no match for %q", args[1])
 				} else if len(seeds) == 1 {
@@ -147,7 +147,7 @@ func NewTargetCmd(targetReader TargetReader, targetWriter TargetWriter, configRe
 					}
 					break
 				} else if !garden && seed && !project {
-					seeds := resolveNameSeed(args[0])
+					seeds := resolveNameSeed(target, args[0])
 					if len(seeds) == 0 {
 						fmt.Println("No match for " + args[0])
 						os.Exit(2)
@@ -178,9 +178,12 @@ func NewTargetCmd(targetReader TargetReader, targetWriter TargetWriter, configRe
 					break
 				}
 				tmp := KUBECONFIG
+				var err error
 				Client, err = clientToTarget("garden")
 				checkError(err)
-				seedList := getSeeds()
+				clientset, err := target.GardenerClient()
+				checkError(err)
+				seedList := getSeeds(clientset)
 				for _, seed := range seedList.Items {
 					if args[0] == seed.Name {
 						targetSeed(targetReader, targetWriter, args[0], true)
@@ -189,7 +192,7 @@ func NewTargetCmd(targetReader TargetReader, targetWriter TargetWriter, configRe
 				}
 				gardenClientset, err := target.GardenerClient()
 				checkError(err)
-				projectList, err := gardenClientset.GardenV1beta1().Projects().List(metav1.ListOptions{})
+				projectList, err := gardenClientset.CoreV1alpha1().Projects().List(metav1.ListOptions{})
 				checkError(err)
 				match := false
 				for _, project := range projectList.Items {
@@ -239,14 +242,14 @@ func resolveNameProject(target TargetInterface, name string) (matches []string) 
 	gardenClientset, err := target.GardenerClient()
 	checkError(err)
 	if !strings.Contains(name, "*") {
-		project, err := gardenClientset.GardenV1beta1().Projects().Get(name, metav1.GetOptions{})
+		project, err := gardenClientset.CoreV1alpha1().Projects().Get(name, metav1.GetOptions{})
 		if err != nil {
 			return []string{}
 		}
 		return []string{project.Name}
 	}
 
-	projectList, err := gardenClientset.GardenV1beta1().Projects().List(metav1.ListOptions{})
+	projectList, err := gardenClientset.CoreV1alpha1().Projects().List(metav1.ListOptions{})
 	checkError(err)
 	matcher := ""
 	for _, project := range projectList.Items {
@@ -283,7 +286,7 @@ func targetProject(targetReader TargetReader, targetWriter TargetWriter, name st
 		Name: name,
 	})
 	target.SetStack(new)
-	err = targetWriter.WriteTarget(pathTarget, target)
+	err := targetWriter.WriteTarget(pathTarget, target)
 	checkError(err)
 }
 
@@ -327,19 +330,22 @@ func targetGarden(targetWriter TargetWriter, name string) {
 		},
 	}
 
-	err = targetWriter.WriteTarget(pathTarget, target)
+	err := targetWriter.WriteTarget(pathTarget, target)
 	checkError(err)
 
 	fmt.Println("KUBECONFIG=" + getKubeConfigOfCurrentTarget())
 }
 
 // resolveNameSeed resolves name to seed
-func resolveNameSeed(name string) (matches []string) {
+func resolveNameSeed(target TargetInterface, name string) (matches []string) {
 	tmp := KUBECONFIG
+	var err error
 	Client, err = clientToTarget("garden")
 	checkError(err)
 	matcher := ""
-	seedList := getSeeds()
+	clientset, err := target.GardenerClient()
+	checkError(err)
+	seedList := getSeeds(clientset)
 	for _, seed := range seedList.Items {
 		if strings.HasPrefix(name, "*") && strings.HasSuffix(name, "*") {
 			matcher = strings.Replace(name, "*", "", 2)
@@ -368,13 +374,14 @@ func resolveNameSeed(name string) (matches []string) {
 
 // targetSeed targets kubeconfig file of seed cluster and updates target
 func targetSeed(targetReader TargetReader, targetWriter TargetWriter, name string, cache bool) {
+	var err error
 	Client, err = clientToTarget("garden")
 	checkError(err)
 	target := targetReader.ReadTarget(pathTarget)
 	gardenName := target.Stack()[0].Name
-	gardenClientset, err := clientset.NewForConfig(NewConfigFromBytes(*kubeconfig))
+	gardenClientset, err := target.GardenerClient()
 	checkError(err)
-	seed, err := gardenClientset.GardenV1beta1().Seeds().Get(name, metav1.GetOptions{})
+	seed, err := gardenClientset.CoreV1alpha1().Seeds().Get(name, metav1.GetOptions{})
 	if err != nil {
 		fmt.Println("Seed not found")
 		os.Exit(2)
@@ -382,7 +389,8 @@ func targetSeed(targetReader TargetReader, targetWriter TargetWriter, name strin
 	kubeSecret, err := Client.CoreV1().Secrets(seed.Spec.SecretRef.Namespace).Get(seed.Spec.SecretRef.Name, metav1.GetOptions{})
 	checkError(err)
 	pathSeed := filepath.Join(pathGardenHome, "cache", gardenName, "seeds", name)
-	os.MkdirAll(pathSeed, os.ModePerm)
+	err = os.MkdirAll(pathSeed, os.ModePerm)
+	checkError(err)
 	err = ioutil.WriteFile(filepath.Join(pathSeed, "kubeconfig.yaml"), kubeSecret.Data["kubeconfig"], 0644)
 	checkError(err)
 	KUBECONFIG = filepath.Join(pathSeed, "kubeconfig.yaml")
@@ -405,31 +413,31 @@ func targetSeed(targetReader TargetReader, targetWriter TargetWriter, name strin
 }
 
 // resolveNameShoot resolves name to shoot
-func resolveNameShoot(target TargetInterface, name string) (matches []v1beta1.Shoot) {
+func resolveNameShoot(target TargetInterface, name string) (matches []gardencorev1alpha1.Shoot) {
 	gardenClientset, err := target.GardenerClient()
 	checkError(err)
 
-	var shootList *v1beta1.ShootList
+	var shootList *gardencorev1alpha1.ShootList
 	if len(target.Stack()) > 1 && target.Stack()[1].Kind == TargetKindProject {
 		projectName := target.Stack()[1].Name
-		project, err := gardenClientset.GardenV1beta1().Projects().Get(projectName, metav1.GetOptions{})
+		project, err := gardenClientset.CoreV1alpha1().Projects().Get(projectName, metav1.GetOptions{})
 		checkError(err)
 
 		projectNamespace := project.Spec.Namespace
-		shootList, err = gardenClientset.GardenV1beta1().Shoots(*projectNamespace).List(metav1.ListOptions{})
+		shootList, err = gardenClientset.CoreV1alpha1().Shoots(*projectNamespace).List(metav1.ListOptions{})
 		checkError(err)
 	} else if len(target.Stack()) > 1 && target.Stack()[1].Kind == TargetKindSeed {
-		shootList, err = gardenClientset.GardenV1beta1().Shoots("").List(metav1.ListOptions{})
+		shootList, err = gardenClientset.CoreV1alpha1().Shoots("").List(metav1.ListOptions{})
 		checkError(err)
-		var filteredShoots []v1beta1.Shoot
+		var filteredShoots []gardencorev1alpha1.Shoot
 		for _, shoot := range shootList.Items {
-			if *shoot.Spec.Cloud.Seed == target.Stack()[1].Name {
+			if *shoot.Spec.SeedName == target.Stack()[1].Name {
 				filteredShoots = append(filteredShoots, shoot)
 			}
 		}
 		shootList.Items = filteredShoots
 	} else {
-		shootList, err = gardenClientset.GardenV1beta1().Shoots("").List(metav1.ListOptions{})
+		shootList, err = gardenClientset.CoreV1alpha1().Shoots("").List(metav1.ListOptions{})
 		checkError(err)
 	}
 
@@ -462,7 +470,7 @@ func resolveNameShoot(target TargetInterface, name string) (matches []v1beta1.Sh
 }
 
 // targetShoot targets shoot cluster with project as default value in stack
-func targetShoot(targetWriter TargetWriter, shoot v1beta1.Shoot) {
+func targetShoot(targetWriter TargetWriter, shoot gardencorev1alpha1.Shoot) {
 	var target Target
 	ReadTarget(pathTarget, &target)
 
@@ -473,13 +481,13 @@ func targetShoot(targetWriter TargetWriter, shoot v1beta1.Shoot) {
 
 	gardenClientset, err := target.GardenerClient()
 	checkError(err)
-	seed, err := gardenClientset.GardenV1beta1().Seeds().Get(*shoot.Spec.Cloud.Seed, metav1.GetOptions{})
+	seed, err := gardenClientset.CoreV1alpha1().Seeds().Get(*shoot.Spec.SeedName, metav1.GetOptions{})
 	checkError(err)
 	gardenClient, err := target.K8SClientToKind(TargetKindGarden)
 	checkError(err)
 	seedKubeconfigSecret, err := gardenClient.CoreV1().Secrets(seed.Spec.SecretRef.Namespace).Get(seed.Spec.SecretRef.Name, metav1.GetOptions{})
 	checkError(err)
-	var seedCacheDir = filepath.Join(pathSeedCache, *shoot.Spec.Cloud.Seed)
+	var seedCacheDir = filepath.Join(pathSeedCache, *shoot.Spec.SeedName)
 	err = os.MkdirAll(seedCacheDir, os.ModePerm)
 	checkError(err)
 	var seedKubeconfigPath = filepath.Join(seedCacheDir, "kubeconfig.yaml")
@@ -503,7 +511,7 @@ func targetShoot(targetWriter TargetWriter, shoot v1beta1.Shoot) {
 		drop(targetWriter)
 		if target.Target[1].Kind == "seed" {
 			target.Target[1].Kind = "seed"
-			target.Target[1].Name = *shoot.Spec.Cloud.Seed
+			target.Target[1].Name = *shoot.Spec.SeedName
 		} else if target.Target[1].Kind == "project" {
 			target.Target[1].Kind = "project"
 			target.Target[1].Name = projectName
@@ -514,7 +522,7 @@ func targetShoot(targetWriter TargetWriter, shoot v1beta1.Shoot) {
 		drop(targetWriter)
 		if len(target.Target) > 2 && target.Target[1].Kind == "seed" {
 			target.Target = target.Target[:len(target.Target)-2]
-			target.Target = append(target.Target, TargetMeta{"seed", *shoot.Spec.Cloud.Seed})
+			target.Target = append(target.Target, TargetMeta{"seed", *shoot.Spec.SeedName})
 			target.Target = append(target.Target, TargetMeta{"shoot", shoot.Name})
 		} else if len(target.Target) > 2 && target.Target[1].Kind == "project" {
 			target.Target = target.Target[:len(target.Target)-2]
@@ -561,15 +569,16 @@ func getProjectNameByShootNamespace(k8sClientToGarden kubernetes.Interface, shoo
 
 // getSeedForProject
 func getSeedForProject(shootName string) (seedName string) {
+	var err error
 	Client, err = clientToTarget("garden")
 	checkError(err)
-	gardenClientset, err := clientset.NewForConfig(NewConfigFromBytes(*kubeconfig))
+	gardenClientset, err := gardencoreclientset.NewForConfig(NewConfigFromBytes(*kubeconfig))
 	checkError(err)
-	shootList, err := gardenClientset.GardenV1beta1().Shoots("").List(metav1.ListOptions{})
+	shootList, err := gardenClientset.CoreV1alpha1().Shoots("").List(metav1.ListOptions{})
 	checkError(err)
 	for _, item := range shootList.Items {
 		if item.Name == shootName {
-			seedName = *item.Spec.Cloud.Seed
+			seedName = *item.Spec.SeedName
 		}
 	}
 	return seedName
