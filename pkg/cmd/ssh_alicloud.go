@@ -65,9 +65,9 @@ type AliyunInstanceTypeSpec struct {
 }
 
 // sshToAlicloudNode provides cmds to ssh to alicloud via a public ip and clean it up afterwards.
-func sshToAlicloudNode(nodeIP, path string, sshPublicKey []byte) {
+func sshToAlicloudNode(nodeIP, path, user string, sshPublicKey []byte) {
 	// Check if this is a cleanup command
-	if nodeIP == "clean" {
+	if nodeIP == "cleanup" {
 		cleanupAlicloudBastionHost()
 		return
 	}
@@ -111,7 +111,7 @@ func sshToAlicloudNode(nodeIP, path string, sshPublicKey []byte) {
 
 	fmt.Println("")
 	fmt.Println("- Fill in the placeholders and run the following command to ssh onto the target node. For more information about the user, you can check the documentation of the cloud provider:")
-	fmt.Println("ssh -i " + aliyunPathSSHKey + "key -o \"ProxyCommand ssh -i " + aliyunPathSSHKey + "key -W " + nodeIP + ":22 gardener@" + a.BastionIP + "\" <user>@" + nodeIP)
+	fmt.Println("ssh -i " + aliyunPathSSHKey + "key -o \"ProxyCommand ssh -i " + aliyunPathSSHKey + "key -W " + nodeIP + ":22 " + user + "@" + a.BastionIP + "\" " + user + " @" + nodeIP)
 	fmt.Println("")
 	fmt.Println("- Run following command to hibernate bastion host:")
 	fmt.Println("gardenctl aliyun ecs StopInstance -- --InstanceId=" + a.BastionInstanceID)
