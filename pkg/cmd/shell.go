@@ -118,7 +118,12 @@ func shellToNode(client kubernetes.Interface, targetKind TargetKind, nodeName st
 	if podName, err = ExecCmdReturnOutput("whoami"); err != nil {
 		return errors.New("Cmd was unsuccessful")
 	}
-	podName = "rootpod-" + podName
+
+	internalIP, err := findNodeInternalIP(node)
+	if err != nil {
+		return err
+	}
+	podName = fmt.Sprintf("rootpod-%s-%s", podName, internalIP)
 	if targetKind == TargetKindShoot {
 		namespace = metav1.NamespaceSystem
 	}
@@ -223,4 +228,14 @@ func buildRootPod(name, namespace, image, hostname string) *corev1.Pod {
 			},
 		},
 	}
+}
+
+func findNodeInternalIP(node *corev1.Node) (string, error) {
+	for _, address := range node.Status.Addresses {
+		if address.Type == corev1.NodeInternalIP {
+			return address.Address, nil
+		}
+	}
+
+	return "", fmt.Errorf("node address with type %q not found", corev1.NodeInternalIP)
 }
