@@ -27,6 +27,7 @@ import (
 	"github.com/spf13/cobra"
 	"gopkg.in/yaml.v2"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/client-go/kubernetes"
 )
 
@@ -413,9 +414,17 @@ func targetSeed(targetReader TargetReader, targetWriter TargetWriter, name strin
 }
 
 // resolveNameShoot resolves name to shoot
-func resolveNameShoot(target TargetInterface, name string) (matches []gardencorev1alpha1.Shoot) {
+func resolveNameShoot(target TargetInterface, name string) []gardencorev1alpha1.Shoot {
 	gardenClientset, err := target.GardenerClient()
 	checkError(err)
+
+	isRegexName := true
+	listOptions := metav1.ListOptions{}
+	if !strings.Contains(name, "*") {
+		isRegexName = false
+		fieldSelector := fields.OneTermEqualSelector("metadata.name", name)
+		listOptions.FieldSelector = fieldSelector.String()
+	}
 
 	var shootList *gardencorev1alpha1.ShootList
 	if len(target.Stack()) > 1 && target.Stack()[1].Kind == TargetKindProject {
@@ -424,10 +433,10 @@ func resolveNameShoot(target TargetInterface, name string) (matches []gardencore
 		checkError(err)
 
 		projectNamespace := project.Spec.Namespace
-		shootList, err = gardenClientset.CoreV1alpha1().Shoots(*projectNamespace).List(metav1.ListOptions{})
+		shootList, err = gardenClientset.CoreV1alpha1().Shoots(*projectNamespace).List(listOptions)
 		checkError(err)
 	} else if len(target.Stack()) > 1 && target.Stack()[1].Kind == TargetKindSeed {
-		shootList, err = gardenClientset.CoreV1alpha1().Shoots("").List(metav1.ListOptions{})
+		shootList, err = gardenClientset.CoreV1alpha1().Shoots(metav1.NamespaceAll).List(listOptions)
 		checkError(err)
 		var filteredShoots []gardencorev1alpha1.Shoot
 		for _, shoot := range shootList.Items {
@@ -437,36 +446,43 @@ func resolveNameShoot(target TargetInterface, name string) (matches []gardencore
 		}
 		shootList.Items = filteredShoots
 	} else {
-		shootList, err = gardenClientset.CoreV1alpha1().Shoots("").List(metav1.ListOptions{})
+		shootList, err = gardenClientset.CoreV1alpha1().Shoots(metav1.NamespaceAll).List(listOptions)
 		checkError(err)
 	}
 
-	matcher := ""
-	for _, shoot := range shootList.Items {
-		shootName := shoot.Name
-		if strings.HasPrefix(name, "*") && strings.HasSuffix(name, "*") {
-			matcher = strings.Replace(name, "*", "", 2)
-			if strings.Contains(shootName, matcher) {
-				matches = append(matches, shoot)
-			}
-		} else if strings.HasSuffix(name, "*") {
-			matcher = strings.Replace(name, "*", "", 1)
-			if strings.HasPrefix(shootName, matcher) {
-				matches = append(matches, shoot)
-			}
-		} else if strings.HasPrefix(name, "*") {
-			matcher = strings.Replace(name, "*", "", 1)
-			if strings.HasSuffix(shootName, matcher) {
-				matches = append(matches, shoot)
-			}
-		} else {
-			if shootName == name {
-				matches = append(matches, shoot)
+	if isRegexName {
+		var (
+			matches []gardencorev1alpha1.Shoot
+			matcher string
+		)
+		for _, shoot := range shootList.Items {
+			shootName := shoot.Name
+			if strings.HasPrefix(name, "*") && strings.HasSuffix(name, "*") {
+				matcher = strings.Replace(name, "*", "", 2)
+				if strings.Contains(shootName, matcher) {
+					matches = append(matches, shoot)
+				}
+			} else if strings.HasSuffix(name, "*") {
+				matcher = strings.Replace(name, "*", "", 1)
+				if strings.HasPrefix(shootName, matcher) {
+					matches = append(matches, shoot)
+				}
+			} else if strings.HasPrefix(name, "*") {
+				matcher = strings.Replace(name, "*", "", 1)
+				if strings.HasSuffix(shootName, matcher) {
+					matches = append(matches, shoot)
+				}
+			} else {
+				if shootName == name {
+					matches = append(matches, shoot)
+				}
 			}
 		}
+
+		return matches
 	}
 
-	return matches
+	return shootList.Items
 }
 
 // targetShoot targets shoot cluster with project as default value in stack
