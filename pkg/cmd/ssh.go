@@ -24,22 +24,10 @@ import (
 	"strings"
 
 	gardencorev1alpha1 "github.com/gardener/gardener/pkg/apis/core/v1alpha1"
-	v1alpha1 "github.com/gardener/gardener/pkg/client/core/clientset/versioned/typed/core/v1alpha1"
 	"github.com/jmoiron/jsonq"
 	"github.com/spf13/cobra"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-)
-
-const (
-	//BastionOSName is the name of the operation system used for creating bastion
-	BastionOSName = "coreos"
-
-	//ControllerRegistrationAwsName is name of controller registration for AWS
-	ControllerRegistrationAwsName = "provider-aws"
-
-	//NodeRegionLabel is the label name for the node region
-	NodeRegionLabel = "failure-domain.beta.kubernetes.io/region"
 )
 
 // NewSSHCmd returns a new ssh command.
@@ -105,17 +93,24 @@ func NewSSHCmd(reader TargetReader, ioStreams IOStreams) *cobra.Command {
 			if path != "" {
 				path = filepath.Join(path, "terraform.tfstate")
 			}
-			pathToKey := downloadSSHKeypair()
-			fmt.Print(pathToKey)
+			sshKeypairSecret := getSSHKeypair()
+			pathSSKeypair, err := os.Getwd()
+			checkError(err)
+			err = ioutil.WriteFile(filepath.Join(pathSSKeypair, "key"), sshKeypairSecret.Data["id_rsa"], 0600)
+			checkError(err)
+			fmt.Println("Downloaded id_rsa key")
+
+			sshPublicKey := sshKeypairSecret.Data["id_rsa.pub"]
+
 			switch infraType {
 			case "aws":
-				sshToAWSNode(args[0], path)
+				sshToAWSNode(args[0], path, sshPublicKey)
 			case "gcp":
 				sshToGCPNode(args[0], path)
 			case "az":
 				sshToAZNode(args[0], path)
 			case "alicloud":
-				sshToAlicloudNode(args[0], path)
+				sshToAlicloudNode(args[0], path, sshPublicKey)
 			case "openstack":
 			default:
 				return fmt.Errorf("infrastructure type %q not found", infraType)
@@ -129,10 +124,9 @@ func NewSSHCmd(reader TargetReader, ioStreams IOStreams) *cobra.Command {
 }
 
 // sshToAWSNode provides cmds to ssh to aws via a bastions host and clean it up afterwards
-func sshToAWSNode(nodeIP, path string) {
-	var imageID string
-	fmt.Println("Fetching coreos AMI")
-	imageID = fetchAWSImageIDByInstancePrivateIP(nodeIP)
+func sshToAWSNode(nodeIP, path string, sshPublicKey []byte) {
+	imageID, err := fetchAWSImageIDByInstancePrivateIP(nodeIP)
+	checkError(err)
 
 	// create bastion host
 	clustername := getShootClusterName()
@@ -142,8 +136,16 @@ func sshToAWSNode(nodeIP, path string) {
 	checkError(err)
 	securityGroupID, err := ExecCmdReturnOutput("bash", "-c", "cat "+path+" | jq -r '.modules[].resources[\"aws_security_group_rule.bastion_ssh_bastion\"].primary[\"attributes\"].security_group_id'")
 	checkError(err)
+
+	userData := getBastionUserData(sshPublicKey)
+	tmpfile, err := ioutil.TempFile(os.TempDir(), "gardener-user.sh")
+	checkError(err)
+	defer os.Remove(tmpfile.Name())
+	_, err = tmpfile.Write(userData)
+	checkError(err)
+
 	fmt.Println("Creating bastion host")
-	arguments := "aws " + fmt.Sprintf("ec2 run-instances --iam-instance-profile Name=%s --image-id %s --count 1 --instance-type t2.nano --key-name %s --security-group-ids %s --subnet-id %s --associate-public-ip-address", name, imageID, keyName, securityGroupID, subnetID)
+	arguments := "aws " + fmt.Sprintf("ec2 run-instances --iam-instance-profile Name=%s --image-id %s --count 1 --instance-type t2.nano --key-name %s --security-group-ids %s --subnet-id %s --associate-public-ip-address --user-data file://%s", name, imageID, keyName, securityGroupID, subnetID, tmpfile.Name())
 	captured := capture()
 	operate("aws", arguments)
 	capturedOutput, err := captured()
@@ -168,12 +170,15 @@ func sshToAWSNode(nodeIP, path string) {
 			break
 		}
 	}
-	bastionNode := "core@" + ip
+	bastionNode := "gardener@" + ip
 	node := "<user>@" + nodeIP
 	fmt.Println("- Fill in the placeholders and run the following command to ssh onto the target node. For more information about the user, you can check the documentation of the cloud provider:")
 	fmt.Println()
 	fmt.Println("Connect: ssh -i key -o \"ProxyCommand ssh -W %h:%p -i key " + bastionNode + "\" " + node)
 	fmt.Printf("Cleanup: gardenctl aws ec2 terminate-instances -- --instance-ids %s\n", instanceID)
+
+	err = tmpfile.Close()
+	checkError(err)
 }
 
 // sshToGCPNode provides cmds to ssh to gcp via a public ip and clean it up afterwards
@@ -246,8 +251,8 @@ func sshToAZNode(nodeIP, path string) {
 
 }
 
-// downloadSSHKeypair downloads ssh keypair for a shoot cluster
-func downloadSSHKeypair() string {
+// getSSHKeypair returns ssh keypair for a shoot cluster
+func getSSHKeypair() *v1.Secret {
 	var target Target
 	ReadTarget(pathTarget, &target)
 	shootName := target.Target[2].Name
@@ -257,11 +262,7 @@ func downloadSSHKeypair() string {
 	checkError(err)
 	secret, err := Client.CoreV1().Secrets(shootNamespace).Get("ssh-keypair", metav1.GetOptions{})
 	checkError(err)
-	pathSSKeypair, err := os.Getwd()
-	checkError(err)
-	err = ioutil.WriteFile(filepath.Join(pathSSKeypair, "key"), []byte(secret.Data["id_rsa"]), 0600)
-	checkError(err)
-	return "Downloaded id_rsa key\n"
+	return secret
 }
 
 // printNodeIPs print all nodes in k8s cluster
@@ -298,57 +299,29 @@ func getNodeForIP(ip string) *v1.Node {
 }
 
 // fetchAWSImageIDByInstancePrivateIP returns the image ID (AMI) for instance with the given <privateIP>.
-func fetchAWSImageIDByInstancePrivateIP(privateIP string) string {
-	_, err := clientToTarget("garden")
-	checkError(err)
-	clientset, err := v1alpha1.NewForConfig(NewConfigFromBytes(*kubeconfig))
-	checkError(err)
-	controllerRegistration, err := clientset.ControllerRegistrations().Get(ControllerRegistrationAwsName, metav1.GetOptions{})
-	checkError(err)
+func fetchAWSImageIDByInstancePrivateIP(privateIP string) (string, error) {
+	command := fmt.Sprintf("aws ec2 describe-instances --filters Name=private-ip-address,Values=%s --query Reservations[0].Instances[0].ImageId", privateIP)
+	captured := capture()
+	operate("aws", command)
+	output, err := captured()
 
-	var controllerRegistrationSpec AWSControllerRegistrationSpec
-	err = json.Unmarshal(controllerRegistration.Spec.Deployment.ProviderConfig.Raw, &controllerRegistrationSpec)
-	checkError(err)
-	machineImages := controllerRegistrationSpec.Values.Config.MachineImages
-
-	nodeRegion := getNodeForIP(privateIP).Labels[NodeRegionLabel]
-	var ami string
-	for _, machineImage := range machineImages {
-		if machineImage.Name == BastionOSName {
-			for _, region := range machineImage.Regions {
-				if region.Name == nodeRegion {
-					ami = region.Ami
-					break
-				}
-			}
-		}
+	if err != nil || output == "None" {
+		return "", fmt.Errorf("could not fetch image ID (AMI) of instance with private IP address %q", privateIP)
 	}
 
-	if ami == "" {
-		fmt.Println(fmt.Sprintf("Cannot find AMI with coreos image for region: %s", nodeRegion))
-		os.Exit(2)
-	}
-
-	return ami
+	return output, nil
 }
 
-// AWSControllerRegistrationSpec is a struct which is used for deserialization of ControllerRegistration
-type AWSControllerRegistrationSpec struct {
-	Values struct {
-		Config struct {
-			MachineImages []AWSMachineImageSpec `json:"machineImages,omitempty"`
-		} `json:"config,omitempty"`
-	} `json:"values,omitempty"`
-}
+func getBastionUserData(sshPublicKey []byte) []byte {
+	template := `#!/bin/bash -eu
 
-// AWSMachineImageSpec is a struct which is used for deserialization of MachineImage
-type AWSMachineImageSpec struct {
-	Name    string          `json:"name,omitempty"`
-	Regions []AWSRegionSpec `json:"regions,omitempty"`
-}
+id gardener || useradd gardener -mU
+mkdir -p /home/gardener/.ssh
+echo %q > /home/gardener/.ssh/authorized_keys
+chown gardener:gardener /home/gardener/.ssh/authorized_keys
+echo "gardener ALL=(ALL) NOPASSWD:ALL" >/etc/sudoers.d/99-gardener-user
+`
+	userData := fmt.Sprintf(template, sshPublicKey)
 
-// AWSRegionSpec is a struct which is used for deserialization of Region
-type AWSRegionSpec struct {
-	Name string `json:"name,omitempty"`
-	Ami  string `json:"ami,omitempty"`
+	return []byte(userData)
 }
