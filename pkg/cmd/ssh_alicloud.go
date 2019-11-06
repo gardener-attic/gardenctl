@@ -15,10 +15,12 @@
 package cmd
 
 import (
+	"bufio"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
@@ -47,6 +49,7 @@ type AliyunInstanceAttribute struct {
 	InternetMaxBandwidthOut  string
 	IoOptimized              string
 	KeyPairName              string
+	PrivateIP                string
 	BastionIP                string
 }
 
@@ -65,10 +68,10 @@ type AliyunInstanceTypeSpec struct {
 }
 
 // sshToAlicloudNode provides cmds to ssh to alicloud via a public ip and clean it up afterwards.
-func sshToAlicloudNode(nodeIP, path, user string, sshPublicKey []byte) {
+func sshToAlicloudNode(nodeName, path, user string, sshPublicKey []byte) {
 	// Check if this is a cleanup command
-	if nodeIP == "cleanup" {
-		cleanupAlicloudBastionHost()
+	if nodeName == "cleanup" {
+		cleanupAliyunBastionHost()
 		return
 	}
 
@@ -91,7 +94,7 @@ func sshToAlicloudNode(nodeIP, path, user string, sshPublicKey []byte) {
 
 	fmt.Println("")
 	fmt.Println("(2/5) Fetching data from target shoot cluster")
-	a.fetchAttributes(nodeIP)
+	a.fetchAttributes(nodeName)
 	fmt.Println("Data fetched from target shoot cluster.")
 
 	fmt.Println("")
@@ -109,55 +112,40 @@ func sshToAlicloudNode(nodeIP, path, user string, sshPublicKey []byte) {
 	a.startBastionHostInstance()
 	fmt.Println("Bastion host started.")
 
-	fmt.Println("")
-	fmt.Println("- Fill in the placeholders and run the following command to ssh onto the target node. For more information about the user, you can check the documentation of the cloud provider:")
-	fmt.Println("ssh -i " + aliyunPathSSHKey + "key -o \"ProxyCommand ssh -i " + aliyunPathSSHKey + "key -W " + nodeIP + ":22 " + user + "@" + a.BastionIP + "\" " + user + "@" + nodeIP)
-	fmt.Println("")
-	fmt.Println("- Run following command to hibernate bastion host:")
-	fmt.Println("gardenctl aliyun ecs StopInstance -- --InstanceId=" + a.BastionInstanceID)
-	fmt.Println("")
-	fmt.Println("- Run following command before shoot deletion:")
-	fmt.Println("gardenctl ssh clean")
-}
+	sshCmd := "ssh -i " + aliyunPathSSHKey + "key -o \"ProxyCommand ssh -i " + aliyunPathSSHKey + "key -o StrictHostKeyChecking=no -W " + a.PrivateIP + ":22 " + user + "@" + a.BastionIP + "\" " + user + "@" + a.PrivateIP + " -o StrictHostKeyChecking=no"
+	cmd := exec.Command("bash", "-c", sshCmd)
+	cmd.Stdout = os.Stdout
+	cmd.Stdin = os.Stdin
+	cmd.Stderr = os.Stderr
+	err = cmd.Run()
+	checkError(err)
 
-// cleanupAlicloudBastionHost cleans up the bastion host for the targeted cluster.
-func cleanupAlicloudBastionHost() {
-	fmt.Println("Cleaning up bastion host configurations...")
+	fmt.Println("Would you like to cleanup the created bastion? (y/n)")
 
-	fmt.Println("")
-	fmt.Println("(1/4) Configuring aliyun cli")
-	configureAliyunCLI()
-	fmt.Println("Aliyun cli configured.")
-
-	a := &AliyunInstanceAttribute{}
-
-	fmt.Println("")
-	fmt.Println("(2/4) Fetching data from target shoot cluster")
-	a.ShootName = getShootClusterName()
-	a.BastionInstanceName = a.ShootName + "-bastion"
-	a.BastionSecurityGroupName = a.ShootName + "-bsg"
-	fmt.Println("Data fetched from target shoot cluster.")
-
-	fmt.Println("")
-	fmt.Println("(3/4) Cleaning up bastion host instance")
-	a.deleteBastionHostInstance()
-
-	// Clean up bastion security group
-	fmt.Println("")
-	fmt.Println("(4/4) Clean up bastion server security group")
-	a.deleteBastionHostSecurityGroup()
-
-	fmt.Println("")
-	fmt.Println("Bastion server settings cleaned up.")
-}
-
-// fetchAttributes gets all the needed attributes for creating bastion host and its security group with given <nodeIP>.
-func (a *AliyunInstanceAttribute) fetchAttributes(nodeIP string) {
-	a.InstanceID = getAlicloudInstanceIDForIP(nodeIP)
-	if a.InstanceID == "" {
-		fmt.Println("No instance found for ip")
-		os.Exit(2)
+	reader := bufio.NewReader(os.Stdin)
+	char, _, err := reader.ReadRune()
+	checkError(err)
+	switch char {
+	case 'y', 'Y':
+		fmt.Println("Cleanup")
+		cleanupAliyunBastionHost()
+	case 'n', 'N':
+		fmt.Println("- Run following command to hibernate bastion host:")
+		fmt.Println("gardenctl aliyun ecs StopInstance -- --InstanceId=" + a.BastionInstanceID)
+		fmt.Println("")
+		fmt.Println("- Run following command before shoot deletion:")
+		fmt.Println("gardenctl ssh clean")
+	default:
+		fmt.Println("Unknown option")
 	}
+}
+
+// fetchAttributes gets all the needed attributes for creating bastion host and its security group with given <nodeName>.
+func (a *AliyunInstanceAttribute) fetchAttributes(nodeName string) {
+	a.ShootName = getShootClusterName()
+	var err error
+	a.InstanceID, err = fetchAlicloudInstanceIDByNodeName(nodeName)
+	checkError(err)
 
 	res, err := ExecCmdReturnOutput("bash", "-c", "aliyun ecs DescribeInstanceAttribute --InstanceId="+a.InstanceID)
 	checkError(err)
@@ -171,10 +159,11 @@ func (a *AliyunInstanceAttribute) fetchAttributes(nodeIP string) {
 	checkError(err)
 	a.VSwitchID, err = decodedQuery.String("VpcAttributes", "VSwitchId")
 	checkError(err)
-	fmt.Println("Fetching coreos imageID")
 	a.ImageID, err = decodedQuery.String("ImageId")
 	checkError(err)
-	a.ShootName = getShootClusterName()
+	ips, err := decodedQuery.ArrayOfStrings("VpcAttributes", "PrivateIpAddress", "IpAddress")
+	checkError(err)
+	a.PrivateIP = ips[0]
 	a.BastionSecurityGroupName = a.ShootName + "-bsg"
 	a.BastionInstanceName = a.ShootName + "-bastion"
 
@@ -483,20 +472,22 @@ func decodeAndQueryFromJSONString(jsonString string) *jsonq.JsonQuery {
 	return jsonq.NewQuery(data)
 }
 
-// getAlicloudInstanceIDForIP returns the instance ID with the given <nodeIP>.
-func getAlicloudInstanceIDForIP(ip string) string {
+// fetchAlicloudInstanceIDByNodeName returns the instance ID for node for given <nodeName>.
+func fetchAlicloudInstanceIDByNodeName(nodeName string) (string, error) {
 	typeName, err := getTargetType()
 	checkError(err)
 	Client, err = clientToTarget(typeName)
 	checkError(err)
+
 	nodes, err := Client.CoreV1().Nodes().List(metav1.ListOptions{})
 	checkError(err)
 	for _, node := range nodes.Items {
-		if ip == node.Status.Addresses[0].Address {
-			return strings.Split(node.Spec.ProviderID, ".")[1]
+		if nodeName == node.Name {
+			return strings.Split(node.Spec.ProviderID, ".")[1], nil
 		}
 	}
-	return ""
+
+	return "", fmt.Errorf("Cannot find InstanceID for node %q", nodeName)
 }
 
 // parseAliyunInstanceTypeSpec parses instance type spec with given interface <data>.
@@ -594,4 +585,35 @@ func (a *AliyunInstanceAttribute) getMinimumInstanceSpec() string {
 	}
 
 	return currentMinimumSpec.InstanceTypeID
+}
+
+// cleanupAlicloudBastionHost cleans up the bastion host for the targeted cluster.
+func cleanupAliyunBastionHost() {
+	fmt.Println("Cleaning up bastion host configurations...")
+
+	fmt.Println("")
+	fmt.Println("(1/4) Configuring aliyun cli")
+	configureAliyunCLI()
+	fmt.Println("Aliyun cli configured.")
+
+	a := &AliyunInstanceAttribute{}
+
+	fmt.Println("")
+	fmt.Println("(2/4) Fetching data from target shoot cluster")
+	a.ShootName = getShootClusterName()
+	a.BastionInstanceName = a.ShootName + "-bastion"
+	a.BastionSecurityGroupName = a.ShootName + "-bsg"
+	fmt.Println("Data fetched from target shoot cluster.")
+
+	fmt.Println("")
+	fmt.Println("(3/4) Cleaning up bastion host instance")
+	a.deleteBastionHostInstance()
+
+	// Clean up bastion security group
+	fmt.Println("")
+	fmt.Println("(4/4) Clean up bastion server security group")
+	a.deleteBastionHostSecurityGroup()
+
+	fmt.Println("")
+	fmt.Println("Bastion server settings cleaned up.")
 }

@@ -23,7 +23,10 @@ import (
 	"time"
 
 	"github.com/Masterminds/semver"
+	"github.com/gardener/machine-controller-manager/pkg/apis/machine/v1alpha1"
+	mcmv1alpha1 "github.com/gardener/machine-controller-manager/pkg/client/clientset/versioned"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/tools/clientcmd"
 )
 
 // AwsInstanceAttribute stores all the critical information for creating an instance on AWS.
@@ -46,13 +49,13 @@ type AwsInstanceAttribute struct {
 }
 
 // sshToAWSNode provides cmds to ssh to aws via a bastions host and clean it up afterwards
-func sshToAWSNode(nodeIP, path, user string, sshPublicKey []byte) {
+func sshToAWSNode(nodeName, path, user string, sshPublicKey []byte) {
 	a := &AwsInstanceAttribute{}
 	a.SSHPublicKey = sshPublicKey
 	fmt.Println("")
 
 	fmt.Println("(1/4) Fetching data from target shoot cluster")
-	a.fetchAwsAttributes(nodeIP, path)
+	a.fetchAwsAttributes(nodeName, path)
 	fmt.Println("Data fetched from target shoot cluster.")
 	fmt.Println("")
 
@@ -64,7 +67,7 @@ func sshToAWSNode(nodeIP, path, user string, sshPublicKey []byte) {
 	a.createBastionHostInstance()
 
 	bastionNode := user + "@" + a.BastionIP
-	node := user + "@" + nodeIP
+	node := user + "@" + nodeName
 	fmt.Println("Waiting 45 seconds until ports are open.")
 	time.Sleep(45 * time.Second)
 
@@ -80,10 +83,9 @@ func sshToAWSNode(nodeIP, path, user string, sshPublicKey []byte) {
 	a.cleanupAwsBastionHost()
 }
 
-// fetchAwsAttributes gets all the needed attributes for creating bastion host and its security group with given <nodeIP>.
-func (a *AwsInstanceAttribute) fetchAwsAttributes(nodeIP, path string) {
+// fetchAwsAttributes gets all the needed attributes for creating bastion host and its security group with given <nodeName>.
+func (a *AwsInstanceAttribute) fetchAwsAttributes(nodeName, path string) {
 	a.ShootName = getShootClusterName()
-	a.InstanceID = getAwsInstanceIDForIP(nodeIP)
 	terraformVersion, err := ExecCmdReturnOutput("bash", "-c", "cat "+path+"  | jq -r .terraform_version")
 	checkError(err)
 	c, err := semver.NewConstraint(">= 0.12.0")
@@ -115,22 +117,35 @@ func (a *AwsInstanceAttribute) fetchAwsAttributes(nodeIP, path string) {
 	a.getSecurityGroupID()
 	a.BastionInstanceName = a.ShootName + "-bastions"
 	a.BastionSecurityGroupName = a.ShootName + "-bsg"
-	a.ImageID, err = fetchAWSImageIDByInstancePrivateIP(nodeIP)
+	a.ImageID, err = fetchAWSImageIDByNodeName(nodeName)
 	checkError(err)
 	a.KeyName = a.ShootName + "-ssh-publickey"
 	a.UserData = getBastionUserData(a.SSHPublicKey)
 }
 
-// fetchAWSImageIDByInstancePrivateIP returns the image ID (AMI) for instance with the given <privateIP>.
-func fetchAWSImageIDByInstancePrivateIP(privateIP string) (string, error) {
-	command := fmt.Sprintf("aws ec2 describe-instances --filters Name=private-ip-address,Values=%s --query Reservations[0].Instances[0].ImageId", privateIP)
-	captured := capture()
-	operate("aws", command)
-	output, err := captured()
-	if err != nil || output == "None" {
-		return "", fmt.Errorf("could not fetch image ID (AMI) of instance with private IP address %q", privateIP)
+// fetchAWSImageIDByNodeName returns the image ID (AMI) for instance with the given <nodeName>.
+func fetchAWSImageIDByNodeName(nodeName string) (string, error) {
+	machines := getMachines()
+	machineClassName := ""
+	for _, machine := range machines.Items {
+		if machine.Status.Node == nodeName {
+			machineClassName = machine.Spec.Class.Name
+			break
+		}
 	}
-	return output, nil
+
+	if machineClassName == "" {
+		return "", fmt.Errorf("Cannot find MachineClass for node %q", nodeName)
+	}
+
+	machineClasses := getAWSMachineClasses()
+	for _, machineClass := range machineClasses.Items {
+		if machineClass.Name == machineClassName {
+			return machineClass.Spec.AMI, nil
+		}
+	}
+
+	return "", fmt.Errorf("Cannot find ImageID for node %q", nodeName)
 }
 
 // createBastionHostSecurityGroup finds the or creates a security group for the bastion host.
@@ -181,26 +196,6 @@ func (a *AwsInstanceAttribute) getBastionSecurityGroupID() {
 	operate("aws", arguments)
 	a.BastionSecurityGroupID, err = captured()
 	checkError(err)
-}
-
-// getAwsInstanceIDForIP returns the instance ID with the given <nodeIP>.
-func getAwsInstanceIDForIP(ip string) string {
-	typeName, err := getTargetType()
-	checkError(err)
-	Client, err = clientToTarget(typeName)
-	checkError(err)
-	nodes, err := Client.CoreV1().Nodes().List(metav1.ListOptions{})
-	checkError(err)
-	for _, node := range nodes.Items {
-		if ip == node.Status.Addresses[0].Address {
-			for _, v := range strings.Split(node.Spec.ProviderID, "/") {
-				if strings.HasPrefix(v, "i-") {
-					return v
-				}
-			}
-		}
-	}
-	return ""
 }
 
 // getBastionHostInstance gets bastion host instance if it exists
@@ -277,6 +272,24 @@ func (a *AwsInstanceAttribute) createBastionHostInstance() {
 		fmt.Println("Bastion server instance timeout. Please try again.")
 		os.Exit(2)
 	}
+}
+
+// getAWSMachineClasses returns machine classes for the cluster nodes
+func getAWSMachineClasses() *v1alpha1.AWSMachineClassList {
+	tempTarget := Target{}
+	ReadTarget(pathTarget, &tempTarget)
+	shootName := tempTarget.Target[2].Name
+	shootNamespace := getSeedNamespaceNameForShoot(shootName)
+
+	config, err := clientcmd.BuildConfigFromFlags("", getKubeConfigOfClusterType("seed"))
+	checkError(err)
+	mcmClient, err := mcmv1alpha1.NewForConfig(config)
+	checkError(err)
+
+	machineClasses, err := mcmClient.MachineV1alpha1().AWSMachineClasses(shootNamespace).List(metav1.ListOptions{})
+	checkError(err)
+
+	return machineClasses
 }
 
 // cleanupAwsBastionHost cleans up the bastion host for the targeted cluster.
