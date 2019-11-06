@@ -15,19 +15,23 @@
 package cmd
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io/ioutil"
 	"os"
 	"path/filepath"
-	"strings"
 
 	gardencorev1alpha1 "github.com/gardener/gardener/pkg/apis/core/v1alpha1"
-	"github.com/jmoiron/jsonq"
 	"github.com/spf13/cobra"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+)
+
+const (
+	// warningColor prints user warnings in red
+	warningColor = "\033[1;31m%s\033[0m"
+	// user is operating system user for bastion host and instances
+	user = "gardener"
 )
 
 // NewSSHCmd returns a new ssh command.
@@ -67,8 +71,8 @@ func NewSSHCmd(reader TargetReader, ioStreams IOStreams) *cobra.Command {
 			case "aws":
 				kind = "internal"
 			case "gcp":
-				kind = "external"
-			case "az":
+				kind = "internal"
+			case "azure":
 				kind = "internal"
 			case "alicloud":
 				kind = "internal"
@@ -82,18 +86,24 @@ func NewSSHCmd(reader TargetReader, ioStreams IOStreams) *cobra.Command {
 				printNodeIPs(kind)
 				return nil
 			} else if len(args) != 1 || !isIP(args[0]) {
-				if !(infraType == "alicloud" && args[0] == "clean") {
-					fmt.Printf("Select a valid node ip or use 'gardenctl ssh clean' to clean up settings for alicloud\n\n")
+				if args[0] != "cleanup" {
+					fmt.Printf("Select a valid node ip or use 'gardenctl ssh cleanup' to clean up settings\n\n")
 					fmt.Printf("Node ips:\n")
 					printNodeIPs(kind)
 					os.Exit(2)
 				}
 			}
+
 			path := downloadTerraformFiles("infra")
 			if path != "" {
 				path = filepath.Join(path, "terraform.tfstate")
 			}
-			sshKeypairSecret := getSSHKeypair()
+
+			// warning: entering untrusted zone
+			fmt.Printf(warningColor, "\nWarning:\nBe aware that you are entering an untrusted environment!\nDo not enter credentials or sensitive data within the ssh session that cluster owners should not have access to.\n")
+			fmt.Println("")
+
+			sshKeypairSecret := getSSHKeypair(shoot)
 			pathSSKeypair, err := os.Getwd()
 			checkError(err)
 			err = ioutil.WriteFile(filepath.Join(pathSSKeypair, "key"), sshKeypairSecret.Data["id_rsa"], 0600)
@@ -101,16 +111,15 @@ func NewSSHCmd(reader TargetReader, ioStreams IOStreams) *cobra.Command {
 			fmt.Println("Downloaded id_rsa key")
 
 			sshPublicKey := sshKeypairSecret.Data["id_rsa.pub"]
-
 			switch infraType {
 			case "aws":
-				sshToAWSNode(args[0], path, sshPublicKey)
+				sshToAWSNode(args[0], path, user, sshPublicKey)
 			case "gcp":
-				sshToGCPNode(args[0], path)
-			case "az":
-				sshToAZNode(args[0], path)
+				sshToGCPNode(args[0], path, user, sshPublicKey)
+			case "azure":
+				sshToAZNode(args[0], path, user, sshPublicKey)
 			case "alicloud":
-				sshToAlicloudNode(args[0], path, sshPublicKey)
+				sshToAlicloudNode(args[0], path, user, sshPublicKey)
 			case "openstack":
 			default:
 				return fmt.Errorf("infrastructure type %q not found", infraType)
@@ -123,144 +132,11 @@ func NewSSHCmd(reader TargetReader, ioStreams IOStreams) *cobra.Command {
 	return cmd
 }
 
-// sshToAWSNode provides cmds to ssh to aws via a bastions host and clean it up afterwards
-func sshToAWSNode(nodeIP, path string, sshPublicKey []byte) {
-	imageID, err := fetchAWSImageIDByInstancePrivateIP(nodeIP)
+// getSSHKeypair downloads ssh keypair for a shoot cluster
+func getSSHKeypair(shoot *gardencorev1alpha1.Shoot) *v1.Secret {
+	Client, err := clientToTarget("garden")
 	checkError(err)
-
-	// create bastion host
-	clustername := getShootClusterName()
-	name := clustername + "-bastions"
-	keyName := clustername + "-ssh-publickey"
-	subnetID, err := ExecCmdReturnOutput("bash", "-c", "cat "+path+" | jq -r .modules[].outputs.subnet_public_utility_z0.value")
-	checkError(err)
-	securityGroupID, err := ExecCmdReturnOutput("bash", "-c", "cat "+path+" | jq -r '.modules[].resources[\"aws_security_group_rule.bastion_ssh_bastion\"].primary[\"attributes\"].security_group_id'")
-	checkError(err)
-
-	userData := getBastionUserData(sshPublicKey)
-	tmpfile, err := ioutil.TempFile(os.TempDir(), "gardener-user.sh")
-	checkError(err)
-	defer os.Remove(tmpfile.Name())
-	_, err = tmpfile.Write(userData)
-	checkError(err)
-
-	fmt.Println("Creating bastion host")
-	arguments := "aws " + fmt.Sprintf("ec2 run-instances --iam-instance-profile Name=%s --image-id %s --count 1 --instance-type t2.nano --key-name %s --security-group-ids %s --subnet-id %s --associate-public-ip-address --user-data file://%s", name, imageID, keyName, securityGroupID, subnetID, tmpfile.Name())
-	captured := capture()
-	operate("aws", arguments)
-	capturedOutput, err := captured()
-	checkError(err)
-	words := strings.Fields(capturedOutput)
-	instanceID := ""
-	for _, value := range words {
-		if strings.HasPrefix(value, "i-") {
-			instanceID = value
-		}
-	}
-	arguments = "aws " + fmt.Sprintf("ec2 describe-instances --instance-ids %s", instanceID)
-	captured = capture()
-	operate("aws", arguments)
-	capturedOutput, err = captured()
-	checkError(err)
-	words = strings.Fields(capturedOutput)
-	ip := ""
-	for _, value := range words {
-		if isIP(value) && !strings.HasPrefix(value, "10.") {
-			ip = value
-			break
-		}
-	}
-	bastionNode := "gardener@" + ip
-	node := "<user>@" + nodeIP
-	fmt.Println("- Fill in the placeholders and run the following command to ssh onto the target node. For more information about the user, you can check the documentation of the cloud provider:")
-	fmt.Println()
-	fmt.Println("Connect: ssh -i key -o \"ProxyCommand ssh -W %h:%p -i key " + bastionNode + "\" " + node)
-	fmt.Printf("Cleanup: gardenctl aws ec2 terminate-instances -- --instance-ids %s\n", instanceID)
-
-	err = tmpfile.Close()
-	checkError(err)
-}
-
-// sshToGCPNode provides cmds to ssh to gcp via a public ip and clean it up afterwards
-func sshToGCPNode(nodeIP, path string) {
-	securityGroupID, err := ExecCmdReturnOutput("bash", "-c", "cat "+path+" | jq -r '.modules[].resources[\"google_compute_firewall.rule-allow-external-access\"].primary[\"id\"]'")
-	checkError(err)
-	fmt.Println("Add ssh rule")
-	arguments := "gcloud " + fmt.Sprintf("compute firewall-rules update %s --allow tcp:22,tcp:80,tcp:443", securityGroupID)
-	operate("gcp", arguments)
-	node := "<user>@" + nodeIP
-	fmt.Println("- Fill in the placeholders and run the following command to ssh onto the target node. For more information about the user, you can check the documentation of the cloud provider:")
-	fmt.Println()
-	fmt.Println("Connect: ssh -i key " + node)
-	fmt.Printf("Cleanup: gardenctl gcloud compute firewall-rules update %s -- --allow tcp:80,tcp:443\n", securityGroupID)
-}
-
-// sshToAZNode provides cmds to ssh to az via a public ip and clean it up afterwards
-func sshToAZNode(nodeIP, path string) {
-	name := "sshIP"
-	resourceGroup, err := ExecCmdReturnOutput("bash", "-c", "cat "+path+" | jq -r '.modules[].outputs.resourceGroupName.value'")
-	checkError(err)
-	nsgName, err := ExecCmdReturnOutput("bash", "-c", "cat "+path+" | jq -r '.modules[].outputs.securityGroupName.value'")
-	checkError(err)
-	targetNode := getNodeForIP(nodeIP)
-	if targetNode == nil {
-		fmt.Println("No node found for ip")
-		os.Exit(2)
-	}
-	nicName := fmt.Sprintf("%s-nic", targetNode.Name)
-
-	// add ssh rule
-	fmt.Println("Add ssh rule")
-	arguments := "az " + fmt.Sprintf("network nsg rule create --resource-group %s  --nsg-name %s --name ssh --protocol Tcp --priority 1000 --destination-port-range 22", resourceGroup, nsgName)
-	operate("az", arguments)
-	// create public ip
-	fmt.Println("Create public ip")
-	arguments = "az " + fmt.Sprintf("network public-ip create -g %s -n %s --allocation-method static", resourceGroup, name)
-	captured := capture()
-	operate("az", arguments)
-	nodeIP, err = captured()
-	checkError(err)
-	fmt.Println(nodeIP)
-
-	data := map[string]interface{}{}
-	dec := json.NewDecoder(strings.NewReader(nodeIP))
-	err = dec.Decode(&data)
-	checkError(err)
-	jq := jsonq.NewQuery(data)
-	nodeIP, err = jq.String("publicIp", "ipAddress")
-	if err != nil {
-		os.Exit(2)
-	}
-
-	// update nic ip-config
-	fmt.Println("Update nic")
-	fmt.Printf("Connect: gardenctl az network nic ip-config update -- -g %s --nic-name %s --public-ip-address %s -n %s\n", resourceGroup, nicName, name, nicName)
-	// azure adds invisible control character -> Bad Request'. Details: 400 Client Error
-	//arguments = "az " + fmt.Sprintf("network nic ip-config update -g %s --nic-name %s -n %s --public-ip-address %s", resourceGroup, nicName, nicName, name)
-	//operate("az", arguments)
-	node := "<user>@" + nodeIP
-	fmt.Println("- Fill in the placeholders and run the following command to ssh onto the target node. For more information about the user, you can check the documentation of the cloud provider:")
-	fmt.Println()
-	fmt.Println("         ssh -i key " + node)
-	// remove ssh rule
-	fmt.Printf("Cleanup: gardenctl az network nsg rule delete -- --resource-group %s  --nsg-name %s --name ssh\n", resourceGroup, nsgName)
-	// remove public ip address from nic
-	fmt.Printf("         gardenctl az network nic ip-config update -- -g %s --nic-name %s --public-ip-address %s -n %s --remove publicIPAddress\n", resourceGroup, nicName, name, nicName)
-	// delete ip
-	fmt.Printf("         gardenctl az network public-ip delete -- -g %s -n %s\n", resourceGroup, name)
-
-}
-
-// getSSHKeypair returns ssh keypair for a shoot cluster
-func getSSHKeypair() *v1.Secret {
-	var target Target
-	ReadTarget(pathTarget, &target)
-	shootName := target.Target[2].Name
-	shootNamespace := getSeedNamespaceNameForShoot(shootName)
-	var err error
-	Client, err = clientToTarget("seed")
-	checkError(err)
-	secret, err := Client.CoreV1().Secrets(shootNamespace).Get("ssh-keypair", metav1.GetOptions{})
+	secret, err := Client.CoreV1().Secrets(shoot.Namespace).Get(shoot.Name+".ssh-keypair", metav1.GetOptions{})
 	checkError(err)
 	return secret
 }
@@ -275,9 +151,17 @@ func printNodeIPs(kindIP string) {
 	checkError(err)
 	for _, node := range nodes.Items {
 		if kindIP == "internal" {
-			fmt.Println("- " + node.Status.Addresses[0].Address)
+			for _, v := range node.Status.Addresses {
+				if v.Type == "InternalIP" {
+					fmt.Println("- " + v.Address)
+				}
+			}
 		} else if kindIP == "external" {
-			fmt.Println("- " + node.Status.Addresses[1].Address)
+			for _, v := range node.Status.Addresses {
+				if v.Type == "ExternalIP" {
+					fmt.Println("- " + v.Address)
+				}
+			}
 		}
 	}
 }
@@ -291,25 +175,13 @@ func getNodeForIP(ip string) *v1.Node {
 	nodes, err := Client.CoreV1().Nodes().List(metav1.ListOptions{})
 	checkError(err)
 	for _, node := range nodes.Items {
-		if ip == node.Status.Addresses[0].Address {
-			return &node
+		for _, v := range node.Status.Addresses {
+			if ip == v.Address {
+				return &node
+			}
 		}
 	}
 	return nil
-}
-
-// fetchAWSImageIDByInstancePrivateIP returns the image ID (AMI) for instance with the given <privateIP>.
-func fetchAWSImageIDByInstancePrivateIP(privateIP string) (string, error) {
-	command := fmt.Sprintf("aws ec2 describe-instances --filters Name=private-ip-address,Values=%s --query Reservations[0].Instances[0].ImageId", privateIP)
-	captured := capture()
-	operate("aws", command)
-	output, err := captured()
-
-	if err != nil || output == "None" {
-		return "", fmt.Errorf("could not fetch image ID (AMI) of instance with private IP address %q", privateIP)
-	}
-
-	return output, nil
 }
 
 func getBastionUserData(sshPublicKey []byte) []byte {
@@ -322,6 +194,5 @@ chown gardener:gardener /home/gardener/.ssh/authorized_keys
 echo "gardener ALL=(ALL) NOPASSWD:ALL" >/etc/sudoers.d/99-gardener-user
 `
 	userData := fmt.Sprintf(template, sshPublicKey)
-
 	return []byte(userData)
 }

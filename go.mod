@@ -3,6 +3,7 @@ module github.com/gardener/gardenctl
 go 1.13
 
 require (
+	github.com/Masterminds/semver v1.4.2
 	github.com/badoux/checkmail v0.0.0-20181210160741-9661bd69e9ad
 	github.com/gardener/gardener v0.0.0-20191018063251-c1b318de841e
 	github.com/gardener/gardener-extensions v0.0.0-20190906160200-5c329d46ae81
