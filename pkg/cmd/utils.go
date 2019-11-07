@@ -24,6 +24,7 @@ import (
 	yaml "gopkg.in/yaml.v2"
 	restclient "k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
+	clientcmdapi "k8s.io/client-go/tools/clientcmd/api"
 )
 
 // checkError checks if an error during execution occurred
@@ -155,4 +156,28 @@ func NewConfigFromBytes(kubeconfig string) *restclient.Config {
 	client, err := clientConfig.ClientConfig()
 	checkError(err)
 	return client
+}
+
+// ValidateClientConfig validates that the auth info of a given kubeconfig doesn't have unsupported fields.
+func ValidateClientConfig(config clientcmdapi.Config) error {
+	validFields := []string{"client-certificate-data", "client-key-data", "token", "username", "password"}
+
+	for user, authInfo := range config.AuthInfos {
+		switch {
+		case authInfo.ClientCertificate != "":
+			return fmt.Errorf("client certificate files are not supported (user %q), these are the valid fields: %+v", user, validFields)
+		case authInfo.ClientKey != "":
+			return fmt.Errorf("client key files are not supported (user %q), these are the valid fields: %+v", user, validFields)
+		case authInfo.TokenFile != "":
+			return fmt.Errorf("token files are not supported (user %q), these are the valid fields: %+v", user, validFields)
+		case authInfo.Impersonate != "" || len(authInfo.ImpersonateGroups) > 0:
+			return fmt.Errorf("impersonation is not supported, these are the valid fields: %+v", validFields)
+		case authInfo.AuthProvider != nil && len(authInfo.AuthProvider.Config) > 0:
+			return fmt.Errorf("auth provider configurations are not supported (user %q), these are the valid fields: %+v", user, validFields)
+		case authInfo.Exec != nil:
+			return fmt.Errorf("exec configurations are not supported (user %q), these are the valid fields: %+v", user, validFields)
+		}
+	}
+
+	return nil
 }
