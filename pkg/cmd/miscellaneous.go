@@ -104,12 +104,18 @@ func clientToTarget(target TargetKind) (*k8s.Clientset, error) {
 		err := flag.Set("kubeconfig", KUBECONFIG)
 		checkError(err)
 	}
-	// use the current context in kubeconfig
-	config, err := clientcmd.BuildConfigFromFlags("", *kubeconfig)
+	kubeconfig, err := ioutil.ReadFile(*kubeconfig)
 	checkError(err)
-	// create the clientset
+	clientConfig, err := clientcmd.NewClientConfigFromBytes(kubeconfig)
+	checkError(err)
+	rawConfig, err := clientConfig.RawConfig()
+	checkError(err)
+	if err := ValidateClientConfig(rawConfig); err != nil {
+		return nil, err
+	}
+	config, err := clientConfig.ClientConfig()
+	checkError(err)
 	clientset, err := k8s.NewForConfig(config)
-	checkError(err)
 	return clientset, err
 }
 
