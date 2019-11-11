@@ -264,6 +264,12 @@ func getEmail(githubURL string) string {
 	return res
 }
 
+func getEmailFromConfig() string {
+	var gardenConfig GardenConfig
+	GetGardenConfig(pathGardenConfig, &gardenConfig)
+	return gardenConfig.Email
+}
+
 func getGithubURL() string {
 	var gardenConfig GardenConfig
 	GetGardenConfig(pathGardenConfig, &gardenConfig)

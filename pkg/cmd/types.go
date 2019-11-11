@@ -119,6 +119,7 @@ type GardenConfigReader struct{}
 
 //GardenConfig contains config for gardenctl
 type GardenConfig struct {
+	Email          string              `yaml:"email,omitempty" json:"email,omitempty"`
 	GithubURL      string              `yaml:"githubURL,omitempty" json:"githubURL,omitempty"`
 	GardenClusters []GardenClusterMeta `yaml:"gardenClusters,omitempty" json:"gardenClusters,omitempty"`
 }
