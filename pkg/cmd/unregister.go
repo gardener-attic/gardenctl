@@ -58,6 +58,7 @@ func NewUnregisterCmd() *cobra.Command {
 				email = args[0]
 			}
 			if len(args) < 1 {
+				email = getEmailFromConfig()
 				githubURL := getGithubURL()
 				if email == "" {
 					if githubURL == "" {
