@@ -32,7 +32,6 @@ import (
 type AzureInstanceAttribute struct {
 	NamePublicIP       string
 	ShootName          string
-	InstanceID         string
 	NicName            string
 	PublicIP           string
 	RescourceGroupName string
@@ -40,13 +39,13 @@ type AzureInstanceAttribute struct {
 	SkuType            string
 }
 
-// sshToAZNode provides cmds to ssh to az via a public ip and clean it up afterwards
-func sshToAZNode(nodeIP, path, user string, sshPublicKey []byte) {
+// sshToAZNode provides cmds to ssh to az via a node name and clean it up afterwards
+func sshToAZNode(nodeName, path, user string, sshPublicKey []byte) {
 	a := &AzureInstanceAttribute{}
 
 	fmt.Println("")
 	fmt.Println("(1/4) Fetching data from target shoot cluster")
-	a.fetchAzureAttributes(nodeIP, path)
+	a.fetchAzureAttributes(nodeName, path)
 	fmt.Println("Data fetched from target shoot cluster.")
 	fmt.Println("")
 
@@ -84,8 +83,8 @@ func sshToAZNode(nodeIP, path, user string, sshPublicKey []byte) {
 	a.cleanupAzure()
 }
 
-// fetchAttributes gets all the needed attributes for creating bastion host and its security group with given <nodeIP>.
-func (a *AzureInstanceAttribute) fetchAzureAttributes(nodeIP, path string) {
+// fetchAttributes gets all the needed attributes for creating bastion host and its security group with given <nodeName>.
+func (a *AzureInstanceAttribute) fetchAzureAttributes(nodeName, path string) {
 	a.NamePublicIP = "sshIP"
 	var err error
 	terraformVersion, err := ExecCmdReturnOutput("bash", "-c", "cat "+path+"  | jq -r .terraform_version")
@@ -112,15 +111,12 @@ func (a *AzureInstanceAttribute) fetchAzureAttributes(nodeIP, path string) {
 		checkError(err)
 	}
 
-	targetNode := getNodeForIP(nodeIP)
-	if targetNode == nil {
-		fmt.Println("No node found for ip")
-		os.Exit(2)
-	}
+	targetMachineName, err := fetchAzureMachineNameByNodeName(nodeName)
+	checkError(err)
 
 	// remove invisible controll character which are somehow encoded in the *v1.Node object
 	re := regexp.MustCompile("[[:^ascii:]]")
-	a.NicName = re.ReplaceAllLiteralString(targetNode.Name+"-nic", "")
+	a.NicName = re.ReplaceAllLiteralString(targetMachineName+"-nic", "")
 
 	// parse sku type (Basic,Standard,...) from lbs
 	arguments := fmt.Sprintf("az network lb list --resource-group %s", a.RescourceGroupName)
@@ -177,6 +173,18 @@ func (a *AzureInstanceAttribute) configureNic() {
 	operate("az", arguments)
 	_, err = captured()
 	checkError(err)
+}
+
+// fetchAzureMachineNameByNodeName returns the name of machine with the given <nodeName>.
+func fetchAzureMachineNameByNodeName(nodeName string) (string, error) {
+	machines := getMachines()
+	for _, machine := range machines.Items {
+		if machine.Status.Node == nodeName {
+			return machine.Name, nil
+		}
+	}
+
+	return "", fmt.Errorf("Cannot find Machine for node %q", nodeName)
 }
 
 // cleanupAzure cleans up all created azure resources required for ssh connection

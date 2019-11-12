@@ -7,6 +7,7 @@ require (
 	github.com/badoux/checkmail v0.0.0-20181210160741-9661bd69e9ad
 	github.com/gardener/gardener v0.0.0-20191018063251-c1b318de841e
 	github.com/gardener/gardener-extensions v0.0.0-20190906160200-5c329d46ae81
+	github.com/gardener/machine-controller-manager v0.0.0-20191106084902-f60747ac59fe
 	github.com/ghodss/yaml v1.0.0
 	github.com/golang/mock v1.3.1
 	github.com/jmoiron/jsonq v0.0.0-20150511023944-e874b168d07e
@@ -23,4 +24,7 @@ require (
 )
 
 // TODO: Fix for https://github.com/Azure/go-autorest/issues/449.
-replace github.com/census-instrumentation/opencensus-proto v0.1.0-0.20181214143942-ba49f56771b8 => github.com/census-instrumentation/opencensus-proto v0.0.3-0.20181214143942-ba49f56771b8
+replace (
+	github.com/Azure/go-autorest => github.com/Azure/go-autorest v12.2.0+incompatible
+	github.com/census-instrumentation/opencensus-proto v0.1.0-0.20181214143942-ba49f56771b8 => github.com/census-instrumentation/opencensus-proto v0.0.3-0.20181214143942-ba49f56771b8
+)
