@@ -22,9 +22,12 @@ import (
 	"path/filepath"
 
 	gardencorev1alpha1 "github.com/gardener/gardener/pkg/apis/core/v1alpha1"
+	"github.com/gardener/machine-controller-manager/pkg/apis/machine/v1alpha1"
+	mcmv1alpha1 "github.com/gardener/machine-controller-manager/pkg/client/clientset/versioned"
 	"github.com/spf13/cobra"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/tools/clientcmd"
 )
 
 const (
@@ -82,16 +85,9 @@ func NewSSHCmd(reader TargetReader, ioStreams IOStreams) *cobra.Command {
 			}
 
 			if len(args) == 0 {
-				fmt.Printf("Node ips:\n")
-				printNodeIPs(kind)
+				fmt.Printf("Nodes:\n")
+				printNodeNames(kind)
 				return nil
-			} else if len(args) != 1 || !isIP(args[0]) {
-				if args[0] != "cleanup" {
-					fmt.Printf("Select a valid node ip or use 'gardenctl ssh cleanup' to clean up settings\n\n")
-					fmt.Printf("Node ips:\n")
-					printNodeIPs(kind)
-					os.Exit(2)
-				}
 			}
 
 			path := downloadTerraformFiles("infra")
@@ -141,47 +137,13 @@ func getSSHKeypair(shoot *gardencorev1alpha1.Shoot) *v1.Secret {
 	return secret
 }
 
-// printNodeIPs print all nodes in k8s cluster
-func printNodeIPs(kindIP string) {
-	typeName, err := getTargetType()
-	checkError(err)
-	Client, err = clientToTarget(typeName)
-	checkError(err)
-	nodes, err := Client.CoreV1().Nodes().List(metav1.ListOptions{})
-	checkError(err)
-	for _, node := range nodes.Items {
-		if kindIP == "internal" {
-			for _, v := range node.Status.Addresses {
-				if v.Type == "InternalIP" {
-					fmt.Println("- " + v.Address)
-				}
-			}
-		} else if kindIP == "external" {
-			for _, v := range node.Status.Addresses {
-				if v.Type == "ExternalIP" {
-					fmt.Println("- " + v.Address)
-				}
-			}
-		}
-	}
-}
+// printNodeNames print all nodes in k8s cluster
+func printNodeNames(kindIP string) {
+	machines := getMachines().Items
 
-// getNodeForIP extract node for ip address
-func getNodeForIP(ip string) *v1.Node {
-	typeName, err := getTargetType()
-	checkError(err)
-	Client, err = clientToTarget(typeName)
-	checkError(err)
-	nodes, err := Client.CoreV1().Nodes().List(metav1.ListOptions{})
-	checkError(err)
-	for _, node := range nodes.Items {
-		for _, v := range node.Status.Addresses {
-			if ip == v.Address {
-				return &node
-			}
-		}
+	for _, machine := range machines {
+		fmt.Println(fmt.Sprintf("%s (%s)", machine.Status.Node, string(machine.Status.CurrentStatus.Phase)))
 	}
-	return nil
 }
 
 func getBastionUserData(sshPublicKey []byte) []byte {
@@ -195,4 +157,21 @@ echo "gardener ALL=(ALL) NOPASSWD:ALL" >/etc/sudoers.d/99-gardener-user
 `
 	userData := fmt.Sprintf(template, sshPublicKey)
 	return []byte(userData)
+}
+
+func getMachines() *v1alpha1.MachineList {
+	tempTarget := Target{}
+	ReadTarget(pathTarget, &tempTarget)
+	shootName := tempTarget.Target[2].Name
+	shootNamespace := getSeedNamespaceNameForShoot(shootName)
+
+	config, err := clientcmd.BuildConfigFromFlags("", getKubeConfigOfClusterType("seed"))
+	checkError(err)
+	mcmClient, err := mcmv1alpha1.NewForConfig(config)
+	checkError(err)
+
+	machines, err := mcmClient.MachineV1alpha1().Machines(shootNamespace).List(metav1.ListOptions{})
+	checkError(err)
+
+	return machines
 }

@@ -23,6 +23,10 @@ import (
 	"time"
 
 	"github.com/Masterminds/semver"
+	"github.com/gardener/machine-controller-manager/pkg/apis/machine/v1alpha1"
+	mcmv1alpha1 "github.com/gardener/machine-controller-manager/pkg/client/clientset/versioned"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/tools/clientcmd"
 )
 
 // GCPInstanceAttribute stores all the critical information for creating an instance on GCP.
@@ -34,18 +38,19 @@ type GCPInstanceAttribute struct {
 	FirewallRuleName            string
 	VpcName                     string
 	Subnetwork                  string
+	Zone                        string
 	UserData                    []byte
 	SSHPublicKey                []byte
 }
 
 // sshToGCPNode provides cmds to ssh to gcp via a public ip and clean it up afterwards
-func sshToGCPNode(nodeIP, path, user string, sshPublicKey []byte) {
+func sshToGCPNode(nodeName, path, user string, sshPublicKey []byte) {
 	g := &GCPInstanceAttribute{}
 	g.SSHPublicKey = sshPublicKey
 	fmt.Println("")
 
 	fmt.Println("(1/4) Fetching data from target shoot cluster")
-	g.fetchGCPAttributes(nodeIP, path)
+	g.fetchGCPAttributes(nodeName, path)
 	fmt.Println("Data fetched from target shoot cluster.")
 	fmt.Println("")
 
@@ -57,7 +62,7 @@ func sshToGCPNode(nodeIP, path, user string, sshPublicKey []byte) {
 	g.createBastionHostInstance()
 
 	bastionNode := user + "@" + g.BastionIP
-	node := user + "@" + nodeIP
+	node := user + "@" + nodeName
 	fmt.Println("Waiting 45 seconds until ports are open.")
 	time.Sleep(45 * time.Second)
 
@@ -74,13 +79,15 @@ func sshToGCPNode(nodeIP, path, user string, sshPublicKey []byte) {
 	g.cleanupGcpBastionHost()
 }
 
-// fetchAttributes gets all the needed attributes for creating bastion host and its security group with given <nodeIP>.
-func (g *GCPInstanceAttribute) fetchGCPAttributes(nodeIP, path string) {
+// fetchAttributes gets all the needed attributes for creating bastion host and its security group with given <nodeName>.
+func (g *GCPInstanceAttribute) fetchGCPAttributes(nodeName, path string) {
 	var err error
 	g.ShootName = getShootClusterName()
 	g.BastionHostName = g.ShootName + "-bastions"
 	g.BastionHostFirewallRuleName = g.ShootName + "-fw"
 	g.Subnetwork = g.ShootName + "-nodes"
+	g.Zone, err = fetchZone(nodeName)
+	checkError(err)
 	terraformVersion, err := ExecCmdReturnOutput("bash", "-c", "cat "+path+"  | jq -r .terraform_version")
 	checkError(err)
 	c, err := semver.NewConstraint(">= 0.12.0")
@@ -95,7 +102,6 @@ func (g *GCPInstanceAttribute) fetchGCPAttributes(nodeIP, path string) {
 	}
 	if c.Check(v) {
 		fmt.Println(path)
-		//g.FirewallRuleName, err = ExecCmdReturnOutput("bash", "-c", "cat "+path+" | jq -r .resources[\"google_compute_firewall.rule-allow-external-access\"].primary[\"id\"]''")
 		g.FirewallRuleName, err = ExecCmdReturnOutput("bash", "-c", "cat "+path+" | jq -r '.resources[] | select(.name == \"rule-allow-external-access\").instances[0].attributes.id'")
 		checkError(err)
 		g.VpcName, err = ExecCmdReturnOutput("bash", "-c", "cat "+path+" | jq -r '.outputs.vpc_name.value'")
@@ -131,7 +137,7 @@ func (g *GCPInstanceAttribute) createBastionHostInstance() {
 	_, err = tmpfile.Write(g.UserData)
 	checkError(err)
 
-	arguments := fmt.Sprintf("gcloud compute instances create %s --network %s --subnet %s --metadata-from-file startup-script=%s", g.BastionHostName, g.VpcName, g.Subnetwork, tmpfile.Name())
+	arguments := fmt.Sprintf("gcloud compute instances create %s --network %s --subnet %s --zone %s --metadata-from-file startup-script=%s", g.BastionHostName, g.VpcName, g.Subnetwork, g.Zone, tmpfile.Name())
 	captured := capture()
 	operate("gcp", arguments)
 	capturedOutput, err := captured()
@@ -141,7 +147,7 @@ func (g *GCPInstanceAttribute) createBastionHostInstance() {
 	// check if bastion host is up and running, timeout after 3 minutes
 	attemptCnt := 0
 	for attemptCnt < 60 {
-		arguments = fmt.Sprintf("gcloud compute instances describe %s --flatten=[status]", g.BastionHostName)
+		arguments = fmt.Sprintf("gcloud compute instances describe %s --zone %s --flatten=[status]", g.BastionHostName, g.Zone)
 		captured = capture()
 		operate("gcp", arguments)
 		capturedOutput, err = captured()
@@ -149,7 +155,7 @@ func (g *GCPInstanceAttribute) createBastionHostInstance() {
 		checkError(err)
 		fmt.Println("Instance State: " + capturedOutput)
 		if strings.Trim(capturedOutput, "\n") == "RUNNING" {
-			arguments := fmt.Sprintf("gcloud compute instances describe %s --flatten=networkInterfaces[0].accessConfigs[0].natIP", g.BastionHostName)
+			arguments := fmt.Sprintf("gcloud compute instances describe %s --zone %s --flatten=networkInterfaces[0].accessConfigs[0].natIP", g.BastionHostName, g.Zone)
 			captured := capture()
 			operate("gcp", arguments)
 			capturedOutput, err := captured()
@@ -176,6 +182,49 @@ func (g *GCPInstanceAttribute) createBastionHostInstance() {
 
 }
 
+// getGCPMachineClasses returns the machine classes for shoot
+func getGCPMachineClasses() *v1alpha1.GCPMachineClassList {
+	tempTarget := Target{}
+	ReadTarget(pathTarget, &tempTarget)
+	shootName := tempTarget.Target[2].Name
+	shootNamespace := getSeedNamespaceNameForShoot(shootName)
+
+	config, err := clientcmd.BuildConfigFromFlags("", getKubeConfigOfClusterType("seed"))
+	checkError(err)
+	mcmClient, err := mcmv1alpha1.NewForConfig(config)
+	checkError(err)
+
+	machineClasses, err := mcmClient.MachineV1alpha1().GCPMachineClasses(shootNamespace).List(metav1.ListOptions{})
+	checkError(err)
+
+	return machineClasses
+}
+
+// fetchZone returns the zone for instance with the given <nodeName>.
+func fetchZone(nodeName string) (string, error) {
+	machines := getMachines()
+	machineClassName := ""
+	for _, machine := range machines.Items {
+		if machine.Status.Node == nodeName {
+			machineClassName = machine.Spec.Class.Name
+			break
+		}
+	}
+
+	if machineClassName == "" {
+		return "", fmt.Errorf("Cannot find MachineClass for node %q", nodeName)
+	}
+
+	machineClasses := getGCPMachineClasses()
+	for _, machineClass := range machineClasses.Items {
+		if machineClass.Name == machineClassName {
+			return machineClass.Spec.Zone, nil
+		}
+	}
+
+	return "", fmt.Errorf("Cannot find zone for node %q", nodeName)
+}
+
 // cleanupGcpBastionHost cleans up the bastion host for the targeted cluster.
 func (g *GCPInstanceAttribute) cleanupGcpBastionHost() {
 	fmt.Println("Cleaning up bastion host configurations...")
@@ -185,7 +234,7 @@ func (g *GCPInstanceAttribute) cleanupGcpBastionHost() {
 
 	// clean up bastion host instance
 	fmt.Println("  (1/2) Cleaning up bastion host instance")
-	arguments := fmt.Sprintf("gcloud --quiet compute instances delete %s", g.BastionHostName)
+	arguments := fmt.Sprintf("gcloud  --quiet compute instances delete %s --zone %s", g.BastionHostName, g.Zone)
 	captured := capture()
 	operate("gcp", arguments)
 	capturedOutput, err := captured()
