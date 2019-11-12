@@ -78,6 +78,7 @@ First clone the repository as described in the the build step "From source". As 
 
 Here an example file:
 ``` yaml
+email: john.doe@example.com
 githubURL: https://github.location.company.corp
 gardenClusters:
 - name: dev
