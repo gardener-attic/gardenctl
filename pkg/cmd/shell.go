@@ -90,7 +90,7 @@ func printNodes(client kubernetes.Interface, ioStreams IOStreams) (err error) {
 func shellToNode(client kubernetes.Interface, targetKind TargetKind, nodeName string, ioStreams IOStreams) (err error) {
 	// Check if the node name was a pod name and we should actually identify the node from the pod (node that runs the pod)
 	var pods *corev1.PodList
-	if pods, err = client.CoreV1().Pods(metav1.NamespaceAll).List(metav1.ListOptions{}); err != nil {
+	if pods, err = client.CoreV1().Pods("").List(metav1.ListOptions{}); err != nil {
 		return err
 	}
 
