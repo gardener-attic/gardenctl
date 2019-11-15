@@ -51,6 +51,7 @@ type AliyunInstanceAttribute struct {
 	KeyPairName              string
 	PrivateIP                string
 	BastionIP                string
+	BastionSSHUser           string
 }
 
 // AliyunInstanceTypeSpec stores all the critical information for choosing a instance type on Alicloud.
@@ -112,7 +113,7 @@ func sshToAlicloudNode(nodeName, path, user string, sshPublicKey []byte) {
 	a.startBastionHostInstance()
 	fmt.Println("Bastion host started.")
 
-	sshCmd := "ssh -i " + aliyunPathSSHKey + "key -o \"ProxyCommand ssh -i " + aliyunPathSSHKey + "key -o StrictHostKeyChecking=no -W " + a.PrivateIP + ":22 " + user + "@" + a.BastionIP + "\" " + user + "@" + a.PrivateIP + " -o StrictHostKeyChecking=no"
+	sshCmd := "ssh -i " + aliyunPathSSHKey + "key -o \"ProxyCommand ssh -i " + aliyunPathSSHKey + "key -o StrictHostKeyChecking=no -W " + a.PrivateIP + ":22 " + a.BastionSSHUser + "@" + a.BastionIP + "\" " + user + "@" + a.PrivateIP + " -o StrictHostKeyChecking=no"
 	cmd := exec.Command("bash", "-c", sshCmd)
 	cmd.Stdout = os.Stdout
 	cmd.Stdin = os.Stdin
@@ -249,6 +250,13 @@ func (a *AliyunInstanceAttribute) createBastionHostInstance(sshPublicKey []byte)
 			bastionServerExists = true
 			a.BastionInstanceID, err = instance.String("InstanceId")
 			checkError(err)
+			if checkIsThereGardenerUser(a.BastionInstanceID) {
+				a.BastionSSHUser = "gardener"
+			} else {
+				// The bastion is created before `gardener-user` change
+				a.BastionSSHUser = "root"
+			}
+			break
 		}
 	}
 
@@ -261,6 +269,7 @@ func (a *AliyunInstanceAttribute) createBastionHostInstance(sshPublicKey []byte)
 		checkError(err)
 		decodedQuery = decodeAndQueryFromJSONString(res)
 		a.BastionInstanceID, err = decodedQuery.String("InstanceId")
+		a.BastionSSHUser = "gardener"
 		checkError(err)
 		attemptCnt := 0
 		for attemptCnt < 60 {
@@ -488,6 +497,17 @@ func fetchAlicloudInstanceIDByNodeName(nodeName string) (string, error) {
 	}
 
 	return "", fmt.Errorf("Cannot find InstanceID for node %q", nodeName)
+}
+
+// checkIsThereGardenerUser checks if the bastion contains gardener user
+func checkIsThereGardenerUser(instanceID string) bool {
+	res, err := ExecCmdReturnOutput("bash", "-c", "aliyun ecs DescribeUserData --InstanceId="+instanceID)
+	checkError(err)
+	decodedQuery := decodeAndQueryFromJSONString(res)
+	userData, err := decodedQuery.String("UserData")
+	checkError(err)
+
+	return userData != ""
 }
 
 // parseAliyunInstanceTypeSpec parses instance type spec with given interface <data>.
