@@ -165,6 +165,8 @@ func (a *AwsInstanceAttribute) createBastionHostSecurityGroup() {
 	capturedOutput, err := captured()
 	checkError(err)
 	a.BastionSecurityGroupID = strings.Trim((capturedOutput), "\n")
+	arguments = fmt.Sprintf("aws ec2 create-tags --resources %s  --tags Key=component,Value=gardenctl", a.BastionSecurityGroupID)
+	operate("aws", arguments)
 	arguments = fmt.Sprintf("aws ec2 authorize-security-group-ingress --group-id %s --protocol tcp --port 22 --cidr 0.0.0.0/0", a.BastionSecurityGroupID)
 	operate("aws", arguments)
 	fmt.Println("Bastion host security group set up.")
@@ -225,7 +227,7 @@ func (a *AwsInstanceAttribute) createBastionHostInstance() {
 	checkError(err)
 
 	// create bastion host
-	arguments := "aws " + fmt.Sprintf("ec2 run-instances --iam-instance-profile Name=%s --image-id %s --count 1 --instance-type t2.nano --key-name %s --security-group-ids %s --subnet-id %s --associate-public-ip-address --user-data file://%s --tag-specifications ResourceType=instance,Tags=[{Key=Name,Value=%s}]", a.BastionInstanceName, a.ImageID, a.KeyName, a.BastionSecurityGroupID, a.SubnetID, tmpfile.Name(), a.BastionInstanceName)
+	arguments := "aws " + fmt.Sprintf("ec2 run-instances --iam-instance-profile Name=%s --image-id %s --count 1 --instance-type t2.nano --key-name %s --security-group-ids %s --subnet-id %s --associate-public-ip-address --user-data file://%s --tag-specifications ResourceType=instance,Tags=[{Key=Name,Value=%s},{Key=component,Value=gardenctl}] ResourceType=volume,Tags=[{Key=component,Value=gardenctl}]", a.BastionInstanceName, a.ImageID, a.KeyName, a.BastionSecurityGroupID, a.SubnetID, tmpfile.Name(), a.BastionInstanceName)
 	captured := capture()
 	operate("aws", arguments)
 	capturedOutput, err := captured()
