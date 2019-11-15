@@ -42,7 +42,7 @@ func NewInfoCmd(targetReader TargetReader, ioStreams IOStreams) *cobra.Command {
 				return err
 			}
 
-			shootList, err := gardenClientset.CoreV1alpha1().Shoots(metav1.NamespaceAll).List(metav1.ListOptions{})
+			shootList, err := gardenClientset.CoreV1alpha1().Shoots("").List(metav1.ListOptions{})
 			if err != nil {
 				return err
 			}

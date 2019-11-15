@@ -111,7 +111,9 @@ func NewTargetCmd(targetReader TargetReader, targetWriter TargetWriter, configRe
 				if len(target.Stack()) < 1 {
 					return errors.New("no garden cluster targeted")
 				}
+
 				shoots := resolveNameShoot(target, args[1])
+
 				if len(shoots) == 0 {
 					return fmt.Errorf("no match for %q", args[1])
 				} else if len(shoots) == 1 {
@@ -436,8 +438,9 @@ func resolveNameShoot(target TargetInterface, name string) []gardencorev1alpha1.
 		shootList, err = gardenClientset.CoreV1alpha1().Shoots(*projectNamespace).List(listOptions)
 		checkError(err)
 	} else if len(target.Stack()) > 1 && target.Stack()[1].Kind == TargetKindSeed {
-		shootList, err = gardenClientset.CoreV1alpha1().Shoots(metav1.NamespaceAll).List(listOptions)
+		shootList, err = gardenClientset.CoreV1alpha1().Shoots("").List(listOptions)
 		checkError(err)
+
 		var filteredShoots []gardencorev1alpha1.Shoot
 		for _, shoot := range shootList.Items {
 			if *shoot.Spec.SeedName == target.Stack()[1].Name {
@@ -446,7 +449,7 @@ func resolveNameShoot(target TargetInterface, name string) []gardencorev1alpha1.
 		}
 		shootList.Items = filteredShoots
 	} else {
-		shootList, err = gardenClientset.CoreV1alpha1().Shoots(metav1.NamespaceAll).List(listOptions)
+		shootList, err = gardenClientset.CoreV1alpha1().Shoots("").List(listOptions)
 		checkError(err)
 	}
 
@@ -488,6 +491,7 @@ func resolveNameShoot(target TargetInterface, name string) []gardencorev1alpha1.
 // targetShoot targets shoot cluster with project as default value in stack
 func targetShoot(targetWriter TargetWriter, shoot gardencorev1alpha1.Shoot) {
 	var target Target
+
 	ReadTarget(pathTarget, &target)
 
 	// Get and cache seed kubeconfig for future commands
