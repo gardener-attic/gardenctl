@@ -130,19 +130,19 @@ func (g *GCPInstanceAttribute) createBastionHostFirewallRule() {
 // createBastionHostInstance finds or creates a bastion host instance.
 func (g *GCPInstanceAttribute) createBastionHostInstance() {
 	fmt.Println("Create bastion host")
-
 	tmpfile, err := ioutil.TempFile(os.TempDir(), "gardener-user.sh")
 	checkError(err)
 	defer os.Remove(tmpfile.Name())
 	_, err = tmpfile.Write(g.UserData)
 	checkError(err)
-
-	arguments := fmt.Sprintf("gcloud compute instances create %s --network %s --subnet %s --zone %s --metadata-from-file startup-script=%s", g.BastionHostName, g.VpcName, g.Subnetwork, g.Zone, tmpfile.Name())
+	arguments := fmt.Sprintf("gcloud compute instances create %s --network %s --subnet %s --zone %s --metadata-from-file startup-script=%s --labels component=gardenctl", g.BastionHostName, g.VpcName, g.Subnetwork, g.Zone, tmpfile.Name())
 	captured := capture()
 	operate("gcp", arguments)
 	capturedOutput, err := captured()
 	checkError(err)
 	fmt.Println(capturedOutput)
+	arguments = fmt.Sprintf("gcloud compute disks add-labels %s --labels component=gardenctl --zone=%s", g.BastionHostName, g.Zone)
+	operate("gcp", arguments)
 
 	// check if bastion host is up and running, timeout after 3 minutes
 	attemptCnt := 0
@@ -234,7 +234,7 @@ func (g *GCPInstanceAttribute) cleanupGcpBastionHost() {
 
 	// clean up bastion host instance
 	fmt.Println("  (1/2) Cleaning up bastion host instance")
-	arguments := fmt.Sprintf("gcloud  --quiet compute instances delete %s --zone %s", g.BastionHostName, g.Zone)
+	arguments := fmt.Sprintf("gcloud --quiet compute instances delete %s --zone %s", g.BastionHostName, g.Zone)
 	captured := capture()
 	operate("gcp", arguments)
 	capturedOutput, err := captured()

@@ -146,7 +146,7 @@ func (a *AzureInstanceAttribute) addNsgRule() {
 func (a *AzureInstanceAttribute) createPublicIP() {
 	var err error
 	fmt.Println("Create public ip")
-	arguments := fmt.Sprintf("az network public-ip create -g %s -n %s --sku %s --allocation-method static", a.RescourceGroupName, a.NamePublicIP, a.SkuType)
+	arguments := fmt.Sprintf("az network public-ip create -g %s -n %s --sku %s --allocation-method static --tags component=gardenctl", a.RescourceGroupName, a.NamePublicIP, a.SkuType)
 	captured := capture()
 	operate("az", arguments)
 	a.PublicIP, err = captured()
