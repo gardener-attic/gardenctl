@@ -47,7 +47,7 @@ var flags *logFlags
 func NewLogsCmd() *cobra.Command {
 	flags = newLogsFlags()
 	cmd := &cobra.Command{
-		Use:   "logs (gardener-apiserver|gardener-controller-manager|gardener-dashboard|api|scheduler|controller-manager|etcd-operator|etcd-main[etcd backup-restore]|etcd-main-backup|etcd-events[etcd backup-restore]|addon-manager|vpn-seed|vpn-shoot|machine-controller-manager|kubernetes-dashboard|prometheus|grafana|alertmanager|tf (infra|dns|ingress)",
+		Use:   "logs (gardener-apiserver|gardener-controller-manager|gardener-dashboard|api|scheduler|controller-manager|etcd-operator|etcd-main[etcd backup-restore]|etcd-main-backup|etcd-events[etcd backup-restore]|addon-manager|vpn-seed|vpn-shoot|machine-controller-manager|kubernetes-dashboard|prometheus|grafana|alertmanager|tf (infra|dns|ingress)|cluster-autoscaler)",
 		Short: "Show and optionally follow logs of given component\n",
 		PreRun: func(cmd *cobra.Command, args []string) {
 			validateArgs(args)
@@ -69,7 +69,7 @@ func NewLogsCmd() *cobra.Command {
 
 func validateArgs(args []string) {
 	if len(args) < 1 || len(args) > 2 {
-		fmt.Println("Command must be in the format: logs (gardener-apiserver|gardener-controller-manager|gardener-dashboard|api|scheduler|controller-manager|etcd-operator|etcd-main[etcd backup-restore]|etcd-events[etcd backup-restore]|addon-manager|vpn-seed|vpn-shoot|machine-controller-manager|kubernetes-dashboard|prometheus|grafana|alertmanager|tf (infra|dns|ingress) flags(--elasticsearch|--tail|--since|--since-time|--timestamps)")
+		fmt.Println("Command must be in the format: logs (gardener-apiserver|gardener-controller-manager|gardener-dashboard|api|scheduler|controller-manager|etcd-operator|etcd-main[etcd backup-restore]|etcd-events[etcd backup-restore]|addon-manager|vpn-seed|vpn-shoot|machine-controller-manager|kubernetes-dashboard|prometheus|grafana|alertmanager|tf (infra|dns|ingress)|cluster-autoscaler flags(--elasticsearch|--tail|--since|--since-time|--timestamps)")
 		os.Exit(2)
 	}
 	var t Target
@@ -153,6 +153,8 @@ func runCommand(args []string) {
 		logsGrafana()
 	case "alertmanager":
 		logsAlertmanager()
+	case "cluster-autoscaler":
+		logsClusterAutoscaler()
 	case "tf":
 		if len(args) == 1 {
 			logsTf()
@@ -166,10 +168,10 @@ func runCommand(args []string) {
 		case "ingress":
 			logsIngress()
 		default:
-			fmt.Println("Command must be in the format: logs (gardener-apiserver|gardener-controller-manager|gardener-dashboard|api|scheduler|controller-manager|etcd-operator|etcd-main[etcd backup-restore]|etcd-events[etcd backup-restore]|addon-manager|vpn-seed|vpn-shoot|auto-node-repair|kubernetes-dashboard|prometheus|grafana|alertmanager|tf (infra|dns|ingress)")
+			fmt.Println("Command must be in the format: logs (gardener-apiserver|gardener-controller-manager|gardener-dashboard|api|scheduler|controller-manager|etcd-operator|etcd-main[etcd backup-restore]|etcd-events[etcd backup-restore]|addon-manager|vpn-seed|vpn-shoot|auto-node-repair|kubernetes-dashboard|prometheus|grafana|alertmanager|tf (infra|dns|ingress)|cluster-autoscaler)")
 		}
 	default:
-		fmt.Println("Command must be in the format: logs (gardener-apiserver|gardener-controller-manager|gardener-dashboard|api|scheduler|controller-manager|etcd-operator|etcd-main[etcd backup-restore]|etcd-events[etcd backup-restore]|addon-manager|vpn-seed|vpn-shoot|auto-node-repair|kubernetes-dashboard|prometheus|grafana|alertmanager|tf (infra|dns|ingress)")
+		fmt.Println("Command must be in the format: logs (gardener-apiserver|gardener-controller-manager|gardener-dashboard|api|scheduler|controller-manager|etcd-operator|etcd-main[etcd backup-restore]|etcd-events[etcd backup-restore]|addon-manager|vpn-seed|vpn-shoot|auto-node-repair|kubernetes-dashboard|prometheus|grafana|alertmanager|tf (infra|dns|ingress)|cluster-autoscaler)")
 	}
 }
 
@@ -493,6 +495,11 @@ func logsGrafana() {
 // logsAlertmanager prints the logfiles of alertmanager
 func logsAlertmanager() {
 	logPod("alertmanager", "seed", "alertmanager") // TODO: TWO PODS ARE RUNNING
+}
+
+// logsClusterAutoscaler prints the logfiles of cluster-autoscaler
+func logsClusterAutoscaler() {
+	logPod("cluster-autoscaler", "seed", "cluster-autoscaler")
 }
 
 // logsTerraform prints the logfiles of tf pod
