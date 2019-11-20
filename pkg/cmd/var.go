@@ -33,7 +33,6 @@ var (
 
 	// KUBECONFIG contains path to file
 	KUBECONFIG string
-	masterURL  *string
 	garden     bool
 	seed       bool
 	project    bool

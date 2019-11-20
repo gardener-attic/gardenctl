@@ -47,28 +47,42 @@ func NewInfoCmd(targetReader TargetReader, ioStreams IOStreams) *cobra.Command {
 				return err
 			}
 
-			var unscheduled = 0
-			shootsCountPerSeed := make(map[string]int)
+			var (
+				unscheduled                  = 0
+				hibernatedShootsCount        = 0
+				totalShootsCountPerSeed      = make(map[string]int)
+				hibernatedShootsCountPerSeed = make(map[string]int)
+			)
+
 			for _, shoot := range shootList.Items {
 				if shoot.Spec.SeedName == nil {
 					unscheduled++
 					continue
 				}
-				shootsCountPerSeed[*shoot.Spec.SeedName]++
+				totalShootsCountPerSeed[*shoot.Spec.SeedName]++
+				if shoot.Status.IsHibernated {
+					hibernatedShootsCountPerSeed[*shoot.Spec.SeedName]++
+					hibernatedShootsCount++
+				}
 			}
 
 			var sortedSeeds []string
-			for seed := range shootsCountPerSeed {
+			for seed := range totalShootsCountPerSeed {
 				sortedSeeds = append(sortedSeeds, seed)
 			}
 			sort.Strings(sortedSeeds)
 
 			fmt.Fprintf(ioStreams.Out, "Garden: %s\n", targetStack[0].Name)
 			fmt.Fprintf(ioStreams.Out, "Shoots:\n")
-			fmt.Fprintf(ioStreams.Out, "\ttotal: %d\n", len(shootList.Items))
-			fmt.Fprintf(ioStreams.Out, "\tunscheduled: %d\n", unscheduled)
+			fmt.Fprintf(ioStreams.Out, "  active: %d\n", len(shootList.Items)-hibernatedShootsCount-unscheduled)
+			fmt.Fprintf(ioStreams.Out, "  hibernated: %d\n", hibernatedShootsCount)
+			fmt.Fprintf(ioStreams.Out, "  unscheduled: %d\n", unscheduled)
+			fmt.Fprintf(ioStreams.Out, "  total: %d\n\n", len(shootList.Items))
 			for _, seed := range sortedSeeds {
-				fmt.Fprintf(ioStreams.Out, "\t%s: %d\n", seed, shootsCountPerSeed[seed])
+				fmt.Fprintf(ioStreams.Out, "  %s:\n", seed)
+				fmt.Fprintf(ioStreams.Out, "    active: %d\n", totalShootsCountPerSeed[seed]-hibernatedShootsCountPerSeed[seed])
+				fmt.Fprintf(ioStreams.Out, "    hibernated: %d\n", hibernatedShootsCountPerSeed[seed])
+				fmt.Fprintf(ioStreams.Out, "    total: %d\n", totalShootsCountPerSeed[seed])
 			}
 
 			return nil

@@ -49,45 +49,13 @@ func NewSSHCmd(reader TargetReader, ioStreams IOStreams) *cobra.Command {
 				return errors.New("no shoot targeted")
 			}
 
-			gardenClientset, err := target.GardenerClient()
-			checkError(err)
-			var shoot *gardencorev1alpha1.Shoot
-			if target.Stack()[1].Kind == "project" {
-				project, err := gardenClientset.CoreV1alpha1().Projects().Get(target.Stack()[1].Name, metav1.GetOptions{})
-				checkError(err)
-				shoot, err = gardenClientset.CoreV1alpha1().Shoots(*project.Spec.Namespace).Get(target.Stack()[2].Name, metav1.GetOptions{})
-				checkError(err)
-			} else {
-				shootList, err := gardenClientset.CoreV1alpha1().Shoots("").List(metav1.ListOptions{})
-				checkError(err)
-				for index, s := range shootList.Items {
-					if s.Name == target.Stack()[2].Name && *s.Spec.SeedName == target.Stack()[1].Name {
-						shoot = &shootList.Items[index]
-						break
-					}
-				}
-			}
-
-			infraType := shoot.Spec.Provider.Type
-			var kind string
-			switch infraType {
-			case "aws":
-				kind = "internal"
-			case "gcp":
-				kind = "internal"
-			case "azure":
-				kind = "internal"
-			case "alicloud":
-				kind = "internal"
-			case "openstack":
-			default:
-				return fmt.Errorf("infrastructure type %q not found", infraType)
+			shoot, err := FetchShootFromTarget(target)
+			if err != nil {
+				return err
 			}
 
 			if len(args) == 0 {
-				fmt.Printf("Nodes:\n")
-				printNodeNames(kind)
-				return nil
+				return printNodeNames(shoot.Name)
 			}
 
 			path := downloadTerraformFiles("infra")
@@ -107,6 +75,7 @@ func NewSSHCmd(reader TargetReader, ioStreams IOStreams) *cobra.Command {
 			fmt.Println("Downloaded id_rsa key")
 
 			sshPublicKey := sshKeypairSecret.Data["id_rsa.pub"]
+			infraType := shoot.Spec.Provider.Type
 			switch infraType {
 			case "aws":
 				sshToAWSNode(args[0], path, user, sshPublicKey)
@@ -138,12 +107,18 @@ func getSSHKeypair(shoot *gardencorev1alpha1.Shoot) *v1.Secret {
 }
 
 // printNodeNames print all nodes in k8s cluster
-func printNodeNames(kindIP string) {
-	machines := getMachines().Items
+func printNodeNames(shootName string) error {
+	machineList, err := getMachineList(shootName)
+	if err != nil {
+		return err
+	}
 
-	for _, machine := range machines {
+	fmt.Println("Nodes:")
+	for _, machine := range machineList.Items {
 		fmt.Println(fmt.Sprintf("%s (%s)", machine.Status.Node, string(machine.Status.CurrentStatus.Phase)))
 	}
+
+	return nil
 }
 
 func getBastionUserData(sshPublicKey []byte) []byte {
@@ -159,19 +134,21 @@ echo "gardener ALL=(ALL) NOPASSWD:ALL" >/etc/sudoers.d/99-gardener-user
 	return []byte(userData)
 }
 
-func getMachines() *v1alpha1.MachineList {
-	tempTarget := Target{}
-	ReadTarget(pathTarget, &tempTarget)
-	shootName := tempTarget.Target[2].Name
-	shootNamespace := getSeedNamespaceNameForShoot(shootName)
-
+func getMachineList(shootName string) (*v1alpha1.MachineList, error) {
 	config, err := clientcmd.BuildConfigFromFlags("", getKubeConfigOfClusterType("seed"))
-	checkError(err)
-	mcmClient, err := mcmv1alpha1.NewForConfig(config)
-	checkError(err)
+	if err != nil {
+		return nil, err
+	}
+	client, err := mcmv1alpha1.NewForConfig(config)
+	if err != nil {
+		return nil, err
+	}
 
-	machines, err := mcmClient.MachineV1alpha1().Machines(shootNamespace).List(metav1.ListOptions{})
-	checkError(err)
+	shootNamespace := getSeedNamespaceNameForShoot(shootName)
+	machines, err := client.MachineV1alpha1().Machines(shootNamespace).List(metav1.ListOptions{})
+	if err != nil {
+		return nil, err
+	}
 
-	return machines
+	return machines, nil
 }
