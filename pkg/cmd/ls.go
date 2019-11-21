@@ -113,7 +113,11 @@ func getProjectsWithShoots(ioStreams IOStreams) {
 		var pm ProjectMeta
 		for _, shoot := range shootList.Items {
 			if shoot.Namespace == *project.Spec.Namespace {
-				pm.Shoots = append(pm.Shoots, shoot.Name)
+				currentShoot := shoot.Name
+				if shoot.Status.IsHibernated {
+					currentShoot += " (Hibernated)"
+				}
+				pm.Shoots = append(pm.Shoots, currentShoot)
 			}
 		}
 		pm.Project = project.Name
@@ -173,7 +177,11 @@ func getProjectsWithShootsForSeed(ioStreams IOStreams) {
 		var pm ProjectMeta
 		for _, shoot := range shootList.Items {
 			if shoot.Namespace == *project.Spec.Namespace && target.Target[1].Name == *shoot.Spec.SeedName {
-				pm.Shoots = append(pm.Shoots, shoot.Name)
+				currentShoot := shoot.Name
+				if shoot.Status.IsHibernated {
+					currentShoot += " (Hibernated)"
+				}
+				pm.Shoots = append(pm.Shoots, currentShoot)
 			}
 		}
 		if len(pm.Shoots) > 0 {
@@ -303,7 +311,11 @@ func getSeedsWithShootsForProject(ioStreams IOStreams) {
 	for _, shoot := range shootList.Items {
 		for index, seed := range seeds.Seeds {
 			if seed.Seed == *shoot.Spec.SeedName {
-				seeds.Seeds[index].Shoots = append(seeds.Seeds[index].Shoots, shoot.Name)
+				currentShoot := shoot.Name
+				if shoot.Status.IsHibernated {
+					currentShoot += " (Hibernated)"
+				}
+				seeds.Seeds[index].Shoots = append(seeds.Seeds[index].Shoots, currentShoot)
 			}
 		}
 	}

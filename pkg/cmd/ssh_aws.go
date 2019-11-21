@@ -117,15 +117,19 @@ func (a *AwsInstanceAttribute) fetchAwsAttributes(nodeName, path string) {
 	a.getSecurityGroupID()
 	a.BastionInstanceName = a.ShootName + "-bastions"
 	a.BastionSecurityGroupName = a.ShootName + "-bsg"
-	a.ImageID, err = fetchAWSImageIDByNodeName(nodeName)
+	a.ImageID, err = fetchAWSImageIDByNodeName(a.ShootName, nodeName)
 	checkError(err)
 	a.KeyName = a.ShootName + "-ssh-publickey"
 	a.UserData = getBastionUserData(a.SSHPublicKey)
 }
 
 // fetchAWSImageIDByNodeName returns the image ID (AMI) for instance with the given <nodeName>.
-func fetchAWSImageIDByNodeName(nodeName string) (string, error) {
-	machines := getMachines()
+func fetchAWSImageIDByNodeName(shootName, nodeName string) (string, error) {
+	machines, err := getMachineList(shootName)
+	if err != nil {
+		return "", err
+	}
+
 	machineClassName := ""
 	for _, machine := range machines.Items {
 		if machine.Status.Node == nodeName {

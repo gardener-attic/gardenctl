@@ -42,7 +42,6 @@ type AzureInstanceAttribute struct {
 // sshToAZNode provides cmds to ssh to az via a node name and clean it up afterwards
 func sshToAZNode(nodeName, path, user string, sshPublicKey []byte) {
 	a := &AzureInstanceAttribute{}
-
 	fmt.Println("")
 	fmt.Println("(1/4) Fetching data from target shoot cluster")
 	a.fetchAzureAttributes(nodeName, path)
@@ -85,6 +84,7 @@ func sshToAZNode(nodeName, path, user string, sshPublicKey []byte) {
 
 // fetchAttributes gets all the needed attributes for creating bastion host and its security group with given <nodeName>.
 func (a *AzureInstanceAttribute) fetchAzureAttributes(nodeName, path string) {
+	a.ShootName = getShootClusterName()
 	a.NamePublicIP = "sshIP"
 	var err error
 	terraformVersion, err := ExecCmdReturnOutput("bash", "-c", "cat "+path+"  | jq -r .terraform_version")
@@ -111,10 +111,10 @@ func (a *AzureInstanceAttribute) fetchAzureAttributes(nodeName, path string) {
 		checkError(err)
 	}
 
-	targetMachineName, err := fetchAzureMachineNameByNodeName(nodeName)
+	targetMachineName, err := fetchAzureMachineNameByNodeName(a.ShootName, nodeName)
 	checkError(err)
 
-	// remove invisible controll character which are somehow encoded in the *v1.Node object
+	// remove invisible control character which are somehow encoded in the *v1.Node object
 	re := regexp.MustCompile("[[:^ascii:]]")
 	a.NicName = re.ReplaceAllLiteralString(targetMachineName+"-nic", "")
 
@@ -176,8 +176,12 @@ func (a *AzureInstanceAttribute) configureNic() {
 }
 
 // fetchAzureMachineNameByNodeName returns the name of machine with the given <nodeName>.
-func fetchAzureMachineNameByNodeName(nodeName string) (string, error) {
-	machines := getMachines()
+func fetchAzureMachineNameByNodeName(shootName, nodeName string) (string, error) {
+	machines, err := getMachineList(shootName)
+	if err != nil {
+		return "", err
+	}
+
 	for _, machine := range machines.Items {
 		if machine.Status.Node == nodeName {
 			return machine.Name, nil
