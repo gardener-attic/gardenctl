@@ -21,7 +21,9 @@ import (
 	"os/exec"
 	"strings"
 
+	gardencorev1alpha1 "github.com/gardener/gardener/pkg/apis/core/v1alpha1"
 	yaml "gopkg.in/yaml.v2"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	restclient "k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 	clientcmdapi "k8s.io/client-go/tools/clientcmd/api"
@@ -180,4 +182,39 @@ func ValidateClientConfig(config clientcmdapi.Config) error {
 	}
 
 	return nil
+}
+
+// FetchShootFromTarget fetches shoot object from given target
+func FetchShootFromTarget(target TargetInterface) (*gardencorev1alpha1.Shoot, error) {
+	gardenClientset, err := target.GardenerClient()
+	if err != nil {
+		return nil, err
+	}
+
+	var shoot *gardencorev1alpha1.Shoot
+	if target.Stack()[1].Kind == TargetKindProject {
+		project, err := gardenClientset.CoreV1alpha1().Projects().Get(target.Stack()[1].Name, metav1.GetOptions{})
+		if err != nil {
+			return nil, err
+		}
+
+		shoot, err = gardenClientset.CoreV1alpha1().Shoots(*project.Spec.Namespace).Get(target.Stack()[2].Name, metav1.GetOptions{})
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		shootList, err := gardenClientset.CoreV1alpha1().Shoots(metav1.NamespaceAll).List(metav1.ListOptions{})
+		if err != nil {
+			return nil, err
+		}
+
+		for index, s := range shootList.Items {
+			if s.Name == target.Stack()[2].Name && *s.Spec.SeedName == target.Stack()[1].Name {
+				shoot = &shootList.Items[index]
+				break
+			}
+		}
+	}
+
+	return shoot, nil
 }

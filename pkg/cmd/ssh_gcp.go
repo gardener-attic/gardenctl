@@ -86,7 +86,7 @@ func (g *GCPInstanceAttribute) fetchGCPAttributes(nodeName, path string) {
 	g.BastionHostName = g.ShootName + "-bastions"
 	g.BastionHostFirewallRuleName = g.ShootName + "-fw"
 	g.Subnetwork = g.ShootName + "-nodes"
-	g.Zone, err = fetchZone(nodeName)
+	g.Zone, err = fetchZone(g.ShootName, nodeName)
 	checkError(err)
 	terraformVersion, err := ExecCmdReturnOutput("bash", "-c", "cat "+path+"  | jq -r .terraform_version")
 	checkError(err)
@@ -201,8 +201,12 @@ func getGCPMachineClasses() *v1alpha1.GCPMachineClassList {
 }
 
 // fetchZone returns the zone for instance with the given <nodeName>.
-func fetchZone(nodeName string) (string, error) {
-	machines := getMachines()
+func fetchZone(shootName, nodeName string) (string, error) {
+	machines, err := getMachineList(shootName)
+	if err != nil {
+		return "", err
+	}
+
 	machineClassName := ""
 	for _, machine := range machines.Items {
 		if machine.Status.Node == nodeName {

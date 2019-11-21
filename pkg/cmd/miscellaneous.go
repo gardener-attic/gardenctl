@@ -98,7 +98,6 @@ func clientToTarget(target TargetKind) (*k8s.Clientset, error) {
 		} else {
 			kubeconfig = flag.String("kubeconfig", "", "absolute path to the kubeconfig file")
 		}
-		masterURL = flag.String("master", "", "The address of the Kubernetes API server. Overrides any value in kubeconfig. Only required if out-of-cluster.")
 		flag.Parse()
 	} else {
 		err := flag.Set("kubeconfig", KUBECONFIG)

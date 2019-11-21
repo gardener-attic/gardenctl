@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"time"
 
+	gardencorev1alpha1 "github.com/gardener/gardener/pkg/apis/core/v1alpha1"
 	"github.com/spf13/cobra"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -55,10 +56,24 @@ func NewShellCmd(reader TargetReader, ioStreams IOStreams) *cobra.Command {
 				return errors.New("project targeted")
 			}
 
+			var shoot *gardencorev1alpha1.Shoot
+			if len(target.Stack()) == 1 {
+				return errors.New("garden cluster targeted")
+			} else if len(target.Stack()) > 2 {
+				if shoot, err = FetchShootFromTarget(target); err != nil {
+					return err
+				}
+			}
+
+			if shoot != nil && shoot.Status.IsHibernated {
+				return fmt.Errorf("shoot %q is hibernated", shoot.Name)
+			}
+
 			var client kubernetes.Interface
 			if client, err = target.K8SClient(); err != nil {
 				return err
 			}
+
 			if len(args) == 0 {
 				return printNodes(client, ioStreams)
 			}
@@ -78,7 +93,7 @@ func printNodes(client kubernetes.Interface, ioStreams IOStreams) (err error) {
 	if nodes, err = client.CoreV1().Nodes().List(metav1.ListOptions{}); err != nil {
 		return err
 	}
-
+	fmt.Fprintln(ioStreams.Out, "Node names:")
 	for _, n := range nodes.Items {
 		fmt.Fprintln(ioStreams.Out, n.Name)
 	}

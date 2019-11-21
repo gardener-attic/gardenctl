@@ -17,6 +17,8 @@ package cmd_test
 import (
 	"github.com/gardener/gardenctl/pkg/cmd"
 	mockcmd "github.com/gardener/gardenctl/pkg/mock/cmd"
+	gardencorev1alpha1 "github.com/gardener/gardener/pkg/apis/core/v1alpha1"
+	gardencorefake "github.com/gardener/gardener/pkg/client/core/clientset/versioned/fake"
 	"github.com/golang/mock/gomock"
 	"github.com/spf13/cobra"
 	corev1 "k8s.io/api/core/v1"
@@ -30,15 +32,52 @@ import (
 var _ = Describe("Shell command", func() {
 
 	var (
-		ctrl      *gomock.Controller
-		reader    *mockcmd.MockTargetReader
-		target    *mockcmd.MockTargetInterface
-		clientSet *fake.Clientset
-		command   *cobra.Command
+		ctrl    *gomock.Controller
+		reader  *mockcmd.MockTargetReader
+		target  *mockcmd.MockTargetInterface
+		command *cobra.Command
 
 		execute = func(command *cobra.Command, args []string) error {
 			command.SetArgs(args)
 			return command.Execute()
+		}
+
+		seedName  = "test-name"
+		shootName = "test-shoot"
+
+		createGardenClientSet = func(isHibernated bool) *gardencorefake.Clientset {
+			return gardencorefake.NewSimpleClientset(
+				&gardencorev1alpha1.Seed{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: seedName,
+					},
+				},
+				&gardencorev1alpha1.Shoot{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: shootName,
+					},
+					Spec: gardencorev1alpha1.ShootSpec{
+						SeedName: &seedName,
+					},
+					Status: gardencorev1alpha1.ShootStatus{
+						IsHibernated: isHibernated,
+					},
+				})
+		}
+
+		targetMeta = []cmd.TargetMeta{
+			{
+				Kind: cmd.TargetKindGarden,
+				Name: "test-garden",
+			},
+			{
+				Kind: cmd.TargetKindSeed,
+				Name: seedName,
+			},
+			{
+				Kind: cmd.TargetKindShoot,
+				Name: shootName,
+			},
 		}
 	)
 
@@ -54,27 +93,31 @@ var _ = Describe("Shell command", func() {
 
 	Context("without args", func() {
 		It("should list the node names", func() {
-			clientSet = fake.NewSimpleClientset(&corev1.Node{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: "minikube",
-				},
-			})
+			gardenClientSet := createGardenClientSet(false)
+			k8sClientSet := fake.NewSimpleClientset(
+				&corev1.Node{ObjectMeta: metav1.ObjectMeta{Name: "minikube"}},
+			)
+
 			reader.EXPECT().ReadTarget(gomock.Any()).Return(target)
 			target.EXPECT().Kind().Return(cmd.TargetKindShoot, nil)
-			target.EXPECT().K8SClient().Return(clientSet, nil)
+			target.EXPECT().Stack().Return(targetMeta).AnyTimes()
+			target.EXPECT().GardenerClient().Return(gardenClientSet, nil)
+			target.EXPECT().K8SClient().Return(k8sClientSet, nil)
 
 			ioStreams, _, out, _ := cmd.NewTestIOStreams()
 			command = cmd.NewShellCmd(reader, ioStreams)
 			err := execute(command, []string{})
 
 			Expect(err).NotTo(HaveOccurred())
-			Expect(out.String()).To(Equal("minikube\n"))
+			Expect(out.String()).To(Equal("Node names:\nminikube\n"))
 		})
 
 		Context("when project is targeted", func() {
 			It("should return error", func() {
-				reader.EXPECT().ReadTarget(gomock.Any()).Return(target)
-				target.EXPECT().Kind().Return(cmd.TargetKindProject, nil)
+				gomock.InOrder(
+					reader.EXPECT().ReadTarget(gomock.Any()).Return(target),
+					target.EXPECT().Kind().Return(cmd.TargetKindProject, nil),
+				)
 
 				ioStreams, _, _, _ := cmd.NewTestIOStreams()
 				command = cmd.NewShellCmd(reader, ioStreams)
@@ -88,10 +131,14 @@ var _ = Describe("Shell command", func() {
 
 	Context("with non-existing node name", func() {
 		It("should return error", func() {
-			clientSet = fake.NewSimpleClientset()
+			gardenClientSet := createGardenClientSet(false)
+			k8sClientSet := fake.NewSimpleClientset()
+
 			reader.EXPECT().ReadTarget(gomock.Any()).Return(target)
 			target.EXPECT().Kind().Return(cmd.TargetKindShoot, nil)
-			target.EXPECT().K8SClient().Return(clientSet, nil)
+			target.EXPECT().K8SClient().Return(k8sClientSet, nil)
+			target.EXPECT().GardenerClient().Return(gardenClientSet, nil)
+			target.EXPECT().Stack().Return(targetMeta).AnyTimes()
 
 			ioStreams, _, _, _ := cmd.NewTestIOStreams()
 			command = cmd.NewShellCmd(reader, ioStreams)
@@ -104,8 +151,10 @@ var _ = Describe("Shell command", func() {
 
 	Context("when project is targeted", func() {
 		It("should return error", func() {
-			reader.EXPECT().ReadTarget(gomock.Any()).Return(target)
-			target.EXPECT().Kind().Return(cmd.TargetKindProject, nil)
+			gomock.InOrder(
+				reader.EXPECT().ReadTarget(gomock.Any()).Return(target),
+				target.EXPECT().Kind().Return(cmd.TargetKindProject, nil),
+			)
 
 			ioStreams, _, _, _ := cmd.NewTestIOStreams()
 			command = cmd.NewShellCmd(reader, ioStreams)
@@ -124,6 +173,24 @@ var _ = Describe("Shell command", func() {
 
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(Equal("command must be in the format: gardenctl shell (node|pod)"))
+		})
+	})
+
+	Context("with hibernated shoot", func() {
+		It("should not list nodes", func() {
+			gardenClientSet := createGardenClientSet(true)
+
+			reader.EXPECT().ReadTarget(gomock.Any()).Return(target)
+			target.EXPECT().Kind().Return(cmd.TargetKindShoot, nil)
+			target.EXPECT().GardenerClient().Return(gardenClientSet, nil)
+			target.EXPECT().Stack().Return(targetMeta).AnyTimes()
+
+			ioStreams, _, _, _ := cmd.NewTestIOStreams()
+			command = cmd.NewShellCmd(reader, ioStreams)
+			err := execute(command, []string{})
+
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(Equal("shoot \"test-shoot\" is hibernated"))
 		})
 	})
 })
