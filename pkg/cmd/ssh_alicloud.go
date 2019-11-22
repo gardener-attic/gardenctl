@@ -135,7 +135,7 @@ func sshToAlicloudNode(nodeName, path, user string, sshPublicKey []byte) {
 		fmt.Println("gardenctl aliyun ecs StopInstance -- --InstanceId=" + a.BastionInstanceID)
 		fmt.Println("")
 		fmt.Println("- Run following command before shoot deletion:")
-		fmt.Println("gardenctl ssh clean")
+		fmt.Println("gardenctl ssh cleanup")
 	default:
 		fmt.Println("Unknown option")
 	}
