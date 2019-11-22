@@ -33,11 +33,11 @@ import (
 // NewShowCmd returns a new show command.
 func NewShowCmd() *cobra.Command {
 	return &cobra.Command{
-		Use:   "show (operator|gardener-dashboard|api|scheduler|controller-manager|etcd-operator|etcd-main|etcd-events|addon-manager|vpn-seed|vpn-shoot|machine-controller-manager|kubernetes-dashboard|prometheus|grafana|alertmanager|tf (infra|dns|ingress))",
+		Use:   "show (operator|gardener-dashboard|api|scheduler|controller-manager|etcd-operator|etcd-main|etcd-events|addon-manager|vpn-seed|vpn-shoot|machine-controller-manager|kubernetes-dashboard|prometheus|grafana|alertmanager|tf (infra|dns|ingress)|cluster-autoscaler)",
 		Short: `Show details about endpoint/service and open in default browser if applicable`,
 		Run: func(cmd *cobra.Command, args []string) {
 			if len(args) < 1 || len(args) > 2 {
-				fmt.Println("Command must be in the format: show (operator|gardener-dashboard|api|scheduler|controller-manager|etcd-operator|etcd-main|etcd-events|addon-manager|vpn-seed|vpn-shoot|machine-controller-manager|kubernetes-dashboard|prometheus|grafana|alertmanager|tf (infra|dns|ingress)")
+				fmt.Println("Command must be in the format: show (operator|gardener-dashboard|api|scheduler|controller-manager|etcd-operator|etcd-main|etcd-events|addon-manager|vpn-seed|vpn-shoot|machine-controller-manager|kubernetes-dashboard|prometheus|grafana|alertmanager|tf (infra|dns|ingress)|cluster-autoscaler)")
 				os.Exit(2)
 			}
 			var t Target
@@ -103,13 +103,15 @@ func NewShowCmd() *cobra.Command {
 				case "ingress":
 					showIngress()
 				default:
-					fmt.Println("Command must be in the format: show (operator|gardener-dashboard|api|scheduler|controller-manager|etcd-operator|etcd-main|etcd-events|addon-manager|vpn-seed|vpn-shoot|machine-controller-manager|kubernetes-dashboard|prometheus|grafana|alertmanager|tf (infra|dns|ingress)")
+					fmt.Println("Command must be in the format: show (operator|gardener-dashboard|api|scheduler|controller-manager|etcd-operator|etcd-main|etcd-events|addon-manager|vpn-seed|vpn-shoot|machine-controller-manager|kubernetes-dashboard|prometheus|grafana|alertmanager|tf (infra|dns|ingress)|cluster-autoscaler)")
 				}
+			case "cluster-autoscaler":
+				showClusterAutoscaler()
 			default:
-				fmt.Println("Command must be in the format: show (operator|gardener-dashboard|api|scheduler|controller-manager|etcd-operator|etcd-main|etcd-events|addon-manager|vpn-seed|vpn-shoot|machine-controller-manager|kubernetes-dashboard|prometheus|grafana|alertmanager|tf (infra|dns|ingress)")
+				fmt.Println("Command must be in the format: show (operator|gardener-dashboard|api|scheduler|controller-manager|etcd-operator|etcd-main|etcd-events|addon-manager|vpn-seed|vpn-shoot|machine-controller-manager|kubernetes-dashboard|prometheus|grafana|alertmanager|tf (infra|dns|ingress)|cluster-autoscaler)")
 			}
 		},
-		ValidArgs: []string{"operator", "gardener-dashboard", "api", "scheduler", "controller-manager", "etcd-operator", "etcd-main", "etcd-events", "addon-manager", "vpn-seed", "vpn-shoot", "machine-controller-manager", "kubernetes-dashboard", "prometheus", "grafana", "alertmanager", "tf"},
+		ValidArgs: []string{"operator", "gardener-dashboard", "api", "scheduler", "controller-manager", "etcd-operator", "etcd-main", "etcd-events", "addon-manager", "vpn-seed", "vpn-shoot", "machine-controller-manager", "kubernetes-dashboard", "prometheus", "grafana", "alertmanager", "tf", "cluster-autoscaler"},
 	}
 }
 
@@ -445,4 +447,9 @@ func showDNS() {
 // showIngress shows the currently running ingress tf-pods
 func showIngress() {
 	showTerraform(".ingress.tf-job")
+}
+
+// showClusterAutoscaler shows the pod for the running cluster-autoscaler in the targeted seed cluster
+func showClusterAutoscaler() {
+	showPod("cluster-autoscaler", "seed")
 }
