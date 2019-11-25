@@ -54,6 +54,8 @@ func sshToAZNode(nodeName, path, user string, sshPublicKey []byte) {
 	a.addNsgRule()
 	fmt.Println("")
 
+	defer a.cleanupAzure()
+
 	// create public ip
 	a.createPublicIP()
 	fmt.Println("Waiting 5 s until public ip is available.")
@@ -74,12 +76,9 @@ func sshToAZNode(nodeName, path, user string, sshPublicKey []byte) {
 	cmd.Stdout = os.Stdout
 	cmd.Stdin = os.Stdin
 	cmd.Stderr = os.Stderr
-	err := cmd.Run()
-	checkError(err)
-
-	fmt.Println("")
-	fmt.Println("(4/4) Cleanup")
-	a.cleanupAzure()
+	if err := cmd.Run(); err != nil {
+		fmt.Println(err)
+	}
 }
 
 // fetchAttributes gets all the needed attributes for creating bastion host and its security group with given <nodeName>.
@@ -193,6 +192,9 @@ func fetchAzureMachineNameByNodeName(shootName, nodeName string) (string, error)
 
 // cleanupAzure cleans up all created azure resources required for ssh connection
 func (a *AzureInstanceAttribute) cleanupAzure() {
+	fmt.Println("")
+	fmt.Println("(4/4) Cleanup")
+
 	var err error
 
 	// remove ssh rule

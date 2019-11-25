@@ -58,6 +58,8 @@ func sshToGCPNode(nodeName, path, user string, sshPublicKey []byte) {
 	g.createBastionHostFirewallRule()
 	fmt.Println("")
 
+	defer g.cleanupGcpBastionHost()
+
 	fmt.Println("(3/4) Creating bastion host")
 	g.createBastionHostInstance()
 
@@ -72,11 +74,9 @@ func sshToGCPNode(nodeName, path, user string, sshPublicKey []byte) {
 	cmd.Stdout = os.Stdout
 	cmd.Stdin = os.Stdin
 	cmd.Stderr = os.Stderr
-	err := cmd.Run()
-	checkError(err)
-
-	fmt.Println("(4/4) Cleanup")
-	g.cleanupGcpBastionHost()
+	if err := cmd.Run(); err != nil {
+		fmt.Println(err)
+	}
 }
 
 // fetchAttributes gets all the needed attributes for creating bastion host and its security group with given <nodeName>.
@@ -231,6 +231,7 @@ func fetchZone(shootName, nodeName string) (string, error) {
 
 // cleanupGcpBastionHost cleans up the bastion host for the targeted cluster.
 func (g *GCPInstanceAttribute) cleanupGcpBastionHost() {
+	fmt.Println("(4/4) Cleanup")
 	fmt.Println("Cleaning up bastion host configurations...")
 	fmt.Println("")
 	fmt.Println("Starting cleanup")

@@ -103,6 +103,8 @@ func sshToAlicloudNode(nodeName, path, user string, sshPublicKey []byte) {
 	a.createBastionHostSecurityGroup()
 	fmt.Println("Bastion host security group set up.")
 
+	defer checkIsDeletionWanted(a.BastionInstanceID)
+
 	fmt.Println("")
 	fmt.Println("(4/5) Setting up bastion host")
 	a.createBastionHostInstance(sshPublicKey)
@@ -118,26 +120,8 @@ func sshToAlicloudNode(nodeName, path, user string, sshPublicKey []byte) {
 	cmd.Stdout = os.Stdout
 	cmd.Stdin = os.Stdin
 	cmd.Stderr = os.Stderr
-	err = cmd.Run()
-	checkError(err)
-
-	fmt.Println("Would you like to cleanup the created bastion? (y/n)")
-
-	reader := bufio.NewReader(os.Stdin)
-	char, _, err := reader.ReadRune()
-	checkError(err)
-	switch char {
-	case 'y', 'Y':
-		fmt.Println("Cleanup")
-		cleanupAliyunBastionHost()
-	case 'n', 'N':
-		fmt.Println("- Run following command to hibernate bastion host:")
-		fmt.Println("gardenctl aliyun ecs StopInstance -- --InstanceId=" + a.BastionInstanceID)
-		fmt.Println("")
-		fmt.Println("- Run following command before shoot deletion:")
-		fmt.Println("gardenctl ssh cleanup")
-	default:
-		fmt.Println("Unknown option")
+	if err := cmd.Run(); err != nil {
+		fmt.Println(err)
 	}
 }
 
@@ -605,6 +589,29 @@ func (a *AliyunInstanceAttribute) getMinimumInstanceSpec() string {
 	}
 
 	return currentMinimumSpec.InstanceTypeID
+}
+
+//checkIsDeletionWanted checks if the user wants to delete the created IAS resources
+func checkIsDeletionWanted(bastionInstanceID string) {
+	fmt.Println("Would you like to cleanup the created bastion? (y/n)")
+
+	reader := bufio.NewReader(os.Stdin)
+	char, _, err := reader.ReadRune()
+	checkError(err)
+
+	switch char {
+	case 'y', 'Y':
+		fmt.Println("Cleanup")
+		cleanupAliyunBastionHost()
+	case 'n', 'N':
+		fmt.Println("- Run following command to hibernate bastion host:")
+		fmt.Println("gardenctl aliyun ecs StopInstance -- --InstanceId=" + bastionInstanceID)
+		fmt.Println("")
+		fmt.Println("- Run following command before shoot deletion:")
+		fmt.Println("gardenctl ssh cleanup")
+	default:
+		fmt.Println("Unknown option")
+	}
 }
 
 // cleanupAlicloudBastionHost cleans up the bastion host for the targeted cluster.
