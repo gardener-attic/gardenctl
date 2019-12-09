@@ -517,7 +517,9 @@ func targetShoot(targetWriter TargetWriter, shoot gardencorev1alpha1.Shoot) {
 	// Get shoot kubeconfig
 	var shootKubeconfigSecretName = fmt.Sprintf("%s.kubeconfig", shoot.Name)
 	shootKubeconfigSecret, err := gardenClient.CoreV1().Secrets(shoot.Namespace).Get(shootKubeconfigSecretName, metav1.GetOptions{})
-	checkError(err)
+	if err != nil {
+		fmt.Println("Kubeconfig not available, using empty one. Be aware only a limited number of cmds are available!")
+	}
 
 	k8sClientToGarden, err := target.K8SClientToKind(TargetKindGarden)
 	checkError(err)
