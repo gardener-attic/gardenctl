@@ -68,7 +68,7 @@ func downloadTerraformFiles(option string) string {
 		fmt.Println("No Shoot targeted")
 		os.Exit(2)
 	} else if len(target.Stack()) < 3 {
-		fmt.Println("Command must be in the format:\n  download tf + (infra|internal-dns|external-dns|ingress|backup)\n  download logs vpn")
+		fmt.Println("Command must be in the format:\n download tf + (infra|internal-dns|external-dns|ingress|backup)\n  download logs vpn")
 		os.Exit(2)
 	} else {
 		var err error
