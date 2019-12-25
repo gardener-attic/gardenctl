@@ -32,7 +32,7 @@ import (
 
 const (
 	// AdminClusterRoleBindingName is the name for the administrator ClusterRoleBinding
-	AdminClusterRoleBindingName = "garden.sapcloud.io:system:administrators"
+	AdminClusterRoleBindingName = "gardener.cloud:system:administrators"
 )
 
 var (
