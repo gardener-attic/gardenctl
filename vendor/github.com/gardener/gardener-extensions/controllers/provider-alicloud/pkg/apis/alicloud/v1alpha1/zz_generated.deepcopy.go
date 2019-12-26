@@ -140,6 +140,11 @@ func (in *InfrastructureStatus) DeepCopyInto(out *InfrastructureStatus) {
 	*out = *in
 	out.TypeMeta = in.TypeMeta
 	in.VPC.DeepCopyInto(&out.VPC)
+	if in.MachineImages != nil {
+		in, out := &in.MachineImages, &out.MachineImages
+		*out = make([]MachineImage, len(*in))
+		copy(*out, *in)
+	}
 	return
 }
 

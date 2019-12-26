@@ -18,6 +18,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
+// +genclient
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
 // InfrastructureConfig infrastructure configuration resource
@@ -101,4 +102,12 @@ type InfrastructureStatus struct {
 
 	VPC         VPCStatus `json:"vpc"`
 	KeyPairName string    `json:"keyPairName"`
+
+	// MachineImages is a list of machine images that have been used in this infrastructure. Usually, the extension controller
+	// gets the mapping from name/version to the provider-specific machine image data in its componentconfig. However, if
+	// a version that is still in use gets removed from this componentconfig and Shoot's access to the this version is revoked,
+	// it cannot reconcile anymore existing `Infrastructure` resources that are still using this version. Hence, it stores
+	// the used versions in the provider status to ensure reconciliation is possible.
+	// +optional
+	MachineImages []MachineImage `json:"machineImages,omitempty"`
 }

@@ -19,7 +19,7 @@ import (
 	"fmt"
 	"time"
 
-	gardencorev1alpha1 "github.com/gardener/gardener/pkg/apis/core/v1alpha1"
+	gardencorev1beta1 "github.com/gardener/gardener/pkg/apis/core/v1beta1"
 	"github.com/spf13/cobra"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -56,7 +56,7 @@ func NewShellCmd(reader TargetReader, ioStreams IOStreams) *cobra.Command {
 				return errors.New("project targeted")
 			}
 
-			var shoot *gardencorev1alpha1.Shoot
+			var shoot *gardencorev1beta1.Shoot
 			if len(target.Stack()) == 1 {
 				return errors.New("garden cluster targeted")
 			} else if len(target.Stack()) > 2 {

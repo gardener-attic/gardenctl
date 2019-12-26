@@ -21,7 +21,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	gardencorev1alpha1 "github.com/gardener/gardener/pkg/apis/core/v1alpha1"
+	gardencorev1beta1 "github.com/gardener/gardener/pkg/apis/core/v1beta1"
 	gardencoreclientset "github.com/gardener/gardener/pkg/client/core/clientset/versioned"
 	"github.com/spf13/cobra"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -64,10 +64,10 @@ func downloadTerraformFiles(option string) string {
 	gardenName := target.Stack()[0].Name
 	pathSeedCache := filepath.Join("cache", gardenName, "seeds")
 	pathProjectCache := filepath.Join("cache", gardenName, "projects")
-	if len(target.Target) < 3 && (option == "infra" || option == "internal-dns" || option == "external-dns" || option == "ingress" || option == "backup") {
+	if len(target.Stack()) < 3 && (option == "infra" || option == "internal-dns" || option == "external-dns" || option == "ingress" || option == "backup") {
 		fmt.Println("No Shoot targeted")
 		os.Exit(2)
-	} else if len(target.Target) < 3 {
+	} else if len(target.Stack()) < 3 {
 		fmt.Println("Command must be in the format:\n  download tf + (infra|internal-dns|external-dns|ingress|backup)\n  download logs vpn")
 		os.Exit(2)
 	} else {
@@ -76,14 +76,14 @@ func downloadTerraformFiles(option string) string {
 		checkError(err)
 		gardenClientset, err := gardencoreclientset.NewForConfig(NewConfigFromBytes(*kubeconfig))
 		checkError(err)
-		var shoot *gardencorev1alpha1.Shoot
+		var shoot *gardencorev1beta1.Shoot
 		if target.Stack()[1].Kind == "project" {
-			project, err := gardenClientset.CoreV1alpha1().Projects().Get(target.Stack()[1].Name, metav1.GetOptions{})
+			project, err := gardenClientset.CoreV1beta1().Projects().Get(target.Stack()[1].Name, metav1.GetOptions{})
 			checkError(err)
-			shoot, err = gardenClientset.CoreV1alpha1().Shoots(*project.Spec.Namespace).Get(target.Stack()[2].Name, metav1.GetOptions{})
+			shoot, err = gardenClientset.CoreV1beta1().Shoots(*project.Spec.Namespace).Get(target.Stack()[2].Name, metav1.GetOptions{})
 			checkError(err)
 		} else {
-			shootList, err := gardenClientset.CoreV1alpha1().Shoots("").List(metav1.ListOptions{})
+			shootList, err := gardenClientset.CoreV1beta1().Shoots("").List(metav1.ListOptions{})
 			checkError(err)
 			for index, s := range shootList.Items {
 				if s.Name == target.Stack()[2].Name && *s.Spec.SeedName == target.Stack()[1].Name {
@@ -93,7 +93,7 @@ func downloadTerraformFiles(option string) string {
 			}
 		}
 		namespace = shoot.Status.TechnicalID
-		seed, err := gardenClientset.CoreV1alpha1().Seeds().Get(*shoot.Spec.SeedName, metav1.GetOptions{})
+		seed, err := gardenClientset.CoreV1beta1().Seeds().Get(*shoot.Spec.SeedName, metav1.GetOptions{})
 		checkError(err)
 		kubeSecret, err := Client.CoreV1().Secrets(seed.Spec.SecretRef.Namespace).Get(seed.Spec.SecretRef.Name, metav1.GetOptions{})
 		checkError(err)
@@ -146,10 +146,10 @@ func downloadLogs(option string) {
 	pathSeedCache := filepath.Join("cache", gardenName, "seeds")
 	gardenClientset, err := gardencoreclientset.NewForConfig(NewConfigFromBytes(*kubeconfig))
 	checkError(err)
-	shootList, err := gardenClientset.CoreV1alpha1().Shoots("").List(metav1.ListOptions{})
+	shootList, err := gardenClientset.CoreV1beta1().Shoots("").List(metav1.ListOptions{})
 	checkError(err)
 	for _, shoot := range shootList.Items {
-		seed, err := gardenClientset.CoreV1alpha1().Seeds().Get(*shoot.Spec.SeedName, metav1.GetOptions{})
+		seed, err := gardenClientset.CoreV1beta1().Seeds().Get(*shoot.Spec.SeedName, metav1.GetOptions{})
 		if err != nil {
 			fmt.Println("Could not get seed")
 			continue

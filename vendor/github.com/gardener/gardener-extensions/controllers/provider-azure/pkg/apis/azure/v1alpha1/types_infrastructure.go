@@ -18,16 +18,20 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
+// +genclient
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
 // InfrastructureConfig infrastructure configuration resource
 type InfrastructureConfig struct {
 	metav1.TypeMeta `json:",inline"`
-	// ResourceGroup is azure resource group
+	// ResourceGroup is azure resource group.
 	// +optional
 	ResourceGroup *ResourceGroup `json:"resourceGroup,omitempty"`
-	// Networks is the network configuration (VNet, subnets, etc.)
+	// Networks is the network configuration (VNet, subnets, etc.).
 	Networks NetworkConfig `json:"networks"`
+	// Zoned indicates whether the cluster uses availability zones.
+	// +optional
+	Zoned bool `json:"zoned,omitempty"`
 }
 
 // ResourceGroup is azure resource group
@@ -42,6 +46,9 @@ type NetworkConfig struct {
 	VNet VNet `json:"vnet"`
 	// Workers is the worker subnet range to create (used for the VMs).
 	Workers string `json:"workers"`
+	// ServiceEndpoints is a list of Azure ServiceEndpoints which should be associated with the worker subnet.
+	// +optional
+	ServiceEndpoints []string `json:"serviceEndpoints,omitempty"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
@@ -59,6 +66,9 @@ type InfrastructureStatus struct {
 	RouteTables []RouteTable `json:"routeTables"`
 	// SecurityGroups is a list of created security groups
 	SecurityGroups []SecurityGroup `json:"securityGroups"`
+	// Zoned indicates whether the cluster uses zones
+	// +optional
+	Zoned bool `json:"zoned,omitempty"`
 }
 
 // NetworkStatus is the current status of the infrastructure networks.
@@ -116,9 +126,12 @@ type SecurityGroup struct {
 
 // VNet contains information about the VNet and some related resources.
 type VNet struct {
-	// Name is the VNet name.
+	// Name is the name of an existing vNet which should be used.
 	// +optional
 	Name *string `json:"name,omitempty"`
+	// ResourceGroup is the resource group where the existing vNet blongs to.
+	// +optional
+	ResourceGroup *string `json:"resourceGroup,omitempty"`
 	// CIDR is the VNet CIDR
 	// +optional
 	CIDR *string `json:"cidr,omitempty"`
@@ -128,4 +141,7 @@ type VNet struct {
 type VNetStatus struct {
 	// Name is the VNet name.
 	Name string `json:"name"`
+	// ResourceGroup is the resource group where the existing vNet belongs to.
+	// +optional
+	ResourceGroup *string `json:"resourceGroup,omitempty"`
 }

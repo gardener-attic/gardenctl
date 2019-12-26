@@ -20,7 +20,7 @@ import (
 	"fmt"
 	"os"
 
-	gardencorev1alpha1 "github.com/gardener/gardener/pkg/apis/core/v1alpha1"
+	gardencorev1beta1 "github.com/gardener/gardener/pkg/apis/core/v1beta1"
 	gardencoreclientset "github.com/gardener/gardener/pkg/client/core/clientset/versioned"
 	"github.com/spf13/cobra"
 	"gopkg.in/yaml.v2"
@@ -44,11 +44,7 @@ func NewLsCmd(targetReader TargetReader, configReader ConfigReader, ioStreams IO
 			}
 			switch args[0] {
 			case "projects":
-				tmp := KUBECONFIG
-				Client, err = clientToTarget("garden")
-				checkError(err)
-				getProjectsWithShoots(ioStreams)
-				KUBECONFIG = tmp
+				return printProjectsWithShoots(target, ioStreams)
 			case "gardens":
 				PrintGardenClusters(configReader, outputFormat, ioStreams)
 			case "seeds":
@@ -71,23 +67,17 @@ func NewLsCmd(targetReader TargetReader, configReader ConfigReader, ioStreams IO
 					fmt.Fprint(ioStreams.Out, string(j))
 				}
 			case "shoots":
-				tmp := KUBECONFIG
-				Client, err = clientToTarget("garden")
-				checkError(err)
 				if len(target.Stack()) == 1 {
-					getProjectsWithShoots(ioStreams)
+					return printProjectsWithShoots(target, ioStreams)
 				} else if len(target.Stack()) == 2 && target.Stack()[1].Kind == "seed" {
 					getProjectsWithShootsForSeed(ioStreams)
 				} else if len(target.Stack()) == 2 && target.Stack()[1].Kind == "project" {
 					getSeedsWithShootsForProject(ioStreams)
 				}
-				KUBECONFIG = tmp
 			case "issues":
-				Client, err = clientToTarget("garden")
-				checkError(err)
 				getIssues(ioStreams)
 			default:
-				fmt.Println("Command must be in the format: ls [gardens|projects|seeds|shoots|issues]")
+				return errors.New("command must be in the format: ls [gardens|projects|seeds|shoots|issues]")
 			}
 
 			return nil
@@ -98,16 +88,21 @@ func NewLsCmd(targetReader TargetReader, configReader ConfigReader, ioStreams IO
 	return cmd
 }
 
-// getProjectsWithShoots lists list of projects with shoots
-func getProjectsWithShoots(ioStreams IOStreams) {
-	var target Target
-	ReadTarget(pathTarget, &target)
+// printProjectsWithShoots lists list of projects with shoots
+func printProjectsWithShoots(target TargetInterface, ioStreams IOStreams) error {
 	gardenClientset, err := target.GardenerClient()
-	checkError(err)
-	projectList, err := gardenClientset.CoreV1alpha1().Projects().List(metav1.ListOptions{})
-	checkError(err)
-	shootList, err := gardenClientset.CoreV1alpha1().Shoots("").List(metav1.ListOptions{})
-	checkError(err)
+	if err != nil {
+		return err
+	}
+	projectList, err := gardenClientset.CoreV1beta1().Projects().List(metav1.ListOptions{})
+	if err != nil {
+		return err
+	}
+	shootList, err := gardenClientset.CoreV1beta1().Shoots("").List(metav1.ListOptions{})
+	if err != nil {
+		return err
+	}
+
 	var projects Projects
 	for _, project := range projectList.Items {
 		var pm ProjectMeta
@@ -123,15 +118,22 @@ func getProjectsWithShoots(ioStreams IOStreams) {
 		pm.Project = project.Name
 		projects.Projects = append(projects.Projects, pm)
 	}
+
 	if outputFormat == "yaml" {
 		y, err := yaml.Marshal(projects)
-		checkError(err)
+		if err != nil {
+			return err
+		}
 		os.Stdout.Write(y)
 	} else if outputFormat == "json" {
 		j, err := json.MarshalIndent(projects, "", "  ")
-		checkError(err)
+		if err != nil {
+			return err
+		}
 		fmt.Fprint(ioStreams.Out, string(j))
 	}
+
+	return nil
 }
 
 // PrintGardenClusters prints all Garden cluster in the Garden config
@@ -156,8 +158,8 @@ func PrintGardenClusters(reader ConfigReader, outFormat string, ioStreams IOStre
 }
 
 // getSeeds returns list of seeds
-func getSeeds(clientset gardencoreclientset.Interface) *gardencorev1alpha1.SeedList {
-	seedList, err := clientset.CoreV1alpha1().Seeds().List(metav1.ListOptions{})
+func getSeeds(clientset gardencoreclientset.Interface) *gardencorev1beta1.SeedList {
+	seedList, err := clientset.CoreV1beta1().Seeds().List(metav1.ListOptions{})
 	checkError(err)
 	return seedList
 }
@@ -169,9 +171,9 @@ func getProjectsWithShootsForSeed(ioStreams IOStreams) {
 	var projects Projects
 	gardenClientset, err := target.GardenerClient()
 	checkError(err)
-	projectList, err := gardenClientset.CoreV1alpha1().Projects().List(metav1.ListOptions{})
+	projectList, err := gardenClientset.CoreV1beta1().Projects().List(metav1.ListOptions{})
 	checkError(err)
-	shootList, err := gardenClientset.CoreV1alpha1().Shoots("").List(metav1.ListOptions{})
+	shootList, err := gardenClientset.CoreV1beta1().Shoots("").List(metav1.ListOptions{})
 	checkError(err)
 	for _, project := range projectList.Items {
 		var pm ProjectMeta
@@ -208,7 +210,7 @@ func getProjectsWithShootsForSeed(ioStreams IOStreams) {
 func getIssues(ioStreams IOStreams) {
 	gardenClientset, err := gardencoreclientset.NewForConfig(NewConfigFromBytes(*kubeconfig))
 	checkError(err)
-	shootList, err := gardenClientset.CoreV1alpha1().Shoots("").List(metav1.ListOptions{})
+	shootList, err := gardenClientset.CoreV1beta1().Shoots("").List(metav1.ListOptions{})
 	checkError(err)
 	var issues Issues
 	for _, item := range shootList.Items {
@@ -252,8 +254,10 @@ func getIssues(ioStreams IOStreams) {
 					lastOperationMeta.State = string(item.Status.LastOperation.State)
 					lastOperationMeta.Type = string(item.Status.LastOperation.Type)
 				}
-				if item.Status.LastError != nil {
-					statusMeta.LastError = item.Status.LastError.Description
+				if item.Status.LastErrors != nil {
+					for _, lastError := range item.Status.LastErrors {
+						statusMeta.LastErrors = append(statusMeta.LastErrors, lastError.GetDescription())
+					}
 				}
 				statusMeta.LastOperation = lastOperationMeta
 				im.Health = state
@@ -290,15 +294,15 @@ func getSeedsWithShootsForProject(ioStreams IOStreams) {
 	var target Target
 	ReadTarget(pathTarget, &target)
 
-	gardenClientset, err := gardencoreclientset.NewForConfig(NewConfigFromBytes(*kubeconfig))
+	gardenClientset, err := target.GardenerClient()
 	checkError(err)
 
 	projectName := target.Target[1].Name
-	project, err := gardenClientset.CoreV1alpha1().Projects().Get(projectName, metav1.GetOptions{})
+	project, err := gardenClientset.CoreV1beta1().Projects().Get(projectName, metav1.GetOptions{})
 	checkError(err)
 
 	projectNamespace := project.Spec.Namespace
-	shootList, err := gardenClientset.CoreV1alpha1().Shoots(*projectNamespace).List(metav1.ListOptions{})
+	shootList, err := gardenClientset.CoreV1beta1().Shoots(*projectNamespace).List(metav1.ListOptions{})
 	checkError(err)
 
 	var seeds, seedsFiltered Seeds

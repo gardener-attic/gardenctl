@@ -53,7 +53,7 @@ func (t *Target) Kind() (TargetKind, error) {
 	case 3:
 		return TargetKindShoot, nil
 	default:
-		return "", errors.New("No target selected")
+		return "", errors.New("no target selected")
 	}
 }
 
