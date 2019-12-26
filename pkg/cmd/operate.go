@@ -24,7 +24,7 @@ import (
 
 	openstackinstall "github.com/gardener/gardener-extensions/controllers/provider-openstack/pkg/apis/openstack/install"
 	openstackv1alpha1 "github.com/gardener/gardener-extensions/controllers/provider-openstack/pkg/apis/openstack/v1alpha1"
-	gardencorev1alpha1 "github.com/gardener/gardener/pkg/apis/core/v1alpha1"
+	gardencorev1beta1 "github.com/gardener/gardener/pkg/apis/core/v1beta1"
 	gardencoreclientset "github.com/gardener/gardener/pkg/client/core/clientset/versioned"
 	"github.com/jmoiron/jsonq"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -59,7 +59,7 @@ func operate(provider, arguments string) {
 	checkError(err)
 	gardenClientset, err := gardencoreclientset.NewForConfig(NewConfigFromBytes(*kubeconfig))
 	checkError(err)
-	shootList, err := gardenClientset.CoreV1alpha1().Shoots("").List(metav1.ListOptions{})
+	shootList, err := gardenClientset.CoreV1beta1().Shoots("").List(metav1.ListOptions{})
 	checkError(err)
 	for _, shoot := range shootList.Items {
 		if shoot.Name == target.Target[2].Name {
@@ -67,7 +67,7 @@ func operate(provider, arguments string) {
 			region = shoot.Spec.Region
 			namespaceSecretBinding := shoot.Namespace
 			profile = shoot.Spec.CloudProfileName
-			secretBinding, err := gardenClientset.CoreV1alpha1().SecretBindings(namespaceSecretBinding).Get((secretBindingName), metav1.GetOptions{})
+			secretBinding, err := gardenClientset.CoreV1beta1().SecretBindings(namespaceSecretBinding).Get((secretBindingName), metav1.GetOptions{})
 			checkError(err)
 			secretName = secretBinding.SecretRef.Name
 			namespaceSecret = secretBinding.SecretRef.Namespace
@@ -206,7 +206,7 @@ func operate(provider, arguments string) {
 		}
 	case "openstack":
 		authURL := ""
-		cloudProfileList, err := gardenClientset.CoreV1alpha1().CloudProfiles().List(metav1.ListOptions{})
+		cloudProfileList, err := gardenClientset.CoreV1beta1().CloudProfiles().List(metav1.ListOptions{})
 		checkError(err)
 		for _, cp := range cloudProfileList.Items {
 			if cp.Name == profile {
@@ -284,7 +284,7 @@ func operate(provider, arguments string) {
 	}
 }
 
-func getOpenstackCloudProfileConfig(in *gardencorev1alpha1.CloudProfile) (*openstackv1alpha1.CloudProfileConfig, error) {
+func getOpenstackCloudProfileConfig(in *gardencorev1beta1.CloudProfile) (*openstackv1alpha1.CloudProfileConfig, error) {
 	if in.Spec.ProviderConfig == nil {
 		return nil, fmt.Errorf("Cannot fetch providerConfig of core.gardener.cloud/v1alpha1.CloudProfile %s", in.Name)
 	}
@@ -306,11 +306,11 @@ func getOpenstackCloudProfileConfig(in *gardencorev1alpha1.CloudProfile) (*opens
 		var ok bool
 		out, ok = in.Spec.ProviderConfig.Object.(*openstackv1alpha1.CloudProfileConfig)
 		if !ok {
-			return nil, fmt.Errorf("Cannot cast providerConfig of core.gardener.cloud/v1alpha1.CloudProfile %s", in.Name)
+			return nil, fmt.Errorf("cannot cast providerConfig of core.gardener.cloud/v1beta1.CloudProfile %s", in.Name)
 		}
 	case in.Spec.ProviderConfig.Raw != nil:
 		if _, _, err := decoder.Decode(in.Spec.ProviderConfig.Raw, nil, out); err != nil {
-			return nil, fmt.Errorf("Cannot decode providerConfig of core.gardener.cloud/v1alpha1.CloudProfile %s", in.Name)
+			return nil, fmt.Errorf("cannot decode providerConfig of core.gardener.cloud/v1beta1.CloudProfile %s", in.Name)
 		}
 	}
 

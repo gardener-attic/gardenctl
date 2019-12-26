@@ -20,9 +20,9 @@ curl -LO https://github.com/gardener/gardenctl/releases/download/$(curl -s https
 
 To download a specific version, replace the `$(curl -s https://raw.githubusercontent.com/gardener/gardenctl/master/LATEST)` portion of the command with the specific version.
 
-For example, to download version 0.13.0 on macOS, type:
+For example, to download version 0.15.0 on macOS, type:
 ```bash
-curl -LO https://github.com/gardener/gardenctl/releases/download/0.13.0/gardenctl-darwin-amd64
+curl -LO https://github.com/gardener/gardenctl/releases/download/v0.15.0/gardenctl-darwin-amd64
 ```
 
 2. Make the gardenctl binary executable.

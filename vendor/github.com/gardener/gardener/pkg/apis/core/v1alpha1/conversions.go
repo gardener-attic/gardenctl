@@ -16,9 +16,14 @@ package v1alpha1
 
 import (
 	"encoding/json"
+	"fmt"
 	"strings"
+	"unsafe"
 
+	"github.com/gardener/gardener/pkg/apis/core"
+	"github.com/gardener/gardener/pkg/apis/core/v1alpha1/constants"
 	"github.com/gardener/gardener/pkg/apis/garden"
+	"github.com/gardener/gardener/pkg/utils"
 
 	alicloudinstall "github.com/gardener/gardener-extensions/controllers/provider-alicloud/pkg/apis/alicloud/install"
 	alicloudv1alpha1 "github.com/gardener/gardener-extensions/controllers/provider-alicloud/pkg/apis/alicloud/v1alpha1"
@@ -39,13 +44,86 @@ import (
 )
 
 func addConversionFuncs(scheme *runtime.Scheme) error {
+	if err := scheme.AddFieldLabelConversionFunc(SchemeGroupVersion.WithKind("Shoot"),
+		func(label, value string) (string, string, error) {
+			switch label {
+			case "metadata.name", "metadata.namespace", garden.ShootSeedName, garden.ShootCloudProfileName:
+				return label, value, nil
+			default:
+				return "", "", fmt.Errorf("field label not supported: %s", label)
+			}
+		},
+	); err != nil {
+		return err
+	}
+
 	// Add non-generated conversion functions
 	return scheme.AddConversionFuncs(
+		Convert_v1alpha1_BackupBucket_To_core_BackupBucket,
+		Convert_core_BackupBucket_To_v1alpha1_BackupBucket,
+		Convert_v1alpha1_BackupEntry_To_core_BackupEntry,
+		Convert_core_BackupEntry_To_v1alpha1_BackupEntry,
 		Convert_v1alpha1_Seed_To_garden_Seed,
 		Convert_garden_Seed_To_v1alpha1_Seed,
 		Convert_v1alpha1_CloudProfile_To_garden_CloudProfile,
 		Convert_garden_CloudProfile_To_v1alpha1_CloudProfile,
 	)
+}
+
+func Convert_v1alpha1_BackupBucket_To_core_BackupBucket(in *BackupBucket, out *core.BackupBucket, s conversion.Scope) error {
+	if err := autoConvert_v1alpha1_BackupBucket_To_core_BackupBucket(in, out, s); err != nil {
+		return err
+	}
+
+	out.Spec.SeedName = in.Spec.Seed
+
+	return nil
+}
+
+func Convert_core_BackupBucket_To_v1alpha1_BackupBucket(in *core.BackupBucket, out *BackupBucket, s conversion.Scope) error {
+	if err := autoConvert_core_BackupBucket_To_v1alpha1_BackupBucket(in, out, s); err != nil {
+		return err
+	}
+
+	out.Spec.Seed = in.Spec.SeedName
+
+	return nil
+}
+
+func Convert_core_BackupBucketSpec_To_v1alpha1_BackupBucketSpec(in *core.BackupBucketSpec, out *BackupBucketSpec, s conversion.Scope) error {
+	return autoConvert_core_BackupBucketSpec_To_v1alpha1_BackupBucketSpec(in, out, s)
+}
+
+func Convert_v1alpha1_BackupBucketSpec_To_core_BackupBucketSpec(in *BackupBucketSpec, out *core.BackupBucketSpec, s conversion.Scope) error {
+	return autoConvert_v1alpha1_BackupBucketSpec_To_core_BackupBucketSpec(in, out, s)
+}
+
+func Convert_v1alpha1_BackupEntry_To_core_BackupEntry(in *BackupEntry, out *core.BackupEntry, s conversion.Scope) error {
+	if err := autoConvert_v1alpha1_BackupEntry_To_core_BackupEntry(in, out, s); err != nil {
+		return err
+	}
+
+	out.Spec.SeedName = in.Spec.Seed
+
+	return nil
+}
+
+func Convert_core_BackupEntry_To_v1alpha1_BackupEntry(in *core.BackupEntry, out *BackupEntry, s conversion.Scope) error {
+	if err := autoConvert_core_BackupEntry_To_v1alpha1_BackupEntry(in, out, s); err != nil {
+		return err
+	}
+
+	out.Spec.Seed = in.Spec.SeedName
+
+	return nil
+}
+
+func Convert_core_BackupEntrySpec_To_v1alpha1_BackupEntrySpec(in *core.BackupEntrySpec, out *BackupEntrySpec, s conversion.Scope) error {
+	return autoConvert_core_BackupEntrySpec_To_v1alpha1_BackupEntrySpec(in, out, s)
+}
+
+func Convert_v1alpha1_BackupEntrySpec_To_core_BackupEntrySpec(in *BackupEntrySpec, out *core.BackupEntrySpec, s conversion.Scope) error {
+	return autoConvert_v1alpha1_BackupEntrySpec_To_core_BackupEntrySpec(in, out, s)
 }
 
 func Convert_v1alpha1_Seed_To_garden_Seed(in *Seed, out *garden.Seed, s conversion.Scope) error {
@@ -65,6 +143,7 @@ func Convert_v1alpha1_Seed_To_garden_Seed(in *Seed, out *garden.Seed, s conversi
 
 	out.Spec.IngressDomain = in.Spec.DNS.IngressDomain
 	out.Spec.Cloud.Region = in.Spec.Provider.Region
+	out.Spec.Networks.BlockCIDRs = in.Spec.BlockCIDRs
 
 	return nil
 }
@@ -98,6 +177,8 @@ func Convert_garden_Seed_To_v1alpha1_Seed(in *garden.Seed, out *Seed, s conversi
 		}
 	}
 
+	out.Spec.BlockCIDRs = in.Spec.Networks.BlockCIDRs
+
 	return nil
 }
 
@@ -107,6 +188,14 @@ func Convert_garden_SeedSpec_To_v1alpha1_SeedSpec(in *garden.SeedSpec, out *Seed
 
 func Convert_v1alpha1_SeedSpec_To_garden_SeedSpec(in *SeedSpec, out *garden.SeedSpec, s conversion.Scope) error {
 	return autoConvert_v1alpha1_SeedSpec_To_garden_SeedSpec(in, out, s)
+}
+
+func Convert_garden_SeedNetworks_To_v1alpha1_SeedNetworks(in *garden.SeedNetworks, out *SeedNetworks, s conversion.Scope) error {
+	return autoConvert_garden_SeedNetworks_To_v1alpha1_SeedNetworks(in, out, s)
+}
+
+func Convert_v1alpha1_SeedNetworks_To_garden_SeedNetworks(in *SeedNetworks, out *garden.SeedNetworks, s conversion.Scope) error {
+	return autoConvert_v1alpha1_SeedNetworks_To_garden_SeedNetworks(in, out, s)
 }
 
 func Convert_v1alpha1_ProjectSpec_To_garden_ProjectSpec(in *ProjectSpec, out *garden.ProjectSpec, s conversion.Scope) error {
@@ -261,6 +350,15 @@ func Convert_v1alpha1_CloudProfile_To_garden_CloudProfile(in *CloudProfile, out 
 			}
 		}
 
+		for _, region := range in.Spec.Regions {
+			if !zonesHaveName(out.Spec.Azure.Constraints.Zones, region.Name) {
+				z := garden.Zone{Region: region.Name}
+				for _, zones := range region.Zones {
+					z.Names = append(z.Names, zones.Name)
+				}
+				out.Spec.Azure.Constraints.Zones = append(out.Spec.Azure.Constraints.Zones, z)
+			}
+		}
 		cloudProfileConfig := &azurev1alpha1.CloudProfileConfig{
 			TypeMeta: metav1.TypeMeta{
 				APIVersion: azurev1alpha1.SchemeGroupVersion.String(),
@@ -406,8 +504,9 @@ func Convert_v1alpha1_CloudProfile_To_garden_CloudProfile(in *CloudProfile, out 
 				t := garden.OpenStackMachineType{MachineType: o}
 				if machineType.Storage != nil {
 					t.Storage = &garden.MachineTypeStorage{
-						Size: machineType.Storage.Size,
-						Type: machineType.Storage.Type,
+						Class: machineType.Storage.Class,
+						Size:  machineType.Storage.Size,
+						Type:  machineType.Storage.Type,
 					}
 					t.VolumeSize = machineType.Storage.Size
 					t.VolumeType = machineType.Storage.Type
@@ -699,6 +798,7 @@ func Convert_garden_CloudProfile_To_v1alpha1_CloudProfile(in *garden.CloudProfil
 		} else {
 			delete(out.Annotations, garden.MigrationCloudProfileDNSProviders)
 		}
+		out.Spec.VolumeTypes = nil
 
 	case in.Spec.Alicloud != nil:
 		out.Spec.Type = "alicloud"
@@ -1056,6 +1156,8 @@ func Convert_v1alpha1_Shoot_To_garden_Shoot(in *Shoot, out *garden.Shoot, s conv
 		out.Spec.Cloud.Azure.Networks.Workers = infrastructureConfig.Networks.Workers
 		out.Spec.Cloud.Azure.Networks.VNet.CIDR = infrastructureConfig.Networks.VNet.CIDR
 		out.Spec.Cloud.Azure.Networks.VNet.Name = infrastructureConfig.Networks.VNet.Name
+		out.Spec.Cloud.Azure.Networks.VNet.ResourceGroup = infrastructureConfig.Networks.VNet.ResourceGroup
+		out.Spec.Cloud.Azure.Networks.ServiceEndpoints = infrastructureConfig.Networks.ServiceEndpoints
 		out.Spec.Cloud.Azure.Networks.Pods = in.Spec.Networking.Pods
 		out.Spec.Cloud.Azure.Networks.Services = in.Spec.Networking.Services
 		out.Spec.Cloud.Azure.Networks.Nodes = &in.Spec.Networking.Nodes
@@ -1103,13 +1205,21 @@ func Convert_v1alpha1_Shoot_To_garden_Shoot(in *Shoot, out *garden.Shoot, s conv
 			}
 		}
 
+		out.Spec.Cloud.Azure.Zones = nil
 		out.Spec.Cloud.Azure.Workers = nil
+		zones := sets.NewString()
 		for _, worker := range in.Spec.Provider.Workers {
 			var o garden.Worker
 			if err := autoConvert_v1alpha1_Worker_To_garden_Worker(&worker, &o, s); err != nil {
 				return err
 			}
 			out.Spec.Cloud.Azure.Workers = append(out.Spec.Cloud.Azure.Workers, o)
+			for _, zone := range o.Zones {
+				if !zones.Has(zone) {
+					out.Spec.Cloud.Azure.Zones = append(out.Spec.Cloud.Azure.Zones, zone)
+					zones.Insert(zone)
+				}
+			}
 		}
 
 	case "gcp":
@@ -1209,9 +1319,13 @@ func Convert_v1alpha1_Shoot_To_garden_Shoot(in *Shoot, out *garden.Shoot, s conv
 				return err
 			}
 			out.Spec.Cloud.GCP.Workers = append(out.Spec.Cloud.GCP.Workers, o)
-			zones.Insert(o.Zones...)
+			for _, zone := range o.Zones {
+				if !zones.Has(zone) {
+					out.Spec.Cloud.GCP.Zones = append(out.Spec.Cloud.GCP.Zones, zone)
+					zones.Insert(zone)
+				}
+			}
 		}
-		out.Spec.Cloud.GCP.Zones = zones.List()
 
 	case "openstack":
 		if out.Spec.Cloud.OpenStack == nil {
@@ -1321,9 +1435,13 @@ func Convert_v1alpha1_Shoot_To_garden_Shoot(in *Shoot, out *garden.Shoot, s conv
 				return err
 			}
 			out.Spec.Cloud.OpenStack.Workers = append(out.Spec.Cloud.OpenStack.Workers, o)
-			zones.Insert(o.Zones...)
+			for _, zone := range o.Zones {
+				if !zones.Has(zone) {
+					out.Spec.Cloud.OpenStack.Zones = append(out.Spec.Cloud.OpenStack.Zones, zone)
+					zones.Insert(zone)
+				}
+			}
 		}
-		out.Spec.Cloud.OpenStack.Zones = zones.List()
 
 	case "alicloud":
 		if out.Spec.Cloud.Alicloud == nil {
@@ -1451,9 +1569,13 @@ func Convert_v1alpha1_Shoot_To_garden_Shoot(in *Shoot, out *garden.Shoot, s conv
 				return err
 			}
 			out.Spec.Cloud.Packet.Workers = append(out.Spec.Cloud.Packet.Workers, o)
-			zones.Insert(o.Zones...)
+			for _, zone := range o.Zones {
+				if !zones.Has(zone) {
+					out.Spec.Cloud.Packet.Zones = append(out.Spec.Cloud.Packet.Zones, zone)
+					zones.Insert(zone)
+				}
+			}
 		}
-		out.Spec.Cloud.Packet.Zones = zones.List()
 
 		var cloudControllerManager *garden.CloudControllerManagerConfig
 		if data, ok := in.Annotations[garden.MigrationShootCloudControllerManager]; ok {
@@ -1536,6 +1658,31 @@ func Convert_garden_Shoot_To_v1alpha1_Shoot(in *garden.Shoot, out *Shoot, s conv
 	out.Spec.Region = in.Spec.Cloud.Region
 	out.Spec.SecretBindingName = in.Spec.Cloud.SecretBindingRef.Name
 	out.Spec.SeedName = in.Spec.Cloud.Seed
+
+	if email, ok := in.Annotations[constants.AnnotationShootOperatedBy]; ok && utils.TestEmail(email) {
+		exists := false
+		if in.Spec.Monitoring == nil {
+			out.Spec.Monitoring = &Monitoring{
+				Alerting: &Alerting{},
+			}
+		}
+		if in.Spec.Monitoring != nil && in.Spec.Monitoring.Alerting == nil {
+			out.Spec.Monitoring.Alerting = &Alerting{}
+		}
+		if in.Spec.Monitoring != nil && in.Spec.Monitoring.Alerting != nil {
+			for _, receiver := range in.Spec.Monitoring.Alerting.EmailReceivers {
+				if receiver == email {
+					exists = true
+					break
+				}
+			}
+		}
+		if !exists {
+			out.Spec.Monitoring.Alerting.EmailReceivers = append(out.Spec.Monitoring.Alerting.EmailReceivers, email)
+		}
+		// Always delete annotation (Either email gets appended to emailReceivers or email already exists).
+		delete(out.Annotations, constants.AnnotationShootOperatedBy)
+	}
 
 	switch in.Spec.Provider.Type {
 	case "aws":
@@ -1631,11 +1778,23 @@ func Convert_garden_ShootStatus_To_v1alpha1_ShootStatus(in *garden.ShootStatus, 
 		return err
 	}
 
+	if len(in.LastErrors) != 0 {
+		out.LastError = (*LastError)(unsafe.Pointer(&in.LastErrors[0]))
+		if len(in.LastErrors) > 1 {
+			lastErrors := in.LastErrors[1:]
+			out.LastErrors = *(*[]LastError)(unsafe.Pointer(&lastErrors))
+		} else {
+			out.LastErrors = nil
+		}
+	}
+
 	if in.IsHibernated == nil {
 		out.IsHibernated = false
 	} else {
 		out.IsHibernated = *in.IsHibernated
 	}
+
+	out.Seed = in.SeedName
 
 	return nil
 }
@@ -1645,7 +1804,21 @@ func Convert_v1alpha1_ShootStatus_To_garden_ShootStatus(in *ShootStatus, out *ga
 		return err
 	}
 
+	if in.LastError != nil {
+		outLastErrors := []garden.LastError{
+			{
+				Description:    in.LastError.Description,
+				Codes:          *(*[]garden.ErrorCode)(unsafe.Pointer(&in.LastError.Codes)),
+				LastUpdateTime: in.LastError.LastUpdateTime,
+			},
+		}
+		out.LastErrors = append(outLastErrors, *(*[]garden.LastError)(unsafe.Pointer(&in.LastErrors))...)
+	} else {
+		out.LastErrors = nil
+	}
+
 	out.IsHibernated = &in.IsHibernated
+	out.SeedName = in.Seed
 
 	return nil
 }

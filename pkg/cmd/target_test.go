@@ -18,7 +18,7 @@ import (
 	"github.com/gardener/gardenctl/pkg/cmd"
 	mockcmd "github.com/gardener/gardenctl/pkg/mock/cmd"
 
-	gardencorev1alpha1 "github.com/gardener/gardener/pkg/apis/core/v1alpha1"
+	gardencorev1beta1 "github.com/gardener/gardener/pkg/apis/core/v1beta1"
 	gardencorefake "github.com/gardener/gardener/pkg/client/core/clientset/versioned/fake"
 	"github.com/golang/mock/gomock"
 	. "github.com/onsi/ginkgo"
@@ -120,7 +120,7 @@ var _ = Describe("Target command", func() {
 				},
 			}).Times(2)
 
-			clientSet := gardencorefake.NewSimpleClientset(&gardencorev1alpha1.Project{
+			clientSet := gardencorefake.NewSimpleClientset(&gardencorev1beta1.Project{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "myproject",
 				},
@@ -174,13 +174,13 @@ var _ = Describe("Target command", func() {
 				},
 			}).Times(3)
 			clientSet := gardencorefake.NewSimpleClientset(
-				&gardencorev1alpha1.Shoot{
+				&gardencorev1beta1.Shoot{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      "foo",
 						Namespace: "garden-validation",
 					},
 				},
-				&gardencorev1alpha1.Shoot{
+				&gardencorev1beta1.Shoot{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      "foo",
 						Namespace: "garden-prod",

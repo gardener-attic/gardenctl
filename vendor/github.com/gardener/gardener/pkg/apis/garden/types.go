@@ -191,6 +191,8 @@ type AzureConstraints struct {
 	MachineTypes []MachineType
 	// VolumeTypes contains constraints regarding allowed values for volume types in the 'workers' block in the Shoot specification.
 	VolumeTypes []VolumeType
+	// Zones contains constraints regarding allowed values for 'zones' block in the Shoot specification.
+	Zones []Zone
 }
 
 // AzureDomainCount defines the region and the count for this domain count value.
@@ -366,6 +368,8 @@ type MachineType struct {
 
 // MachineTypeStorage is the amount of storage associated with the root volume of this machine type.
 type MachineTypeStorage struct {
+	// Class is the class of the storage type.
+	Class string
 	// Size is the storage size.
 	Size resource.Quantity
 	// Type is the type of the storage.
@@ -546,12 +550,9 @@ type SeedSpec struct {
 	IngressDomain string
 	// SecretRef is a reference to a Secret object containing the Kubeconfig and the cloud provider credentials for
 	// the account the Seed cluster has been deployed to.
-	SecretRef corev1.SecretReference
+	SecretRef *corev1.SecretReference
 	// Networks defines the pod, service and worker network of the Seed cluster.
 	Networks SeedNetworks
-	// BlockCIDRs is a list of network addresses tha should be blocked for shoot control plane components running
-	// in the seed cluster.
-	BlockCIDRs []string
 	// Taints describes taints on the seed.
 	Taints []SeedTaint
 	// Backup holds the object store configuration for the backups of shoot(currently only etcd).
@@ -588,7 +589,9 @@ type SeedStatus struct {
 	// Conditions represents the latest available observations of a Seed's current state.
 	Conditions []Condition
 	// Gardener holds information about the Gardener which last acted on the Seed.
-	Gardener Gardener
+	Gardener *Gardener
+	// KubernetesVersion is the Kubernetes version of the seed cluster.
+	KubernetesVersion *string
 	// ObservedGeneration is the most recent generation observed for this Seed. It corresponds to the
 	// Seed's generation, which is updated on mutation by the API Server.
 	ObservedGeneration int64
@@ -639,6 +642,9 @@ type SeedNetworks struct {
 	Services string
 	// ShootDefaults contains the default networks CIDRs for shoots.
 	ShootDefaults *ShootNetworks
+	// BlockCIDRs is a list of network addresses that should be blocked for shoot control plane components running
+	// in the seed cluster.
+	BlockCIDRs []string
 }
 
 // ShootNetworks contains the default networks CIDRs for shoots.
@@ -658,6 +664,10 @@ type SeedTaint struct {
 }
 
 const (
+	// SeedTaintDisableDNS is a constant for a taint key on a seed that marks it for disabling DNS. All shoots
+	// using this seed won't get any DNS providers, DNS records, and no DNS extension controller is required to
+	// be installed here. This is useful for environment where DNS is not required.
+	SeedTaintDisableDNS = "seed.gardener.cloud/disable-dns"
 	// SeedTaintProtected is a constant for a taint key on a seed that marks it as protected. Protected seeds
 	// may only be used by shoots in the `garden` namespace.
 	SeedTaintProtected = "seed.gardener.cloud/protected"
@@ -805,6 +815,8 @@ type ShootSpec struct {
 	// Maintenance contains information about the time window for maintenance operations and which
 	// operations should be performed.
 	Maintenance *Maintenance
+	// Monitoring contains information about custom monitoring configurations for the shoot.
+	Monitoring *Monitoring
 	// Provider contains all provider-specific and provider-relevant information.
 	Provider Provider
 	// Region is a name of a region.
@@ -833,21 +845,24 @@ const (
 type ShootStatus struct {
 	// Conditions represents the latest available observations of a Shoots's current state.
 	Conditions []Condition
+	// Constraints represents conditions of a Shoot's current state that constraint some operations on it.
+	// +optional
+	Constraints []Condition
 	// Gardener holds information about the Gardener which last acted on the Shoot.
 	Gardener Gardener
 	// LastOperation holds information about the last operation on the Shoot.
 	LastOperation *LastOperation
-	// LastError holds information about the last occurred error during an operation.
-	LastError *LastError
+	// LastErrors holds information about the last occurred error(s) during an operation.
+	LastErrors []LastError
 	// ObservedGeneration is the most recent generation observed for this Shoot. It corresponds to the
 	// Shoot's generation, which is updated on mutation by the API Server.
 	ObservedGeneration int64
 	// RetryCycleStartTime is the start time of the last retry cycle (used to determine how often an operation
 	// must be retried until we give up).
 	RetryCycleStartTime *metav1.Time
-	// Seed is the name of the seed cluster that runs the control plane of the Shoot. This value is only written
+	// SeedName is the name of the seed cluster that runs the control plane of the Shoot. This value is only written
 	// after a successful create/reconcile operation. It will be used when control planes are moved between Seeds.
-	Seed *string
+	SeedName *string
 	// IsHibernated indicates whether the Shoot is currently hibernated.
 	IsHibernated *bool
 	// TechnicalID is the name that is used for creating the Seed namespace, the infrastructure resources, and
@@ -1002,6 +1017,8 @@ type AzureCloud struct {
 	ResourceGroup *AzureResourceGroup
 	// Workers is a list of worker groups.
 	Workers []Worker
+	// Zones is a list of availability zones to deploy the Shoot cluster to.
+	Zones []string
 }
 
 // AzureResourceGroup indicates whether to use an existing resource group or create a new one.
@@ -1017,12 +1034,16 @@ type AzureNetworks struct {
 	VNet AzureVNet
 	// Workers is a CIDR of a worker subnet (private) to create (used for the VMs).
 	Workers string
+	// ServiceEndpoints is a list of Azure ServiceEndpoints which should be associated with the worker subnet.
+	ServiceEndpoints []string
 }
 
 // AzureVNet indicates whether to use an existing VNet or create a new one.
 type AzureVNet struct {
-	// Name is the AWS VNet name of an existing VNet.
+	// Name is the Azure VNet name of an existing VNet.
 	Name *string
+	// ResourceGroup is the resourceGroup where the VNet is located.
+	ResourceGroup *string
 	// CIDR is a CIDR range for a new VNet.
 	CIDR *string
 }
@@ -1119,7 +1140,6 @@ type Addons struct {
 	// KubernetesDashboard holds configuration settings for the kubernetes dashboard addon.
 	KubernetesDashboard *KubernetesDashboard
 	// NginxIngress holds configuration settings for the nginx-ingress addon.
-	// DEPRECATED: This field will be removed in a future version.
 	NginxIngress *NginxIngress
 
 	// ClusterAutoscaler holds configuration settings for the cluster autoscaler addon.
@@ -1179,6 +1199,12 @@ type NginxIngress struct {
 	Addon
 	// LoadBalancerSourceRanges is list of whitelist IP sources for NginxIngress
 	LoadBalancerSourceRanges []string
+	// Config contains custom configuration for the nginx-ingress-controller configuration.
+	// See https://github.com/kubernetes/ingress-nginx/blob/master/docs/user-guide/nginx-configuration/configmap.md#configuration-options
+	Config map[string]string
+	// ExternalTrafficPolicy controls the `.spec.externalTrafficPolicy` value of the load balancer `Service`
+	// exposing the nginx-ingress. Defaults to `Cluster`.
+	ExternalTrafficPolicy *corev1.ServiceExternalTrafficPolicyType
 }
 
 // Monocular describes configuration values for the monocular addon.
@@ -1597,6 +1623,18 @@ type MaintenanceTimeWindow struct {
 	End string
 }
 
+// Monitoring contains information about the monitoring configuration for the shoot.
+type Monitoring struct {
+	// Alerting contains information about the alerting configuration for the shoot cluster.
+	Alerting *Alerting
+}
+
+// Alerting contains information about how alerting will be done (i.e. who will receive alerts and how).
+type Alerting struct {
+	// MonitoringEmailReceivers is a list of recipients for alerts
+	EmailReceivers []string
+}
+
 // Provider contains provider-specific information that are handed-over to the provider-specific
 // extension controller.
 type Provider struct {
@@ -1688,7 +1726,7 @@ type ShootMachineImage struct {
 // Volume contains information about the volume type and size.
 type Volume struct {
 	// Type is the machine type of the worker group.
-	Type string
+	Type *string
 	// Size is the size of the root volume.
 	Size string
 }
@@ -1750,8 +1788,11 @@ const (
 )
 
 const (
-	// SeedAvailable is a constant for a condition type indicating the Seed cluster availability.
-	SeedAvailable ConditionType = "Available"
+	// SeedGardenletReady is a constant for a condition type indicating that the Gardenlet is ready.
+	SeedGardenletReady ConditionType = "GardenletReady"
+	// SeedBootstrapped is a constant for a condition type indicating that the seed cluster has been
+	// bootstrapped.
+	SeedBootstrapped ConditionType = "Bootstrapped"
 
 	// ShootControlPlaneHealthy is a constant for a condition type indicating the control plane health.
 	ShootControlPlaneHealthy ConditionType = "ControlPlaneHealthy"
@@ -1761,52 +1802,6 @@ const (
 	ShootSystemComponentsHealthy ConditionType = "SystemComponentsHealthy"
 	// ShootAPIServerAvailable is a constant for a condition type indicating the api server is available.
 	ShootAPIServerAvailable ConditionType = "APIServerAvailable"
+	// ShootHibernationPossible is a constant for a condition type indicating whether the Shoot can be hibernated.
+	ShootHibernationPossible ConditionType = "HibernationPossible"
 )
-
-////////////////////////////////////////////////////
-//              Backup Infrastructure             //
-////////////////////////////////////////////////////
-// TODO: Remove in further release.
-
-// BackupInfrastructure holds details about backup infrastructure
-// +genclient
-// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
-// +k8s:openapi-gen=x-kubernetes-print-columns:custom-columns=NAMESPACE:.metadata.namespace,NAME:.metadata.name,SEED:.spec.seed,STATUS:.status.lastOperation.state
-type BackupInfrastructure struct {
-	metav1.TypeMeta
-	// Standard object metadata.
-	metav1.ObjectMeta
-	// Specification of the Backup Infrastructure.
-	Spec BackupInfrastructureSpec
-	// Most recently observed status of the Backup Infrastructure.
-	Status BackupInfrastructureStatus
-}
-
-// BackupInfrastructureList is a list of BackupInfrastructure objects.
-// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
-type BackupInfrastructureList struct {
-	metav1.TypeMeta
-	// Standard list object metadata.
-	metav1.ListMeta
-	// Items is the list of BackupInfrastructure.
-	Items []BackupInfrastructure
-}
-
-// BackupInfrastructureSpec is the specification of a Backup Infrastructure.
-type BackupInfrastructureSpec struct {
-	// Seed is the name of a Seed object.
-	Seed string
-	// ShootUID is a unique identifier for the Shoot cluster for which the BackupInfrastructure object is created.
-	ShootUID types.UID
-}
-
-// BackupInfrastructureStatus holds the most recently observed status of the Backup Infrastructure.
-type BackupInfrastructureStatus struct {
-	// LastOperation holds information about the last operation on the BackupInfrastructure.
-	LastOperation *LastOperation
-	// LastError holds information about the last occurred error during an operation.
-	LastError *LastError
-	// ObservedGeneration is the most recent generation observed for this BackupInfrastructure. It corresponds to the
-	// BackupInfrastructure's generation, which is updated on mutation by the API Server.
-	ObservedGeneration *int64
-}

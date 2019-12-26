@@ -18,6 +18,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
+// +genclient
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
 // InfrastructureConfig infrastructure configuration resource
@@ -33,6 +34,9 @@ type NetworkConfig struct {
 	// VPC indicates whether to use an existing VPC or create a new one.
 	// +optional
 	VPC *VPC `json:"vpc,omitempty"`
+	// CloudNAT contains configation about the the CloudNAT configuration
+	// +optional
+	CloudNAT *CloudNAT `json:"cloudNAT,omitempty"`
 	// Internal is a private subnet (used for internal load balancers).
 	// +optional
 	Internal *string `json:"internal,omitempty"`
@@ -84,4 +88,21 @@ type Subnet struct {
 type VPC struct {
 	// Name is the VPC name.
 	Name string `json:"name,omitempty"`
+	// CloudRouter indicates whether to use an existing CloudRouter or create a new one
+	// +optional
+	CloudRouter *CloudRouter `json:"cloudRouter,omitempty"`
+}
+
+// CloudRouter contains information about the the CloudRouter configuration
+type CloudRouter struct {
+	// Name is the CloudRouter name.
+	Name string `json:"name,omitempty"`
+}
+
+// CloudNAT contains information about the the CloudNAT configuration
+type CloudNAT struct {
+	// MinPortsPerVM is the minimum number of ports allocated to a VM in the NAT config.
+	// The default value is 2048 ports.
+	// +optional
+	MinPortsPerVM *int32 `json:"minPortsPerVM,omitempty"`
 }

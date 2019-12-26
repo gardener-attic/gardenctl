@@ -151,7 +151,7 @@ type IssuesMeta struct {
 
 // StatusMeta contains status for a project
 type StatusMeta struct {
-	LastError     string            `yaml:"lastError,omitempty" json:"lastError,omitempty"`
+	LastErrors    []string          `yaml:"lastErrors,omitempty" json:"lastErrors,omitempty"`
 	LastOperation LastOperationMeta `yaml:"lastOperation,omitempty" json:"lastOperation,omitempty"`
 }
 
