@@ -55,7 +55,7 @@ type SeedSpec struct {
 	// under the configured object store.
 	// +optional
 	Backup *SeedBackup `json:"backup,omitempty"`
-	// BlockCIDRs is a list of network addresses tha should be blocked for shoot control plane components running
+	// BlockCIDRs is a list of network addresses that should be blocked for shoot control plane components running
 	// in the seed cluster.
 	// +optional
 	BlockCIDRs []string `json:"blockCIDRs,omitempty"`
@@ -67,7 +67,8 @@ type SeedSpec struct {
 	Provider SeedProvider `json:"provider"`
 	// SecretRef is a reference to a Secret object containing the Kubeconfig and the cloud provider credentials for
 	// the account the Seed cluster has been deployed to.
-	SecretRef corev1.SecretReference `json:"secretRef"`
+	// +optional
+	SecretRef *corev1.SecretReference `json:"secretRef,omitempty"`
 	// Taints describes taints on the seed.
 	// +optional
 	Taints []SeedTaint `json:"taints,omitempty"`
@@ -78,12 +79,17 @@ type SeedSpec struct {
 
 // SeedStatus is the status of a Seed.
 type SeedStatus struct {
-	// Gardener holds information about the Gardener which last acted on the Shoot.
-	// +optional
-	Gardener Gardener `json:"gardener,omitempty"`
 	// Conditions represents the latest available observations of a Seed's current state.
+	// +patchMergeKey=type
+	// +patchStrategy=merge
 	// +optional
-	Conditions []Condition `json:"conditions,omitempty"`
+	Conditions []Condition `json:"conditions,omitempty" patchStrategy:"merge" patchMergeKey:"type"`
+	// Gardener holds information about the Gardener instance which last acted on the Seed.
+	// +optional
+	Gardener *Gardener `json:"gardener,omitempty"`
+	// KubernetesVersion is the Kubernetes version of the seed cluster.
+	// +optional
+	KubernetesVersion *string `json:"kubernetesVersion,omitempty"`
 	// ObservedGeneration is the most recent generation observed for this Seed. It corresponds to the
 	// Seed's generation, which is updated on mutation by the API Server.
 	// +optional
@@ -95,6 +101,7 @@ type SeedBackup struct {
 	// Provider is a provider name.
 	Provider string `json:"provider"`
 	// Region is a region name.
+	// +optional
 	Region *string `json:"region,omitempty"`
 	// SecretRef is a reference to a Secret object containing the cloud provider credentials for
 	// the object store where backups should be stored. It should have enough privileges to manipulate
@@ -150,6 +157,10 @@ type SeedTaint struct {
 }
 
 const (
+	// SeedTaintDisableDNS is a constant for a taint key on a seed that marks it for disabling DNS. All shoots
+	// using this seed won't get any DNS providers, DNS records, and no DNS extension controller is required to
+	// be installed here. This is useful for environment where DNS is not required.
+	SeedTaintDisableDNS = "seed.gardener.cloud/disable-dns"
 	// SeedTaintProtected is a constant for a taint key on a seed that marks it as protected. Protected seeds
 	// may only be used by shoots in the `garden` namespace.
 	SeedTaintProtected = "seed.gardener.cloud/protected"
@@ -164,8 +175,10 @@ type SeedVolume struct {
 	// +optional
 	MinimumSize *resource.Quantity `json:"minimumSize,omitempty"`
 	// Providers is a list of storage class provisioner types for the seed.
+	// +patchMergeKey=name
+	// +patchStrategy=merge
 	// +optional
-	Providers []SeedVolumeProvider `json:"providers,omitempty"`
+	Providers []SeedVolumeProvider `json:"providers,omitempty" patchStrategy:"merge" patchMergeKey:"name"`
 }
 
 // SeedVolumeProvider is a storage class provisioner type.
@@ -177,6 +190,9 @@ type SeedVolumeProvider struct {
 }
 
 const (
-	// SeedAvailable is a constant for a condition type indicating the Seed cluster availability.
-	SeedAvailable ConditionType = "Available"
+	// SeedGardenletReady is a constant for a condition type indicating that the Gardenlet is ready.
+	SeedGardenletReady ConditionType = "GardenletReady"
+	// SeedBootstrapped is a constant for a condition type indicating that the seed cluster has been
+	// bootstrapped.
+	SeedBootstrapped ConditionType = "Bootstrapped"
 )

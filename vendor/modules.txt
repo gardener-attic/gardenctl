@@ -21,17 +21,22 @@ github.com/davecgh/go-spew/spew
 github.com/dgrijalva/jwt-go
 # github.com/evanphx/json-patch v4.5.0+incompatible
 github.com/evanphx/json-patch
-# github.com/gardener/gardener v0.0.0-20191018063251-c1b318de841e
+# github.com/gardener/gardener v0.33.6
 github.com/gardener/gardener/pkg/apis/core
 github.com/gardener/gardener/pkg/apis/core/v1alpha1
+github.com/gardener/gardener/pkg/apis/core/v1alpha1/constants
+github.com/gardener/gardener/pkg/apis/core/v1beta1
+github.com/gardener/gardener/pkg/apis/core/v1beta1/constants
 github.com/gardener/gardener/pkg/apis/garden
 github.com/gardener/gardener/pkg/client/core/clientset/versioned
 github.com/gardener/gardener/pkg/client/core/clientset/versioned/fake
 github.com/gardener/gardener/pkg/client/core/clientset/versioned/scheme
 github.com/gardener/gardener/pkg/client/core/clientset/versioned/typed/core/v1alpha1
 github.com/gardener/gardener/pkg/client/core/clientset/versioned/typed/core/v1alpha1/fake
+github.com/gardener/gardener/pkg/client/core/clientset/versioned/typed/core/v1beta1
+github.com/gardener/gardener/pkg/client/core/clientset/versioned/typed/core/v1beta1/fake
 github.com/gardener/gardener/pkg/utils
-# github.com/gardener/gardener-extensions v0.0.0-20190906160200-5c329d46ae81
+# github.com/gardener/gardener-extensions v1.1.0
 github.com/gardener/gardener-extensions/controllers/provider-alicloud/pkg/apis/alicloud
 github.com/gardener/gardener-extensions/controllers/provider-alicloud/pkg/apis/alicloud/install
 github.com/gardener/gardener-extensions/controllers/provider-alicloud/pkg/apis/alicloud/v1alpha1
@@ -47,7 +52,7 @@ github.com/gardener/gardener-extensions/controllers/provider-gcp/pkg/apis/gcp/v1
 github.com/gardener/gardener-extensions/controllers/provider-openstack/pkg/apis/openstack
 github.com/gardener/gardener-extensions/controllers/provider-openstack/pkg/apis/openstack/install
 github.com/gardener/gardener-extensions/controllers/provider-openstack/pkg/apis/openstack/v1alpha1
-# github.com/gardener/machine-controller-manager v0.0.0-20191106084902-f60747ac59fe
+# github.com/gardener/machine-controller-manager v0.25.0
 github.com/gardener/machine-controller-manager/pkg/apis/machine
 github.com/gardener/machine-controller-manager/pkg/apis/machine/v1alpha1
 github.com/gardener/machine-controller-manager/pkg/client/clientset/versioned
@@ -68,7 +73,7 @@ github.com/golang/protobuf/ptypes/duration
 github.com/golang/protobuf/ptypes/timestamp
 # github.com/google/gofuzz v1.0.0
 github.com/google/gofuzz
-# github.com/googleapis/gnostic v0.3.0
+# github.com/googleapis/gnostic v0.3.1
 github.com/googleapis/gnostic/OpenAPIv2
 github.com/googleapis/gnostic/compiler
 github.com/googleapis/gnostic/extensions
@@ -144,7 +149,7 @@ github.com/pkg/errors
 github.com/sirupsen/logrus
 # github.com/spf13/cobra v0.0.5
 github.com/spf13/cobra
-# github.com/spf13/pflag v1.0.3
+# github.com/spf13/pflag v1.0.5
 github.com/spf13/pflag
 # golang.org/x/crypto v0.0.0-20190701094942-4def268fd1a4
 golang.org/x/crypto/ssh/terminal

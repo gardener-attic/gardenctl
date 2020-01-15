@@ -26,7 +26,7 @@ import (
 	"strconv"
 	"strings"
 
-	gardencorev1alpha1 "github.com/gardener/gardener/pkg/apis/core/v1alpha1"
+	gardencorev1beta1 "github.com/gardener/gardener/pkg/apis/core/v1beta1"
 	gardencoreclientset "github.com/gardener/gardener/pkg/client/core/clientset/versioned"
 	"gopkg.in/yaml.v2"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -192,14 +192,14 @@ func getSeedNamespaceNameForShoot(shootName string) (namespaceSeed string) {
 	checkError(err)
 	gardenClientset, err := gardencoreclientset.NewForConfig(NewConfigFromBytes(*kubeconfig))
 	checkError(err)
-	var shoot *gardencorev1alpha1.Shoot
+	var shoot *gardencorev1beta1.Shoot
 	if target.Stack()[1].Kind == "project" {
-		project, err := gardenClientset.CoreV1alpha1().Projects().Get(target.Stack()[1].Name, metav1.GetOptions{})
+		project, err := gardenClientset.CoreV1beta1().Projects().Get(target.Stack()[1].Name, metav1.GetOptions{})
 		checkError(err)
-		shoot, err = gardenClientset.CoreV1alpha1().Shoots(*project.Spec.Namespace).Get(target.Stack()[2].Name, metav1.GetOptions{})
+		shoot, err = gardenClientset.CoreV1beta1().Shoots(*project.Spec.Namespace).Get(target.Stack()[2].Name, metav1.GetOptions{})
 		checkError(err)
 	} else {
-		shootList, err := gardenClientset.CoreV1alpha1().Shoots("").List(metav1.ListOptions{})
+		shootList, err := gardenClientset.CoreV1beta1().Shoots("").List(metav1.ListOptions{})
 		checkError(err)
 		for index, s := range shootList.Items {
 			if s.Name == target.Stack()[2].Name && *s.Spec.SeedName == target.Stack()[1].Name {
@@ -223,7 +223,7 @@ func getProjectForShoot() (projectName string) {
 		checkError(err)
 		gardenClientset, err := gardencoreclientset.NewForConfig(NewConfigFromBytes(*kubeconfig))
 		checkError(err)
-		shootList, err := gardenClientset.CoreV1alpha1().Shoots("").List(metav1.ListOptions{})
+		shootList, err := gardenClientset.CoreV1beta1().Shoots("").List(metav1.ListOptions{})
 		checkError(err)
 		for _, shoot := range shootList.Items {
 			if shoot.Name == target.Target[2].Name && *shoot.Spec.SeedName == target.Target[1].Name {

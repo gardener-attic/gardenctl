@@ -17,7 +17,7 @@ package cmd_test
 import (
 	"github.com/gardener/gardenctl/pkg/cmd"
 	mockcmd "github.com/gardener/gardenctl/pkg/mock/cmd"
-	gardencorev1alpha1 "github.com/gardener/gardener/pkg/apis/core/v1alpha1"
+	gardencorev1beta1 "github.com/gardener/gardener/pkg/apis/core/v1beta1"
 	gardencorefake "github.com/gardener/gardener/pkg/client/core/clientset/versioned/fake"
 	"github.com/golang/mock/gomock"
 	"github.com/spf13/cobra"
@@ -47,19 +47,19 @@ var _ = Describe("Shell command", func() {
 
 		createGardenClientSet = func(isHibernated bool) *gardencorefake.Clientset {
 			return gardencorefake.NewSimpleClientset(
-				&gardencorev1alpha1.Seed{
+				&gardencorev1beta1.Seed{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: seedName,
 					},
 				},
-				&gardencorev1alpha1.Shoot{
+				&gardencorev1beta1.Shoot{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: shootName,
 					},
-					Spec: gardencorev1alpha1.ShootSpec{
+					Spec: gardencorev1beta1.ShootSpec{
 						SeedName: &seedName,
 					},
-					Status: gardencorev1alpha1.ShootStatus{
+					Status: gardencorev1beta1.ShootStatus{
 						IsHibernated: isHibernated,
 					},
 				})

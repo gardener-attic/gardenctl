@@ -18,6 +18,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
+// +genclient
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
 // WorkerStatus contains information about created worker resources.
@@ -39,10 +40,7 @@ type MachineImage struct {
 	Name string `json:"name"`
 	// Version is the logical version of the machine image.
 	Version string `json:"version"`
-	// Publisher is the publisher of the image.
-	Publisher string `json:"publisher"`
-	// Offer is the offering of the image.
-	Offer string `json:"offer"`
-	// SKU is the stock keeping unit to pull images from.
-	SKU string `json:"sku"`
+	// URN is the uniform resource name, it has the format 'publisher:offer:sku:version'
+	// +optional
+	URN *string `json:"urn,omitempty"`
 }

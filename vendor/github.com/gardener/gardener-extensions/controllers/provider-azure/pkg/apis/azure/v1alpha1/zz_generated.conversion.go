@@ -343,6 +343,7 @@ func autoConvert_v1alpha1_InfrastructureConfig_To_azure_InfrastructureConfig(in 
 	if err := Convert_v1alpha1_NetworkConfig_To_azure_NetworkConfig(&in.Networks, &out.Networks, s); err != nil {
 		return err
 	}
+	out.Zoned = in.Zoned
 	return nil
 }
 
@@ -356,6 +357,7 @@ func autoConvert_azure_InfrastructureConfig_To_v1alpha1_InfrastructureConfig(in 
 	if err := Convert_azure_NetworkConfig_To_v1alpha1_NetworkConfig(&in.Networks, &out.Networks, s); err != nil {
 		return err
 	}
+	out.Zoned = in.Zoned
 	return nil
 }
 
@@ -374,6 +376,7 @@ func autoConvert_v1alpha1_InfrastructureStatus_To_azure_InfrastructureStatus(in 
 	out.AvailabilitySets = *(*[]azure.AvailabilitySet)(unsafe.Pointer(&in.AvailabilitySets))
 	out.RouteTables = *(*[]azure.RouteTable)(unsafe.Pointer(&in.RouteTables))
 	out.SecurityGroups = *(*[]azure.SecurityGroup)(unsafe.Pointer(&in.SecurityGroups))
+	out.Zoned = in.Zoned
 	return nil
 }
 
@@ -392,6 +395,7 @@ func autoConvert_azure_InfrastructureStatus_To_v1alpha1_InfrastructureStatus(in 
 	out.AvailabilitySets = *(*[]AvailabilitySet)(unsafe.Pointer(&in.AvailabilitySets))
 	out.RouteTables = *(*[]RouteTable)(unsafe.Pointer(&in.RouteTables))
 	out.SecurityGroups = *(*[]SecurityGroup)(unsafe.Pointer(&in.SecurityGroups))
+	out.Zoned = in.Zoned
 	return nil
 }
 
@@ -403,9 +407,7 @@ func Convert_azure_InfrastructureStatus_To_v1alpha1_InfrastructureStatus(in *azu
 func autoConvert_v1alpha1_MachineImage_To_azure_MachineImage(in *MachineImage, out *azure.MachineImage, s conversion.Scope) error {
 	out.Name = in.Name
 	out.Version = in.Version
-	out.Publisher = in.Publisher
-	out.Offer = in.Offer
-	out.SKU = in.SKU
+	out.URN = (*string)(unsafe.Pointer(in.URN))
 	return nil
 }
 
@@ -417,9 +419,7 @@ func Convert_v1alpha1_MachineImage_To_azure_MachineImage(in *MachineImage, out *
 func autoConvert_azure_MachineImage_To_v1alpha1_MachineImage(in *azure.MachineImage, out *MachineImage, s conversion.Scope) error {
 	out.Name = in.Name
 	out.Version = in.Version
-	out.Publisher = in.Publisher
-	out.Offer = in.Offer
-	out.SKU = in.SKU
+	out.URN = (*string)(unsafe.Pointer(in.URN))
 	return nil
 }
 
@@ -477,6 +477,7 @@ func autoConvert_v1alpha1_NetworkConfig_To_azure_NetworkConfig(in *NetworkConfig
 		return err
 	}
 	out.Workers = in.Workers
+	out.ServiceEndpoints = *(*[]string)(unsafe.Pointer(&in.ServiceEndpoints))
 	return nil
 }
 
@@ -490,6 +491,7 @@ func autoConvert_azure_NetworkConfig_To_v1alpha1_NetworkConfig(in *azure.Network
 		return err
 	}
 	out.Workers = in.Workers
+	out.ServiceEndpoints = *(*[]string)(unsafe.Pointer(&in.ServiceEndpoints))
 	return nil
 }
 
@@ -612,6 +614,7 @@ func Convert_azure_Subnet_To_v1alpha1_Subnet(in *azure.Subnet, out *Subnet, s co
 
 func autoConvert_v1alpha1_VNet_To_azure_VNet(in *VNet, out *azure.VNet, s conversion.Scope) error {
 	out.Name = (*string)(unsafe.Pointer(in.Name))
+	out.ResourceGroup = (*string)(unsafe.Pointer(in.ResourceGroup))
 	out.CIDR = (*string)(unsafe.Pointer(in.CIDR))
 	return nil
 }
@@ -623,6 +626,7 @@ func Convert_v1alpha1_VNet_To_azure_VNet(in *VNet, out *azure.VNet, s conversion
 
 func autoConvert_azure_VNet_To_v1alpha1_VNet(in *azure.VNet, out *VNet, s conversion.Scope) error {
 	out.Name = (*string)(unsafe.Pointer(in.Name))
+	out.ResourceGroup = (*string)(unsafe.Pointer(in.ResourceGroup))
 	out.CIDR = (*string)(unsafe.Pointer(in.CIDR))
 	return nil
 }
@@ -634,6 +638,7 @@ func Convert_azure_VNet_To_v1alpha1_VNet(in *azure.VNet, out *VNet, s conversion
 
 func autoConvert_v1alpha1_VNetStatus_To_azure_VNetStatus(in *VNetStatus, out *azure.VNetStatus, s conversion.Scope) error {
 	out.Name = in.Name
+	out.ResourceGroup = (*string)(unsafe.Pointer(in.ResourceGroup))
 	return nil
 }
 
@@ -644,6 +649,7 @@ func Convert_v1alpha1_VNetStatus_To_azure_VNetStatus(in *VNetStatus, out *azure.
 
 func autoConvert_azure_VNetStatus_To_v1alpha1_VNetStatus(in *azure.VNetStatus, out *VNetStatus, s conversion.Scope) error {
 	out.Name = in.Name
+	out.ResourceGroup = (*string)(unsafe.Pointer(in.ResourceGroup))
 	return nil
 }
 

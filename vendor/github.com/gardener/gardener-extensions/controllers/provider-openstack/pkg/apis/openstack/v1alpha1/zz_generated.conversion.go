@@ -325,10 +325,10 @@ func Convert_openstack_Constraints_To_v1alpha1_Constraints(in *openstack.Constra
 }
 
 func autoConvert_v1alpha1_ControlPlaneConfig_To_openstack_ControlPlaneConfig(in *ControlPlaneConfig, out *openstack.ControlPlaneConfig, s conversion.Scope) error {
+	out.CloudControllerManager = (*openstack.CloudControllerManagerConfig)(unsafe.Pointer(in.CloudControllerManager))
+	out.LoadBalancerClasses = *(*[]openstack.LoadBalancerClass)(unsafe.Pointer(&in.LoadBalancerClasses))
 	out.LoadBalancerProvider = in.LoadBalancerProvider
 	out.Zone = in.Zone
-	out.LoadBalancerClasses = *(*[]openstack.LoadBalancerClass)(unsafe.Pointer(&in.LoadBalancerClasses))
-	out.CloudControllerManager = (*openstack.CloudControllerManagerConfig)(unsafe.Pointer(in.CloudControllerManager))
 	return nil
 }
 
@@ -374,6 +374,7 @@ func Convert_openstack_FloatingPool_To_v1alpha1_FloatingPool(in *openstack.Float
 
 func autoConvert_v1alpha1_FloatingPoolStatus_To_openstack_FloatingPoolStatus(in *FloatingPoolStatus, out *openstack.FloatingPoolStatus, s conversion.Scope) error {
 	out.ID = in.ID
+	out.Name = in.Name
 	return nil
 }
 
@@ -384,6 +385,7 @@ func Convert_v1alpha1_FloatingPoolStatus_To_openstack_FloatingPoolStatus(in *Flo
 
 func autoConvert_openstack_FloatingPoolStatus_To_v1alpha1_FloatingPoolStatus(in *openstack.FloatingPoolStatus, out *FloatingPoolStatus, s conversion.Scope) error {
 	out.ID = in.ID
+	out.Name = in.Name
 	return nil
 }
 
