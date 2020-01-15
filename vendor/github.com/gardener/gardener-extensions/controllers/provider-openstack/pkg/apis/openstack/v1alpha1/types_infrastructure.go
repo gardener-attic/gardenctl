@@ -18,6 +18,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
+// +genclient
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
 // InfrastructureConfig infrastructure configuration resource
@@ -85,6 +86,8 @@ type RouterStatus struct {
 type FloatingPoolStatus struct {
 	// ID is the floating pool id.
 	ID string `json:"id"`
+	// Name is the floating pool name.
+	Name string `json:"name"`
 }
 
 // Purpose is a purpose of a resource.

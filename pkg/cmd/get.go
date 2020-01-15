@@ -22,7 +22,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	gardencorev1alpha1 "github.com/gardener/gardener/pkg/apis/core/v1alpha1"
+	gardencorev1beta1 "github.com/gardener/gardener/pkg/apis/core/v1beta1"
 	yaml2 "github.com/ghodss/yaml"
 	"github.com/spf13/cobra"
 	yaml "gopkg.in/yaml.v2"
@@ -123,7 +123,7 @@ func getProject(name string, targetReader TargetReader, ioStreams IOStreams) err
 	if err != nil {
 		return err
 	}
-	project, err := clientset.CoreV1alpha1().Projects().Get(name, metav1.GetOptions{})
+	project, err := clientset.CoreV1beta1().Projects().Get(name, metav1.GetOptions{})
 	if err != nil {
 		return err
 	}
@@ -210,7 +210,7 @@ func getSeed(name string, targetReader TargetReader, ioStreams IOStreams) error 
 	if err != nil {
 		return err
 	}
-	seed, err := gardenClientset.CoreV1alpha1().Seeds().Get(name, metav1.GetOptions{})
+	seed, err := gardenClientset.CoreV1beta1().Seeds().Get(name, metav1.GetOptions{})
 	if err != nil {
 		return err
 	}
@@ -256,20 +256,20 @@ func getShoot(name string, targetReader TargetReader, kubeconfigWriter Kubeconfi
 		return err
 	}
 	var namespace string
-	var shoot *gardencorev1alpha1.Shoot
+	var shoot *gardencorev1beta1.Shoot
 	if target.Stack()[1].Kind == "project" {
-		project, err := gardenClientset.CoreV1alpha1().Projects().Get(target.Stack()[1].Name, metav1.GetOptions{})
+		project, err := gardenClientset.CoreV1beta1().Projects().Get(target.Stack()[1].Name, metav1.GetOptions{})
 		if err != nil {
 			return err
 		}
 		if name == "" {
-			shoot, err = gardenClientset.CoreV1alpha1().Shoots(*project.Spec.Namespace).Get(target.Stack()[2].Name, metav1.GetOptions{})
+			shoot, err = gardenClientset.CoreV1beta1().Shoots(*project.Spec.Namespace).Get(target.Stack()[2].Name, metav1.GetOptions{})
 			if err != nil {
 				return err
 			}
 		}
 		if name != "" {
-			shoot, err = gardenClientset.CoreV1alpha1().Shoots(*project.Spec.Namespace).Get(name, metav1.GetOptions{})
+			shoot, err = gardenClientset.CoreV1beta1().Shoots(*project.Spec.Namespace).Get(name, metav1.GetOptions{})
 			if err != nil {
 				return err
 			}
@@ -277,7 +277,7 @@ func getShoot(name string, targetReader TargetReader, kubeconfigWriter Kubeconfi
 		namespace = shoot.Status.TechnicalID
 	}
 	if target.Stack()[1].Kind == "seed" {
-		shootList, err := gardenClientset.CoreV1alpha1().Shoots("").List(metav1.ListOptions{})
+		shootList, err := gardenClientset.CoreV1beta1().Shoots("").List(metav1.ListOptions{})
 		if err != nil {
 			return err
 		}
@@ -296,7 +296,7 @@ func getShoot(name string, targetReader TargetReader, kubeconfigWriter Kubeconfi
 			}
 		}
 	}
-	seed, err := gardenClientset.CoreV1alpha1().Seeds().Get(*shoot.Spec.SeedName, metav1.GetOptions{})
+	seed, err := gardenClientset.CoreV1beta1().Seeds().Get(*shoot.Spec.SeedName, metav1.GetOptions{})
 	if err != nil {
 		return err
 	}

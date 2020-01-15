@@ -279,6 +279,7 @@ func autoConvert_v1alpha1_InfrastructureStatus_To_alicloud_InfrastructureStatus(
 		return err
 	}
 	out.KeyPairName = in.KeyPairName
+	out.MachineImages = *(*[]alicloud.MachineImage)(unsafe.Pointer(&in.MachineImages))
 	return nil
 }
 
@@ -292,6 +293,7 @@ func autoConvert_alicloud_InfrastructureStatus_To_v1alpha1_InfrastructureStatus(
 		return err
 	}
 	out.KeyPairName = in.KeyPairName
+	out.MachineImages = *(*[]MachineImage)(unsafe.Pointer(&in.MachineImages))
 	return nil
 }
 

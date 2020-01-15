@@ -27,6 +27,8 @@ type InfrastructureConfig struct {
 	ResourceGroup *ResourceGroup
 	// Networks is the network configuration (VNets, subnets, etc.)
 	Networks NetworkConfig
+	// Zoned indicates whether the cluster uses zones
+	Zoned bool
 }
 
 // ResourceGroup is azure resource group
@@ -41,6 +43,8 @@ type NetworkConfig struct {
 	VNet VNet
 	// Workers is the worker subnet range to create (used for the VMs).
 	Workers string
+	// ServiceEndpoints is a list of Azure ServiceEndpoints which should be associated with the worker subnet.
+	ServiceEndpoints []string
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
@@ -58,6 +62,8 @@ type InfrastructureStatus struct {
 	RouteTables []RouteTable
 	// SecurityGroups is a list of created security groups
 	SecurityGroups []SecurityGroup
+	// Zoned indicates whether the cluster uses zones
+	Zoned bool
 }
 
 // NetworkStatus is the current status of the infrastructure networks.
@@ -116,6 +122,8 @@ type SecurityGroup struct {
 type VNet struct {
 	// Name is the VNet name.
 	Name *string
+	// ResourceGroup is the resource group where the existing vNet belongs to.
+	ResourceGroup *string
 	// CIDR is the VNet CIDR
 	CIDR *string
 }
@@ -124,4 +132,6 @@ type VNet struct {
 type VNetStatus struct {
 	// Name is the VNet name.
 	Name string
+	// ResourceGroup is the resource group where the existing vNet belongs to.
+	ResourceGroup *string
 }

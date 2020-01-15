@@ -21,7 +21,7 @@ import (
 	"os"
 	"path/filepath"
 
-	gardencorev1alpha1 "github.com/gardener/gardener/pkg/apis/core/v1alpha1"
+	gardencorev1beta1 "github.com/gardener/gardener/pkg/apis/core/v1beta1"
 	"github.com/gardener/machine-controller-manager/pkg/apis/machine/v1alpha1"
 	mcmv1alpha1 "github.com/gardener/machine-controller-manager/pkg/client/clientset/versioned"
 	"github.com/spf13/cobra"
@@ -98,7 +98,7 @@ func NewSSHCmd(reader TargetReader, ioStreams IOStreams) *cobra.Command {
 }
 
 // getSSHKeypair downloads ssh keypair for a shoot cluster
-func getSSHKeypair(shoot *gardencorev1alpha1.Shoot) *v1.Secret {
+func getSSHKeypair(shoot *gardencorev1beta1.Shoot) *v1.Secret {
 	Client, err := clientToTarget("garden")
 	checkError(err)
 	secret, err := Client.CoreV1().Secrets(shoot.Namespace).Get(shoot.Name+".ssh-keypair", metav1.GetOptions{})

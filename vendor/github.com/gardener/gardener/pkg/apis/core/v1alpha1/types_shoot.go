@@ -77,6 +77,9 @@ type ShootSpec struct {
 	// operations should be performed.
 	// +optional
 	Maintenance *Maintenance `json:"maintenance,omitempty"`
+	// Monitoring contains information about custom monitoring configurations for the shoot.
+	// +optional
+	Monitoring *Monitoring `json:"monitoring,omitempty"`
 	// Provider contains all provider-specific and provider-relevant information.
 	Provider Provider `json:"provider"`
 	// Region is a name of a region.
@@ -93,7 +96,14 @@ type ShootSpec struct {
 type ShootStatus struct {
 	// Conditions represents the latest available observations of a Shoots's current state.
 	// +optional
-	Conditions []Condition `json:"conditions,omitempty"`
+	// +patchMergeKey=type
+	// +patchStrategy=merge
+	Conditions []Condition `json:"conditions,omitempty" patchStrategy:"merge" patchMergeKey:"type"`
+	// Constraints represents conditions of a Shoot's current state that constraint some operations on it.
+	// +optional
+	// +patchMergeKey=type
+	// +patchStrategy=merge
+	Constraints []Condition `json:"constraints,omitempty" patchStrategy:"merge" patchMergeKey:"type"`
 	// Gardener holds information about the Gardener which last acted on the Shoot.
 	Gardener Gardener `json:"gardener"`
 	// IsHibernated indicates whether the Shoot is currently hibernated.
@@ -104,6 +114,9 @@ type ShootStatus struct {
 	// LastError holds information about the last occurred error during an operation.
 	// +optional
 	LastError *LastError `json:"lastError,omitempty"`
+	// LastErrors holds information about the last occurred error(s) during an operation.
+	// +optional
+	LastErrors []LastError `json:"lastErrors,omitempty"`
 	// ObservedGeneration is the most recent generation observed for this Shoot. It corresponds to the
 	// Shoot's generation, which is updated on mutation by the API Server.
 	// +optional
@@ -165,6 +178,14 @@ type NginxIngress struct {
 	// LoadBalancerSourceRanges is list of whitelist IP sources for NginxIngress
 	// +optional
 	LoadBalancerSourceRanges []string `json:"loadBalancerSourceRanges,omitempty"`
+	// Config contains custom configuration for the nginx-ingress-controller configuration.
+	// See https://github.com/kubernetes/ingress-nginx/blob/master/docs/user-guide/nginx-configuration/configmap.md#configuration-options
+	// +optional
+	Config map[string]string `json:"config,omitempty"`
+	// ExternalTrafficPolicy controls the `.spec.externalTrafficPolicy` value of the load balancer `Service`
+	// exposing the nginx-ingress. Defaults to `Cluster`.
+	// +optional
+	ExternalTrafficPolicy *corev1.ServiceExternalTrafficPolicyType `json:"externalTrafficPolicy,omitempty"`
 }
 
 //////////////////////////////////////////////////////////////////////////////////////////////////
@@ -179,8 +200,10 @@ type DNS struct {
 	Domain *string `json:"domain,omitempty"`
 	// Providers is a list of DNS providers that shall be enabled for this shoot cluster. Only relevant if
 	// not a default domain is used.
+	// +patchMergeKey=type
+	// +patchStrategy=merge
 	// +optional
-	Providers []DNSProvider `json:"providers,omitempty"`
+	Providers []DNSProvider `json:"providers,omitempty" patchStrategy:"merge" patchMergeKey:"type"`
 }
 
 // DNSProvider contains information about a DNS provider.
@@ -322,8 +345,10 @@ type KubeAPIServerConfig struct {
 	KubernetesConfig `json:",inline"`
 	// AdmissionPlugins contains the list of user-defined admission plugins (additional to those managed by Gardener), and, if desired, the corresponding
 	// configuration.
+	// +patchMergeKey=name
+	// +patchStrategy=merge
 	// +optional
-	AdmissionPlugins []AdmissionPlugin `json:"admissionPlugins,omitempty"`
+	AdmissionPlugins []AdmissionPlugin `json:"admissionPlugins,omitempty" patchStrategy:"merge" patchMergeKey:"name"`
 	// APIAudiences are the identifiers of the API. The service account token authenticator will
 	// validate that tokens used against the API are bound to at least one of these audiences.
 	// If `serviceAccountConfig.issuer` is configured and this is not, this defaults to a single
@@ -727,6 +752,24 @@ type MaintenanceTimeWindow struct {
 }
 
 //////////////////////////////////////////////////////////////////////////////////////////////////
+// Monitoring relevant types                                                                    //
+//////////////////////////////////////////////////////////////////////////////////////////////////
+
+// Monitoring contains information about the monitoring configuration for the shoot.
+type Monitoring struct {
+	// Alerting contains information about the alerting configuration for the shoot cluster.
+	// +optional
+	Alerting *Alerting `json:"alerting,omitempty"`
+}
+
+// Alerting contains information about how alerting will be done (i.e. who will receive alerts and how).
+type Alerting struct {
+	// MonitoringEmailReceivers is a list of recipients for alerts
+	// +optional
+	EmailReceivers []string `json:"emailReceivers,omitempty"`
+}
+
+//////////////////////////////////////////////////////////////////////////////////////////////////
 // Provider relevant types                                                                      //
 //////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -744,7 +787,9 @@ type Provider struct {
 	// +optional
 	InfrastructureConfig *ProviderConfig `json:"infrastructureConfig,omitempty"`
 	// Workers is a list of worker groups.
-	Workers []Worker `json:"workers"`
+	// +patchMergeKey=name
+	// +patchStrategy=merge
+	Workers []Worker `json:"workers" patchStrategy:"merge" patchMergeKey:"name"`
 }
 
 // Worker is the base definition of a worker group.
@@ -822,7 +867,8 @@ type ShootMachineImage struct {
 // Volume contains information about the volume type and size.
 type Volume struct {
 	// Type is the machine type of the worker group.
-	Type string `json:"type"`
+	// +optional
+	Type *string `json:"type,omitempty"`
 	// Size is the size of the root volume.
 	Size string `json:"size"`
 }
@@ -848,4 +894,17 @@ const (
 	ShootEventSchedulingSuccessful = "SchedulingSuccessful"
 	// ShootEventSchedulingFailed indicates that a scheduling decision failed.
 	ShootEventSchedulingFailed = "SchedulingFailed"
+)
+
+const (
+	// ShootAPIServerAvailable is a constant for a condition type indicating that the Shoot cluster's API server is available.
+	ShootAPIServerAvailable ConditionType = "APIServerAvailable"
+	// ShootControlPlaneHealthy is a constant for a condition type indicating the control plane health.
+	ShootControlPlaneHealthy ConditionType = "ControlPlaneHealthy"
+	// ShootEveryNodeReady is a constant for a condition type indicating the node health.
+	ShootEveryNodeReady ConditionType = "EveryNodeReady"
+	// ShootSystemComponentsHealthy is a constant for a condition type indicating the system components health.
+	ShootSystemComponentsHealthy ConditionType = "SystemComponentsHealthy"
+	// ShootHibernationPossible is a constant for a condition type indicating whether the Shoot can be hibernated.
+	ShootHibernationPossible ConditionType = "HibernationPossible"
 )
