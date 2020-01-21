@@ -34,6 +34,13 @@ import (
 // ProjectName is they key of a label on namespaces whose value holds the project name.
 const ProjectName = "project.garden.sapcloud.io/name"
 
+var (
+	pgarden  string
+	pproject string
+	pseed    string
+	pshoot   string
+)
+
 // NewTargetCmd returns a new target command.
 func NewTargetCmd(targetReader TargetReader, targetWriter TargetWriter, configReader ConfigReader, ioStreams IOStreams) *cobra.Command {
 	cmd := &cobra.Command{
@@ -41,94 +48,57 @@ func NewTargetCmd(targetReader TargetReader, targetWriter TargetWriter, configRe
 		Short:        "Set scope for next operations",
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if len(args) < 1 || len(args) > 4 {
+			if pgarden != "" || pproject != "" || pseed != "" || pshoot != "" {
+				var arguments []string
+				if pgarden != "" {
+					arguments := append(arguments, "garden")
+					arguments = append(arguments, pgarden)
+					err := gardenWrapper(targetReader, targetWriter, configReader, ioStreams, arguments)
+					checkError(err)
+				}
+				if pproject != "" {
+					arguments := append(arguments, "project")
+					arguments = append(arguments, pproject)
+					err := projectWrapper(targetReader, targetWriter, configReader, ioStreams, arguments)
+					checkError(err)
+				}
+				if pseed != "" {
+					arguments := append(arguments, "seed")
+					arguments = append(arguments, pseed)
+					err := seedWrapper(targetReader, targetWriter, configReader, ioStreams, arguments)
+					checkError(err)
+				}
+				if pshoot != "" {
+					arguments := append(arguments, "shoot")
+					arguments = append(arguments, pshoot)
+					err := shootWrapper(targetReader, targetWriter, configReader, ioStreams, arguments)
+					checkError(err)
+				}
+				return nil
+			}
+			if len(args) < 1 && pgarden == "" && pproject == "" && pseed == "" && pshoot == "" || len(args) > 4 {
 				return errors.New("command must be in the format: target <project|garden|seed|shoot> NAME")
 			}
 			switch args[0] {
 			case "garden":
-				if len(args) == 1 {
-					// Print Garden clusters
-					PrintGardenClusters(configReader, "yaml", ioStreams)
-					return nil
-				} else if len(args) > 2 {
-					return errors.New("command must be in the format: target garden NAME")
-				}
-
-				gardens := resolveNameGarden(configReader, args[1])
-				if len(gardens) == 0 {
-					return fmt.Errorf("no match for %q", args[1])
-				} else if len(gardens) == 1 {
-					targetGarden(targetWriter, gardens[0])
-				} else if len(gardens) > 1 {
-					fmt.Println("gardens:")
-					for _, val := range gardens {
-						fmt.Println("- garden: " + val)
-					}
+				err := gardenWrapper(targetReader, targetWriter, configReader, ioStreams, args)
+				if err != nil {
+					return err
 				}
 			case "project":
-				if len(args) != 2 {
-					return errors.New("command must be in the format: target project NAME")
-				}
-				target := targetReader.ReadTarget(pathTarget)
-				if len(target.Stack()) < 1 {
-					return errors.New("no garden cluster targeted")
-				}
-				projects := resolveNameProject(target, args[1])
-				if len(projects) == 0 {
-					return fmt.Errorf("no match for %q", args[1])
-				} else if len(projects) == 1 {
-					targetProject(targetReader, targetWriter, projects[0])
-				} else if len(projects) > 1 {
-					fmt.Println("projects:")
-					for _, val := range projects {
-						fmt.Println("- project: " + val)
-					}
+				err := projectWrapper(targetReader, targetWriter, configReader, ioStreams, args)
+				if err != nil {
+					return err
 				}
 			case "seed":
-				if len(args) != 2 {
-					return errors.New("command must be in the format: target seed NAME")
-				}
-				target := targetReader.ReadTarget(pathTarget)
-				if len(target.Stack()) < 1 {
-					return errors.New("no garden cluster targeted")
-				}
-				seeds := resolveNameSeed(target, args[1])
-				if len(seeds) == 0 {
-					return fmt.Errorf("no match for %q", args[1])
-				} else if len(seeds) == 1 {
-					targetSeed(targetReader, targetWriter, seeds[0], true)
-				} else if len(seeds) > 1 {
-					fmt.Println("seeds:")
-					for _, val := range seeds {
-						fmt.Println("- seed: " + val)
-					}
+				err := seedWrapper(targetReader, targetWriter, configReader, ioStreams, args)
+				if err != nil {
+					return err
 				}
 			case "shoot":
-				if len(args) != 2 {
-					return errors.New("command must be in the format: target shoot NAME")
-				}
-				target := targetReader.ReadTarget(pathTarget)
-				if len(target.Stack()) < 1 {
-					return errors.New("no garden cluster targeted")
-				}
-
-				shoots := resolveNameShoot(target, args[1])
-
-				if len(shoots) == 0 {
-					return fmt.Errorf("no match for %q", args[1])
-				} else if len(shoots) == 1 {
-					targetShoot(targetWriter, shoots[0])
-				} else if len(shoots) > 1 {
-					k8sClientToGarden, err := target.K8SClientToKind(TargetKindGarden)
-					checkError(err)
-					fmt.Fprintln(ioStreams.Out, "shoots:")
-					for _, shoot := range shoots {
-						projectName, err := getProjectNameByShootNamespace(k8sClientToGarden, shoot.Namespace)
-						checkError(err)
-
-						fmt.Fprintln(ioStreams.Out, "- project: "+projectName)
-						fmt.Fprintln(ioStreams.Out, "  shoot: "+shoot.Name)
-					}
+				err := shootWrapper(targetReader, targetWriter, configReader, ioStreams, args)
+				if err != nil {
+					return err
 				}
 			default:
 				target := targetReader.ReadTarget(pathTarget)
@@ -227,15 +197,15 @@ func NewTargetCmd(targetReader TargetReader, targetWriter TargetWriter, configRe
 					}
 				}
 			}
-
 			return nil
 		},
 		ValidArgs: []string{"project", "garden", "seed", "shoot"},
 	}
 
-	cmd.PersistentFlags().BoolVarP(&garden, "garden", "g", false, "target garden")
-	cmd.PersistentFlags().BoolVarP(&seed, "seed", "s", false, "target seed")
-	cmd.PersistentFlags().BoolVarP(&project, "project", "p", false, "target project")
+	cmd.PersistentFlags().StringVarP(&pgarden, "garden", "g", "", "garden name")
+	cmd.PersistentFlags().StringVarP(&pproject, "project", "p", "", "project name")
+	cmd.PersistentFlags().StringVarP(&pseed, "seed", "s", "", "seed name")
+	cmd.PersistentFlags().StringVarP(&pshoot, "shoot", "t", "", "shoot name")
 
 	return cmd
 }
@@ -335,7 +305,7 @@ func targetGarden(targetWriter TargetWriter, name string) {
 
 	err := targetWriter.WriteTarget(pathTarget, target)
 	checkError(err)
-
+	fmt.Println("Garden:")
 	fmt.Println("KUBECONFIG=" + getKubeConfigOfCurrentTarget())
 }
 
@@ -411,7 +381,7 @@ func targetSeed(targetReader TargetReader, targetWriter TargetWriter, name strin
 
 	err = targetWriter.WriteTarget(pathTarget, target)
 	checkError(err)
-
+	fmt.Println("Seed:")
 	fmt.Println("KUBECONFIG=" + getKubeConfigOfCurrentTarget())
 }
 
@@ -571,6 +541,7 @@ func targetShoot(targetWriter TargetWriter, shoot gardencorev1beta1.Shoot) {
 	checkError(err)
 
 	KUBECONFIG = shootKubeconfigPath
+	fmt.Println("Shoot:")
 	fmt.Println("KUBECONFIG=" + KUBECONFIG)
 }
 
@@ -672,4 +643,101 @@ func getGardenKubeConfig() (pathToGardenKubeConfig string) {
 		}
 	}
 	return pathToGardenKubeConfig
+}
+
+func gardenWrapper(targetReader TargetReader, targetWriter TargetWriter, configReader ConfigReader, ioStreams IOStreams, args []string) error {
+	if len(args) == 1 {
+		// Print Garden clusters
+		PrintGardenClusters(configReader, "yaml", ioStreams)
+		return nil
+	} else if len(args) > 2 {
+		return errors.New("command must be in the format: target garden NAME")
+	}
+
+	gardens := resolveNameGarden(configReader, args[1])
+	if len(gardens) == 0 {
+		return fmt.Errorf("no match for %q", args[1])
+	} else if len(gardens) == 1 {
+		targetGarden(targetWriter, gardens[0])
+	} else if len(gardens) > 1 {
+		fmt.Println("gardens:")
+		for _, val := range gardens {
+			fmt.Println("- garden: " + val)
+		}
+	}
+	return nil
+}
+
+func projectWrapper(targetReader TargetReader, targetWriter TargetWriter, configReader ConfigReader, ioStreams IOStreams, args []string) error {
+	if len(args) != 2 {
+		return errors.New("command must be in the format: target project NAME")
+	}
+	target := targetReader.ReadTarget(pathTarget)
+	if len(target.Stack()) < 1 {
+		return errors.New("no garden cluster targeted")
+	}
+	projects := resolveNameProject(target, args[1])
+	if len(projects) == 0 {
+		return fmt.Errorf("no match for %q", args[1])
+	} else if len(projects) == 1 {
+		targetProject(targetReader, targetWriter, projects[0])
+	} else if len(projects) > 1 {
+		fmt.Println("projects:")
+		for _, val := range projects {
+			fmt.Println("- project: " + val)
+		}
+	}
+	return nil
+}
+
+func seedWrapper(targetReader TargetReader, targetWriter TargetWriter, configReader ConfigReader, ioStreams IOStreams, args []string) error {
+	if len(args) != 2 {
+		return errors.New("command must be in the format: target seed NAME")
+	}
+	target := targetReader.ReadTarget(pathTarget)
+	if len(target.Stack()) < 1 {
+		return errors.New("no garden cluster targeted")
+	}
+	seeds := resolveNameSeed(target, args[1])
+	if len(seeds) == 0 {
+		return fmt.Errorf("no match for %q", args[1])
+	} else if len(seeds) == 1 {
+		targetSeed(targetReader, targetWriter, seeds[0], true)
+	} else if len(seeds) > 1 {
+		fmt.Println("seeds:")
+		for _, val := range seeds {
+			fmt.Println("- seed: " + val)
+		}
+	}
+	return nil
+}
+
+func shootWrapper(targetReader TargetReader, targetWriter TargetWriter, configReader ConfigReader, ioStreams IOStreams, args []string) error {
+	if len(args) != 2 {
+		return errors.New("command must be in the format: target shoot NAME")
+	}
+	target := targetReader.ReadTarget(pathTarget)
+	if len(target.Stack()) < 1 {
+		return errors.New("no garden cluster targeted")
+	}
+
+	shoots := resolveNameShoot(target, args[1])
+
+	if len(shoots) == 0 {
+		return fmt.Errorf("no match for %q", args[1])
+	} else if len(shoots) == 1 {
+		targetShoot(targetWriter, shoots[0])
+	} else if len(shoots) > 1 {
+		k8sClientToGarden, err := target.K8SClientToKind(TargetKindGarden)
+		checkError(err)
+		fmt.Fprintln(ioStreams.Out, "shoots:")
+		for _, shoot := range shoots {
+			projectName, err := getProjectNameByShootNamespace(k8sClientToGarden, shoot.Namespace)
+			checkError(err)
+
+			fmt.Fprintln(ioStreams.Out, "- project: "+projectName)
+			fmt.Fprintln(ioStreams.Out, "  shoot: "+shoot.Name)
+		}
+	}
+	return nil
 }
