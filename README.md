@@ -91,6 +91,8 @@ The path to the kubeconfig files of a garden cluster can be relative by using th
 
 `gardenctl` caches some information, e.g. the garden project names. The location of this cache is per default `$GARDENCTL_HOME/cache`. If `GARDENCTL_HOME` is not set, `~/.garden` is assumed.
 
+`gardenctl` supports multiple sessions. The session ID can be set via `$GARDEN_SESSION_ID` and the sessions are stored under `$GARDENCTL_HOME/sessions`.
+
 `gardenctl` makes it easy to get additional information of your IaaS provider by using the secrets stored in the corresponding projects in the Gardener. To use this functionality, the CLIs of the IaaS providers need to be available. 
 
 Please check the IaaS provider documentation for more details about their CLIs.

@@ -42,7 +42,8 @@ var (
 	password string
 
 	// file pathes
-	pathGardenConfig string
-	pathTarget       string
-	pathDefault      = filepath.Join(HomeDir(), ".garden")
+	pathGardenConfig   string
+	pathTarget         string
+	pathDefault        = filepath.Join(HomeDir(), ".garden")
+	pathDefaultSession = filepath.Join(HomeDir(), ".garden", "sessions")
 )
