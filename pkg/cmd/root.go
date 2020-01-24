@@ -30,6 +30,7 @@ var cachevar bool
 var outputFormat string
 var gardenConfig string
 var pathGardenHome string
+var sessionID string
 
 // RootCmd represents the base command when called without any subcommands
 var RootCmd = &cobra.Command{
@@ -90,8 +91,14 @@ func Execute() {
 		pathGardenHome = strings.Replace(pathGardenHome, "~", HomeDir(), 1)
 	}
 	pathGardenConfig = filepath.Join(pathGardenHome, "config")
-	pathTarget = filepath.Join(pathGardenHome, "target")
 	CreateDir(pathGardenHome, 0751)
+	sessionID = os.Getenv("GARDEN_SESSION_ID")
+	if sessionID == "" {
+		sessionID = "plantingSession"
+	}
+	pathSessionID := filepath.Join(pathDefaultSession, sessionID)
+	CreateDir(pathSessionID, 0751)
+	pathTarget = filepath.Join(pathSessionID, "target")
 	CreateFileIfNotExists(pathTarget, 0644)
 	gardenConfig = os.Getenv("GARDENCONFIG")
 	if gardenConfig != "" {
@@ -171,6 +178,7 @@ Use "{{.CommandPath}} [command] --help" for more information about a command.
 
 Configuration and KUBECONFIG file cache located $GARDENCTL_HOME or ~/.garden (default).
 Gardenctl configuration file must be provided in $GARDENCONFIG or ~/.garden/config (default).
+Session ID can be specified via $GARDEN_SESSION_ID.
 
 Find more information and an example configuration at https://github.com/gardener/gardenctl
 {{end}}
