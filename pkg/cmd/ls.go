@@ -178,7 +178,7 @@ func getProjectsWithShootsForSeed(ioStreams IOStreams) {
 	for _, project := range projectList.Items {
 		var pm ProjectMeta
 		for _, shoot := range shootList.Items {
-			if shoot.Namespace == *project.Spec.Namespace && target.Target[1].Name == *shoot.Spec.SeedName {
+			if shoot.Namespace == *project.Spec.Namespace && shoot.Spec.SeedName != nil && target.Target[1].Name == *shoot.Spec.SeedName {
 				currentShoot := shoot.Name
 				if shoot.Status.IsHibernated {
 					currentShoot += " (Hibernated)"
