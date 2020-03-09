@@ -11,6 +11,7 @@ require (
 	github.com/ghodss/yaml v1.0.0
 	github.com/golang/mock v1.3.1
 	github.com/jmoiron/jsonq v0.0.0-20150511023944-e874b168d07e
+	github.com/mcuadros/go-version v0.0.0-20190830083331-035f6764e8d2
 	github.com/onsi/ginkgo v1.8.0
 	github.com/onsi/gomega v1.5.0
 	github.com/pkg/browser v0.0.0-20180916011732-0a3d74bf9ce4
