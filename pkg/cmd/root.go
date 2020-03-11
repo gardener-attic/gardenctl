@@ -127,7 +127,7 @@ func init() {
 		}
 	)
 
-	RootCmd.PersistentFlags().BoolVarP(&cachevar, "no-cache", "n", false, "no caching")
+	RootCmd.PersistentFlags().BoolVarP(&cachevar, "no-cache", "c", false, "no caching")
 	RootCmd.PersistentFlags().StringVarP(&outputFormat, "output", "o", "yaml", "output format yaml or json")
 
 	cobra.EnableCommandSorting = false
