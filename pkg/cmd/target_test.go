@@ -234,7 +234,7 @@ var _ = Describe("Target command", func() {
 		},
 		Entry("with missing target kind", targetCase{
 			args:        []string{},
-			expectedErr: "command must be in the format: target <project|garden|seed|shoot> NAME",
+			expectedErr: "command must be in the format: target <project|garden|seed|shoot|namespace> NAME",
 		}),
 		Entry("with 2 garden cluster names", targetCase{
 			args:        []string{"garden", "prod-1", "prod-2"},

@@ -35,20 +35,21 @@ import (
 const ProjectName = "project.garden.sapcloud.io/name"
 
 var (
-	pgarden  string
-	pproject string
-	pseed    string
-	pshoot   string
+	pgarden    string
+	pproject   string
+	pseed      string
+	pshoot     string
+	pnamespace string
 )
 
 // NewTargetCmd returns a new target command.
 func NewTargetCmd(targetReader TargetReader, targetWriter TargetWriter, configReader ConfigReader, ioStreams IOStreams) *cobra.Command {
 	cmd := &cobra.Command{
-		Use:          "target <project|garden|seed|shoot> NAME",
+		Use:          "target <project|garden|seed|shoot|namespace> NAME",
 		Short:        "Set scope for next operations",
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if pgarden != "" || pproject != "" || pseed != "" || pshoot != "" {
+			if pgarden != "" || pproject != "" || pseed != "" || pshoot != "" || pnamespace != "" {
 				var arguments []string
 				if pgarden != "" {
 					arguments := append(arguments, "garden")
@@ -74,10 +75,15 @@ func NewTargetCmd(targetReader TargetReader, targetWriter TargetWriter, configRe
 					err := shootWrapper(targetReader, targetWriter, configReader, ioStreams, arguments)
 					checkError(err)
 				}
+
+				if pnamespace != "" {
+					err := setKubectlNamespace(pnamespace)
+					checkError(err)
+				}
 				return nil
 			}
-			if len(args) < 1 && pgarden == "" && pproject == "" && pseed == "" && pshoot == "" || len(args) > 4 {
-				return errors.New("command must be in the format: target <project|garden|seed|shoot> NAME")
+			if len(args) < 1 && pgarden == "" && pproject == "" && pseed == "" && pshoot == "" && pnamespace == "" || len(args) > 5 {
+				return errors.New("command must be in the format: target <project|garden|seed|shoot|namespace> NAME")
 			}
 			switch args[0] {
 			case "garden":
@@ -97,6 +103,14 @@ func NewTargetCmd(targetReader TargetReader, targetWriter TargetWriter, configRe
 				}
 			case "shoot":
 				err := shootWrapper(targetReader, targetWriter, configReader, ioStreams, args)
+				if err != nil {
+					return err
+				}
+			case "namespace":
+				if len(args) != 2 || args[1] == "" {
+					return errors.New("command must be in the format: target namespace NAME")
+				}
+				err := setKubectlNamespace(args[1])
 				if err != nil {
 					return err
 				}
@@ -196,16 +210,24 @@ func NewTargetCmd(targetReader TargetReader, targetWriter TargetWriter, configRe
 						fmt.Fprintln(ioStreams.Out, "  shoot: "+shoot.Name)
 					}
 				}
+				if pnamespace != "" {
+					err := setKubectlNamespace(pnamespace)
+					if err != nil {
+						checkError(err)
+					}
+				}
+
 			}
 			return nil
 		},
-		ValidArgs: []string{"project", "garden", "seed", "shoot"},
+		ValidArgs: []string{"project", "garden", "seed", "shoot", "namespace"},
 	}
 
 	cmd.PersistentFlags().StringVarP(&pgarden, "garden", "g", "", "garden name")
 	cmd.PersistentFlags().StringVarP(&pproject, "project", "p", "", "project name")
 	cmd.PersistentFlags().StringVarP(&pseed, "seed", "s", "", "seed name")
 	cmd.PersistentFlags().StringVarP(&pshoot, "shoot", "t", "", "shoot name")
+	cmd.PersistentFlags().StringVarP(&pnamespace, "namespace", "n", "", "namespace name")
 
 	return cmd
 }
@@ -739,5 +761,31 @@ func shootWrapper(targetReader TargetReader, targetWriter TargetWriter, configRe
 			fmt.Fprintln(ioStreams.Out, "  shoot: "+shoot.Name)
 		}
 	}
+	return nil
+}
+
+//set namespace for current kubectl ctx
+func setKubectlNamespace(kubectlNameSpace string) error {
+
+	if kubectlNameSpace == "" {
+		return errors.New("Namespace must be provided")
+	}
+
+	currentConfig := getKubeConfigOfCurrentTarget()
+
+	out, err := ExecCmdReturnOutput("bash", "-c", "export KUBECONFIG="+currentConfig+"; kubectl config current-context")
+	if err != nil {
+		fmt.Println(err)
+	}
+	currentConext := strings.TrimSuffix(string(out), "\n")
+	fmt.Println("Namespace:")
+	fmt.Printf("Set namespace to %s for current context %s \n", kubectlNameSpace, currentConext)
+	out, err = ExecCmdReturnOutput("bash", "-c", "export KUBECONFIG="+currentConfig+"; kubectl config set-context "+currentConext+" --namespace="+kubectlNameSpace)
+	if err != nil {
+		fmt.Println(err)
+		return err
+	}
+	fmt.Println(string(out))
+
 	return nil
 }
