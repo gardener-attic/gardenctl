@@ -77,7 +77,7 @@ func NewTargetCmd(targetReader TargetReader, targetWriter TargetWriter, configRe
 				}
 
 				if pnamespace != "" {
-					err := setKubectlNamespace(pnamespace)
+					err := namespaceWrapper(targetReader, targetWriter, pnamespace)
 					checkError(err)
 				}
 				return nil
@@ -110,7 +110,7 @@ func NewTargetCmd(targetReader TargetReader, targetWriter TargetWriter, configRe
 				if len(args) != 2 || args[1] == "" {
 					return errors.New("command must be in the format: target namespace NAME")
 				}
-				err := setKubectlNamespace(args[1])
+				err := namespaceWrapper(targetReader, targetWriter, args[1])
 				if err != nil {
 					return err
 				}
@@ -211,7 +211,7 @@ func NewTargetCmd(targetReader TargetReader, targetWriter TargetWriter, configRe
 					}
 				}
 				if pnamespace != "" {
-					err := setKubectlNamespace(pnamespace)
+					err := namespaceWrapper(targetReader, targetWriter, pnamespace)
 					if err != nil {
 						checkError(err)
 					}
@@ -628,8 +628,24 @@ func getKubeConfigOfClusterType(clusterType TargetKind) (pathToKubeconfig string
 
 // getKubeConfigOfCurrentTarget returns the path to the kubeconfig of current target
 func getKubeConfigOfCurrentTarget() (pathToKubeconfig string) {
+	var targetReal Target
 	var target Target
-	ReadTarget(pathTarget, &target)
+	ReadTarget(pathTarget, &targetReal)
+
+	if len(targetReal.Target) == 1 && targetReal.Stack()[0].Kind == "namespace" {
+		panic("the target has only namespace, this is invalid, at least one garden needs to be targeted before using namespace")
+	} else if len(targetReal.Target) > 1 && len(targetReal.Target) <= 4 {
+		if targetReal.Stack()[len(targetReal.Target)-1].Kind == "namespace" {
+			target.Target = targetReal.Target[:len(targetReal.Target)-1]
+		} else {
+			target.Target = targetReal.Target
+		}
+	} else if len(targetReal.Target) == 1 && targetReal.Stack()[0].Kind != "namespace" {
+		target.Target = targetReal.Target
+	} else {
+		panic("length of target.Stack is illegal")
+	}
+
 	gardenName := target.Stack()[0].Name
 	if len(target.Target) == 1 {
 		if strings.Contains(getGardenKubeConfig(), "~") {
@@ -639,6 +655,8 @@ func getKubeConfigOfCurrentTarget() (pathToKubeconfig string) {
 		}
 	} else if (len(target.Target) == 2) && (target.Target[1].Kind != "project") {
 		pathToKubeconfig = filepath.Join(pathGardenHome, "cache", gardenName, "seeds", target.Target[1].Name, "kubeconfig.yaml")
+	} else if (len(target.Target) == 2) && (target.Target[1].Kind == "project") {
+		pathToKubeconfig = getGardenKubeConfigViaGardenName(target.Target[0].Name)
 	} else if len(target.Target) == 3 {
 		if target.Target[1].Kind == "seed" {
 			pathToKubeconfig = filepath.Join(pathGardenHome, "cache", gardenName, "seeds", target.Target[1].Name, target.Target[2].Name, "kubeconfig.yaml")
@@ -661,6 +679,22 @@ func getGardenKubeConfig() (pathToGardenKubeConfig string) {
 	ReadTarget(pathTarget, &target)
 	for _, value := range gardenClusters.GardenClusters {
 		if value.Name == target.Target[0].Name {
+			pathToGardenKubeConfig = value.KubeConfig
+		}
+	}
+	return pathToGardenKubeConfig
+}
+
+// getGardenKubeConfigViaGardenName returns path to garden kubeconfig file via garden name
+func getGardenKubeConfigViaGardenName(name string) (pathToGardenKubeConfig string) {
+	pathToGardenKubeConfig = ""
+	var gardenClusters GardenClusters
+	yamlGardenConfig, err := ioutil.ReadFile(pathGardenConfig)
+	checkError(err)
+	err = yaml.Unmarshal(yamlGardenConfig, &gardenClusters)
+	checkError(err)
+	for _, value := range gardenClusters.GardenClusters {
+		if value.Name == name {
 			pathToGardenKubeConfig = value.KubeConfig
 		}
 	}
@@ -765,7 +799,12 @@ func shootWrapper(targetReader TargetReader, targetWriter TargetWriter, configRe
 }
 
 //set namespace for current kubectl ctx
-func setKubectlNamespace(kubectlNameSpace string) error {
+func namespaceWrapper(targetReader TargetReader, targetWriter TargetWriter, kubectlNameSpace string) error {
+
+	err := targetNamespace(targetWriter, kubectlNameSpace)
+	if err != nil {
+		return err
+	}
 
 	if kubectlNameSpace == "" {
 		return errors.New("Namespace must be provided")
@@ -787,5 +826,50 @@ func setKubectlNamespace(kubectlNameSpace string) error {
 	}
 	fmt.Println(string(out))
 
+	return nil
+}
+
+//write current namespace to target
+func targetNamespace(targetWriter TargetWriter, ns string) error {
+	var target Target
+	ReadTarget(pathTarget, &target)
+
+	if len(target.Target) > 4 {
+		panic("the length is greater than 4 and illegal")
+	}
+	if len(target.Target) == 0 {
+		panic("the length is 0 and illegal. at least one garden needs to be targeted")
+	}
+	if len(target.Target) == 1 {
+		if string(target.Target[0].Kind) != "garden" {
+			panic("if one element in target, this needs to be garden")
+		}
+		target.Target = append(target.Target, TargetMeta{"namespace", ns})
+	}
+	if len(target.Target) == 2 {
+		if target.Target[1].Kind != "namespace" {
+			target.Target = append(target.Target, TargetMeta{"namespace", ns})
+		} else {
+			target.Target = target.Target[:len(target.Target)-1]
+			target.Target = append(target.Target, TargetMeta{"namespace", ns})
+		}
+	}
+	if len(target.Target) == 3 {
+		if target.Target[2].Kind != "namespace" {
+			target.Target = append(target.Target, TargetMeta{"namespace", ns})
+		} else {
+			target.Target = target.Target[:len(target.Target)-1]
+			target.Target = append(target.Target, TargetMeta{"namespace", ns})
+		}
+	}
+	if len(target.Target) == 4 {
+		target.Target = target.Target[:len(target.Target)-1]
+		target.Target = append(target.Target, TargetMeta{"namespace", ns})
+	}
+
+	err := targetWriter.WriteTarget(pathTarget, &target)
+	if err != nil {
+		return err
+	}
 	return nil
 }
