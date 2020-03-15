@@ -21,7 +21,7 @@ import (
 	"net/http"
 	"runtime"
 
-	version_tool "github.com/mcuadros/go-version"
+	"github.com/Masterminds/semver"
 	"github.com/spf13/cobra"
 )
 
@@ -34,7 +34,7 @@ func NewVersionCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "version",
 		Short: "Show the gardenctl version information",
-		Run: func(cmd *cobra.Command, args []string) {
+		RunE: func(cmd *cobra.Command, args []string) error {
 			fmt.Printf(`gardenctl:
 		version     : %s
 		build date  : %s
@@ -42,38 +42,52 @@ func NewVersionCmd() *cobra.Command {
 		go compiler : %s
 		platform    : %s/%s
 `, version, buildDate, runtime.Version(), runtime.Compiler, runtime.GOOS, runtime.GOARCH)
-			if NewVersionAvailable() {
+
+			isAvailable, err := newVersionAvailable(version)
+			if err != nil {
+				return err
+			}
+			if isAvailable {
 				fmt.Println("New version of Gardenctl is available at https://github.com/gardener/gardenctl/releases/latest")
 				fmt.Println("Please get latest version from above URL and see https://github.com/gardener/gardenctl#installation for how to upgrade")
 			}
+
+			return nil
 		},
 	}
 }
 
-//NewVersionAvailable returns whether new version is available
-func NewVersionAvailable() bool {
-	var latestVersion string
+// newVersionAvailable returns whether new version is available.
+func newVersionAvailable(currentVersion string) (bool, error) {
 	gardenctlLatestURL := "https://api.github.com/repos/gardener/gardenctl/releases/latest"
 	resp, err := http.Get(gardenctlLatestURL)
 	if err != nil {
-		print(err)
+		return false, err
 	}
 	defer resp.Body.Close()
 	body, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
-		print(err)
+		return false, err
 	}
 
 	data := make(map[string]interface{})
-	err1 := json.Unmarshal([]byte(body), &data)
-	if err1 != nil {
-		print(err1)
+	if err := json.Unmarshal([]byte(body), &data); err != nil {
+		return false, err
 	}
+	var latestVersion string
 	if data["tag_name"] != nil {
 		latestVersion = data["tag_name"].(string)
 	}
-	if version_tool.CompareSimple(latestVersion, version) == 1 {
-		return true
+
+	c, err := semver.NewConstraint("> " + currentVersion)
+	if err != nil {
+		return false, err
 	}
-	return false
+
+	latest, err := semver.NewVersion(latestVersion)
+	if err != nil {
+		return false, err
+	}
+
+	return c.Check(latest), nil
 }
