@@ -17,6 +17,7 @@ package cmd
 import (
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/spf13/cobra"
 )
@@ -39,6 +40,20 @@ func NewDropCmd(targetReader TargetReader, targetWriter TargetWriter, ioStreams 
 				}
 
 				fmt.Fprintf(ioStreams.Out, "Dropped %s %s\n", target.Stack()[stackLength-1].Kind, target.Stack()[stackLength-1].Name)
+
+				if target.Stack()[stackLength-1].Kind == "namespace" {
+					cfg := getKubeConfigOfCurrentTarget()
+					out, err := ExecCmdReturnOutput("bash", "-c", "export KUBECONFIG="+cfg+"; kubectl config current-context")
+					if err != nil {
+						fmt.Println(err)
+					}
+					currentConext := strings.TrimSuffix(string(out), "\n")
+					_, err = ExecCmdReturnOutput("bash", "-c", "export KUBECONFIG="+cfg+"; kubectl config set-context "+currentConext+" --namespace=default")
+					if err != nil {
+						fmt.Println(err)
+					}
+
+				}
 
 				target.SetStack(target.Stack()[:stackLength-1])
 				if err := targetWriter.WriteTarget(pathTarget, target); err != nil {
