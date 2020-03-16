@@ -542,6 +542,19 @@ func targetShoot(targetWriter TargetWriter, shoot gardencorev1beta1.Shoot) {
 			target.Target = append(target.Target, TargetMeta{"project", projectName})
 			target.Target = append(target.Target, TargetMeta{"shoot", shoot.Name})
 		}
+	} else if len(target.Target) == 4 {
+		drop(targetWriter)
+		drop(targetWriter)
+		drop(targetWriter)
+		if len(target.Target) > 3 && target.Target[1].Kind == "seed" {
+			target.Target = target.Target[:len(target.Target)-3]
+			target.Target = append(target.Target, TargetMeta{"seed", *shoot.Spec.SeedName})
+			target.Target = append(target.Target, TargetMeta{"shoot", shoot.Name})
+		} else if len(target.Target) > 3 && target.Target[1].Kind == "project" {
+			target.Target = target.Target[:len(target.Target)-3]
+			target.Target = append(target.Target, TargetMeta{"project", projectName})
+			target.Target = append(target.Target, TargetMeta{"shoot", shoot.Name})
+		}
 	}
 
 	// Write target
