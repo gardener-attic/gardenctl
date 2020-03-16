@@ -42,17 +42,7 @@ func NewDropCmd(targetReader TargetReader, targetWriter TargetWriter, ioStreams 
 				fmt.Fprintf(ioStreams.Out, "Dropped %s %s\n", target.Stack()[stackLength-1].Kind, target.Stack()[stackLength-1].Name)
 
 				if target.Stack()[stackLength-1].Kind == "namespace" {
-					cfg := getKubeConfigOfCurrentTarget()
-					out, err := ExecCmdReturnOutput("bash", "-c", "export KUBECONFIG="+cfg+"; kubectl config current-context")
-					if err != nil {
-						fmt.Println(err)
-					}
-					currentConext := strings.TrimSuffix(string(out), "\n")
-					_, err = ExecCmdReturnOutput("bash", "-c", "export KUBECONFIG="+cfg+"; kubectl config set-context "+currentConext+" --namespace=default")
-					if err != nil {
-						fmt.Println(err)
-					}
-
+					setNamespaceDefault()
 				}
 
 				target.SetStack(target.Stack()[:stackLength-1])
@@ -72,6 +62,13 @@ func NewDropCmd(targetReader TargetReader, targetWriter TargetWriter, ioStreams 
 						drop(targetWriter)
 						fmt.Printf("Dropped %s %s\n", target.Target[2].Kind, target.Target[2].Name)
 						fmt.Printf("Dropped %s %s\n", target.Target[1].Kind, target.Target[1].Name)
+					} else if len(target.Target) == 4 && target.Target[1].Kind == "project" {
+						drop(targetWriter)
+						drop(targetWriter)
+						drop(targetWriter)
+						fmt.Printf("Dropped %s %s\n", target.Target[3].Kind, target.Target[3].Name)
+						fmt.Printf("Dropped %s %s\n", target.Target[2].Kind, target.Target[2].Name)
+						fmt.Printf("Dropped %s %s\n", target.Target[1].Kind, target.Target[1].Name)
 					} else {
 						fmt.Println("A seed is targeted")
 					}
@@ -84,17 +81,38 @@ func NewDropCmd(targetReader TargetReader, targetWriter TargetWriter, ioStreams 
 						drop(targetWriter)
 						fmt.Printf("Dropped %s %s\n", target.Target[2].Kind, target.Target[2].Name)
 						fmt.Printf("Dropped %s %s\n", target.Target[1].Kind, target.Target[1].Name)
+					} else if len(target.Target) == 4 && target.Target[1].Kind == "seed" {
+						drop(targetWriter)
+						drop(targetWriter)
+						drop(targetWriter)
+						fmt.Printf("Dropped %s %s\n", target.Target[3].Kind, target.Target[3].Name)
+						fmt.Printf("Dropped %s %s\n", target.Target[2].Kind, target.Target[2].Name)
+						fmt.Printf("Dropped %s %s\n", target.Target[1].Kind, target.Target[1].Name)
 					} else {
 						fmt.Println("A project is targeted")
 					}
+				case "namespace":
+					if len(target.Target) > 1 && len(target.Target) < 5 {
+						if target.Target[len(target.Target)-1].Kind == "namespace" {
+							setNamespaceDefault()
+							drop(targetWriter)
+							fmt.Printf("Dropped %s %s\n", target.Target[len(target.Target)-1].Kind, target.Target[len(target.Target)-1].Name)
+						} else {
+							fmt.Println("No namespace targeted")
+						}
+					} else if len(target.Target) == 1 {
+						fmt.Println("Only Garden is targeted, no namespace info")
+					} else {
+						fmt.Println("Size of target stack is illegal")
+					}
 				default:
-					fmt.Println("Command must be in the format: gardenctl drop <project|seed>")
+					fmt.Println("Command must be in the format: gardenctl drop <project|seed|namespace>")
 				}
 			}
 
 			return nil
 		},
-		ValidArgs: []string{"project", "seed"},
+		ValidArgs: []string{"project", "seed", "namespace"},
 	}
 
 	return cmd
@@ -114,4 +132,18 @@ func drop(targetWriter TargetWriter) {
 	checkError(err)
 
 	KUBECONFIG = getKubeConfigOfCurrentTarget()
+}
+
+//set current namespace to default
+func setNamespaceDefault() {
+	cfg := getKubeConfigOfCurrentTarget()
+	out, err := ExecCmdReturnOutput("bash", "-c", "export KUBECONFIG="+cfg+"; kubectl config current-context")
+	if err != nil {
+		fmt.Println(err)
+	}
+	currentConext := strings.TrimSuffix(string(out), "\n")
+	_, err = ExecCmdReturnOutput("bash", "-c", "export KUBECONFIG="+cfg+"; kubectl config set-context "+currentConext+" --namespace=default")
+	if err != nil {
+		fmt.Println(err)
+	}
 }
