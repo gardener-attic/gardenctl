@@ -181,7 +181,7 @@ func (a *AwsInstanceAttribute) createBastionHostSecurityGroup() {
 	operate("aws", arguments)
 	_, err = captured()
 	checkError(err)
-	fmt.Println("Opend SSH Port on Node.")
+	fmt.Println("Opened SSH Port on Node.")
 }
 
 // getSecurityGroupID extracts security group id of ec2 instance
