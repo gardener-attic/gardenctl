@@ -646,7 +646,8 @@ func getKubeConfigOfCurrentTarget() (pathToKubeconfig string) {
 	ReadTarget(pathTarget, &targetReal)
 
 	if len(targetReal.Target) == 1 && targetReal.Stack()[0].Kind == "namespace" {
-		panic("the target has only namespace, this is invalid, at least one garden needs to be targeted before using namespace")
+		fmt.Println("the target has only namespace, this is invalid, at least one garden needs to be targeted before using namespace")
+		os.Exit(2)
 	} else if len(targetReal.Target) > 1 && len(targetReal.Target) <= 4 {
 		if targetReal.Stack()[len(targetReal.Target)-1].Kind == "namespace" {
 			target.Target = targetReal.Target[:len(targetReal.Target)-1]
@@ -656,7 +657,8 @@ func getKubeConfigOfCurrentTarget() (pathToKubeconfig string) {
 	} else if len(targetReal.Target) == 1 && targetReal.Stack()[0].Kind != "namespace" {
 		target.Target = targetReal.Target
 	} else {
-		panic("length of target.Stack is illegal")
+		fmt.Println("length of target.Stack is illegal")
+		os.Exit(2)
 	}
 
 	gardenName := target.Stack()[0].Name
@@ -848,14 +850,14 @@ func targetNamespace(targetWriter TargetWriter, ns string) error {
 	ReadTarget(pathTarget, &target)
 
 	if len(target.Target) > 4 {
-		panic("the length is greater than 4 and illegal")
+		return errors.New("the length is greater than 4 and illegal")
 	}
 	if len(target.Target) == 0 {
-		panic("the length is 0 and illegal. at least one garden needs to be targeted")
+		return errors.New("the length is 0 and illegal. at least one garden needs to be targeted")
 	}
 	if len(target.Target) == 1 {
 		if string(target.Target[0].Kind) != "garden" {
-			panic("if one element in target, this needs to be garden")
+			return errors.New("if one element in target, this needs to be garden")
 		}
 		target.Target = append(target.Target, TargetMeta{"namespace", ns})
 	}
