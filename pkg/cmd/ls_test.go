@@ -54,7 +54,7 @@ var _ = Describe("Ls command", func() {
 				err := command.Execute()
 
 				Expect(err).To(HaveOccurred())
-				Expect(err.Error()).To(Equal("command must be in the format: ls [gardens|projects|seeds|shoots|issues]"))
+				Expect(err.Error()).To(Equal("command must be in the format: ls [gardens|projects|seeds|shoots|issues|namespaces]"))
 			})
 		})
 
