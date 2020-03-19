@@ -30,12 +30,12 @@ import (
 // NewLsCmd returns a new ls command.
 func NewLsCmd(targetReader TargetReader, configReader ConfigReader, ioStreams IOStreams) *cobra.Command {
 	cmd := &cobra.Command{
-		Use:          "ls [gardens|projects|seeds|shoots|issues]",
+		Use:          "ls [gardens|projects|seeds|shoots|issues|namespaces]",
 		Short:        "List all resource instances, e.g. list of shoots|issues",
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) (err error) {
 			if len(args) < 1 || len(args) > 2 {
-				return errors.New("command must be in the format: ls [gardens|projects|seeds|shoots|issues]")
+				return errors.New("command must be in the format: ls [gardens|projects|seeds|shoots|issues|namespaces]")
 			}
 
 			target := targetReader.ReadTarget(pathTarget)
@@ -76,13 +76,15 @@ func NewLsCmd(targetReader TargetReader, configReader ConfigReader, ioStreams IO
 				}
 			case "issues":
 				getIssues(ioStreams)
+			case "namespaces":
+				getNamespaces(ioStreams)
 			default:
-				return errors.New("command must be in the format: ls [gardens|projects|seeds|shoots|issues]")
+				return errors.New("command must be in the format: ls [gardens|projects|seeds|shoots|issues|namespaces]")
 			}
 
 			return nil
 		},
-		ValidArgs: []string{"issues", "projects", "gardens", "seeds", "shoots"},
+		ValidArgs: []string{"issues", "projects", "gardens", "seeds", "shoots", "namespaces"},
 	}
 
 	return cmd
@@ -341,4 +343,15 @@ func getSeedsWithShootsForProject(ioStreams IOStreams) {
 		checkError(err)
 		fmt.Fprint(ioStreams.Out, string(j))
 	}
+}
+
+//getNamespaces get all namespaces based on current kubeconfig
+func getNamespaces(ioStreams IOStreams) {
+	currentConfig := getKubeConfigOfCurrentTarget()
+
+	out, err := ExecCmdReturnOutput("bash", "-c", "export KUBECONFIG="+currentConfig+"; kubectl get ns")
+	if err != nil {
+		fmt.Println(err)
+	}
+	fmt.Println(string(out))
 }

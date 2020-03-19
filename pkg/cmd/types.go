@@ -79,6 +79,8 @@ const (
 	TargetKindSeed TargetKind = "seed"
 	// TargetKindShoot points to shoot cluster.
 	TargetKindShoot TargetKind = "shoot"
+	// TargetKindNamespace points to namespace.
+	TargetKindNamespace TargetKind = "namespace"
 )
 
 // TargetMeta contains kind and name of target.
