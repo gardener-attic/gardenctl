@@ -19,6 +19,7 @@ import (
 	"io/ioutil"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -31,20 +32,19 @@ import (
 
 // GCPInstanceAttribute stores all the critical information for creating an instance on GCP.
 type GCPInstanceAttribute struct {
-	ShootName                   string
-	BastionHostName             string
-	BastionHostFirewallRuleName string
-	BastionIP                   string
-	FirewallRuleName            string
-	VpcName                     string
-	Subnetwork                  string
-	Zone                        string
-	UserData                    []byte
-	SSHPublicKey                []byte
+	ShootName        string
+	BastionHostName  string
+	BastionIP        string
+	FirewallRuleName string
+	VpcName          string
+	Subnetwork       string
+	Zone             string
+	UserData         []byte
+	SSHPublicKey     []byte
 }
 
 // sshToGCPNode provides cmds to ssh to gcp via a public ip and clean it up afterwards
-func sshToGCPNode(nodeName, path, user string, sshPublicKey []byte) {
+func sshToGCPNode(nodeName, path, user, pathSSKeypair string, sshPublicKey []byte) {
 	g := &GCPInstanceAttribute{}
 	g.SSHPublicKey = sshPublicKey
 	fmt.Println("")
@@ -56,7 +56,6 @@ func sshToGCPNode(nodeName, path, user string, sshPublicKey []byte) {
 
 	fmt.Println("(2/4) Setting up bastion host firewall rule")
 	g.createBastionHostFirewallRule()
-	fmt.Println("")
 
 	defer g.cleanupGcpBastionHost()
 
@@ -68,7 +67,8 @@ func sshToGCPNode(nodeName, path, user string, sshPublicKey []byte) {
 	fmt.Println("Waiting 45 seconds until ports are open.")
 	time.Sleep(45 * time.Second)
 
-	sshCmd := fmt.Sprintf("ssh -i key -o \"ProxyCommand ssh -W %%h:%%p -i key -o StrictHostKeyChecking=no " + bastionNode + "\" " + node + " -o StrictHostKeyChecking=no")
+	key := filepath.Join(pathSSKeypair, "key")
+	sshCmd := fmt.Sprintf("ssh -i " + key + " -o \"ProxyCommand ssh -W %%h:%%p -i " + key + " -o StrictHostKeyChecking=no " + bastionNode + "\" " + node + " -o StrictHostKeyChecking=no")
 	fmt.Println(sshCmd)
 	cmd := exec.Command("bash", "-c", sshCmd)
 	cmd.Stdout = os.Stdout
@@ -84,7 +84,7 @@ func (g *GCPInstanceAttribute) fetchGCPAttributes(nodeName, path string) {
 	var err error
 	g.ShootName = getShootClusterName()
 	g.BastionHostName = g.ShootName + "-bastions"
-	g.BastionHostFirewallRuleName = g.ShootName + "-fw"
+	g.FirewallRuleName = g.ShootName + "-allow-ssh-access"
 	g.Subnetwork = g.ShootName + "-nodes"
 	g.Zone, err = fetchZone(g.ShootName, nodeName)
 	checkError(err)
@@ -102,13 +102,9 @@ func (g *GCPInstanceAttribute) fetchGCPAttributes(nodeName, path string) {
 	}
 	if c.Check(v) {
 		fmt.Println(path)
-		g.FirewallRuleName, err = ExecCmdReturnOutput("bash", "-c", "cat "+path+" | jq -r '.resources[] | select(.name == \"rule-allow-external-access\").instances[0].attributes.id'")
-		checkError(err)
 		g.VpcName, err = ExecCmdReturnOutput("bash", "-c", "cat "+path+" | jq -r '.outputs.vpc_name.value'")
 		checkError(err)
 	} else {
-		g.FirewallRuleName, err = ExecCmdReturnOutput("bash", "-c", "cat "+path+" | jq -r '.modules[].resources[\"google_compute_firewall.rule-allow-external-access\"].primary[\"id\"]''")
-		checkError(err)
 		g.VpcName, err = ExecCmdReturnOutput("bash", "-c", "cat "+path+" | jq -r '.modules[].outputs.vpc_name.value'")
 		checkError(err)
 	}
@@ -119,7 +115,7 @@ func (g *GCPInstanceAttribute) fetchGCPAttributes(nodeName, path string) {
 func (g *GCPInstanceAttribute) createBastionHostFirewallRule() {
 	var err error
 	fmt.Println("Add ssh rule")
-	arguments := "gcloud " + fmt.Sprintf("compute firewall-rules update %s --allow tcp:22,tcp:80,tcp:443", g.FirewallRuleName)
+	arguments := "gcloud " + fmt.Sprintf("compute firewall-rules create %s --network %s --allow tcp:22,tcp:80,tcp:443", g.FirewallRuleName, g.ShootName)
 	captured := capture()
 	operate("gcp", arguments)
 	capturedOutput, err := captured()
@@ -249,7 +245,7 @@ func (g *GCPInstanceAttribute) cleanupGcpBastionHost() {
 	// remove shh port from firewall rule
 	fmt.Println("  (2/2) Close SSH Port on Node.")
 	fmt.Println("Close SSH Port on Node.")
-	arguments = "gcloud " + fmt.Sprintf("compute firewall-rules update %s --allow tcp:80,tcp:443", g.FirewallRuleName)
+	arguments = "gcloud " + fmt.Sprintf("compute firewall-rules delete %s --quiet", g.FirewallRuleName)
 	captured = capture()
 	operate("gcp", arguments)
 	capturedOutput, err = captured()

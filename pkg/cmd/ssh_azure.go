@@ -20,6 +20,7 @@ import (
 	"io/ioutil"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"regexp"
 	"strings"
 	"time"
@@ -40,7 +41,7 @@ type AzureInstanceAttribute struct {
 }
 
 // sshToAZNode provides cmds to ssh to az via a node name and clean it up afterwards
-func sshToAZNode(nodeName, path, user string, sshPublicKey []byte) {
+func sshToAZNode(nodeName, path, user, pathSSKeypair string, sshPublicKey []byte) {
 	a := &AzureInstanceAttribute{}
 	fmt.Println("")
 	fmt.Println("(1/4) Fetching data from target shoot cluster")
@@ -71,7 +72,8 @@ func sshToAZNode(nodeName, path, user string, sshPublicKey []byte) {
 	fmt.Println("(3/4) Establishing SSH connection")
 	fmt.Println("")
 
-	sshCmd := fmt.Sprintf("ssh -i key -o StrictHostKeyChecking=no " + node)
+	key := filepath.Join(pathSSKeypair, "key")
+	sshCmd := fmt.Sprintf("ssh -i " + key + " -o StrictHostKeyChecking=no " + node)
 	cmd := exec.Command("bash", "-c", sshCmd)
 	cmd.Stdout = os.Stdout
 	cmd.Stdin = os.Stdin
