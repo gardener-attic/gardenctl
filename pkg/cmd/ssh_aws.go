@@ -19,6 +19,7 @@ import (
 	"io/ioutil"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -49,7 +50,7 @@ type AwsInstanceAttribute struct {
 }
 
 // sshToAWSNode provides cmds to ssh to aws via a bastions host and clean it up afterwards
-func sshToAWSNode(nodeName, path, user string, sshPublicKey []byte) {
+func sshToAWSNode(nodeName, path, user, pathSSKeypair string, sshPublicKey []byte) {
 	a := &AwsInstanceAttribute{}
 	a.SSHPublicKey = sshPublicKey
 	fmt.Println("")
@@ -70,10 +71,12 @@ func sshToAWSNode(nodeName, path, user string, sshPublicKey []byte) {
 
 	bastionNode := user + "@" + a.BastionIP
 	node := user + "@" + nodeName
-	fmt.Println("Waiting 45 seconds until ports are open.")
-	time.Sleep(45 * time.Second)
+	fmt.Println("Waiting 60 seconds until ports are open.")
+	time.Sleep(60 * time.Second)
 
-	sshCmd := fmt.Sprintf("ssh -i key -o \"ProxyCommand ssh -W %%h:%%p -i key -o StrictHostKeyChecking=no " + bastionNode + "\" " + node + " -o StrictHostKeyChecking=no")
+	key := filepath.Join(pathSSKeypair, "key")
+	sshCmd := fmt.Sprintf("ssh -i " + key + " -o \"ProxyCommand ssh -W %%h:%%p -i " + key + " -o StrictHostKeyChecking=no " + bastionNode + "\" " + node + " -o StrictHostKeyChecking=no")
+	fmt.Println("Executing: " + sshCmd)
 	cmd := exec.Command("bash", "-c", sshCmd)
 	cmd.Stdout = os.Stdout
 	cmd.Stdin = os.Stdin

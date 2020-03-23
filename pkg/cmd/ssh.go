@@ -87,11 +87,11 @@ func NewSSHCmd(reader TargetReader, ioStreams IOStreams) *cobra.Command {
 			infraType := shoot.Spec.Provider.Type
 			switch infraType {
 			case "aws":
-				sshToAWSNode(args[0], path, user, sshPublicKey)
+				sshToAWSNode(args[0], path, user, pathSSKeypair, sshPublicKey)
 			case "gcp":
-				sshToGCPNode(args[0], path, user, sshPublicKey)
+				sshToGCPNode(args[0], path, user, pathSSKeypair, sshPublicKey)
 			case "azure":
-				sshToAZNode(args[0], path, user, sshPublicKey)
+				sshToAZNode(args[0], path, user, pathSSKeypair, sshPublicKey)
 			case "alicloud":
 				sshToAlicloudNode(args[0], path, user, sshPublicKey)
 			case "openstack":
