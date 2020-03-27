@@ -75,7 +75,7 @@ func NewLsCmd(targetReader TargetReader, configReader ConfigReader, ioStreams IO
 					getSeedsWithShootsForProject(ioStreams)
 				}
 			case "issues":
-				getIssues(ioStreams)
+				getIssues(target, ioStreams)
 			case "namespaces":
 				getNamespaces(ioStreams)
 			default:
@@ -209,8 +209,8 @@ func getProjectsWithShootsForSeed(ioStreams IOStreams) {
 }
 
 // getIssues lists broken shoot clusters
-func getIssues(ioStreams IOStreams) {
-	gardenClientset, err := gardencoreclientset.NewForConfig(NewConfigFromBytes(*kubeconfig))
+func getIssues(target TargetInterface, ioStreams IOStreams) {
+	gardenClientset, err := target.GardenerClient()
 	checkError(err)
 	shootList, err := gardenClientset.CoreV1beta1().Shoots("").List(metav1.ListOptions{})
 	checkError(err)
