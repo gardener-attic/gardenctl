@@ -15,22 +15,12 @@
 package utils
 
 import (
-	"io/ioutil"
 	"net"
 	"regexp"
 	"time"
 
-	"github.com/sirupsen/logrus"
-
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
-
-// NewNopLogger instantiates a new logger that logs to ioutil.Discard.
-func NewNopLogger() *logrus.Logger {
-	logger := logrus.New()
-	logger.Out = ioutil.Discard
-	return logger
-}
 
 // ValueExists returns true or false, depending on whether the given string <value>
 // is part of the given []string list <list>.
@@ -128,9 +118,7 @@ func TestEmail(email string) bool {
 	return match
 }
 
-// NetworksIntersect returns true if the given network CIDRs intersect.
-func NetworksIntersect(cidr1, cidr2 string) bool {
-	_, net1, err1 := net.ParseCIDR(cidr1)
-	_, net2, err2 := net.ParseCIDR(cidr2)
-	return err1 != nil || err2 != nil || net2.Contains(net1.IP) || net1.Contains(net2.IP)
+// IsTrue returns true if the passed bool pointer is not nil and true.
+func IsTrue(value *bool) bool {
+	return value != nil && *value
 }
