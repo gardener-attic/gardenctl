@@ -100,6 +100,9 @@ type SeedStatus struct {
 type SeedBackup struct {
 	// Provider is a provider name.
 	Provider string `json:"provider"`
+	// ProviderConfig is the configuration passed to BackupBucket resource.
+	// +optional
+	ProviderConfig *ProviderConfig `json:"providerConfig,omitempty"`
 	// Region is a region name.
 	// +optional
 	Region *string `json:"region,omitempty"`
@@ -119,7 +122,8 @@ type SeedDNS struct {
 // SeedNetworks contains CIDRs for the pod, service and node networks of a Kubernetes cluster.
 type SeedNetworks struct {
 	// Nodes is the CIDR of the node network.
-	Nodes string `json:"nodes"`
+	// +optional
+	Nodes *string `json:"nodes,omitempty"`
 	// Pods is the CIDR of the pod network.
 	Pods string `json:"pods"`
 	// Services is the CIDR of the service network.
@@ -167,6 +171,10 @@ const (
 	// SeedTaintInvisible is a constant for a taint key on a seed that marks it as invisible. Invisible seeds
 	// are not considered by the gardener-scheduler.
 	SeedTaintInvisible = "seed.gardener.cloud/invisible"
+	// SeedTaintDisableCapacityReservation is a constant for a taint key on a seed that marks it for disabling
+	// excess capacity reservation. This can be useful for seed clusters which only host shooted seeds to reduce
+	// costs.
+	SeedTaintDisableCapacityReservation = "seed.gardener.cloud/disable-capacity-reservation"
 )
 
 // SeedVolume contains settings for persistentvolumes created in the seed cluster.
@@ -190,9 +198,11 @@ type SeedVolumeProvider struct {
 }
 
 const (
-	// SeedGardenletReady is a constant for a condition type indicating that the Gardenlet is ready.
-	SeedGardenletReady ConditionType = "GardenletReady"
 	// SeedBootstrapped is a constant for a condition type indicating that the seed cluster has been
 	// bootstrapped.
 	SeedBootstrapped ConditionType = "Bootstrapped"
+	// SeedExtensionsReady is a constant for a condition type indicating that the extensions are ready.
+	SeedExtensionsReady ConditionType = "ExtensionsReady"
+	// SeedGardenletReady is a constant for a condition type indicating that the Gardenlet is ready.
+	SeedGardenletReady ConditionType = "GardenletReady"
 )

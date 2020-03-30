@@ -60,7 +60,11 @@ type ProjectSpec struct {
 	Description *string `json:"description,omitempty"`
 	// Owner is a subject representing a user name, an email address, or any other identifier of a user owning
 	// the project.
+	// IMPORTANT: Be aware that this field will be removed in the `v1` version of this API in favor of the `owner`
+	// role. The only way to change the owner will be by moving the `owner` role. In this API version the only way
+	// to change the owner is to use this field.
 	// +optional
+	// TODO: Remove this field in favor of the `owner` role in `v1`.
 	Owner *rbacv1.Subject `json:"owner,omitempty"`
 	// Purpose is a human-readable explanation of the project's purpose.
 	// +optional
@@ -90,14 +94,25 @@ type ProjectMember struct {
 	// account that has a certain role.
 	rbacv1.Subject `json:",inline"`
 	// Role represents the role of this member.
+	// IMPORTANT: Be aware that this field will be removed in the `v1` version of this API in favor of the `roles`
+	// list.
+	// TODO: Remove this field in favor of the `owner` role in `v1`.
 	Role string `json:"role"`
+	// Roles represents the list of roles of this member.
+	// +optional
+	Roles []string `json:"roles,omitempty"`
 }
 
 const (
 	// ProjectMemberAdmin is a const for a role that provides full admin access.
 	ProjectMemberAdmin = "admin"
+	// ProjectMemberOwner is a const for a role that provides full owner access.
+	ProjectMemberOwner = "owner"
 	// ProjectMemberViewer is a const for a role that provides limited permissions to only view some resources.
 	ProjectMemberViewer = "viewer"
+
+	// ProjectMemberExtensionPrefix is a prefix for custom roles that are not known by Gardener.
+	ProjectMemberExtensionPrefix = "extension:"
 )
 
 // ProjectPhase is a label for the condition of a project at the current time.

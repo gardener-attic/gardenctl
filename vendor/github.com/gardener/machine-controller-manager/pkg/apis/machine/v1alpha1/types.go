@@ -18,6 +18,7 @@ package v1alpha1
 import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/intstr"
 )
 
@@ -416,9 +417,9 @@ type MachineDeployment struct {
 // MachineDeploymentSpec is the specification of the desired behavior of the MachineDeployment.
 type MachineDeploymentSpec struct {
 	// Number of desired machines. This is a pointer to distinguish between explicit
-	// zero and not specified. Defaults to 1.
+	// zero and not specified. Defaults to 0.
 	// +optional
-	Replicas int32 `json:"replicas,omitempty" protobuf:"varint,1,opt,name=replicas"`
+	Replicas int32 `json:"replicas,inline" protobuf:"varint,1,opt,name=replicas"`
 
 	// Label selector for machines. Existing MachineSets whose machines are
 	// selected by this will be the ones affected by this MachineDeployment.
@@ -558,25 +559,25 @@ type MachineDeploymentStatus struct {
 
 	// Total number of non-terminated machines targeted by this MachineDeployment (their labels match the selector).
 	// +optional
-	Replicas int32 `json:"replicas,omitempty" protobuf:"varint,2,opt,name=replicas"`
+	Replicas int32 `json:"replicas,inline" protobuf:"varint,2,opt,name=replicas"`
 
 	// Total number of non-terminated machines targeted by this MachineDeployment that have the desired template spec.
 	// +optional
-	UpdatedReplicas int32 `json:"updatedReplicas,omitempty" protobuf:"varint,3,opt,name=updatedReplicas"`
+	UpdatedReplicas int32 `json:"updatedReplicas,inline" protobuf:"varint,3,opt,name=updatedReplicas"`
 
 	// Total number of ready machines targeted by this MachineDeployment.
 	// +optional
-	ReadyReplicas int32 `json:"readyReplicas,omitempty" protobuf:"varint,7,opt,name=readyReplicas"`
+	ReadyReplicas int32 `json:"readyReplicas,inline" protobuf:"varint,7,opt,name=readyReplicas"`
 
 	// Total number of available machines (ready for at least minReadySeconds) targeted by this MachineDeployment.
 	// +optional
-	AvailableReplicas int32 `json:"availableReplicas,omitempty" protobuf:"varint,4,opt,name=availableReplicas"`
+	AvailableReplicas int32 `json:"availableReplicas,inline" protobuf:"varint,4,opt,name=availableReplicas"`
 
 	// Total number of unavailable machines targeted by this MachineDeployment. This is the total number of
 	// machines that are still required for the MachineDeployment to have 100% available capacity. They may
 	// either be machines that are running but not yet available or machines that still have not been created.
 	// +optional
-	UnavailableReplicas int32 `json:"unavailableReplicas,omitempty" protobuf:"varint,5,opt,name=unavailableReplicas"`
+	UnavailableReplicas int32 `json:"unavailableReplicas,inline" protobuf:"varint,5,opt,name=unavailableReplicas"`
 
 	// Represents the latest available observations of a MachineDeployment's current state.
 	// +patchMergeKey=type
@@ -730,6 +731,7 @@ type OpenStackMachineClassList struct {
 
 // OpenStackMachineClassSpec is the specification of a cluster.
 type OpenStackMachineClassSpec struct {
+	ImageID          string                  `json:"imageID"`
 	ImageName        string                  `json:"imageName"`
 	Region           string                  `json:"region"`
 	AvailabilityZone string                  `json:"availabilityZone"`
@@ -738,8 +740,16 @@ type OpenStackMachineClassSpec struct {
 	SecurityGroups   []string                `json:"securityGroups"`
 	Tags             map[string]string       `json:"tags,omitempty"`
 	NetworkID        string                  `json:"networkID"`
+	Networks         []OpenStackNetwork      `json:"networks,omitempty"`
 	SecretRef        *corev1.SecretReference `json:"secretRef,omitempty"`
 	PodNetworkCidr   string                  `json:"podNetworkCidr"`
+	RootDiskSize     int                     `json:"rootDiskSize,omitempty"` // in GB
+}
+
+type OpenStackNetwork struct {
+	Id         string `json:"id,omitempty"` // takes priority before name
+	Name       string `json:"name,omitempty"`
+	PodNetwork bool   `json:"podNetwork,omitempty"`
 }
 
 /********************** AWSMachineClass APIs ***************/
@@ -821,7 +831,7 @@ type AWSBlockDeviceMappingSpec struct {
 type AWSEbsBlockDeviceSpec struct {
 
 	// Indicates whether the EBS volume is deleted on machine termination.
-	DeleteOnTermination bool `json:"deleteOnTermination,omitempty"`
+	DeleteOnTermination *bool `json:"deleteOnTermination,omitempty"`
 
 	// Indicates whether the EBS volume is encrypted. Encrypted Amazon EBS volumes
 	// may only be attached to machines that support Amazon EBS encryption.
@@ -946,6 +956,7 @@ type AzureVirtualMachineProperties struct {
 	OsProfile       AzureOSProfile       `json:"osProfile,omitempty"`
 	NetworkProfile  AzureNetworkProfile  `json:"networkProfile,omitempty"`
 	AvailabilitySet *AzureSubResource    `json:"availabilitySet,omitempty"`
+	IdentityID      *string              `json:"identityID,omitempty"`
 	Zone            *int                 `json:"zone,omitempty"`
 }
 
@@ -1020,7 +1031,8 @@ type AzureSSHPublicKey struct {
 
 // AzureNetworkProfile is specifies the network interfaces of the virtual machine.
 type AzureNetworkProfile struct {
-	NetworkInterfaces AzureNetworkInterfaceReference `json:"networkInterfaces,omitempty"`
+	NetworkInterfaces     AzureNetworkInterfaceReference `json:"networkInterfaces,omitempty"`
+	AcceleratedNetworking *bool                          `json:"acceleratedNetworking,omitempty"`
 }
 
 // AzureNetworkInterfaceReference is describes a network interface reference.
@@ -1286,4 +1298,33 @@ type PacketMachineClassSpec struct {
 	UserData     string   `json:"userdata,omitempty"`
 
 	SecretRef *corev1.SecretReference `json:"secretRef,omitempty"`
+}
+
+// +genclient
+// +genclient:noStatus
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+
+// MachineClass can be used to templatize and re-use provider configuration
+// across multiple Machines / MachineSets / MachineDeployments.
+// +k8s:openapi-gen=true
+// +resource:path=machineclasses
+type MachineClass struct {
+	metav1.TypeMeta `json:",inline"`
+	// +optional
+	metav1.ObjectMeta `json:"metadata,omitempty"`
+	// Provider-specific configuration to use during node creation.
+	ProviderSpec runtime.RawExtension `json:"providerSpec"`
+	// SecretRef stores the necessary secrets such as credetials or userdata.
+	SecretRef *corev1.SecretReference `json:"secretRef,omitempty"`
+	// Provider is the combination of name and location of cloud-specific drivers.
+	Provider string `json:"provider,omitempty"`
+}
+
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+
+// MachineClassList contains a list of MachineClasses
+type MachineClassList struct {
+	metav1.TypeMeta `json:",inline"`
+	metav1.ListMeta `json:"metadata,omitempty"`
+	Items           []MachineClass `json:"items"`
 }
