@@ -22,8 +22,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	openstackinstall "github.com/gardener/gardener-extensions/controllers/provider-openstack/pkg/apis/openstack/install"
-	openstackv1alpha1 "github.com/gardener/gardener-extensions/controllers/provider-openstack/pkg/apis/openstack/v1alpha1"
+	openstackinstall "github.com/gardener/gardener-extension-provider-openstack/pkg/apis/openstack/install"
+	openstackv1alpha1 "github.com/gardener/gardener-extension-provider-openstack/pkg/apis/openstack/v1alpha1"
 	gardencorev1beta1 "github.com/gardener/gardener/pkg/apis/core/v1beta1"
 	gardencoreclientset "github.com/gardener/gardener/pkg/client/core/clientset/versioned"
 	"github.com/jmoiron/jsonq"
@@ -212,7 +212,8 @@ func operate(provider, arguments string) {
 			if cp.Name == profile {
 				cloudProfileConfig, err := getOpenstackCloudProfileConfig(&cp)
 				checkError(err)
-				authURL = cloudProfileConfig.KeyStoneURL
+				authURL, err = getKeyStoneURL(cloudProfileConfig, region)
+				checkError(err)
 			}
 		}
 		domainName := []byte(secret.Data["domainName"])
@@ -286,7 +287,7 @@ func operate(provider, arguments string) {
 
 func getOpenstackCloudProfileConfig(in *gardencorev1beta1.CloudProfile) (*openstackv1alpha1.CloudProfileConfig, error) {
 	if in.Spec.ProviderConfig == nil {
-		return nil, fmt.Errorf("Cannot fetch providerConfig of core.gardener.cloud/v1alpha1.CloudProfile %s", in.Name)
+		return nil, fmt.Errorf("cannot fetch providerConfig of core.gardener.cloud/v1alpha1.CloudProfile %s", in.Name)
 	}
 
 	extensionsScheme := runtime.NewScheme()
@@ -315,4 +316,18 @@ func getOpenstackCloudProfileConfig(in *gardencorev1beta1.CloudProfile) (*openst
 	}
 
 	return out, nil
+}
+
+func getKeyStoneURL(config *openstackv1alpha1.CloudProfileConfig, region string) (string, error) {
+	if config.KeyStoneURL != "" {
+		return config.KeyStoneURL, nil
+	}
+
+	for _, keyStoneURL := range config.KeyStoneURLs {
+		if keyStoneURL.Region == region {
+			return keyStoneURL.URL, nil
+		}
+	}
+
+	return "", fmt.Errorf("cannot find KeyStone URL for region %q in CloudProfileConfig", region)
 }
