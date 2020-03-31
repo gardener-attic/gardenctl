@@ -15,13 +15,9 @@
 package cmd
 
 import (
-	"encoding/json"
 	"fmt"
-	"io/ioutil"
-	"net/http"
 	"runtime"
 
-	"github.com/Masterminds/semver"
 	"github.com/spf13/cobra"
 )
 
@@ -43,51 +39,7 @@ func NewVersionCmd() *cobra.Command {
 		platform    : %s/%s
 `, version, buildDate, runtime.Version(), runtime.Compiler, runtime.GOOS, runtime.GOARCH)
 
-			isAvailable, err := newVersionAvailable(version)
-			if err != nil {
-				return err
-			}
-			if isAvailable {
-				fmt.Println("New version of Gardenctl is available at https://github.com/gardener/gardenctl/releases/latest")
-				fmt.Println("Please get latest version from above URL and see https://github.com/gardener/gardenctl#installation for how to upgrade")
-			}
-
 			return nil
 		},
 	}
-}
-
-// newVersionAvailable returns whether new version is available.
-func newVersionAvailable(currentVersion string) (bool, error) {
-	gardenctlLatestURL := "https://api.github.com/repos/gardener/gardenctl/releases/latest"
-	resp, err := http.Get(gardenctlLatestURL)
-	if err != nil {
-		return false, err
-	}
-	defer resp.Body.Close()
-	body, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		return false, err
-	}
-
-	data := make(map[string]interface{})
-	if err := json.Unmarshal([]byte(body), &data); err != nil {
-		return false, err
-	}
-	var latestVersion string
-	if data["tag_name"] != nil {
-		latestVersion = data["tag_name"].(string)
-	}
-
-	c, err := semver.NewConstraint("> " + currentVersion)
-	if err != nil {
-		return false, err
-	}
-
-	latest, err := semver.NewVersion(latestVersion)
-	if err != nil {
-		return false, err
-	}
-
-	return c.Check(latest), nil
 }
