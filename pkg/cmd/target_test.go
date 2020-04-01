@@ -38,6 +38,7 @@ var _ = Describe("Target command", func() {
 		targetReader *mockcmd.MockTargetReader
 		targetWriter *mockcmd.MockTargetWriter
 		target       *mockcmd.MockTargetInterface
+		kcReader     *mockcmd.MockKubeconfigReader
 		command      *cobra.Command
 
 		execute = func(command *cobra.Command, args []string) error {
@@ -64,7 +65,7 @@ var _ = Describe("Target command", func() {
 			target.EXPECT().Stack().Return([]cmd.TargetMeta{})
 
 			ioStreams, _, _, _ := cmd.NewTestIOStreams()
-			command = cmd.NewTargetCmd(targetReader, targetWriter, configReader, ioStreams)
+			command = cmd.NewTargetCmd(targetReader, targetWriter, configReader, ioStreams, kcReader)
 			err := execute(command, []string{"project", "bar"})
 
 			Expect(err).To(HaveOccurred())
@@ -82,7 +83,7 @@ var _ = Describe("Target command", func() {
 			configReader.EXPECT().ReadConfig(gomock.Any()).Return(gardenConfig)
 
 			ioStreams, _, _, _ := cmd.NewTestIOStreams()
-			command = cmd.NewTargetCmd(targetReader, targetWriter, configReader, ioStreams)
+			command = cmd.NewTargetCmd(targetReader, targetWriter, configReader, ioStreams, kcReader)
 			err := execute(command, []string{"garden", "foo"})
 
 			Expect(err).To(HaveOccurred())
@@ -104,7 +105,7 @@ var _ = Describe("Target command", func() {
 			target.EXPECT().GardenerClient().Return(clientSet, nil)
 
 			ioStreams, _, _, _ := cmd.NewTestIOStreams()
-			command = cmd.NewTargetCmd(targetReader, targetWriter, configReader, ioStreams)
+			command = cmd.NewTargetCmd(targetReader, targetWriter, configReader, ioStreams, kcReader)
 			err := execute(command, []string{"project", "foo"})
 
 			Expect(err).To(HaveOccurred())
@@ -140,7 +141,7 @@ var _ = Describe("Target command", func() {
 			targetWriter.EXPECT().WriteTarget(gomock.Any(), target)
 
 			ioStreams, _, _, _ := cmd.NewTestIOStreams()
-			command = cmd.NewTargetCmd(targetReader, targetWriter, configReader, ioStreams)
+			command = cmd.NewTargetCmd(targetReader, targetWriter, configReader, ioStreams, kcReader)
 			err := execute(command, []string{"project", "myproject"})
 
 			Expect(err).NotTo(HaveOccurred())
@@ -158,7 +159,7 @@ var _ = Describe("Target command", func() {
 			target.EXPECT().GardenerClient().Return(clientSet, nil)
 
 			ioStreams, _, _, _ := cmd.NewTestIOStreams()
-			command = cmd.NewTargetCmd(targetReader, targetWriter, configReader, ioStreams)
+			command = cmd.NewTargetCmd(targetReader, targetWriter, configReader, ioStreams, kcReader)
 			err := execute(command, []string{"shoot", "foo"})
 
 			Expect(err).To(HaveOccurred())
@@ -208,7 +209,7 @@ var _ = Describe("Target command", func() {
 			target.EXPECT().K8SClientToKind(cmd.TargetKindGarden).Return(k8sClientToGarden, nil)
 
 			ioStreams, _, out, _ := cmd.NewTestIOStreams()
-			command = cmd.NewTargetCmd(targetReader, targetWriter, configReader, ioStreams)
+			command = cmd.NewTargetCmd(targetReader, targetWriter, configReader, ioStreams, kcReader)
 			err := execute(command, []string{"shoot", "foo"})
 
 			Expect(err).NotTo(HaveOccurred())
@@ -225,7 +226,7 @@ var _ = Describe("Target command", func() {
 	DescribeTable("validation",
 		func(c targetCase) {
 			ioStreams, _, _, _ := cmd.NewTestIOStreams()
-			command := cmd.NewTargetCmd(targetReader, targetWriter, configReader, ioStreams)
+			command := cmd.NewTargetCmd(targetReader, targetWriter, configReader, ioStreams, kcReader)
 
 			err := execute(command, c.args)
 
@@ -234,7 +235,7 @@ var _ = Describe("Target command", func() {
 		},
 		Entry("with missing target kind", targetCase{
 			args:        []string{},
-			expectedErr: "command must be in the format: target <project|garden|seed|shoot|namespace> NAME",
+			expectedErr: "command must be in the format: target <project|garden|seed|shoot|namespace|server> NAME",
 		}),
 		Entry("with 2 garden cluster names", targetCase{
 			args:        []string{"garden", "prod-1", "prod-2"},
@@ -251,6 +252,14 @@ var _ = Describe("Target command", func() {
 		Entry("with missing seed name", targetCase{
 			args:        []string{"shoot"},
 			expectedErr: "command must be in the format: target shoot NAME",
+		}),
+		Entry("with missing namespace name", targetCase{
+			args:        []string{"namespace"},
+			expectedErr: "command must be in the format: target namespace NAME",
+		}),
+		Entry("with missing server name", targetCase{
+			args:        []string{"server"},
+			expectedErr: "command must be in the format: target server NAME",
 		}),
 	)
 })
