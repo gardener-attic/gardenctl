@@ -775,6 +775,9 @@ func serverWrapper(reader ConfigReader, serverName string, kubeconfigReader Kube
 
 	for _, garden := range config.GardenClusters {
 		kc := garden.KubeConfig
+		if strings.Contains(kc, "~") {
+			kc = filepath.Clean(filepath.Join(HomeDir(), strings.Replace(kc, "~", "", 1)))
+		}
 		if _, err := os.Stat(kc); os.IsNotExist(err) {
 			continue
 		}
@@ -890,9 +893,6 @@ func isValidURI(input string) bool {
 }
 
 func getServerValueFromKubeconfig(kubeconfigPath string, kubeconfigReader KubeconfigReader) string {
-	if strings.Contains(kubeconfigPath, "~") {
-		kubeconfigPath = filepath.Clean(filepath.Join(HomeDir(), strings.Replace(kubeconfigPath, "~", "", 1)))
-	}
 	kubeconfig, err := kubeconfigReader.ReadKubeconfig(kubeconfigPath)
 	checkError(err)
 	clientConfig, err := clientcmd.NewClientConfigFromBytes(kubeconfig)
