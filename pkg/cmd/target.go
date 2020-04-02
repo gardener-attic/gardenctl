@@ -18,6 +18,8 @@ import (
 	"errors"
 	"fmt"
 	"io/ioutil"
+	"net"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -29,6 +31,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/tools/clientcmd"
 )
 
 // ProjectName is they key of a label on namespaces whose value holds the project name.
@@ -40,17 +43,29 @@ var (
 	pseed      string
 	pshoot     string
 	pnamespace string
+	pserver    string
 )
 
 // NewTargetCmd returns a new target command.
-func NewTargetCmd(targetReader TargetReader, targetWriter TargetWriter, configReader ConfigReader, ioStreams IOStreams) *cobra.Command {
+func NewTargetCmd(targetReader TargetReader, targetWriter TargetWriter, configReader ConfigReader, ioStreams IOStreams, kubeconfigReader KubeconfigReader) *cobra.Command {
 	cmd := &cobra.Command{
-		Use:          "target <project|garden|seed|shoot|namespace> NAME",
+		Use:          "target <project|garden|seed|shoot|namespace|server> NAME",
 		Short:        "Set scope for next operations",
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if pgarden != "" || pproject != "" || pseed != "" || pshoot != "" || pnamespace != "" {
+			if pgarden != "" || pproject != "" || pseed != "" || pshoot != "" || pnamespace != "" || pserver != "" {
 				var arguments []string
+				if pgarden != "" && pserver != "" {
+					fmt.Println("server and garden values can't be specified at same time.")
+					os.Exit(2)
+				}
+				if pserver != "" {
+					if !isValidURI(pserver) {
+						fmt.Println("the server must be a valid uri")
+						os.Exit(2)
+					}
+					serverWrapper(configReader, pserver, kubeconfigReader)
+				}
 				if pgarden != "" {
 					arguments := append(arguments, "garden")
 					arguments = append(arguments, pgarden)
@@ -82,8 +97,8 @@ func NewTargetCmd(targetReader TargetReader, targetWriter TargetWriter, configRe
 				}
 				return nil
 			}
-			if len(args) < 1 && pgarden == "" && pproject == "" && pseed == "" && pshoot == "" && pnamespace == "" || len(args) > 5 {
-				return errors.New("command must be in the format: target <project|garden|seed|shoot|namespace> NAME")
+			if len(args) < 1 && pgarden == "" && pproject == "" && pseed == "" && pshoot == "" && pnamespace == "" && pserver == "" || len(args) > 5 {
+				return errors.New("command must be in the format: target <project|garden|seed|shoot|namespace|server> NAME")
 			}
 			switch args[0] {
 			case "garden":
@@ -114,6 +129,21 @@ func NewTargetCmd(targetReader TargetReader, targetWriter TargetWriter, configRe
 				if err != nil {
 					return err
 				}
+			case "server":
+				if len(args) != 2 || args[1] == "" {
+					return errors.New("command must be in the format: target server NAME")
+				}
+				if !isValidURI(args[1]) {
+					fmt.Println("the server name must be a valid uri")
+					os.Exit(2)
+				}
+				serverWrapper(configReader, args[1], kubeconfigReader)
+				argStr := []string{"garden", pgarden}
+				err := gardenWrapper(targetReader, targetWriter, configReader, ioStreams, argStr)
+				if err != nil {
+					return err
+				}
+
 			default:
 				target := targetReader.ReadTarget(pathTarget)
 				if len(target.Stack()) < 1 {
@@ -220,7 +250,7 @@ func NewTargetCmd(targetReader TargetReader, targetWriter TargetWriter, configRe
 			}
 			return nil
 		},
-		ValidArgs: []string{"project", "garden", "seed", "shoot", "namespace"},
+		ValidArgs: []string{"project", "garden", "seed", "shoot", "namespace", "server"},
 	}
 
 	cmd.PersistentFlags().StringVarP(&pgarden, "garden", "g", "", "garden name")
@@ -228,6 +258,7 @@ func NewTargetCmd(targetReader TargetReader, targetWriter TargetWriter, configRe
 	cmd.PersistentFlags().StringVarP(&pseed, "seed", "s", "", "seed name")
 	cmd.PersistentFlags().StringVarP(&pshoot, "shoot", "t", "", "shoot name")
 	cmd.PersistentFlags().StringVarP(&pnamespace, "namespace", "n", "", "namespace name")
+	cmd.PersistentFlags().StringVarP(&pserver, "server", "r", "", "server name")
 
 	return cmd
 }
@@ -737,6 +768,143 @@ func gardenWrapper(targetReader TargetReader, targetWriter TargetWriter, configR
 		}
 	}
 	return nil
+}
+
+func serverWrapper(reader ConfigReader, serverName string, kubeconfigReader KubeconfigReader) {
+	config := reader.ReadConfig(pathGardenConfig)
+
+	for _, garden := range config.GardenClusters {
+		kc := garden.KubeConfig
+		if _, err := os.Stat(kc); os.IsNotExist(err) {
+			continue
+		}
+		svr := getServerValueFromKubeconfig(kc, kubeconfigReader)
+		equal, err := isServerEquals(serverName, svr)
+		if err != nil {
+			continue // skip error
+		}
+		if equal {
+			pgarden = garden.Name
+		}
+	}
+
+	if pgarden == "" {
+		fmt.Println("a garden could not be matched for the provided server address:", serverName)
+		os.Exit(2)
+	}
+
+}
+
+func isServerEquals(server1 string, server2 string) (bool, error) {
+	ips1, err := getIps(server1)
+	if err != nil {
+		return false, err
+	}
+
+	ips2, err := getIps(server2)
+	if err != nil {
+		return false, err
+	}
+
+	ipMatches := ipMatches(ips1, ips2)
+
+	port1, err := getPortForHost(server1)
+	if err != nil {
+		return false, err
+	}
+
+	port2, err := getPortForHost(server2)
+	if err != nil {
+		return false, err
+	}
+
+	return ipMatches && port1 == port2, nil
+}
+
+func getPortForHost(host string) (string, error) {
+	u, _ := url.ParseRequestURI(host)
+	if !hasPort(u.Host) {
+		if u.Scheme != "https" {
+			return "80", nil // assume http default port
+		}
+		return "443", nil
+	}
+	_, port, err := net.SplitHostPort(u.Host)
+	if err != nil {
+		return "", err
+	}
+	return port, nil
+}
+
+// returns true if at least one ip of ips1 is equal to an ip of ips2
+func ipMatches(ips1 []net.IP, ips2 []net.IP) bool {
+	for _, ip1 := range ips1 {
+		for _, ip2 := range ips2 {
+			if ip1.Equal(ip2) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func getIps(input string) ([]net.IP, error) {
+	ip := net.ParseIP(input)
+	if isIP := ip != nil; !isIP {
+		u, _ := url.ParseRequestURI(input)
+		host, err := getHostWithoutPort(u.Host)
+		if err != nil {
+			return nil, err
+		}
+
+		ips, err := net.LookupIP(host)
+		if err != nil {
+			return nil, err
+		}
+		return ips, nil
+	}
+	return []net.IP{ip}, nil
+}
+
+func hasPort(input string) bool {
+	// The port starts after the last colon.
+	i := strings.LastIndex(input, ":")
+	return i > 0
+}
+
+func getHostWithoutPort(input string) (string, error) {
+	if !hasPort(input) {
+		return input, nil
+	}
+
+	host, _, err := net.SplitHostPort(input)
+	if err != nil {
+		return "", err
+	}
+	return host, nil
+}
+
+func isValidURI(input string) bool {
+	_, err := url.ParseRequestURI(input)
+	return err == nil
+}
+
+func getServerValueFromKubeconfig(kubeconfigPath string, kubeconfigReader KubeconfigReader) string {
+	if strings.Contains(kubeconfigPath, "~") {
+		kubeconfigPath = filepath.Clean(filepath.Join(HomeDir(), strings.Replace(kubeconfigPath, "~", "", 1)))
+	}
+	kubeconfig, err := kubeconfigReader.ReadKubeconfig(kubeconfigPath)
+	checkError(err)
+	clientConfig, err := clientcmd.NewClientConfigFromBytes(kubeconfig)
+	checkError(err)
+	rawConfig, err := clientConfig.RawConfig()
+	checkError(err)
+	if err := ValidateClientConfig(rawConfig); err != nil {
+		checkError(err)
+	}
+	config, err := clientConfig.ClientConfig()
+	checkError(err)
+	return config.Host
 }
 
 func projectWrapper(targetReader TargetReader, targetWriter TargetWriter, configReader ConfigReader, ioStreams IOStreams, args []string) error {
