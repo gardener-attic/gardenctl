@@ -541,17 +541,17 @@ func logsTf() {
 
 // logsInfra prints the logfiles of tf infra job
 func logsInfra() {
-	logsTerraform("infra.tf-job")
+	logsTerraform("infra.tf")
 }
 
 // logsDNS prints the logfiles of tf dns job
 func logsDNS() {
-	logsTerraform("dns.tf-job")
+	logsTerraform("dns.tf")
 }
 
 // logsIngress prints the logfiles of tf ingress job
 func logsIngress() {
-	logsTerraform("ingress.tf-job")
+	logsTerraform("ingress.tf")
 }
 
 type logFlags struct {
