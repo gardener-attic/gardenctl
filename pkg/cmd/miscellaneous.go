@@ -22,7 +22,6 @@ import (
 	"io"
 	"io/ioutil"
 	"os"
-	"path/filepath"
 	"strconv"
 	"strings"
 
@@ -88,11 +87,7 @@ func clientToTarget(target TargetKind) (*k8s.Clientset, error) {
 			if target == TargetKindSeed || target == TargetKindShoot {
 				kubeconfig = flag.String("kubeconfig", getKubeConfigOfCurrentTarget(), "(optional) absolute path to the kubeconfig file")
 			} else {
-				if strings.Contains(getGardenKubeConfig(), "~") {
-					pathToKubeconfig = filepath.Clean(filepath.Join(HomeDir(), strings.Replace(getGardenKubeConfig(), "~", "", 1)))
-				} else {
-					pathToKubeconfig = getGardenKubeConfig()
-				}
+				pathToKubeconfig = TidyKubeconfigWithHomeDir(getGardenKubeConfig())
 				kubeconfig = flag.String("kubeconfig", pathToKubeconfig, "(optional) absolute path to the kubeconfig file")
 			}
 		} else {

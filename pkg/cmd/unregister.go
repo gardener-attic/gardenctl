@@ -112,9 +112,7 @@ func NewUnregisterCmd() *cobra.Command {
 				GetGardenConfig(pathGardenConfig, &gardenConfig)
 				for _, cluster := range gardenConfig.GardenClusters {
 					gardenKubeConfig := cluster.KubeConfig
-					if strings.Contains(gardenKubeConfig, "~") {
-						gardenKubeConfig = filepath.Clean(filepath.Join(HomeDir(), strings.Replace(gardenKubeConfig, "~", "", 1)))
-					}
+					gardenKubeConfig = TidyKubeconfigWithHomeDir(gardenKubeConfig)
 					config, err := clientcmd.BuildConfigFromFlags("", gardenKubeConfig)
 					checkError(err)
 					clientset, err := k8s.NewForConfig(config)
