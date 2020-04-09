@@ -19,6 +19,7 @@ import (
 	"io/ioutil"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 
 	gardencorev1beta1 "github.com/gardener/gardener/pkg/apis/core/v1beta1"
@@ -217,4 +218,12 @@ func FetchShootFromTarget(target TargetInterface) (*gardencorev1beta1.Shoot, err
 	}
 
 	return shoot, nil
+}
+
+//TidyKubeconfigWithHomeDir check if kubeconfig path contains ~, replace ~ with user home dir
+func TidyKubeconfigWithHomeDir(pathToKubeconfig string) string {
+	if strings.Contains(pathToKubeconfig, "~") {
+		pathToKubeconfig = filepath.Clean(filepath.Join(HomeDir(), strings.Replace(pathToKubeconfig, "~", "", 1)))
+	}
+	return pathToKubeconfig
 }

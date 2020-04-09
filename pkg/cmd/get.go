@@ -20,7 +20,6 @@ import (
 	"errors"
 	"fmt"
 	"path/filepath"
-	"strings"
 
 	gardencorev1beta1 "github.com/gardener/gardener/pkg/apis/core/v1beta1"
 	yaml2 "github.com/ghodss/yaml"
@@ -160,9 +159,7 @@ func getGarden(name string, configReader ConfigReader, targetReader TargetReader
 	for index, garden := range config.GardenClusters {
 		if garden.Name == name {
 			pathToKubeconfig := config.GardenClusters[index].KubeConfig
-			if strings.Contains(pathToKubeconfig, "~") {
-				pathToKubeconfig = filepath.Clean(filepath.Join(HomeDir(), strings.Replace(pathToKubeconfig, "~", "", 1)))
-			}
+			pathToKubeconfig = TidyKubeconfigWithHomeDir(pathToKubeconfig)
 			kubeconfig, err := kubeconfigReader.ReadKubeconfig(pathToKubeconfig)
 			if err != nil {
 				return err
