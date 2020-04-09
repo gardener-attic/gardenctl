@@ -68,7 +68,7 @@ func NewLogsCmd() *cobra.Command {
 }
 
 func validateArgs(args []string) {
-	if len(args) < 1 || len(args) > 2 {
+	if len(args) < 1 || len(args) > 3 {
 		fmt.Println("Command must be in the format: logs (gardener-apiserver|gardener-controller-manager|gardener-dashboard|api|scheduler|controller-manager|etcd-operator|etcd-main[etcd backup-restore]|etcd-events[etcd backup-restore]|addon-manager|vpn-seed|vpn-shoot|machine-controller-manager|kubernetes-dashboard|prometheus|grafana|alertmanager|tf (infra|dns|ingress)|cluster-autoscaler flags(--elasticsearch|--tail|--since|--since-time|--timestamps)")
 		os.Exit(2)
 	}
@@ -156,17 +156,22 @@ func runCommand(args []string) {
 	case "cluster-autoscaler":
 		logsClusterAutoscaler()
 	case "tf":
-		if len(args) == 1 {
-			logsTf()
+		if len(args) == 1 || len(args) < 3 {
+			logsTfHelp()
 			break
 		}
+
+		var prefixName string = (args[02])
 		switch args[1] {
 		case "infra":
-			logsInfra()
+			str := prefixName + ".infra.tf"
+			logsInfra(str)
 		case "dns":
-			logsDNS()
+			str := prefixName + ".dns.tf"
+			logsDNS(str)
 		case "ingress":
-			logsIngress()
+			str := prefixName + ".ingress.tf"
+			logsIngress(str)
 		default:
 			fmt.Println("Command must be in the format: logs (gardener-apiserver|gardener-controller-manager|gardener-dashboard|api|scheduler|controller-manager|etcd-operator|etcd-main[etcd backup-restore]|etcd-events[etcd backup-restore]|addon-manager|vpn-seed|vpn-shoot|auto-node-repair|kubernetes-dashboard|prometheus|grafana|alertmanager|tf (infra|dns|ingress)|cluster-autoscaler)")
 		}
@@ -535,23 +540,23 @@ func logsTerraform(toMatch string) {
 }
 
 // logsTf prints the logfiles of tf job
-func logsTf() {
-	logsTerraform("tf-job")
+func logsTfHelp() {
+	fmt.Println("Command must be in the format: logs tf (infra|dns|ingress) shoot name")
 }
 
 // logsInfra prints the logfiles of tf infra job
-func logsInfra() {
-	logsTerraform("infra.tf")
+func logsInfra(str string) {
+	logsTerraform(str)
 }
 
 // logsDNS prints the logfiles of tf dns job
-func logsDNS() {
-	logsTerraform("dns.tf")
+func logsDNS(str string) {
+	logsTerraform(str)
 }
 
 // logsIngress prints the logfiles of tf ingress job
-func logsIngress() {
-	logsTerraform("ingress.tf")
+func logsIngress(str string) {
+	logsTerraform(str)
 }
 
 type logFlags struct {
