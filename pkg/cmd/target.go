@@ -649,11 +649,7 @@ func getKubeConfigOfClusterType(clusterType TargetKind) (pathToKubeconfig string
 	gardenName := target.Stack()[0].Name
 	switch clusterType {
 	case TargetKindGarden:
-		if strings.Contains(getGardenKubeConfig(), "~") {
-			pathToKubeconfig = filepath.Clean(filepath.Join(HomeDir(), strings.Replace(getGardenKubeConfig(), "~", "", 1)))
-		} else {
-			pathToKubeconfig = getGardenKubeConfig()
-		}
+		pathToKubeconfig = TidyKubeconfigWithHomeDir(getGardenKubeConfig())
 	case TargetKindSeed:
 		if target.Target[1].Kind == "seed" {
 			pathToKubeconfig = filepath.Join(pathGardenHome, "cache", gardenName, "seeds", target.Target[1].Name, "kubeconfig.yaml")
@@ -694,11 +690,7 @@ func getKubeConfigOfCurrentTarget() (pathToKubeconfig string) {
 
 	gardenName := target.Stack()[0].Name
 	if len(target.Target) == 1 {
-		if strings.Contains(getGardenKubeConfig(), "~") {
-			pathToKubeconfig = filepath.Clean(filepath.Join(HomeDir(), strings.Replace(getGardenKubeConfig(), "~", "", 1)))
-		} else {
-			pathToKubeconfig = getGardenKubeConfig()
-		}
+		pathToKubeconfig = TidyKubeconfigWithHomeDir(getGardenKubeConfig())
 	} else if (len(target.Target) == 2) && (target.Target[1].Kind != "project") {
 		pathToKubeconfig = filepath.Join(pathGardenHome, "cache", gardenName, "seeds", target.Target[1].Name, "kubeconfig.yaml")
 	} else if (len(target.Target) == 2) && (target.Target[1].Kind == "project") {
@@ -775,9 +767,7 @@ func serverWrapper(reader ConfigReader, serverName string, kubeconfigReader Kube
 
 	for _, garden := range config.GardenClusters {
 		kc := garden.KubeConfig
-		if strings.Contains(kc, "~") {
-			kc = filepath.Clean(filepath.Join(HomeDir(), strings.Replace(kc, "~", "", 1)))
-		}
+		kc = TidyKubeconfigWithHomeDir(kc)
 		if _, err := os.Stat(kc); os.IsNotExist(err) {
 			continue
 		}
