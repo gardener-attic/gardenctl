@@ -153,7 +153,7 @@ Targets represent a hierarchical structure of resources. On top, there is/are th
 `gardenctl logs etcd-main --elasticsearch`
 - Show last 100 logs from elasticsearch from the last 2 hours  
 `gardenctl logs etcd-main --elasticsearch --since=2h --tail=100`
-- Show logs from seed nodes 
+- Show logs from seed nodes  
 `gardenctl target -g garden-name -s seed-name`  
 `gardenctl logs tf infra shoot-name`
 - Show logs from shoot nodes  
