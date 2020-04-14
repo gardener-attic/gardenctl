@@ -765,15 +765,22 @@ func gardenWrapper(targetReader TargetReader, targetWriter TargetWriter, configR
 func serverWrapper(reader ConfigReader, serverName string, kubeconfigReader KubeconfigReader) {
 	config := reader.ReadConfig(pathGardenConfig)
 
+	errors := map[string]error{}
 	for _, garden := range config.GardenClusters {
 		kc := garden.KubeConfig
 		kc = TidyKubeconfigWithHomeDir(kc)
 		if _, err := os.Stat(kc); os.IsNotExist(err) {
+			errors[kc] = err
 			continue
 		}
-		svr := getServerValueFromKubeconfig(kc, kubeconfigReader)
+		svr, err := getServerValueFromKubeconfig(kc, kubeconfigReader)
+		if err != nil {
+			errors[kc] = err
+			continue // skip error
+		}
 		equal, err := isServerEquals(serverName, svr)
 		if err != nil {
+			errors[kc] = err
 			continue // skip error
 		}
 		if equal {
@@ -782,6 +789,9 @@ func serverWrapper(reader ConfigReader, serverName string, kubeconfigReader Kube
 	}
 
 	if pgarden == "" {
+		for kc, err := range errors {
+			fmt.Printf("Warning: matching kubeconfig file %s failed with: %s\n", kc, err)
+		}
 		fmt.Println("a garden could not be matched for the provided server address:", serverName)
 		os.Exit(2)
 	}
@@ -882,19 +892,27 @@ func isValidURI(input string) bool {
 	return err == nil
 }
 
-func getServerValueFromKubeconfig(kubeconfigPath string, kubeconfigReader KubeconfigReader) string {
+func getServerValueFromKubeconfig(kubeconfigPath string, kubeconfigReader KubeconfigReader) (string, error) {
 	kubeconfig, err := kubeconfigReader.ReadKubeconfig(kubeconfigPath)
-	checkError(err)
+	if err != nil {
+		return "", err
+	}
 	clientConfig, err := clientcmd.NewClientConfigFromBytes(kubeconfig)
-	checkError(err)
+	if err != nil {
+		return "", err
+	}
 	rawConfig, err := clientConfig.RawConfig()
-	checkError(err)
+	if err != nil {
+		return "", err
+	}
 	if err := ValidateClientConfig(rawConfig); err != nil {
-		checkError(err)
+		return "", err
 	}
 	config, err := clientConfig.ClientConfig()
-	checkError(err)
-	return config.Host
+	if err != nil {
+		return "", err
+	}
+	return config.Host, nil
 }
 
 func projectWrapper(targetReader TargetReader, targetWriter TargetWriter, configReader ConfigReader, ioStreams IOStreams, args []string) error {
