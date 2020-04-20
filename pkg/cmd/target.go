@@ -22,6 +22,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 
 	gardencorev1beta1 "github.com/gardener/gardener/pkg/apis/core/v1beta1"
@@ -38,22 +39,23 @@ import (
 const ProjectName = "project.garden.sapcloud.io/name"
 
 var (
-	pgarden    string
-	pproject   string
-	pseed      string
-	pshoot     string
-	pnamespace string
-	pserver    string
+	pgarden       string
+	pproject      string
+	pseed         string
+	pshoot        string
+	pnamespace    string
+	pserver       string
+	pdashboardurl string
 )
 
 // NewTargetCmd returns a new target command.
 func NewTargetCmd(targetReader TargetReader, targetWriter TargetWriter, configReader ConfigReader, ioStreams IOStreams, kubeconfigReader KubeconfigReader) *cobra.Command {
 	cmd := &cobra.Command{
-		Use:          "target <project|garden|seed|shoot|namespace|server> NAME",
+		Use:          "target <project|garden|seed|shoot|namespace|server|dashboardUrl> NAME",
 		Short:        "Set scope for next operations",
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if pgarden != "" || pproject != "" || pseed != "" || pshoot != "" || pnamespace != "" || pserver != "" {
+			if pgarden != "" || pproject != "" || pseed != "" || pshoot != "" || pnamespace != "" || pserver != "" || pdashboardurl != "" {
 				var arguments []string
 				if pgarden != "" && pserver != "" {
 					fmt.Println("server and garden values can't be specified at same time.")
@@ -95,10 +97,15 @@ func NewTargetCmd(targetReader TargetReader, targetWriter TargetWriter, configRe
 					err := namespaceWrapper(targetReader, targetWriter, pnamespace)
 					checkError(err)
 				}
+
+				if pdashboardurl != "" {
+					err := urlWrapper(targetReader, targetWriter, configReader, ioStreams, pdashboardurl)
+					checkError(err)
+				}
 				return nil
 			}
-			if len(args) < 1 && pgarden == "" && pproject == "" && pseed == "" && pshoot == "" && pnamespace == "" && pserver == "" || len(args) > 5 {
-				return errors.New("command must be in the format: target <project|garden|seed|shoot|namespace|server> NAME")
+			if len(args) < 1 && pgarden == "" && pproject == "" && pseed == "" && pshoot == "" && pnamespace == "" && pserver == "" && pdashboardurl == "" || len(args) > 5 {
+				return errors.New("command must be in the format: target <project|garden|seed|shoot|namespace|server|dashboardUrl> NAME")
 			}
 			switch args[0] {
 			case "garden":
@@ -140,6 +147,19 @@ func NewTargetCmd(targetReader TargetReader, targetWriter TargetWriter, configRe
 				serverWrapper(configReader, args[1], kubeconfigReader)
 				argStr := []string{"garden", pgarden}
 				err := gardenWrapper(targetReader, targetWriter, configReader, ioStreams, argStr)
+				if err != nil {
+					return err
+				}
+			case "dashboardUrl":
+				if len(args) != 2 || args[1] == "" {
+					return errors.New("command must be in the format: target dashboardUrl URL")
+				}
+				if !isValidURI(args[1]) {
+					fmt.Println("the server name must be a valid uri")
+					os.Exit(2)
+				}
+
+				err := urlWrapper(targetReader, targetWriter, configReader, ioStreams, args[1])
 				if err != nil {
 					return err
 				}
@@ -250,7 +270,7 @@ func NewTargetCmd(targetReader TargetReader, targetWriter TargetWriter, configRe
 			}
 			return nil
 		},
-		ValidArgs: []string{"project", "garden", "seed", "shoot", "namespace", "server"},
+		ValidArgs: []string{"project", "garden", "seed", "shoot", "namespace", "server", "dashboardUrl"},
 	}
 
 	cmd.PersistentFlags().StringVarP(&pgarden, "garden", "g", "", "garden name")
@@ -259,6 +279,7 @@ func NewTargetCmd(targetReader TargetReader, targetWriter TargetWriter, configRe
 	cmd.PersistentFlags().StringVarP(&pshoot, "shoot", "t", "", "shoot name")
 	cmd.PersistentFlags().StringVarP(&pnamespace, "namespace", "n", "", "namespace name")
 	cmd.PersistentFlags().StringVarP(&pserver, "server", "r", "", "server name")
+	cmd.PersistentFlags().StringVarP(&pdashboardurl, "dashboardUrl", "u", "", "dashboard url name")
 
 	return cmd
 }
@@ -343,6 +364,22 @@ func resolveNameGarden(reader ConfigReader, name string) (matches []string) {
 		}
 	}
 	return matches
+}
+
+// resolveGardenNameFromURL resolve garden name from provided dashboard URL
+func resolveGardenNameFromURL(reader ConfigReader, dashboardURL string) string {
+	config := reader.ReadConfig(pathGardenConfig)
+	gardenName := ""
+	for _, garden := range config.GardenClusters {
+		if strings.Contains(garden.DashboardURL, dashboardURL) {
+			gardenName = garden.Name
+		}
+	}
+	if gardenName == "" {
+		fmt.Println("a garden could not be matched for the provided dashboard url")
+		os.Exit(2)
+	}
+	return gardenName
 }
 
 // targetGarden targets kubeconfig file of garden cluster
@@ -1016,6 +1053,39 @@ func namespaceWrapper(targetReader TargetReader, targetWriter TargetWriter, kube
 		return err
 	}
 	fmt.Println(string(out))
+
+	return nil
+}
+
+//urlWrapper function target garden and shoot in dashboard url
+
+func urlWrapper(targetReader TargetReader, targetWriter TargetWriter, configReader ConfigReader, ioStreams IOStreams, urlString string) error {
+	shootName := ""
+	u, err := url.Parse(urlString)
+	if err != nil {
+		fmt.Println("the URL enter is invalid")
+		os.Exit(2)
+	}
+
+	gardenName := resolveGardenNameFromURL(configReader, u.Host)
+
+	re, _ := regexp.Compile(`\/namespace\/[a-z0-9-]*\/shoots\/([a-z0-9-]*)`)
+	values := re.FindStringSubmatch(u.Path)
+	if len(values) > 0 {
+		shootName = values[1]
+	}
+
+	if shootName == "" {
+		fmt.Println("could not get an valid shoot name from provided URL")
+		os.Exit(2)
+	}
+
+	gardenArgs := []string{"garden", gardenName}
+	err = gardenWrapper(targetReader, targetWriter, configReader, ioStreams, gardenArgs)
+	checkError(err)
+	shootArgs := []string{"shoot", shootName}
+	err = shootWrapper(targetReader, targetWriter, configReader, ioStreams, shootArgs)
+	checkError(err)
 
 	return nil
 }
