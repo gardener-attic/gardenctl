@@ -133,8 +133,9 @@ type GardenClusters struct {
 
 // GardenClusterMeta contains name and path to kubeconfig of gardencluster
 type GardenClusterMeta struct {
-	Name       string `yaml:"name,omitempty" json:"name,omitempty"`
-	KubeConfig string `yaml:"kubeConfig,omitempty" json:"kubeConfig,omitempty"`
+	Name         string `yaml:"name,omitempty" json:"name,omitempty"`
+	KubeConfig   string `yaml:"kubeConfig,omitempty" json:"kubeConfig,omitempty"`
+	DashboardURL string `yaml:"dashboardUrl,omitempty" json:"dashboardUrl,omitempty"`
 }
 
 // Issues contains all projects with issues
