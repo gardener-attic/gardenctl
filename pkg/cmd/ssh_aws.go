@@ -232,13 +232,34 @@ func (a *AwsInstanceAttribute) createBastionHostInstance() {
 	_, err = tmpfile.Write(a.UserData)
 	checkError(err)
 
-	// create bastion host
-	arguments := "aws " + fmt.Sprintf("ec2 run-instances --iam-instance-profile Name=%s --image-id %s --count 1 --instance-type t2.nano --key-name %s --security-group-ids %s --subnet-id %s --associate-public-ip-address --user-data file://%s --tag-specifications ResourceType=instance,Tags=[{Key=Name,Value=%s},{Key=component,Value=gardenctl}] ResourceType=volume,Tags=[{Key=component,Value=gardenctl}]", a.BastionInstanceName, a.ImageID, a.KeyName, a.BastionSecurityGroupID, a.SubnetID, tmpfile.Name(), a.BastionInstanceName)
+	instanceType := ""
+	arguments := fmt.Sprintf("aws ec2 describe-instance-type-offerings --query %s", "InstanceTypeOfferings[].InstanceType")
 	captured := capture()
 	operate("aws", arguments)
 	capturedOutput, err := captured()
 	checkError(err)
 	words := strings.Fields(capturedOutput)
+	for _, value := range words {
+		if value == "t2.nano" {
+			instanceType = "t2.nano"
+		}
+	}
+	if instanceType == "" {
+		for _, value := range words {
+			if strings.HasPrefix(value, "t") {
+				instanceType = value
+				break
+			}
+		}
+	}
+
+	// create bastion host
+	arguments = "aws " + fmt.Sprintf("ec2 run-instances --iam-instance-profile Name=%s --image-id %s --count 1 --instance-type %s --key-name %s --security-group-ids %s --subnet-id %s --associate-public-ip-address --user-data file://%s --tag-specifications ResourceType=instance,Tags=[{Key=Name,Value=%s},{Key=component,Value=gardenctl}] ResourceType=volume,Tags=[{Key=component,Value=gardenctl}]", a.BastionInstanceName, a.ImageID, instanceType, a.KeyName, a.BastionSecurityGroupID, a.SubnetID, tmpfile.Name(), a.BastionInstanceName)
+	captured = capture()
+	operate("aws", arguments)
+	capturedOutput, err = captured()
+	checkError(err)
+	words = strings.Fields(capturedOutput)
 	for _, value := range words {
 		if strings.HasPrefix(value, "i-") {
 			a.BastionInstanceID = value
