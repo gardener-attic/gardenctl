@@ -44,7 +44,7 @@ func NewSSHCmd(reader TargetReader, ioStreams IOStreams) *cobra.Command {
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			target := reader.ReadTarget(pathTarget)
-			if len(target.Stack()) < 3 {
+			if !CheckShootIsTargeted(target) {
 				return errors.New("no shoot targeted")
 			}
 

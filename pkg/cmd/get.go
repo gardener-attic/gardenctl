@@ -236,7 +236,7 @@ func getSeed(name string, targetReader TargetReader, ioStreams IOStreams) error 
 func getShoot(name string, targetReader TargetReader, kubeconfigWriter KubeconfigWriter, ioStreams IOStreams) error {
 	target := targetReader.ReadTarget(pathTarget)
 	if name == "" {
-		if len(target.Stack()) < 3 {
+		if !CheckShootIsTargeted(target) {
 			return errors.New("no shoot targeted")
 		}
 	} else if name != "" {

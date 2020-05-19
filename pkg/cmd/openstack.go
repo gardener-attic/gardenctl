@@ -28,7 +28,7 @@ func NewOpenstackCmd(targetReader TargetReader) *cobra.Command {
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			target := targetReader.ReadTarget(pathTarget)
-			if len(target.Stack()) < 3 {
+			if !CheckShootIsTargeted(target) {
 				return errors.New("no shoot targeted")
 			}
 
