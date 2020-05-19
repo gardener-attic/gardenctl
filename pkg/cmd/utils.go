@@ -227,3 +227,11 @@ func TidyKubeconfigWithHomeDir(pathToKubeconfig string) string {
 	}
 	return pathToKubeconfig
 }
+
+//CheckShootIsTargeted check if current target has shoot targeted
+func CheckShootIsTargeted(target TargetInterface) bool {
+	if (len(target.Stack()) < 3) || (target.Stack()[len(target.Stack())-1].Kind == "namespace" && target.Stack()[len(target.Stack())-2].Kind != "shoot") {
+		return false
+	}
+	return true
+}
