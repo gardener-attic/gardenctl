@@ -278,20 +278,12 @@ func (a *AwsInstanceAttribute) createBastionHostInstance() {
 		checkError(err)
 		fmt.Println("Instance State: " + capturedOutput)
 		if strings.Trim(capturedOutput, "\n") == "running" {
-			arguments := "aws ec2 describe-instances --instance-id " + a.BastionInstanceID
+			arguments := "aws ec2 describe-instances --instance-id " + a.BastionInstanceID + " --query Reservations[*].Instances[*].PublicIpAddress"
 			captured := capture()
 			operate("aws", arguments)
 			capturedOutput, err := captured()
-			words := strings.Fields(capturedOutput)
 			checkError(err)
-			ip := ""
-			for _, value := range words {
-				if isIP(value) && !strings.HasPrefix(value, "10.") {
-					ip = value
-					break
-				}
-			}
-			a.BastionIP = ip
+			a.BastionIP = capturedOutput
 			return
 		}
 		time.Sleep(time.Second * 2)
