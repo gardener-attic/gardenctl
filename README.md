@@ -13,6 +13,13 @@
 
 `gardenctl` is shipped for mac and linux in a binary format. 
 
+Option 1: Install the latest release with [Homebrew](https://brew.sh/) (macOS and Linux) as follows:
+```sh
+brew install gardener/tap/gardenctl
+```
+
+Option 2: Manually download and install from [gardenctl releases](https://github.com/gardener/gardenctl/releases) as follows:
+
 1. Download the latest release:
 ```bash
 curl -LO https://github.com/gardener/gardenctl/releases/download/$(curl -s https://raw.githubusercontent.com/gardener/gardenctl/master/LATEST)/gardenctl-darwin-amd64
