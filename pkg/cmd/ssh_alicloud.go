@@ -21,7 +21,6 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
-	"path/filepath"
 	"strings"
 	"time"
 
@@ -69,7 +68,7 @@ type AliyunInstanceTypeSpec struct {
 }
 
 // sshToAlicloudNode provides cmds to ssh to alicloud via a public ip and clean it up afterwards.
-func sshToAlicloudNode(nodeName, path, user string, sshPublicKey []byte) {
+func sshToAlicloudNode(nodeName, path, user, pathSSKeypair string, sshPublicKey []byte) {
 	// Check if this is a cleanup command
 	if nodeName == "cleanup" {
 		cleanupAliyunBastionHost()
@@ -80,15 +79,6 @@ func sshToAlicloudNode(nodeName, path, user string, sshPublicKey []byte) {
 	configureAliyunCLI()
 	var target Target
 	ReadTarget(pathTarget, &target)
-	gardenName := target.Stack()[0].Name
-	aliyunPathSSHKey := ""
-	if target.Target[1].Kind == "project" {
-		aliyunPathSSHKey = filepath.Join(pathGardenHome, "cache", gardenName, "projects", target.Target[1].Name, target.Target[2].Name, ".aliyun") + string(filepath.Separator)
-	} else if target.Target[1].Kind == "seed" {
-		aliyunPathSSHKey = filepath.Join(pathGardenHome, "cache", gardenName, "seeds", target.Target[1].Name, target.Target[2].Name, ".aliyun") + string(filepath.Separator)
-	}
-	err := ExecCmd(nil, "mv key "+aliyunPathSSHKey, false)
-	checkError(err)
 	fmt.Println("Aliyun cli configured.")
 
 	a := &AliyunInstanceAttribute{}
@@ -115,7 +105,7 @@ func sshToAlicloudNode(nodeName, path, user string, sshPublicKey []byte) {
 	a.startBastionHostInstance()
 	fmt.Println("Bastion host started.")
 
-	sshCmd := "ssh -i " + aliyunPathSSHKey + "key -o \"ProxyCommand ssh -i " + aliyunPathSSHKey + "key -o StrictHostKeyChecking=no -W " + a.PrivateIP + ":22 " + a.BastionSSHUser + "@" + a.BastionIP + "\" " + user + "@" + a.PrivateIP + " -o StrictHostKeyChecking=no"
+	sshCmd := "ssh -i " + pathSSKeypair + "key -o \"ProxyCommand ssh -i " + pathSSKeypair + "key -o StrictHostKeyChecking=no -W " + a.PrivateIP + ":22 " + a.BastionSSHUser + "@" + a.BastionIP + "\" " + user + "@" + a.PrivateIP + " -o StrictHostKeyChecking=no"
 	cmd := exec.Command("bash", "-c", sshCmd)
 	cmd.Stdout = os.Stdout
 	cmd.Stdin = os.Stdin
