@@ -1,0 +1,17 @@
+name: gardenctl-updater
+
+on:
+  release:
+    types:
+      - published
+jobs:
+  update-hombrew-tap:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Send update with latest versions to gardener/homebrew-tap
+        run: |
+          echo '{"event_type": "update", "client_payload": { "tag": "'"$GITHUB_REF"'", "sha": "'"$GITHUB_SHA"'"}}'
+          curl -X POST https://api.github.com/repos/gardener/homebrew-tap/dispatches \
+          -H 'Accept: application/vnd.github.everest-preview+json' \
+          -u ${{ secrets.ACCESS_TOKEN }} \
+          --data '{"event_type": "update", "client_payload": { "tag": "'"$GITHUB_REF"'", "sha": "'"$GITHUB_SHA"'"}}'
