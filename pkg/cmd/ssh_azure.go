@@ -27,6 +27,7 @@ import (
 
 	"github.com/Masterminds/semver"
 	"github.com/jmoiron/jsonq"
+	"gopkg.in/yaml.v2"
 )
 
 // AzureInstanceAttribute stores all the critical information for creating an instance on Azure.
@@ -88,8 +89,14 @@ func (a *AzureInstanceAttribute) fetchAzureAttributes(nodeName, path string) {
 	a.ShootName = getShootClusterName()
 	a.NamePublicIP = "sshIP"
 	var err error
-	terraformVersion, err := ExecCmdReturnOutput("bash", "-c", "cat "+path+"  | jq -r .terraform_version")
+
+	yamlData, err := ioutil.ReadFile(path)
 	checkError(err)
+	var yamlOut map[string]interface{}
+	err = yaml.Unmarshal([]byte(yamlData), &yamlOut)
+	checkError(err)
+
+	terraformVersion := yamlOut["terraform_version"].(string)
 	c, err := semver.NewConstraint(">= 0.12.0")
 	if err != nil {
 		fmt.Println("Handle version not being parsable.")
@@ -101,15 +108,11 @@ func (a *AzureInstanceAttribute) fetchAzureAttributes(nodeName, path string) {
 		os.Exit(2)
 	}
 	if c.Check(v) {
-		a.RescourceGroupName, err = ExecCmdReturnOutput("bash", "-c", "cat "+path+" | jq -r '.outputs.resourceGroupName.value'")
-		checkError(err)
-		a.SecurityGroupName, err = ExecCmdReturnOutput("bash", "-c", "cat "+path+" | jq -r '.outputs.securityGroupName.value'")
-		checkError(err)
+		a.RescourceGroupName = yamlOut["outputs"].(map[interface{}]interface{})["resourceGroupName"].(map[interface{}]interface{})["value"].(string)
+		a.SecurityGroupName  = yamlOut["outputs"].(map[interface{}]interface{})["securityGroupName"].(map[interface{}]interface{})["value"].(string)
 	} else {
-		a.RescourceGroupName, err = ExecCmdReturnOutput("bash", "-c", "cat "+path+" | jq -r '.modules[].outputs.resourceGroupName.value'")
-		checkError(err)
-		a.SecurityGroupName, err = ExecCmdReturnOutput("bash", "-c", "cat "+path+" | jq -r '.modules[].outputs.securityGroupName.value'")
-		checkError(err)
+		a.RescourceGroupName = yamlOut["modules"].(map[interface{}]interface{})["outputs"].(map[interface{}]interface{})["resourceGroupName"].(map[interface{}]interface{})["value"].(string)
+		a.SecurityGroupName  = yamlOut["modules"].(map[interface{}]interface{})["outputs"].(map[interface{}]interface{})["securityGroupName"].(map[interface{}]interface{})["value"].(string)
 	}
 
 	targetMachineName, err := fetchAzureMachineNameByNodeName(a.ShootName, nodeName)
@@ -128,12 +131,20 @@ func (a *AzureInstanceAttribute) fetchAzureAttributes(nodeName, path string) {
 	tmpfile, err := ioutil.TempFile(os.TempDir(), "lbs.json")
 	checkError(err)
 	defer os.Remove(tmpfile.Name())
+
 	_, err = tmpfile.Write([]byte(skuType))
 	checkError(err)
-	skuType, err = ExecCmdReturnOutput("bash", "-c", "cat "+tmpfile.Name()+" | jq .[0].sku.name")
-	a.SkuType = strings.Trim(skuType, "\"")
-	fmt.Println(a.SkuType)
+
+	jsonData, err := ioutil.ReadFile(tmpfile.Name())
 	checkError(err)
+
+	var jsonOut []interface{}
+	err = json.Unmarshal([]byte(jsonData), &jsonOut)
+	checkError(err)
+
+	a.SkuType = jsonOut[0].(map[string]interface{})["sku"].(map[string]interface{})["name"].(string)
+	a.SkuType = strings.Trim(a.SkuType, "\"")
+	fmt.Println(a.SkuType)
 }
 
 // addNsgRule creates a nsg rule to open the ssh port
