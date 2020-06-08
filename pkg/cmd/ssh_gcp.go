@@ -28,6 +28,7 @@ import (
 	mcmv1alpha1 "github.com/gardener/machine-controller-manager/pkg/client/clientset/versioned"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/tools/clientcmd"
+	"gopkg.in/yaml.v2"
 )
 
 // GCPInstanceAttribute stores all the critical information for creating an instance on GCP.
@@ -88,8 +89,14 @@ func (g *GCPInstanceAttribute) fetchGCPAttributes(nodeName, path string) {
 	g.Subnetwork = g.ShootName + "-nodes"
 	g.Zone, err = fetchZone(g.ShootName, nodeName)
 	checkError(err)
-	terraformVersion, err := ExecCmdReturnOutput("bash", "-c", "cat "+path+"  | jq -r .terraform_version")
+
+	yamlData, err := ioutil.ReadFile(path)
 	checkError(err)
+	var yamlOut map[string]interface{}
+	err = yaml.Unmarshal([]byte(yamlData), &yamlOut)
+	checkError(err)
+
+	terraformVersion := yamlOut["terraform_version"].(string)
 	c, err := semver.NewConstraint(">= 0.12.0")
 	if err != nil {
 		fmt.Println("Handle version not being parsable.")
@@ -102,11 +109,9 @@ func (g *GCPInstanceAttribute) fetchGCPAttributes(nodeName, path string) {
 	}
 	if c.Check(v) {
 		fmt.Println(path)
-		g.VpcName, err = ExecCmdReturnOutput("bash", "-c", "cat "+path+" | jq -r '.outputs.vpc_name.value'")
-		checkError(err)
+		g.VpcName = yamlOut["outputs"].(map[interface{}]interface{})["vpc_name"].(map[interface{}]interface{})["value"].(string)
 	} else {
-		g.VpcName, err = ExecCmdReturnOutput("bash", "-c", "cat "+path+" | jq -r '.modules[].outputs.vpc_name.value'")
-		checkError(err)
+		g.VpcName = yamlOut["modules"].(map[interface{}]interface{})["outputs"].(map[interface{}]interface{})["vpc_name"].(map[interface{}]interface{})["value"].(string)
 	}
 	g.UserData = getBastionUserData(g.SSHPublicKey)
 }

@@ -28,6 +28,7 @@ import (
 	mcmv1alpha1 "github.com/gardener/machine-controller-manager/pkg/client/clientset/versioned"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/tools/clientcmd"
+	"gopkg.in/yaml.v2"
 )
 
 // AwsInstanceAttribute stores all the critical information for creating an instance on AWS.
@@ -88,8 +89,14 @@ func sshToAWSNode(nodeName, path, user, pathSSKeypair string, sshPublicKey []byt
 // fetchAwsAttributes gets all the needed attributes for creating bastion host and its security group with given <nodeName>.
 func (a *AwsInstanceAttribute) fetchAwsAttributes(nodeName, path string) {
 	a.ShootName = getShootClusterName()
-	terraformVersion, err := ExecCmdReturnOutput("bash", "-c", "cat "+path+"  | jq -r .terraform_version")
+
+	yamlData, err := ioutil.ReadFile(path)
 	checkError(err)
+	var yamlOut map[string]interface{}
+	err = yaml.Unmarshal([]byte(yamlData), &yamlOut)
+	checkError(err)
+
+	terraformVersion := yamlOut["terraform_version"].(string)
 	c, err := semver.NewConstraint(">= 0.12.0")
 	if err != nil {
 		fmt.Println("Handle version not being parsable.")
@@ -101,19 +108,11 @@ func (a *AwsInstanceAttribute) fetchAwsAttributes(nodeName, path string) {
 		os.Exit(2)
 	}
 	if c.Check(v) {
-		subnetID, err := ExecCmdReturnOutput("bash", "-c", "cat "+path+" | jq -r .outputs.subnet_public_utility_z0.value")
-		checkError(err)
-		a.SubnetID = subnetID
-		vpcID, err := ExecCmdReturnOutput("bash", "-c", "cat "+path+" | jq -r .outputs.vpc_id.value")
-		checkError(err)
-		a.VpcID = vpcID
+		a.SubnetID = yamlOut["outputs"].(map[interface{}]interface{})["subnet_public_utility_z0"].(map[interface{}]interface{})["value"].(string)
+		a.VpcID    = yamlOut["outputs"].(map[interface{}]interface{})["vpc_id"].(map[interface{}]interface{})["value"].(string)
 	} else {
-		subnetID, err := ExecCmdReturnOutput("bash", "-c", "cat "+path+" | jq -r .modules[].outputs.subnet_public_utility_z0.value")
-		checkError(err)
-		a.SubnetID = subnetID
-		vpcID, err := ExecCmdReturnOutput("bash", "-c", "cat "+path+" | jq -r .modules[].outputs.vpc_id.value")
-		checkError(err)
-		a.VpcID = vpcID
+		a.SubnetID = yamlOut["modules"].(map[interface{}]interface{})["outputs"].(map[interface{}]interface{})["subnet_public_utility_z0"].(map[interface{}]interface{})["value"].(string)
+		a.VpcID    = yamlOut["modules"].(map[interface{}]interface{})["outputs"].(map[interface{}]interface{})["vpc_id"].(map[interface{}]interface{})["value"].(string)
 	}
 	a.SecurityGroupName = a.ShootName + "-nodes"
 	a.getSecurityGroupID()
