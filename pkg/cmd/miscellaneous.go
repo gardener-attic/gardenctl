@@ -255,13 +255,21 @@ func getEmail(githubURL string) string {
 	if githubURL == "" {
 		return "null"
 	}
-	res, err := ExecCmdReturnOutput("bash", "-c", "curl -ks "+githubURL+"/api/v3/users/"+os.Getenv("USER")+" | jq -r .email")
+	res, err := ExecCmdReturnOutput("bash", "-c", "curl -ks "+githubURL+"/api/v3/users/"+os.Getenv("USER"))
+	checkError(err)
+
 	if err != nil {
 		fmt.Println("Cmd was unsuccessful")
 		os.Exit(2)
 	}
-	fmt.Printf("used GitHub email: %s\n", res)
-	return res
+
+	var yamlOut map[string]interface{}
+	err = yaml.Unmarshal([]byte(res), &yamlOut)
+	checkError(err)
+
+	githubEmail := yamlOut["email"].(string)
+	fmt.Printf("used GitHub email: %s\n", githubEmail)
+	return githubEmail
 }
 
 func getEmailFromConfig() string {
