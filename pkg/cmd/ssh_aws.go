@@ -26,9 +26,9 @@ import (
 	"github.com/Masterminds/semver"
 	"github.com/gardener/machine-controller-manager/pkg/apis/machine/v1alpha1"
 	mcmv1alpha1 "github.com/gardener/machine-controller-manager/pkg/client/clientset/versioned"
+	"gopkg.in/yaml.v2"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/tools/clientcmd"
-	"gopkg.in/yaml.v2"
 )
 
 // AwsInstanceAttribute stores all the critical information for creating an instance on AWS.
@@ -109,10 +109,10 @@ func (a *AwsInstanceAttribute) fetchAwsAttributes(nodeName, path string) {
 	}
 	if c.Check(v) {
 		a.SubnetID = yamlOut["outputs"].(map[interface{}]interface{})["subnet_public_utility_z0"].(map[interface{}]interface{})["value"].(string)
-		a.VpcID    = yamlOut["outputs"].(map[interface{}]interface{})["vpc_id"].(map[interface{}]interface{})["value"].(string)
+		a.VpcID = yamlOut["outputs"].(map[interface{}]interface{})["vpc_id"].(map[interface{}]interface{})["value"].(string)
 	} else {
 		a.SubnetID = yamlOut["modules"].(map[interface{}]interface{})["outputs"].(map[interface{}]interface{})["subnet_public_utility_z0"].(map[interface{}]interface{})["value"].(string)
-		a.VpcID    = yamlOut["modules"].(map[interface{}]interface{})["outputs"].(map[interface{}]interface{})["vpc_id"].(map[interface{}]interface{})["value"].(string)
+		a.VpcID = yamlOut["modules"].(map[interface{}]interface{})["outputs"].(map[interface{}]interface{})["vpc_id"].(map[interface{}]interface{})["value"].(string)
 	}
 	a.SecurityGroupName = a.ShootName + "-nodes"
 	a.getSecurityGroupID()
@@ -208,7 +208,7 @@ func (a *AwsInstanceAttribute) getBastionSecurityGroupID() {
 // getBastionHostInstance gets bastion host instance if it exists
 func (a *AwsInstanceAttribute) getBastionHostInstance() {
 	var err error
-	arguments := fmt.Sprintf("aws ec2 describe-instances --filter Name=vpc-id,Values=%s Name=tag:Name,Values=%s Name=instance-state-name,Values=running --query Reservations[*].Instances[].{Instance:InstanceId} --output text", a.VpcID, a.BastionSecurityGroupName)
+	arguments := fmt.Sprintf("aws ec2 describe-instances --filter Name=vpc-id,Values=%s Name=tag:Name,Values=%s Name=instance-state-name,Values=running --query Reservations[*].Instances[].{Instance:InstanceId} --output text", a.VpcID, a.BastionInstanceName)
 	captured := capture()
 	operate("aws", arguments)
 	a.BastionInstanceID, err = captured()
