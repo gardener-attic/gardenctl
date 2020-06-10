@@ -62,7 +62,7 @@ func operate(provider, arguments string) {
 	shootList, err := gardenClientset.CoreV1beta1().Shoots("").List(metav1.ListOptions{})
 	checkError(err)
 	for _, shoot := range shootList.Items {
-		if shoot.Name == target.Target[2].Name {
+		if shoot.Name == target.Target[2].Name && strings.HasSuffix(shoot.Namespace, target.Target[1].Name) {
 			secretBindingName := shoot.Spec.SecretBindingName
 			region = shoot.Spec.Region
 			namespaceSecretBinding := shoot.Namespace
