@@ -179,6 +179,8 @@ func operate(provider, arguments string) {
 		clientID := []byte(secret.Data["clientID"])
 		clientSecret := []byte(secret.Data["clientSecret"])
 		tenantID := []byte(secret.Data["tenantID"])
+		subscriptionID := []byte(secret.Data["subscriptionID"])
+
 		if !cachevar {
 			azurePathCredentials := ""
 			if target.Target[1].Kind == "project" {
@@ -200,7 +202,7 @@ func operate(provider, arguments string) {
 		if err != nil {
 			os.Exit(2)
 		}
-		err = ExecCmd(nil, arguments, false)
+		err = ExecCmd(nil, arguments+" --subscription "+string(subscriptionID[:]), false)
 		if err != nil {
 			os.Exit(2)
 		}
