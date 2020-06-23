@@ -263,7 +263,7 @@ func getIssues(target TargetInterface, ioStreams IOStreams) {
 				}
 				statusMeta.LastOperation = lastOperationMeta
 				im.Health = state
-				im.Project = item.Namespace
+				im.Project = getProjectForNamespace(item.Namespace)
 				im.Seed = *item.Spec.SeedName
 				im.Shoot = item.Name
 				im.Status = statusMeta
@@ -273,7 +273,7 @@ func getIssues(target TargetInterface, ioStreams IOStreams) {
 			lastOperationMeta.Description = "Not processed (!)"
 			statusMeta.LastOperation = lastOperationMeta
 			im.Status = statusMeta
-			im.Project = item.Namespace
+			im.Project = getProjectForNamespace(item.Namespace)
 			im.Seed = *item.Spec.SeedName
 			im.Shoot = item.Name
 			im.Health = "None"
@@ -354,4 +354,21 @@ func getNamespaces(ioStreams IOStreams) {
 		fmt.Println(err)
 	}
 	fmt.Println(string(out))
+}
+
+// getProjectForNamespace returns name of project for a shoot
+func getProjectForNamespace(namespace string) string {
+	var err error
+	Client, err = clientToTarget("garden")
+	checkError(err)
+	gardenClientset, err := gardencoreclientset.NewForConfig(NewConfigFromBytes(*kubeconfig))
+	checkError(err)
+	projectList, err := gardenClientset.CoreV1beta1().Projects().List(metav1.ListOptions{})
+	checkError(err)
+	for _, project := range projectList.Items {
+		if namespace == *project.Spec.Namespace {
+			return project.Name
+		}
+	}
+	return ""
 }
