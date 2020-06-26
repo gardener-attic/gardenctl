@@ -21,6 +21,7 @@ package kubernetes
 import (
 	"fmt"
 
+	gardenerv1beta1 "github.com/gardener/gardener/pkg/client/core/clientset/versioned/typed/core/v1beta1"
 	discovery "k8s.io/client-go/discovery"
 	admissionregistrationv1 "k8s.io/client-go/kubernetes/typed/admissionregistration/v1"
 	admissionregistrationv1beta1 "k8s.io/client-go/kubernetes/typed/admissionregistration/v1beta1"
@@ -104,6 +105,7 @@ type Interface interface {
 	StorageV1beta1() storagev1beta1.StorageV1beta1Interface
 	StorageV1() storagev1.StorageV1Interface
 	StorageV1alpha1() storagev1alpha1.StorageV1alpha1Interface
+	GardenerV1beta1() gardenerv1beta1.CoreV1beta1Interface
 }
 
 // Clientset contains the clients for groups. Each group has exactly one
@@ -148,6 +150,7 @@ type Clientset struct {
 	storageV1beta1               *storagev1beta1.StorageV1beta1Client
 	storageV1                    *storagev1.StorageV1Client
 	storageV1alpha1              *storagev1alpha1.StorageV1alpha1Client
+	gardenerv1beta1              *gardenerv1beta1.CoreV1beta1Client
 }
 
 // AdmissionregistrationV1 retrieves the AdmissionregistrationV1Client
@@ -340,6 +343,11 @@ func (c *Clientset) StorageV1alpha1() storagev1alpha1.StorageV1alpha1Interface {
 	return c.storageV1alpha1
 }
 
+// GardenerV1beta1 retrieves the GardenerV1beta1Client
+func (c *Clientset) GardenerV1beta1() gardenerv1beta1.CoreV1beta1Interface {
+	return c.gardenerv1beta1
+}
+
 // Discovery retrieves the DiscoveryClient
 func (c *Clientset) Discovery() discovery.DiscoveryInterface {
 	if c == nil {
@@ -513,6 +521,10 @@ func NewForConfig(c *rest.Config) (*Clientset, error) {
 	if err != nil {
 		return nil, err
 	}
+	cs.gardenerv1beta1, err = gardenerv1beta1.NewForConfig(&configShallowCopy)
+	if err != nil {
+		return nil, err
+	}
 
 	cs.DiscoveryClient, err = discovery.NewDiscoveryClientForConfig(&configShallowCopy)
 	if err != nil {
@@ -609,6 +621,7 @@ func New(c rest.Interface) *Clientset {
 	cs.storageV1beta1 = storagev1beta1.New(c)
 	cs.storageV1 = storagev1.New(c)
 	cs.storageV1alpha1 = storagev1alpha1.New(c)
+	cs.gardenerv1beta1 = gardenerv1beta1.New(c)
 
 	cs.DiscoveryClient = discovery.NewDiscoveryClient(c)
 	return &cs
