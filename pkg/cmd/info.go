@@ -19,6 +19,8 @@ import (
 	"fmt"
 	"sort"
 
+	"text/tabwriter"
+
 	"github.com/spf13/cobra"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -27,7 +29,7 @@ import (
 func NewInfoCmd(targetReader TargetReader, ioStreams IOStreams) *cobra.Command {
 	return &cobra.Command{
 		Use:          "info",
-		Short:        "Get landscape informations",
+		Short:        "Get landscape informations and shows the number of shoots per seed",
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			target := targetReader.ReadTarget(pathTarget)
@@ -73,17 +75,20 @@ func NewInfoCmd(targetReader TargetReader, ioStreams IOStreams) *cobra.Command {
 			sort.Strings(sortedSeeds)
 
 			fmt.Fprintf(ioStreams.Out, "Garden: %s\n", targetStack[0].Name)
-			fmt.Fprintf(ioStreams.Out, "Shoots:\n")
-			fmt.Fprintf(ioStreams.Out, "  active: %d\n", len(shootList.Items)-hibernatedShootsCount-unscheduled)
-			fmt.Fprintf(ioStreams.Out, "  hibernated: %d\n", hibernatedShootsCount)
-			fmt.Fprintf(ioStreams.Out, "  unscheduled: %d\n", unscheduled)
-			fmt.Fprintf(ioStreams.Out, "  total: %d\n\n", len(shootList.Items))
+
+			w := tabwriter.NewWriter(ioStreams.Out, 6, 0, 20, ' ', 0)
+			fmt.Fprintln(w, fmt.Sprintf("%s\t%s\t%s\t%s", "Seed", "Total", "Active", "Hibernated"))
+			fmt.Fprintln(w, fmt.Sprintf("%s\t%s\t%s\t%s", "----", "-----", "------", "----------"))
+
 			for _, seed := range sortedSeeds {
-				fmt.Fprintf(ioStreams.Out, "  %s:\n", seed)
-				fmt.Fprintf(ioStreams.Out, "    active: %d\n", totalShootsCountPerSeed[seed]-hibernatedShootsCountPerSeed[seed])
-				fmt.Fprintf(ioStreams.Out, "    hibernated: %d\n", hibernatedShootsCountPerSeed[seed])
-				fmt.Fprintf(ioStreams.Out, "    total: %d\n", totalShootsCountPerSeed[seed])
+				fmt.Fprintln(w, fmt.Sprintf("%s\t%d\t%d\t%d", seed, totalShootsCountPerSeed[seed], totalShootsCountPerSeed[seed]-hibernatedShootsCountPerSeed[seed], hibernatedShootsCountPerSeed[seed]))
 			}
+			fmt.Fprintln(w, fmt.Sprintf("%s\t%s\t%s\t%s", "----", "-----", "------", "----------"))
+			fmt.Fprintln(w, fmt.Sprintf("%s\t%d\t%d\t%d", "TOTAL", len(shootList.Items), len(shootList.Items)-hibernatedShootsCount-unscheduled, hibernatedShootsCount))
+			fmt.Fprintln(w, fmt.Sprintf("%s\t%d", "Unscheduled", unscheduled))
+
+			fmt.Fprintln(w)
+			w.Flush()
 
 			return nil
 		},
