@@ -5,6 +5,14 @@ gardenctl:
     traits:
       version:
         inject_effective_version: true
+      publish:
+        dockerimages:
+          gardenctl:
+            image: 'eu.gcr.io/gardener-project/gardener/gardenctl'
+            registry: 'gcr-readwrite'
+            inputs:
+              repos:
+                source: ~
     steps:
       check:
         image: 'golang:1.13'
