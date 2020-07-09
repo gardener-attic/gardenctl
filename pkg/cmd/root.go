@@ -139,6 +139,7 @@ func init() {
 		NewTargetCmd(targetReader, targetWriter, configReader, ioStreams, kubeconfigReader),
 		NewDropCmd(targetReader, targetWriter, ioStreams),
 		NewGetCmd(targetReader, configReader, kubeconfigReader, kubeconfigWriter, ioStreams))
+	RootCmd.AddCommand(NewTerraformCmd(targetReader))
 	RootCmd.AddCommand(NewDownloadCmd(), NewShowCmd(), NewLogsCmd())
 	RootCmd.AddCommand(NewRegisterCmd(), NewUnregisterCmd())
 	RootCmd.AddCommand(NewCompletionCmd())
