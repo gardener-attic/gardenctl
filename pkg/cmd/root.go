@@ -146,6 +146,7 @@ func init() {
 	RootCmd.AddCommand(NewSSHCmd(targetReader, ioStreams))
 	RootCmd.AddCommand(NewKubectlCmd(), NewKaCmd(), NewKsCmd(), NewKgCmd(), NewKnCmd())
 	RootCmd.AddCommand(NewKubectxCmd())
+	RootCmd.AddCommand(NewTerraformCmd(targetReader))
 	RootCmd.AddCommand(NewAliyunCmd(targetReader), NewAwsCmd(targetReader), NewAzCmd(targetReader), NewGcloudCmd(targetReader), NewOpenstackCmd(targetReader))
 	RootCmd.AddCommand(NewInfoCmd(targetReader, ioStreams))
 	RootCmd.AddCommand(NewVersionCmd(), NewUpdateCheckCmd())
