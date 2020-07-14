@@ -175,10 +175,10 @@ func ValidateClientConfig(config clientcmdapi.Config) error {
 			return fmt.Errorf("token files are not supported (user %q), these are the valid fields: %+v", user, validFields)
 		case authInfo.Impersonate != "" || len(authInfo.ImpersonateGroups) > 0:
 			return fmt.Errorf("impersonation is not supported, these are the valid fields: %+v", validFields)
-		case authInfo.AuthProvider != nil && len(authInfo.AuthProvider.Config) > 0:
-			return fmt.Errorf("auth provider configurations are not supported (user %q), these are the valid fields: %+v", user, validFields)
-		case authInfo.Exec != nil:
-			return fmt.Errorf("exec configurations are not supported (user %q), these are the valid fields: %+v", user, validFields)
+		// case authInfo.AuthProvider != nil && len(authInfo.AuthProvider.Config) > 0:
+		// 	return fmt.Errorf("auth provider configurations are not supported (user %q), these are the valid fields: %+v", user, validFields)
+		// case authInfo.Exec != nil:
+		// 	return fmt.Errorf("exec configurations are not supported (user %q), these are the valid fields: %+v", user, validFields)
 		}
 	}
 
