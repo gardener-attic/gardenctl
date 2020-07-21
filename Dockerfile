@@ -13,7 +13,7 @@
 # limitations under the License.
 
 # build gardenctl binary
-FROM golang:1.14.6
+FROM golang:1.14
 RUN mkdir -p /go/src/github.com/gardener/gardenctl &&\
     cd /go/src/github.com/gardener &&\
     git clone https://github.com/gardener/gardenctl.git &&\
