@@ -17,11 +17,11 @@ gardenctl:
                 source: ~
     steps:
       check:
-        image: 'golang:1.13'
+        image: 'golang:1.14'
       test:
-        image: 'golang:1.13'
+        image: 'golang:1.14'
       build:
-        image: 'golang:1.13'
+        image: 'golang:1.14'
   jobs:
     head-update:
       traits:
