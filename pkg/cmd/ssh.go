@@ -83,6 +83,7 @@ func NewSSHCmd(reader TargetReader, ioStreams IOStreams) *cobra.Command {
 			checkError(err)
 			fmt.Println("Downloaded id_rsa key")
 
+			fmt.Println("Check Public IP")
 			myPublicIP := getPublicIP()
 
 			sshPublicKey := sshKeypairSecret.Data["id_rsa.pub"]
