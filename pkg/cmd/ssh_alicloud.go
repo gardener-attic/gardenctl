@@ -51,6 +51,7 @@ type AliyunInstanceAttribute struct {
 	PrivateIP                string
 	BastionIP                string
 	BastionSSHUser           string
+	MyPublicIP               string
 }
 
 // AliyunInstanceTypeSpec stores all the critical information for choosing a instance type on Alicloud.
@@ -68,7 +69,7 @@ type AliyunInstanceTypeSpec struct {
 }
 
 // sshToAlicloudNode provides cmds to ssh to alicloud via a public ip and clean it up afterwards.
-func sshToAlicloudNode(nodeName, path, user, pathSSKeypair string, sshPublicKey []byte) {
+func sshToAlicloudNode(nodeName, path, user, pathSSKeypair string, sshPublicKey []byte, myPublicIP string) {
 	// Check if this is a cleanup command
 	if nodeName == "cleanup" {
 		cleanupAliyunBastionHost()
@@ -82,7 +83,7 @@ func sshToAlicloudNode(nodeName, path, user, pathSSKeypair string, sshPublicKey 
 	fmt.Println("Aliyun cli configured.")
 
 	a := &AliyunInstanceAttribute{}
-
+	a.MyPublicIP = myPublicIP + "/32"
 	fmt.Println("")
 	fmt.Println("(2/5) Fetching data from target shoot cluster")
 	a.fetchAttributes(nodeName)
@@ -198,9 +199,7 @@ func (a *AliyunInstanceAttribute) createBastionHostSecurityGroup() {
 			os.Exit(2)
 		}
 		fmt.Println("Configuring bastion host security group rules...")
-		_, err = ExecCmdReturnOutput("bash", "-c", "aliyun ecs AuthorizeSecurityGroup --Policy Accept --NicType intranet --Priority 1 --SourceCidrIp 0.0.0.0/0 --PortRange 22/22 --IpProtocol udp --SecurityGroupId="+a.BastionSecurityGroupID)
-		checkError(err)
-		_, err = ExecCmdReturnOutput("bash", "-c", "aliyun ecs AuthorizeSecurityGroup --Policy Accept --NicType intranet --Priority 1 --SourceCidrIp 0.0.0.0/0 --PortRange 22/22 --IpProtocol tcp --SecurityGroupId="+a.BastionSecurityGroupID)
+		_, err = ExecCmdReturnOutput("bash", "-c", "aliyun ecs AuthorizeSecurityGroup --Policy Accept --NicType intranet --Priority 1 --SourceCidrIp %s --PortRange 22/22 --IpProtocol tcp --SecurityGroupId="+a.BastionSecurityGroupID, a.MyPublicIP)
 		checkError(err)
 		time.Sleep(time.Second * 10)
 		fmt.Println("Bastion host security group rules configured.")

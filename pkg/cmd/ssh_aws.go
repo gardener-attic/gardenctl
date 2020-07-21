@@ -48,12 +48,14 @@ type AwsInstanceAttribute struct {
 	BastionSecurityGroupName string
 	UserData                 []byte
 	SSHPublicKey             []byte
+	MyPublicIP               string
 }
 
 // sshToAWSNode provides cmds to ssh to aws via a bastions host and clean it up afterwards
-func sshToAWSNode(nodeName, path, user, pathSSKeypair string, sshPublicKey []byte) {
+func sshToAWSNode(nodeName, path, user, pathSSKeypair string, sshPublicKey []byte, myPublicIP string) {
 	a := &AwsInstanceAttribute{}
 	a.SSHPublicKey = sshPublicKey
+	a.MyPublicIP = myPublicIP + "/32"
 	fmt.Println("")
 
 	fmt.Println("(1/4) Fetching data from target shoot cluster")
@@ -172,7 +174,7 @@ func (a *AwsInstanceAttribute) createBastionHostSecurityGroup() {
 	a.BastionSecurityGroupID = strings.Trim((capturedOutput), "\n")
 	arguments = fmt.Sprintf("aws ec2 create-tags --resources %s  --tags Key=component,Value=gardenctl", a.BastionSecurityGroupID)
 	operate("aws", arguments)
-	arguments = fmt.Sprintf("aws ec2 authorize-security-group-ingress --group-id %s --protocol tcp --port 22 --cidr 0.0.0.0/0", a.BastionSecurityGroupID)
+	arguments = fmt.Sprintf("aws ec2 authorize-security-group-ingress --group-id %s --protocol tcp --port 22 --cidr %s", a.BastionSecurityGroupID, a.MyPublicIP)
 	operate("aws", arguments)
 	fmt.Println("Bastion host security group set up.")
 
