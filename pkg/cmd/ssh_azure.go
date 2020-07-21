@@ -39,11 +39,13 @@ type AzureInstanceAttribute struct {
 	RescourceGroupName string
 	SecurityGroupName  string
 	SkuType            string
+	MyPublicIP         string
 }
 
 // sshToAZNode provides cmds to ssh to az via a node name and clean it up afterwards
-func sshToAZNode(nodeName, path, user, pathSSKeypair string, sshPublicKey []byte) {
+func sshToAZNode(nodeName, path, user, pathSSKeypair string, sshPublicKey []byte, myPublicIP string) {
 	a := &AzureInstanceAttribute{}
+	a.MyPublicIP = myPublicIP + "/32"
 	fmt.Println("")
 	fmt.Println("(1/4) Fetching data from target shoot cluster")
 	a.fetchAzureAttributes(nodeName, path)
@@ -109,10 +111,10 @@ func (a *AzureInstanceAttribute) fetchAzureAttributes(nodeName, path string) {
 	}
 	if c.Check(v) {
 		a.RescourceGroupName = yamlOut["outputs"].(map[interface{}]interface{})["resourceGroupName"].(map[interface{}]interface{})["value"].(string)
-		a.SecurityGroupName  = yamlOut["outputs"].(map[interface{}]interface{})["securityGroupName"].(map[interface{}]interface{})["value"].(string)
+		a.SecurityGroupName = yamlOut["outputs"].(map[interface{}]interface{})["securityGroupName"].(map[interface{}]interface{})["value"].(string)
 	} else {
 		a.RescourceGroupName = yamlOut["modules"].(map[interface{}]interface{})["outputs"].(map[interface{}]interface{})["resourceGroupName"].(map[interface{}]interface{})["value"].(string)
-		a.SecurityGroupName  = yamlOut["modules"].(map[interface{}]interface{})["outputs"].(map[interface{}]interface{})["securityGroupName"].(map[interface{}]interface{})["value"].(string)
+		a.SecurityGroupName = yamlOut["modules"].(map[interface{}]interface{})["outputs"].(map[interface{}]interface{})["securityGroupName"].(map[interface{}]interface{})["value"].(string)
 	}
 
 	targetMachineName, err := fetchAzureMachineNameByNodeName(a.ShootName, nodeName)
@@ -150,7 +152,7 @@ func (a *AzureInstanceAttribute) fetchAzureAttributes(nodeName, path string) {
 // addNsgRule creates a nsg rule to open the ssh port
 func (a *AzureInstanceAttribute) addNsgRule() {
 	fmt.Println("Opened SSH Port.")
-	arguments := fmt.Sprintf("az network nsg rule create --resource-group %s  --nsg-name %s --name ssh --protocol Tcp --priority 1000 --destination-port-range 22", a.RescourceGroupName, a.SecurityGroupName)
+	arguments := fmt.Sprintf("az network nsg rule create --resource-group %s  --nsg-name %s --name ssh --protocol Tcp --priority 1000 --source-address-prefixes %s --destination-port-range 22", a.RescourceGroupName, a.SecurityGroupName, a.MyPublicIP)
 	operate("az", arguments)
 }
 

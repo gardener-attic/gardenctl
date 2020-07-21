@@ -323,3 +323,9 @@ func isIP(word string) bool {
 	}
 	return true
 }
+
+func getPublicIP() string {
+	result, err := ExecCmdReturnOutput("bash", "-c", "curl ifconfig.me")
+	checkError(err)
+	return result
+}

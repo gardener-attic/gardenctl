@@ -83,17 +83,19 @@ func NewSSHCmd(reader TargetReader, ioStreams IOStreams) *cobra.Command {
 			checkError(err)
 			fmt.Println("Downloaded id_rsa key")
 
+			myPublicIP := getPublicIP()
+
 			sshPublicKey := sshKeypairSecret.Data["id_rsa.pub"]
 			infraType := shoot.Spec.Provider.Type
 			switch infraType {
 			case "aws":
-				sshToAWSNode(args[0], path, user, pathSSKeypair, sshPublicKey)
+				sshToAWSNode(args[0], path, user, pathSSKeypair, sshPublicKey, myPublicIP)
 			case "gcp":
-				sshToGCPNode(args[0], path, user, pathSSKeypair, sshPublicKey)
+				sshToGCPNode(args[0], path, user, pathSSKeypair, sshPublicKey, myPublicIP)
 			case "azure":
-				sshToAZNode(args[0], path, user, pathSSKeypair, sshPublicKey)
+				sshToAZNode(args[0], path, user, pathSSKeypair, sshPublicKey, myPublicIP)
 			case "alicloud":
-				sshToAlicloudNode(args[0], path, user, pathSSKeypair, sshPublicKey)
+				sshToAlicloudNode(args[0], path, user, pathSSKeypair, sshPublicKey, myPublicIP)
 			case "openstack":
 			default:
 				return fmt.Errorf("infrastructure type %q not found", infraType)
