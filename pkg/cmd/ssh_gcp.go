@@ -26,9 +26,9 @@ import (
 	"github.com/Masterminds/semver"
 	"github.com/gardener/machine-controller-manager/pkg/apis/machine/v1alpha1"
 	mcmv1alpha1 "github.com/gardener/machine-controller-manager/pkg/client/clientset/versioned"
+	"gopkg.in/yaml.v2"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/tools/clientcmd"
-	"gopkg.in/yaml.v2"
 )
 
 // GCPInstanceAttribute stores all the critical information for creating an instance on GCP.
@@ -42,12 +42,14 @@ type GCPInstanceAttribute struct {
 	Zone             string
 	UserData         []byte
 	SSHPublicKey     []byte
+	MyPublicIP       string
 }
 
 // sshToGCPNode provides cmds to ssh to gcp via a public ip and clean it up afterwards
-func sshToGCPNode(nodeName, path, user, pathSSKeypair string, sshPublicKey []byte) {
+func sshToGCPNode(nodeName, path, user, pathSSKeypair string, sshPublicKey []byte, myPublicIP string) {
 	g := &GCPInstanceAttribute{}
 	g.SSHPublicKey = sshPublicKey
+	g.MyPublicIP = myPublicIP + "/32"
 	fmt.Println("")
 
 	fmt.Println("(1/4) Fetching data from target shoot cluster")
@@ -120,7 +122,7 @@ func (g *GCPInstanceAttribute) fetchGCPAttributes(nodeName, path string) {
 func (g *GCPInstanceAttribute) createBastionHostFirewallRule() {
 	var err error
 	fmt.Println("Add ssh rule")
-	arguments := "gcloud " + fmt.Sprintf("compute firewall-rules create %s --network %s --allow tcp:22,tcp:80,tcp:443", g.FirewallRuleName, g.ShootName)
+	arguments := "gcloud " + fmt.Sprintf("compute firewall-rules create %s --network %s --allow tcp:22 --source-ranges=%s", g.FirewallRuleName, g.ShootName, g.MyPublicIP)
 	captured := capture()
 	operate("gcp", arguments)
 	capturedOutput, err := captured()
