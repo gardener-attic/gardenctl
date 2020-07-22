@@ -70,9 +70,18 @@ sudo mv bin/darwin-amd64/gardenctl-darwin-amd64 /usr/local/bin/gardenctl
 
 `gardenctl` supports auto completion. This recommended feature is bound to `gardenctl` or the alias `g`. To configure it you can run:
 
+if you are using `bash`:
+
 ```bash
 echo "source <(gardenctl completion bash)" >> ~/.bashrc
 source ~/.bashrc
+```
+
+if you are using `zsh`:
+
+```bash
+echo "source <(gardenctl completion zsh)" >> ~/.zshrc
+source ~/.zshrc
 ```
 
 ### Via Dockerfile
