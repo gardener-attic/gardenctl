@@ -72,13 +72,27 @@ func sshToAWSNode(nodeName, path, user, pathSSKeypair string, sshPublicKey []byt
 	fmt.Println("(3/4) Creating bastion host")
 	a.createBastionHostInstance()
 
+	fmt.Println("Waiting SSH 22 port open")
+	attemptCnt := 0
+	for attemptCnt < 60 {
+		ncCmd := fmt.Sprintf("nc -rz -w 5 %s 22", a.BastionIP)
+		cmd := exec.Command("bash", "-c", ncCmd)
+		output, _ := cmd.CombinedOutput()
+		fmt.Println(" ")
+		if strings.Contains(string(output), "succeeded") {
+			break
+		}
+		time.Sleep(time.Second * 5)
+		attemptCnt++
+	}
+
 	bastionNode := user + "@" + a.BastionIP
 	node := user + "@" + nodeName
-	fmt.Println("Waiting 60 seconds until ports are open.")
-	time.Sleep(60 * time.Second)
 
+	fmt.Print("SSH " + bastionNode + " => " + node)
 	key := filepath.Join(pathSSKeypair, "key")
-	sshCmd := fmt.Sprintf("ssh -i " + key + " -o \"ProxyCommand ssh -W %%h:%%p -i " + key + " -o IdentitiesOnly=yes -o StrictHostKeyChecking=no " + bastionNode + "\" " + node + " -o IdentitiesOnly=yes -o StrictHostKeyChecking=no")
+
+	sshCmd := fmt.Sprintf("ssh -i " + key + "  -o ConnectionAttempts=3 -o \"ProxyCommand ssh -W %%h:%%p -i " + key + " -o IdentitiesOnly=yes -o StrictHostKeyChecking=no " + bastionNode + "\" " + node + " -o IdentitiesOnly=yes -o StrictHostKeyChecking=no")
 	cmd := exec.Command("bash", "-c", sshCmd)
 	cmd.Stdout = os.Stdout
 	cmd.Stdin = os.Stdin
@@ -161,7 +175,7 @@ func (a *AwsInstanceAttribute) createBastionHostSecurityGroup() {
 	// check if security group exists
 	a.getBastionSecurityGroupID()
 	if a.BastionSecurityGroupID != "" {
-		fmt.Println("Security Group exists, skipping creation.")
+		fmt.Println("Security Group exists " + a.BastionSecurityGroupID + " skipping creation.")
 		return
 	}
 
@@ -266,34 +280,22 @@ func (a *AwsInstanceAttribute) createBastionHostInstance() {
 			a.BastionInstanceID = value
 		}
 	}
-	fmt.Println("Bastion host instance created.")
+	fmt.Println("Bastion host instance " + a.BastionInstanceID + " Initializing.")
 	fmt.Println("")
 
-	// check if bastion host is up and running, timeout after 3 minutes
-	attemptCnt := 0
-	for attemptCnt < 60 {
-		arguments = "aws ec2 describe-instances --instance-id=" + a.BastionInstanceID + " --query Reservations[*].Instances[].[State.Name] --output text"
-		captured = capture()
-		operate("aws", arguments)
-		capturedOutput, err = captured()
-		checkError(err)
-		fmt.Println("Instance State: " + capturedOutput)
-		if strings.Trim(capturedOutput, "\n") == "running" {
-			arguments := "aws ec2 describe-instances --instance-id " + a.BastionInstanceID + " --query Reservations[*].Instances[*].PublicIpAddress"
-			captured := capture()
-			operate("aws", arguments)
-			capturedOutput, err := captured()
-			checkError(err)
-			a.BastionIP = capturedOutput
-			return
-		}
-		time.Sleep(time.Second * 2)
-		attemptCnt++
-	}
-	if attemptCnt == 90 {
-		fmt.Println("Bastion server instance timeout. Please try again.")
-		os.Exit(2)
-	}
+	// waiting instance running
+	arguments = "aws ec2 wait instance-running --instance-ids " + a.BastionInstanceID
+	operate("aws", arguments)
+	fmt.Println("Bastion host instance running.")
+
+	// fetch BastionInstanceID
+	arguments = "aws ec2 describe-instances --instance-id " + a.BastionInstanceID + " --query Reservations[*].Instances[*].PublicIpAddress"
+	captured = capture()
+	operate("aws", arguments)
+	capturedOutput, err = captured()
+	checkError(err)
+	a.BastionIP = strings.Trim(capturedOutput, "\n")
+
 }
 
 // getAWSMachineClasses returns machine classes for the cluster nodes
@@ -344,8 +346,11 @@ func (a *AwsInstanceAttribute) cleanupAwsBastionHost() {
 	// clean up bastion security group
 	fmt.Println("  (3/3) Clean up bastion host security group")
 	fmt.Println("")
-	fmt.Println("  Waiting 45 seconds until instance is deleted to remove all dependencies.")
-	time.Sleep(time.Second * 45)
+	arguments = "aws ec2 wait instance-terminated --instance-ids " + a.BastionInstanceID
+	captured = capture()
+	operate("aws", arguments)
+	_, err = captured()
+	checkError(err)
 	arguments = fmt.Sprintf("aws ec2 delete-security-group --group-id %s", a.BastionSecurityGroupID)
 	captured = capture()
 	operate("aws", arguments)
