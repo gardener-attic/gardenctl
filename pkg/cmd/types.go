@@ -133,9 +133,25 @@ type GardenClusters struct {
 
 // GardenClusterMeta contains name and path to kubeconfig of gardencluster
 type GardenClusterMeta struct {
-	Name         string `yaml:"name,omitempty" json:"name,omitempty"`
-	KubeConfig   string `yaml:"kubeConfig,omitempty" json:"kubeConfig,omitempty"`
-	DashboardURL string `yaml:"dashboardUrl,omitempty" json:"dashboardUrl,omitempty"`
+	Name               string              `yaml:"name,omitempty" json:"name,omitempty"`
+	KubeConfig         string              `yaml:"kubeConfig,omitempty" json:"kubeConfig,omitempty"`
+	DashboardURL       string              `yaml:"dashboardUrl,omitempty" json:"dashboardUrl,omitempty"`
+	AccessRestrictions []AccessRestriction `yaml:"accessRestrictions,omitempty" json:"accessRestrictions,omitempty"`
+}
+
+// AccessRestrictionsOption contains key / notifyIf / msg
+type AccessRestrictionsOption struct {
+	Key      string `yaml:"key,omitempty" json:"key,omitempty"`
+	NotifyIf bool   `yaml:"notifyIf,omitempty" json:"notifyIf,omitempty"`
+	Msg      string `yaml:"msg,omitempty" json:"msg,omitempty"`
+}
+
+// AccessRestriction contains key / notifyIf / msg / options
+type AccessRestriction struct {
+	Key      string                     `yaml:"key,omitempty" json:"key,omitempty"`
+	NotifyIf bool                       `yaml:"notifyIf,omitempty" json:"notifyIf,omitempty"`
+	Msg      string                     `yaml:"msg,omitempty" json:"msg,omitempty"`
+	Options  []AccessRestrictionsOption `yaml:"options,omitempty" json:"options,omitempty"`
 }
 
 // Issues contains all projects with issues

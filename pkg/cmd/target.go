@@ -23,6 +23,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 
 	gardencorev1beta1 "github.com/gardener/gardener/pkg/apis/core/v1beta1"
@@ -247,7 +248,7 @@ func NewTargetCmd(targetReader TargetReader, targetWriter TargetWriter, configRe
 				if len(shoots) == 0 {
 					fmt.Println("No match for " + args[0])
 				} else if len(shoots) == 1 {
-					targetShoot(targetWriter, shoots[0])
+					targetShoot(targetWriter, shoots[0], configReader)
 				} else if len(shoots) > 1 {
 					k8sClientToGarden, err := target.K8SClientToKind(TargetKindGarden)
 					checkError(err)
@@ -549,7 +550,7 @@ func resolveNameShoot(target TargetInterface, name string) []gardencorev1beta1.S
 }
 
 // targetShoot targets shoot cluster with project as default value in stack
-func targetShoot(targetWriter TargetWriter, shoot gardencorev1beta1.Shoot) {
+func targetShoot(targetWriter TargetWriter, shoot gardencorev1beta1.Shoot, reader ConfigReader) {
 	var target Target
 	ReadTarget(pathTarget, &target)
 
@@ -642,6 +643,11 @@ func targetShoot(targetWriter TargetWriter, shoot gardencorev1beta1.Shoot) {
 	var shootKubeconfigPath = filepath.Join(shootCacheDir, "kubeconfig.yaml")
 	err = ioutil.WriteFile(shootKubeconfigPath, shootKubeconfigSecret.Data["kubeconfig"], 0644)
 	checkError(err)
+
+	warningMsg := checkShootsRestriction(shoot, reader, gardenName)
+	if warningMsg != "" {
+		fmt.Println(warningMsg)
+	}
 
 	KUBECONFIG = shootKubeconfigPath
 	fmt.Println("Shoot:")
@@ -996,6 +1002,62 @@ func seedWrapper(targetReader TargetReader, targetWriter TargetWriter, configRea
 	return nil
 }
 
+//getAccessRestrictionsFromGardenConfig returns current accessRestrictions from garden config with given garden name
+func getAccessRestrictionsFromGardenConfig(reader ConfigReader, gardenName string) []AccessRestriction {
+	var ars = []AccessRestriction{}
+	config := reader.ReadConfig(pathGardenConfig)
+	for _, garden := range config.GardenClusters {
+		if garden.Name == gardenName && len(garden.AccessRestrictions) > 0 {
+			ars = garden.AccessRestrictions
+			break
+		}
+	}
+	return ars
+}
+
+//checkShootsRestriction returns warning message based on comparion between garden config and shoot lables/annotation
+func checkShootsRestriction(shoot gardencorev1beta1.Shoot, reader ConfigReader, gardenName string) string {
+	warningMsg := ""
+	var shootMatchLabels map[string]string
+	var shootAnnotations map[string]string
+	ars := getAccessRestrictionsFromGardenConfig(reader, gardenName)
+	if shoot.Spec.SeedSelector == nil || shoot.Spec.SeedSelector.MatchLabels == nil {
+		return warningMsg
+	}
+	shootMatchLabels = shoot.Spec.SeedSelector.MatchLabels
+	shootAnnotations = shoot.GetAnnotations()
+
+	if len(ars) == 0 {
+		return warningMsg
+	}
+
+	for _, ar := range ars {
+		if _, ok := shootMatchLabels[ar.Key]; !ok {
+			continue
+		}
+		if shootMatchLabels[ar.Key] != strconv.FormatBool(ar.NotifyIf) {
+			continue
+		}
+		warningMsg += ar.Msg
+		warningMsg += "\n"
+		//if upper level msg will not show, neither will lower level msg show
+		if len(ar.Options) == 0 {
+			continue
+		}
+		for _, option := range ar.Options {
+			if _, ok := shootAnnotations[option.Key]; !ok {
+				continue
+			}
+			if shootAnnotations[option.Key] == strconv.FormatBool(option.NotifyIf) {
+				warningMsg += option.Msg
+				warningMsg += "\n"
+			}
+		}
+	}
+
+	return warningMsg
+}
+
 func shootWrapper(targetReader TargetReader, targetWriter TargetWriter, configReader ConfigReader, ioStreams IOStreams, args []string) error {
 	if len(args) != 2 {
 		return errors.New("command must be in the format: target shoot NAME")
@@ -1010,7 +1072,7 @@ func shootWrapper(targetReader TargetReader, targetWriter TargetWriter, configRe
 	if len(shoots) == 0 {
 		return fmt.Errorf("no match for %q", args[1])
 	} else if len(shoots) == 1 {
-		targetShoot(targetWriter, shoots[0])
+		targetShoot(targetWriter, shoots[0], configReader)
 	} else if len(shoots) > 1 {
 		k8sClientToGarden, err := target.K8SClientToKind(TargetKindGarden)
 		checkError(err)
