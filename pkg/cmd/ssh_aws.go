@@ -72,7 +72,7 @@ func sshToAWSNode(nodeName, path, user, pathSSKeypair string, sshPublicKey []byt
 	fmt.Println("(3/4) Creating bastion host")
 	a.createBastionHostInstance()
 
-	fmt.Println("Waiting SSH 22 port open")
+	fmt.Println("Waiting SSH port open on Bastion")
 	attemptCnt := 0
 	for attemptCnt < 60 {
 		ncCmd := fmt.Sprintf("nc -rz -w 5 %s 22", a.BastionIP)
@@ -85,6 +85,7 @@ func sshToAWSNode(nodeName, path, user, pathSSKeypair string, sshPublicKey []byt
 		time.Sleep(time.Second * 5)
 		attemptCnt++
 	}
+	fmt.Println("Opened SSH Port on Bastion")
 
 	bastionNode := user + "@" + a.BastionIP
 	node := user + "@" + nodeName
@@ -92,7 +93,7 @@ func sshToAWSNode(nodeName, path, user, pathSSKeypair string, sshPublicKey []byt
 	fmt.Print("SSH " + bastionNode + " => " + node)
 	key := filepath.Join(pathSSKeypair, "key")
 
-	sshCmd := fmt.Sprintf("ssh -i " + key + "  -o ConnectionAttempts=3 -o \"ProxyCommand ssh -W %%h:%%p -i " + key + " -o IdentitiesOnly=yes -o StrictHostKeyChecking=no " + bastionNode + "\" " + node + " -o IdentitiesOnly=yes -o StrictHostKeyChecking=no")
+	sshCmd := fmt.Sprintf("ssh -i " + key + "  -o ConnectionAttempts=2 -o \"ProxyCommand ssh -W %%h:%%p -i " + key + " -o IdentitiesOnly=yes -o ConnectionAttempts=2 -o StrictHostKeyChecking=no " + bastionNode + "\" " + node + " -o IdentitiesOnly=yes -o StrictHostKeyChecking=no")
 	cmd := exec.Command("bash", "-c", sshCmd)
 	cmd.Stdout = os.Stdout
 	cmd.Stdin = os.Stdin
