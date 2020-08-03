@@ -23,6 +23,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/utils/pointer"
 )
 
 func addDefaultingFuncs(scheme *runtime.Scheme) error {
@@ -81,6 +82,43 @@ func SetDefaults_VolumeType(obj *VolumeType) {
 	if obj.Usable == nil {
 		trueVar := true
 		obj.Usable = &trueVar
+	}
+}
+
+// SetDefaults_Seed sets default values for Seed objects.
+func SetDefaults_Seed(obj *Seed) {
+	if obj.Spec.Settings == nil {
+		obj.Spec.Settings = &SeedSettings{}
+	}
+
+	if obj.Spec.Settings.ExcessCapacityReservation == nil {
+		enabled := true
+		for _, taint := range obj.Spec.Taints {
+			if taint.Key == DeprecatedSeedTaintDisableCapacityReservation {
+				enabled = false
+			}
+		}
+		obj.Spec.Settings.ExcessCapacityReservation = &SeedSettingExcessCapacityReservation{Enabled: enabled}
+	}
+
+	if obj.Spec.Settings.Scheduling == nil {
+		visible := true
+		for _, taint := range obj.Spec.Taints {
+			if taint.Key == DeprecatedSeedTaintInvisible {
+				visible = false
+			}
+		}
+		obj.Spec.Settings.Scheduling = &SeedSettingScheduling{Visible: visible}
+	}
+
+	if obj.Spec.Settings.ShootDNS == nil {
+		enabled := true
+		for _, taint := range obj.Spec.Taints {
+			if taint.Key == DeprecatedSeedTaintDisableDNS {
+				enabled = false
+			}
+		}
+		obj.Spec.Settings.ShootDNS = &SeedSettingShootDNS{Enabled: enabled}
 	}
 }
 
@@ -182,6 +220,21 @@ func SetDefaults_NginxIngress(obj *NginxIngress) {
 	if obj.ExternalTrafficPolicy == nil {
 		v := corev1.ServiceExternalTrafficPolicyTypeCluster
 		obj.ExternalTrafficPolicy = &v
+	}
+}
+
+// SetDefaults_ControllerResource sets default values for ControllerResource objects.
+func SetDefaults_ControllerResource(obj *ControllerResource) {
+	if obj.Primary == nil {
+		obj.Primary = pointer.BoolPtr(true)
+	}
+}
+
+// SetDefaults_ControllerDeployment sets default values for ControllerDeployment objects.
+func SetDefaults_ControllerDeployment(obj *ControllerDeployment) {
+	p := ControllerDeploymentPolicyOnDemand
+	if obj.Policy == nil {
+		obj.Policy = &p
 	}
 }
 
