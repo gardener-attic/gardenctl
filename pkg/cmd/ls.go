@@ -252,13 +252,13 @@ func getIssues(target TargetInterface, ioStreams IOStreams) {
 				if item.Status.LastOperation != nil {
 					lastOperationMeta.Description = item.Status.LastOperation.Description
 					lastOperationMeta.LastUpdateTime = item.Status.LastOperation.LastUpdateTime.String()
-					lastOperationMeta.Progress = item.Status.LastOperation.Progress
+					lastOperationMeta.Progress = int(item.Status.LastOperation.Progress)
 					lastOperationMeta.State = string(item.Status.LastOperation.State)
 					lastOperationMeta.Type = string(item.Status.LastOperation.Type)
 				}
 				if item.Status.LastErrors != nil {
 					for _, lastError := range item.Status.LastErrors {
-						statusMeta.LastErrors = append(statusMeta.LastErrors, lastError.GetDescription())
+						statusMeta.LastErrors = append(statusMeta.LastErrors, lastError.Description)
 					}
 				}
 				statusMeta.LastOperation = lastOperationMeta
