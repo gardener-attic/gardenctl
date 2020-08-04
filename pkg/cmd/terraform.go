@@ -62,7 +62,7 @@ func terraform(args string) {
 		pathTerraform = filepath.Join(pathGardenHome, "cache", gardenName, "seeds", target.Target[1].Name, target.Target[2].Name, "terraform")
 	}
 
-	if (strings.HasSuffix(args, "init")) {
+	if strings.HasSuffix(args, "init") {
 		pathTerraform = downloadTerraformFiles("infra")
 		fmt.Println("Downloaded terraform config to " + pathTerraform)
 	}
