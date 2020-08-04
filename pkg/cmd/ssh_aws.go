@@ -72,20 +72,7 @@ func sshToAWSNode(nodeName, path, user, pathSSKeypair string, sshPublicKey []byt
 	fmt.Println("(3/4) Creating bastion host")
 	a.createBastionHostInstance()
 
-	fmt.Println("Waiting SSH port open on Bastion")
-	attemptCnt := 0
-	for attemptCnt < 60 {
-		ncCmd := fmt.Sprintf("nc -rz -w 5 %s 22", a.BastionIP)
-		cmd := exec.Command("bash", "-c", ncCmd)
-		output, _ := cmd.CombinedOutput()
-		fmt.Println(" ")
-		if strings.Contains(string(output), "succeeded") {
-			break
-		}
-		time.Sleep(time.Second * 5)
-		attemptCnt++
-	}
-	fmt.Println("Opened SSH Port on Bastion")
+	a.sshPortCheck()
 
 	bastionNode := user + "@" + a.BastionIP
 	node := user + "@" + nodeName
@@ -315,6 +302,28 @@ func getAWSMachineClasses() *v1alpha1.AWSMachineClassList {
 	checkError(err)
 
 	return machineClasses
+}
+
+// Bastion SSH port check
+func (a *AwsInstanceAttribute) sshPortCheck() {
+	// waiting 60 seconds for SSH port open
+	fmt.Println("Waiting 60 seconds for Bastion SSH port open")
+	attemptCnt := 0
+	for attemptCnt < 6 {
+		ncCmd := fmt.Sprintf("timeout 10 nc -vtnz %s 22", a.BastionIP)
+		cmd := exec.Command("bash", "-c", ncCmd)
+		output, _ := cmd.CombinedOutput()
+		fmt.Println("=>", string(output))
+		if strings.Contains(string(output), "succeeded") {
+			fmt.Println("Opened SSH Port on Bastion")
+			return
+		}
+		time.Sleep(time.Second * 10)
+		attemptCnt++
+	}
+	fmt.Println("SSH Port Open on Bastion TimeOut")
+	a.cleanupAwsBastionHost()
+	os.Exit(0)
 }
 
 // cleanupAwsBastionHost cleans up the bastion host for the targeted cluster.
