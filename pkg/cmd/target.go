@@ -564,8 +564,8 @@ func targetShoot(targetWriter TargetWriter, shoot gardencorev1beta1.Shoot) {
 	checkError(err)
 	gardenClient, err := target.K8SClientToKind(TargetKindGarden)
 	checkError(err)
-	seedKubeconfigSecret, err := gardenClient.CoreV1().Secrets(seed.Spec.SecretRef.Namespace).Get(seed.Spec.SecretRef.Name, metav1.GetOptions{})
-	checkError(err)
+	seedKubeconfigSecret, _ := gardenClient.CoreV1().Secrets(seed.Spec.SecretRef.Namespace).Get(seed.Spec.SecretRef.Name, metav1.GetOptions{})
+
 	var seedCacheDir = filepath.Join(pathSeedCache, *shoot.Spec.SeedName)
 	err = os.MkdirAll(seedCacheDir, os.ModePerm)
 	checkError(err)
