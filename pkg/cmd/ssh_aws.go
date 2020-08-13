@@ -181,7 +181,7 @@ func (a *AwsInstanceAttribute) createBastionHostSecurityGroup() {
 	fmt.Println("Bastion host security group set up.")
 
 	// add shh rule to ec2 instance
-	arguments = fmt.Sprintf("aws ec2 authorize-security-group-ingress --group-id %s --protocol tcp --port 22 --cidr 0.0.0.0/0", a.SecurityGroupID)
+	arguments = fmt.Sprintf("aws ec2 authorize-security-group-ingress --group-id %s --protocol tcp --port 22 --cidr %s/32", a.SecurityGroupID, a.BastionIP)
 	captured = capture()
 	operate("aws", arguments)
 	_, err = captured()
@@ -345,7 +345,7 @@ func (a *AwsInstanceAttribute) cleanupAwsBastionHost() {
 
 	// remove shh rule from ec2 instance
 	fmt.Println("  (2/3) Close SSH Port on Node.")
-	arguments = fmt.Sprintf("aws ec2 revoke-security-group-ingress --group-id %s --protocol tcp --port 22 --cidr 0.0.0.0/0", a.SecurityGroupID)
+	arguments = fmt.Sprintf("aws ec2 revoke-security-group-ingress --group-id %s --protocol tcp --port 22 --cidr %s/32", a.SecurityGroupID, a.BastionIP)
 	captured = capture()
 	operate("aws", arguments)
 	capturedOutput, err = captured()
