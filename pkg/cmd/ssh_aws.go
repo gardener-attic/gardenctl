@@ -44,6 +44,7 @@ type AwsInstanceAttribute struct {
 	BastionSecurityGroupID   string
 	BastionInstanceName      string
 	BastionIP                string
+	BastionPrivIP            string
 	BastionInstanceID        string
 	BastionSecurityGroupName string
 	UserData                 []byte
@@ -63,14 +64,14 @@ func sshToAWSNode(nodeName, path, user, pathSSKeypair string, sshPublicKey []byt
 	fmt.Println("Data fetched from target shoot cluster.")
 	fmt.Println("")
 
-	fmt.Println("(2/4) Setting up bastion host security group")
-	a.createBastionHostSecurityGroup()
-	fmt.Println("")
-
 	defer a.cleanupAwsBastionHost()
 
-	fmt.Println("(3/4) Creating bastion host")
+	fmt.Println("(2/4) Creating bastion host")
 	a.createBastionHostInstance()
+
+	fmt.Println("(3/4) Setting up bastion host security group")
+	a.createBastionHostSecurityGroup()
+	fmt.Println("")
 
 	a.sshPortCheck()
 
@@ -181,7 +182,7 @@ func (a *AwsInstanceAttribute) createBastionHostSecurityGroup() {
 	fmt.Println("Bastion host security group set up.")
 
 	// add shh rule to ec2 instance
-	arguments = fmt.Sprintf("aws ec2 authorize-security-group-ingress --group-id %s --protocol tcp --port 22 --cidr 0.0.0.0/0", a.SecurityGroupID)
+	arguments = fmt.Sprintf("aws ec2 authorize-security-group-ingress --group-id %s --protocol tcp --port 22 --cidr %s/32", a.SecurityGroupID, a.BastionPrivIP)
 	captured = capture()
 	operate("aws", arguments)
 	_, err = captured()
@@ -284,6 +285,14 @@ func (a *AwsInstanceAttribute) createBastionHostInstance() {
 	checkError(err)
 	a.BastionIP = strings.Trim(capturedOutput, "\n")
 
+	// get bastion private IP
+	arguments = "aws ec2 describe-instances --instance-id " + a.BastionInstanceID + " --query Reservations[*].Instances[*].PrivateIpAddress"
+	captured = capture()
+	operate("aws", arguments)
+	capturedOutput, err = captured()
+	checkError(err)
+	a.BastionPrivIP = strings.Trim(capturedOutput, "\n")
+
 }
 
 // getAWSMachineClasses returns machine classes for the cluster nodes
@@ -345,7 +354,7 @@ func (a *AwsInstanceAttribute) cleanupAwsBastionHost() {
 
 	// remove shh rule from ec2 instance
 	fmt.Println("  (2/3) Close SSH Port on Node.")
-	arguments = fmt.Sprintf("aws ec2 revoke-security-group-ingress --group-id %s --protocol tcp --port 22 --cidr 0.0.0.0/0", a.SecurityGroupID)
+	arguments = fmt.Sprintf("aws ec2 revoke-security-group-ingress --group-id %s --protocol tcp --port 22 --cidr %s/32", a.SecurityGroupID, a.BastionPrivIP)
 	captured = capture()
 	operate("aws", arguments)
 	capturedOutput, err = captured()
