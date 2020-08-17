@@ -24,6 +24,7 @@ import (
 	"text/tabwriter"
 	"time"
 
+	"github.com/Masterminds/semver"
 	"github.com/spf13/cobra"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -33,10 +34,10 @@ import (
 )
 
 const (
-	maxEsLogs             = 100000
+	maxLokiLogs           = 100000
 	fourteenDaysInSeconds = 60 * 60 * 24 * 14
-	esLogsPerRequest      = 10000
 	emptyString           = ""
+	esLogsPerRequest      = 10000
 	unauthorized          = "Unauthorized"
 )
 
@@ -59,9 +60,10 @@ func NewLogsCmd() *cobra.Command {
 		ValidArgs: []string{"gardener-apiserver", "gardener-controller-manager", "gardener-dashboard", "api", "scheduler", "controller-manager", "etcd-operator", "etcd-main", "etcd-events", "addon-manager", "vpn-seed", "vpn-shoot", "auto-node-repair", "kubernetes-dashboard", "prometheus", "grafana", "alertmanager", "tf"},
 		Aliases:   []string{"log"},
 	}
-	cmd.Flags().Int64Var(&flags.tail, "tail", 200, "Lines of recent log file to display. Defaults to 200 with no selector, if a selector is provided takes the number of specified lines (max 100 000 for elasticsearch).")
+	cmd.Flags().Int64Var(&flags.tail, "tail", 200, "Lines of recent log file to display. Defaults to 200 with no selector, if a selector is provided takes the number of specified lines (max 100 000 for loki).")
 	cmd.Flags().DurationVar(&flags.sinceSeconds, "since", flags.sinceSeconds, "Only return logs newer than a relative duration like 5s, 2m, or 3h. Defaults to all logs. Only one of since-time / since may be used.")
 	cmd.Flags().StringVar(&flags.sinceTime, "since-time", flags.sinceTime, "Only return logs after a specific date (RFC3339). Defaults to all logs. Only one of since-time / since may be used.")
+	cmd.Flags().BoolVar(&flags.loki, "loki", flags.loki, "If the flag is set the logs are retrieved and shown from Loki, otherwise from the kubelet.")
 	cmd.Flags().BoolVar(&flags.elasticsearch, "elasticsearch", flags.elasticsearch, "If the flag is set the logs are retrieved and shown from elasticsearch, otherwise from the kubelet.")
 
 	return cmd
@@ -69,7 +71,7 @@ func NewLogsCmd() *cobra.Command {
 
 func validateArgs(args []string) {
 	if len(args) < 1 || len(args) > 3 {
-		fmt.Println("Command must be in the format: logs (gardener-apiserver|gardener-controller-manager|gardener-dashboard|api|scheduler|controller-manager|etcd-operator|etcd-main[etcd backup-restore]|etcd-events[etcd backup-restore]|addon-manager|vpn-seed|vpn-shoot|machine-controller-manager|kubernetes-dashboard|prometheus|grafana|alertmanager|tf (infra|dns|ingress)|cluster-autoscaler flags(--elasticsearch|--tail|--since|--since-time|--timestamps)")
+		fmt.Println("Command must be in the format: logs (gardener-apiserver|gardener-controller-manager|gardener-dashboard|api|scheduler|controller-manager|etcd-operator|etcd-main[etcd backup-restore]|etcd-events[etcd backup-restore]|addon-manager|vpn-seed|vpn-shoot|machine-controller-manager|kubernetes-dashboard|prometheus|grafana|alertmanager|tf (infra|dns|ingress)|cluster-autoscaler flags(--loki|--elasticsearch|--tail|--since|--since-time|--timestamps)")
 		os.Exit(2)
 	}
 	var t Target
@@ -87,10 +89,10 @@ func validateArgs(args []string) {
 }
 
 func validateFlags(flags *logFlags) {
-	if flags.sinceSeconds != 0 && flags.sinceTime != "" {
+	if flags.sinceSeconds != 0 && flags.sinceTime != emptyString {
 		fmt.Println("Logs command can not contains --since and --since-time in the same time")
 		os.Exit(2)
-	} else if flags.sinceTime != "" {
+	} else if flags.sinceTime != emptyString {
 		value, err := time.Parse(time.RFC3339, flags.sinceTime)
 		if err != nil {
 			fmt.Println("Incorrect value for flag: --since-time")
@@ -101,8 +103,11 @@ func validateFlags(flags *logFlags) {
 	} else if flags.tail < 0 {
 		fmt.Println("Incorrect value for flag: --tail, value must be greater 0")
 		os.Exit(2)
-	} else if flags.elasticsearch && flags.tail > maxEsLogs {
-		fmt.Println(fmt.Sprintf("Maximum number of logs that can be fetched from elasticsearch is %d", maxEsLogs))
+	} else if flags.loki && flags.elasticsearch {
+		fmt.Println(fmt.Sprintf("Logs command cannot contain --elasticsearch and --loki in the same time"))
+		os.Exit(2)
+	} else if (flags.loki || flags.elasticsearch) && flags.tail > maxLokiLogs {
+		fmt.Println(fmt.Sprintf("Maximum number of logs that can be fetched from loki|elasticsearch is %d", maxLokiLogs))
 		os.Exit(2)
 	}
 }
@@ -127,7 +132,7 @@ func runCommand(args []string) {
 		if len(args) == 2 {
 			logsEtcdMain(args[1])
 		} else {
-			logsEtcdMain("")
+			logsEtcdMain(emptyString)
 		}
 	case "etcd-main-backup":
 		logsEtcdMainBackup()
@@ -135,7 +140,7 @@ func runCommand(args []string) {
 		if len(args) == 2 {
 			logsEtcdEvents(args[1])
 		} else {
-			logsEtcdEvents("")
+			logsEtcdEvents(emptyString)
 		}
 	case "addon-manager":
 		logsAddonManager()
@@ -190,6 +195,19 @@ func logPod(toMatch string, toTarget string, container string) {
 	}
 	namespace := getSeedNamespaceNameForShoot(target.Target[2].Name)
 	var err error
+
+	project, err := getProjectForShoot()
+	checkError(err)
+	shootName := target.Target[2].Name
+
+	shoot, err := Client.GardenerV1beta1().Shoots(*project.Spec.Namespace).Get(shootName, metav1.GetOptions{})
+	checkError(err)
+
+	gardenerVersion, err := semver.NewVersion(shoot.Status.Gardener.Version)
+	checkError(err)
+	greaterThanLokiRelease, err := semver.NewConstraint(">=1.8.0")
+	checkError(err)
+
 	Client, err = clientToTarget("seed")
 	checkError(err)
 	if toTarget == "shoot" {
@@ -197,24 +215,39 @@ func logPod(toMatch string, toTarget string, container string) {
 		Client, err = clientToTarget(TargetKindShoot)
 		checkError(err)
 	}
-	if !flags.elasticsearch {
-		showLogsFromKubectl(namespace, toMatch, container)
-	} else {
-		credentials, err := getCredentials(namespace)
 
-		if err == nil {
-			username := credentials.Data["username"]
-			password := credentials.Data["password"]
-
-			showLogsFromElasticsearch(namespace, toMatch, container, string(username), string(password))
+	if flags.loki {
+		if greaterThanLokiRelease.Check(gardenerVersion) {
+			showLogsFromLoki(namespace, toMatch, container)
 		} else {
-			showLogsFromElasticsearch(namespace, toMatch, container, emptyString, emptyString)
+			fmt.Println("--loki flag is available only for gardener version >= 1.8.0")
+			fmt.Println("Current version: " + gardenerVersion.String())
+			os.Exit(2)
 		}
+
+	} else if flags.elasticsearch {
+		if !greaterThanLokiRelease.Check(gardenerVersion) {
+			credentials, err := getCredentials(namespace)
+
+			if err == nil {
+				username := credentials.Data["username"]
+				password := credentials.Data["password"]
+				showLogsFromElasticsearch(namespace, toMatch, container, string(username), string(password))
+			} else {
+				showLogsFromElasticsearch(namespace, toMatch, container, emptyString, emptyString)
+			}
+		} else {
+			fmt.Println("--elasticsearch flag is no longer available for gardener version >= 1.8.0")
+			fmt.Println("Current version: " + gardenerVersion.String())
+			os.Exit(2)
+		}
+	} else {
+		showLogsFromKubectl(namespace, toMatch, container)
 	}
 }
 
 func showLogsFromKubectl(namespace, toMatch, container string) {
-	if container != "" {
+	if container != emptyString {
 		container = " -c " + container
 	}
 	pods, err := Client.CoreV1().Pods(namespace).List(metav1.ListOptions{})
@@ -234,14 +267,24 @@ func getCredentials(namespace string) (*v1.Secret, error) {
 	clientset, err := k8s.NewForConfig(config)
 	checkError(err)
 	KUBECONFIG = oldConfig
-
 	return clientset.CoreV1().Secrets(namespace).Get("logging-ingress-credentials", metav1.GetOptions{})
+}
+
+func showLogsFromLoki(namespace, toMatch, container string) {
+	output, err := ExecCmdReturnOutput("bash", "-c", buildLokiCommand(namespace, toMatch, container))
+	checkError(err)
+
+	byteOutput := []byte(output)
+	var response logResponseLoki
+	err = json.Unmarshal(byteOutput, &response)
+	checkError(err)
+
+	fmt.Println(response)
 }
 
 func showLogsFromElasticsearch(namespace, toMatch, container, username, password string) {
 	output, err := ExecCmdReturnOutput("bash", "-c", buildElasticsearchCommand(namespace, toMatch, container, username, password))
 	checkError(err)
-
 	if output == unauthorized {
 		fmt.Println("You have no permissions to read from elasticsearch")
 		os.Exit(2)
@@ -274,11 +317,34 @@ func buildKubectlCommand(namespace, podName, container string) string {
 	return command.String()
 }
 
+func buildLokiCommand(namespace, podName, container string) string {
+	lokiQuery := fmt.Sprintf("{pod_name=~\"%s.*\"}", podName)
+
+	command := fmt.Sprintf("wget 'http://localhost:3100/loki/api/v1/query_range' -O- --post-data='query=%s", lokiQuery)
+
+	if container != emptyString {
+		command += fmt.Sprintf("&&query={container_name=~\"%s.*\"", container)
+	}
+	if flags.tail != 0 {
+		command += fmt.Sprintf("&&limit=%d", flags.tail)
+	}
+	if flags.sinceSeconds == 0 {
+		flags.sinceSeconds = fourteenDaysInSeconds * time.Second
+	}
+	sinceNanoSec := flags.sinceSeconds.Nanoseconds()
+	now := time.Now().UnixNano()
+
+	command += fmt.Sprintf("&&start=%d&&end=%d", now-sinceNanoSec, now)
+	command += "'"
+
+	endCommand := fmt.Sprintf("kubectl --kubeconfig=%s exec loki-0 -n %s -- %s", KUBECONFIG, namespace, command)
+	return endCommand
+}
+
 func buildElasticsearchCommand(namespace, podName, container, username, password string) string {
 	query := createElasticQuery(podName, container)
 	bytes, err := json.Marshal(query)
 	checkError(err)
-
 	command := fmt.Sprintf("kubectl --kubeconfig=%s exec elasticsearch-logging-0 -n %s -- curl -X GET -H \"Content-Type:application/json\" localhost:9200/_all/_search?scroll=1m -d '%s'", KUBECONFIG, namespace, string(bytes))
 	if username != emptyString && password != emptyString {
 		command += fmt.Sprintf(" --user %s:%s", username, password)
@@ -296,15 +362,14 @@ func buildElasticsearchScrollCommand(namespace, podName, container, scrollID, us
 	if username != emptyString && password != emptyString {
 		scrollCommand += fmt.Sprintf(" --user %s:%s", username, password)
 	}
-
 	return scrollCommand
 }
 
-func buildElasticsearchResponses(output, namespace, toMatch, container, username, password string) []logResponse {
-	responses := make([]logResponse, 0)
+func buildElasticsearchResponses(output, namespace, toMatch, container, username, password string) []logResponseElasticsearch {
+	responses := make([]logResponseElasticsearch, 0)
 
 	byteOutput := []byte(output)
-	var response logResponse
+	var response logResponseElasticsearch
 	err := json.Unmarshal(byteOutput, &response)
 	checkError(err)
 
@@ -317,7 +382,7 @@ func buildElasticsearchResponses(output, namespace, toMatch, container, username
 		checkError(err)
 
 		byteOutput := []byte(output)
-		logResponse := new(logResponse)
+		logResponse := new(logResponseElasticsearch)
 		err = json.Unmarshal(byteOutput, logResponse)
 		checkError(err)
 
@@ -340,7 +405,7 @@ func logPodGarden(toMatch, namespace string) {
 	var err error
 	Client, err = clientToTarget("garden")
 	checkError(err)
-	showLogsFromKubectl(namespace, toMatch, "")
+	showLogsFromKubectl(namespace, toMatch, emptyString)
 }
 
 // logPodGardenImproved print logfiles for garden pods
@@ -351,17 +416,19 @@ func logPodGardenImproved(podName string) {
 	checkError(err)
 	pods, err := Client.CoreV1().Pods("garden").List(metav1.ListOptions{})
 	checkError(err)
-	projectName := getProjectForShoot()
+	project, err := getProjectForShoot()
+	checkError(err)
+
 	for _, pod := range pods.Items {
 		if strings.Contains(pod.Name, podName) {
-			output, err := ExecCmdReturnOutput("bash", "-c", buildKubectlCommand("garden", pod.Name, ""))
+			output, err := ExecCmdReturnOutput("bash", "-c", buildKubectlCommand("garden", pod.Name, emptyString))
 			if err != nil {
 				fmt.Println("Cmd was unsuccessful")
 				os.Exit(2)
 			}
 			lines := strings.Split("time="+output, `time=`)
 			for _, line := range lines {
-				if strings.Contains(line, ("shoot=" + projectName + "/" + target.Target[2].Name)) {
+				if strings.Contains(line, ("shoot=" + project.Name + "/" + target.Target[2].Name)) {
 					fmt.Print(line)
 				}
 			}
@@ -399,12 +466,12 @@ func logsAPIServer() {
 
 // logsScheduler prints the logfile of the scheduler
 func logsScheduler() {
-	logPod("kube-scheduler", "seed", "")
+	logPod("kube-scheduler", "seed", emptyString)
 }
 
 // logsAPIServer prints the logfile of the controller-manager
 func logsControllerManager() {
-	logPod("kube-controller-manager", "seed", "")
+	logPod("kube-controller-manager", "seed", emptyString)
 }
 
 // logsVpnSeed prints the logfile of the vpn-seed container
@@ -427,7 +494,7 @@ func logsEtcdMain(containerName string) {
 
 // logsEtcdMainBackup prints logfiles of etcd-main-backup-sidecar pod
 func logsEtcdMainBackup() {
-	logPod("etcd-main-backup-sidecar", "seed", "")
+	logPod("etcd-main-backup-sidecar", "seed", emptyString)
 }
 
 // logsEtcdEvents prints the logfile of etcd-events
@@ -437,17 +504,17 @@ func logsEtcdEvents(containerName string) {
 
 // logsAddonManager prints the logfile of addon-manager
 func logsAddonManager() {
-	logPod("addon-manager", "seed", "")
+	logPod("addon-manager", "seed", emptyString)
 }
 
 // logsVpnShoot prints the logfile of vpn-shoot
 func logsVpnShoot() {
-	logPod("vpn-shoot", "shoot", "")
+	logPod("vpn-shoot", "shoot", emptyString)
 }
 
 // logsMachineControllerManager prints the logfile of machine-controller-manager
 func logsMachineControllerManager() {
-	logPod("machine-controller-manager", "seed", "")
+	logPod("machine-controller-manager", "seed", emptyString)
 }
 
 // logsKubernetesDashboard prints the logfile of the dashboard
@@ -462,7 +529,7 @@ func logsKubernetesDashboard() {
 	} else if len(target.Target) == 2 && target.Target[1].Kind == "seed" {
 		gardenName := target.Stack()[0].Name
 		KUBECONFIG = filepath.Join(pathGardenHome, "cache", gardenName, "seeds", target.Target[1].Name, "kubeconfig.yaml")
-		config, err := clientcmd.BuildConfigFromFlags("", KUBECONFIG)
+		config, err := clientcmd.BuildConfigFromFlags(emptyString, KUBECONFIG)
 		checkError(err)
 		Client, err = kubernetes.NewForConfig(config)
 		checkError(err)
@@ -515,7 +582,7 @@ func logsTerraform(toMatch string) {
 	var err error
 	Client, err = clientToTarget("seed")
 	checkError(err)
-	pods, err := Client.CoreV1().Pods("").List(metav1.ListOptions{})
+	pods, err := Client.CoreV1().Pods(emptyString).List(metav1.ListOptions{})
 	checkError(err)
 	count := 0
 	for _, pod := range pods.Items {
@@ -563,6 +630,7 @@ type logFlags struct {
 	sinceSeconds  time.Duration
 	sinceTime     string
 	tail          int64
+	loki          bool
 	elasticsearch bool
 }
 
@@ -572,7 +640,15 @@ func newLogsFlags() *logFlags {
 	}
 }
 
-type logResponse struct {
+type logResponseLoki struct {
+	Data struct {
+		Result []struct {
+			Values [][]string `json:"values"`
+		} `json:"result"`
+	} `json:"data"`
+}
+
+type logResponseElasticsearch struct {
 	ScrollID string `json:"_scroll_id"`
 	Hits     struct {
 		Hits []struct {
@@ -584,6 +660,13 @@ type logResponse struct {
 			} `json:"_source"`
 		} `json:"hits"`
 	} `json:"hits"`
+}
+
+type logMessage struct {
+	Log      string `json:"log"`
+	Severity string `json:"severity"`
+	Process  string `json:"pid"`
+	Source   string `json:"source"`
 }
 
 type rng struct {
@@ -684,7 +767,46 @@ func buildMatchPhrases(podName, containerName string) []interface{} {
 	return matchPhrases
 }
 
-func (response logResponse) String() string {
+func (msg logMessage) String() string {
+	message := "\t"
+	if msg.Severity != emptyString {
+		message += (msg.Severity + "\t")
+	}
+	if msg.Process != emptyString {
+		message += (msg.Process + "\t")
+	}
+	if msg.Source != emptyString {
+		message += (msg.Source + "\t")
+	}
+	message += (msg.Log + "\n")
+
+	return message
+}
+
+func (response logResponseLoki) String() string {
+	results := response.Data.Result
+	var allLogs strings.Builder
+	valuesDelimeter := "------------------------------------------------------------------------------------------\n"
+
+	for resultIndex := len(results) - 1; resultIndex >= 0; resultIndex-- {
+		values := results[resultIndex].Values
+		isThereLogs := false
+		for valueIndex := len(values) - 1; valueIndex >= 0; valueIndex-- {
+			time := parseTimeInRFC(values[valueIndex][0])
+			log := parseLogMessage(values[valueIndex][1])
+			allLogs.WriteString(time + log.String())
+			isThereLogs = true
+		}
+
+		if isThereLogs {
+			allLogs.WriteString(valuesDelimeter)
+		}
+	}
+
+	return allLogs.String()
+}
+
+func (response logResponseElasticsearch) String() string {
 	hits := response.Hits.Hits
 	length := len(hits)
 	output := make([]string, 0, length)
@@ -693,4 +815,20 @@ func (response logResponse) String() string {
 		output = append(output, strings.TrimSpace(fmt.Sprintf("%v\t%v\t%v\t%v", source.Timestamp, source.Severity, source.Source, source.Log)))
 	}
 	return strings.Join(output, "\n")
+}
+
+func parseTimeInRFC(unixTime string) string {
+	intTime, err := strconv.ParseInt(unixTime, 10, 64)
+	checkError(err)
+
+	return time.Unix(0, intTime).String()
+}
+
+func parseLogMessage(logMsg string) logMessage {
+	byteOutput := []byte(logMsg)
+	var log logMessage
+	err := json.Unmarshal(byteOutput, &log)
+	checkError(err)
+
+	return log
 }

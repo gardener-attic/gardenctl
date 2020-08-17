@@ -25,10 +25,13 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/gardener/gardener/pkg/apis/core"
+	"github.com/gardener/gardener/pkg/apis/core/v1beta1"
 	gardencorev1beta1 "github.com/gardener/gardener/pkg/apis/core/v1beta1"
 	gardencoreclientset "github.com/gardener/gardener/pkg/client/core/clientset/versioned"
 	"gopkg.in/yaml.v2"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/fields"
 	k8s "k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/clientcmd"
 )
@@ -206,28 +209,44 @@ func getSeedNamespaceNameForShoot(shootName string) (namespaceSeed string) {
 	return shoot.Status.TechnicalID
 }
 
-// getProjectForShoot returns projectName for Shoot
-func getProjectForShoot() (projectName string) {
+// getProjectForShoot returns the Project for Shoot
+func getProjectForShoot() (v1beta1.Project, error) {
 	var target Target
+	project := v1beta1.Project{}
 	ReadTarget(pathTarget, &target)
+	Client, err := clientToTarget("garden")
+	checkError(err)
 	if target.Target[1].Kind == "project" {
-		projectName = target.Target[1].Name
+		projectName := target.Target[1].Name
+		p, err := Client.GardenerV1beta1().Projects().Get(projectName, metav1.GetOptions{})
+		checkError(err)
+		project = *p
 	} else {
-		var err error
-		Client, err = clientToTarget("garden")
+		shootList, err := Client.GardenerV1beta1().Shoots(metav1.NamespaceAll).List(metav1.ListOptions{
+			FieldSelector: fields.SelectorFromSet(
+				fields.Set{
+					core.ShootSeedName: target.Target[1].Name,
+					"metadata.name":    target.Target[2].Name,
+				}).String(),
+		})
 		checkError(err)
-		gardenClientset, err := gardencoreclientset.NewForConfig(NewConfigFromBytes(*kubeconfig))
+		if len(shootList.Items) != 1 {
+			return project, errors.New("there are multiple shoots with the same name running on the same seed")
+		}
+		projectNamespace := shootList.Items[0].Namespace
+
+		projectList, err := Client.GardenerV1beta1().Projects().List(metav1.ListOptions{})
 		checkError(err)
-		shootList, err := gardenClientset.CoreV1beta1().Shoots("").List(metav1.ListOptions{})
-		checkError(err)
-		for _, shoot := range shootList.Items {
-			if shoot.Name == target.Target[2].Name && *shoot.Spec.SeedName == target.Target[1].Name {
-				projectName = shoot.Namespace
+
+		for _, p := range projectList.Items {
+			if *p.Spec.Namespace == projectNamespace {
+				project = p
 				break
 			}
 		}
 	}
-	return projectName
+
+	return project, nil
 }
 
 // getTargetType returns error and name of type
