@@ -566,7 +566,15 @@ func targetShoot(targetWriter TargetWriter, shoot gardencorev1beta1.Shoot, reade
 	gardenClient, err := target.K8SClientToKind(TargetKindGarden)
 	checkError(err)
 	seedKubeconfigSecret, err := gardenClient.CoreV1().Secrets(seed.Spec.SecretRef.Namespace).Get(seed.Spec.SecretRef.Name, metav1.GetOptions{})
-	checkError(err)
+	// temporary solution , will clean up code in ticket move get seed out of targetShoot method #269
+	if err != nil {
+		if strings.Contains(err.Error(), "forbidden") {
+			fmt.Printf(warningColor, "\nWarning:\nYou are user role!\n\n")
+		} else {
+			checkError(err)
+		}
+	}
+
 	var seedCacheDir = filepath.Join(pathSeedCache, *shoot.Spec.SeedName)
 	err = os.MkdirAll(seedCacheDir, os.ModePerm)
 	checkError(err)
@@ -676,7 +684,15 @@ func getSeedForProject(shootName string) (seedName string) {
 	gardenClientset, err := gardencoreclientset.NewForConfig(NewConfigFromBytes(*kubeconfig))
 	checkError(err)
 	shootList, err := gardenClientset.CoreV1beta1().Shoots("").List(metav1.ListOptions{})
-	checkError(err)
+	// temporary solution , will clean up code in ticket move get seed out of targetShoot method #269
+	if err != nil {
+		if strings.Contains(err.Error(), "forbidden") {
+			fmt.Printf(warningColor, "\nWarning:\nYou are user role!\n\n")
+		} else {
+			checkError(err)
+		}
+	}
+
 	for _, item := range shootList.Items {
 		if item.Name == shootName {
 			seedName = *item.Spec.SeedName
