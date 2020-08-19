@@ -61,11 +61,18 @@ func sshToAWSNode(nodeName, path, user, pathSSKeypair string, sshPublicKey []byt
 	fmt.Println("")
 
 	fmt.Println("(1/4) Fetching data from target shoot cluster")
-	a.fetchAwsAttributes(nodeName, path)
+
+	if getRole() == "user" {
+		a.fetchAwsAttributesByCLI(nodeName, path)
+	} else {
+		a.fetchAwsAttributes(nodeName, path)
+	}
+
 	fmt.Println("Data fetched from target shoot cluster.")
 	fmt.Println("")
 
 	fmt.Println("(2/4) Setting up bastion host security group")
+
 	a.createBastionHostSecurityGroup()
 	fmt.Println("")
 
@@ -81,7 +88,7 @@ func sshToAWSNode(nodeName, path, user, pathSSKeypair string, sshPublicKey []byt
 	bastionNode := user + "@" + a.BastionIP
 	node := user + "@" + nodeName
 
-	fmt.Print("SSH " + bastionNode + " => " + node)
+	fmt.Print("SSH " + bastionNode + " => " + node + "\n")
 	key := filepath.Join(pathSSKeypair, "key")
 
 	sshCmd := fmt.Sprintf("ssh -i " + key + "  -o ConnectionAttempts=2 -o \"ProxyCommand ssh -W %%h:%%p -i " + key + " -o IdentitiesOnly=yes -o ConnectionAttempts=2 -o StrictHostKeyChecking=no " + bastionNode + "\" " + node + " -o IdentitiesOnly=yes -o StrictHostKeyChecking=no")
@@ -94,9 +101,43 @@ func sshToAWSNode(nodeName, path, user, pathSSKeypair string, sshPublicKey []byt
 	}
 }
 
+// fetchAwsAttributes gets all the needed attributes for creating bastion host and its security group with given <nodeName> by usering aws cli for non-operator user
+func (a *AwsInstanceAttribute) fetchAwsAttributesByCLI(nodeName, path string) {
+	a.ShootName = getTechnicalID()
+	publicUtility := a.ShootName + "-public-utility-z0"
+	arguments := fmt.Sprintf("aws ec2 describe-subnets --filters Name=tag:Name,Values=" + publicUtility + " --query Subnets[*].SubnetId")
+	captured := capture()
+	operate("aws", arguments)
+	capturedOutput, err := captured()
+	checkError(err)
+	a.SubnetID = strings.Trim(capturedOutput, "\n")
+
+	arguments = fmt.Sprintf("aws ec2 describe-instances --filters Name=network-interface.private-dns-name,Values=" + nodeName + " --query Reservations[*].Instances[*].{VpcId:VpcId}")
+	captured = capture()
+	operate("aws", arguments)
+	capturedOutput, err = captured()
+	checkError(err)
+	a.VpcID = strings.Trim(capturedOutput, "\n")
+
+	a.SecurityGroupName = a.ShootName + "-nodes"
+	a.getSecurityGroupID()
+	a.BastionInstanceName = a.ShootName + "-bastions"
+	a.BastionSecurityGroupName = a.ShootName + "-bsg"
+
+	arguments = fmt.Sprintf("aws ec2 describe-instances --filters Name=network-interface.private-dns-name,Values=" + nodeName + " --query Reservations[*].Instances[*].{ImageId:ImageId}")
+	captured = capture()
+	operate("aws", arguments)
+	capturedOutput, err = captured()
+	checkError(err)
+	a.ImageID = strings.Trim(capturedOutput, "\n")
+
+	a.KeyName = a.ShootName + "-ssh-publickey"
+	a.UserData = getBastionUserData(a.SSHPublicKey)
+}
+
 // fetchAwsAttributes gets all the needed attributes for creating bastion host and its security group with given <nodeName>.
 func (a *AwsInstanceAttribute) fetchAwsAttributes(nodeName, path string) {
-	a.ShootName = getShootClusterName()
+	a.ShootName = getTechnicalID()
 
 	yamlData, err := ioutil.ReadFile(path)
 	checkError(err)
