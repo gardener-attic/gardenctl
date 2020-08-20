@@ -130,7 +130,7 @@ func init() {
 
 	RootCmd.PersistentFlags().BoolVarP(&cachevar, "no-cache", "c", false, "no caching")
 	RootCmd.PersistentFlags().StringVarP(&outputFormat, "output", "o", "yaml", "output format yaml or json")
-	RootCmd.PersistentFlags().BoolVarP(&debugSwitch, "debug", "d", false, "enable debug level output")
+	RootCmd.PersistentFlags().BoolVarP(&debugSwitch, "verbose", "d", false, "enable verbose output")
 
 	cobra.EnableCommandSorting = false
 	cobra.EnablePrefixMatching = prefixMatching
