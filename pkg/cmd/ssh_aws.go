@@ -80,7 +80,12 @@ func sshToAWSNode(nodeName, path, user, pathSSKeypair string, sshPublicKey []byt
 	fmt.Print("SSH " + bastionNode + " => " + node)
 	key := filepath.Join(pathSSKeypair, "key")
 
-	sshCmd := fmt.Sprintf("ssh -i " + key + "  -o ConnectionAttempts=2 -o \"ProxyCommand ssh -W %%h:%%p -i " + key + " -o IdentitiesOnly=yes -o ConnectionAttempts=2 -o StrictHostKeyChecking=no " + bastionNode + "\" " + node + " -o IdentitiesOnly=yes -o StrictHostKeyChecking=no")
+	var sshCmd string
+	if debugSwitch {
+		sshCmd = fmt.Sprintf("ssh -v -i " + key + "  -o ConnectionAttempts=2 -o \"ProxyCommand ssh -W %%h:%%p -i " + key + " -o IdentitiesOnly=yes -o ConnectionAttempts=2 -o StrictHostKeyChecking=no " + bastionNode + "\" " + node + " -o IdentitiesOnly=yes -o StrictHostKeyChecking=no")
+	} else {
+		sshCmd = fmt.Sprintf("ssh -i " + key + "  -o ConnectionAttempts=2 -o \"ProxyCommand ssh -W %%h:%%p -i " + key + " -o IdentitiesOnly=yes -o ConnectionAttempts=2 -o StrictHostKeyChecking=no " + bastionNode + "\" " + node + " -o IdentitiesOnly=yes -o StrictHostKeyChecking=no")
+	}
 	cmd := exec.Command("bash", "-c", sshCmd)
 	cmd.Stdout = os.Stdout
 	cmd.Stdin = os.Stdin
