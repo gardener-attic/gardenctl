@@ -23,6 +23,7 @@ import (
 	"strings"
 
 	gardencorev1beta1 "github.com/gardener/gardener/pkg/apis/core/v1beta1"
+	gardenerlogger "github.com/gardener/gardener/pkg/logger"
 	yaml "gopkg.in/yaml.v2"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	restclient "k8s.io/client-go/rest"
@@ -238,4 +239,18 @@ func CheckShootIsTargeted(target TargetInterface) bool {
 		return false
 	}
 	return true
+}
+
+//GardenctlDebugLog only outputs debug msg when gardencl -d or gardenctl --debug is specified
+func GardenctlDebugLog(logMsg string) {
+	if debugSwitch {
+		var logger = gardenerlogger.NewLogger("debug")
+		logger.Debugf(logMsg)
+	}
+}
+
+//GardenctlInfoLog outputs information msg at all time
+func GardenctlInfoLog(logMsg string) {
+	var logger = gardenerlogger.NewLogger("info")
+	logger.Infof(logMsg)
 }

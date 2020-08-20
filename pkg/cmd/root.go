@@ -31,6 +31,7 @@ var outputFormat string
 var gardenConfig string
 var pathGardenHome string
 var sessionID string
+var debugSwitch bool
 
 // RootCmd represents the base command when called without any subcommands
 var RootCmd = &cobra.Command{
@@ -129,6 +130,7 @@ func init() {
 
 	RootCmd.PersistentFlags().BoolVarP(&cachevar, "no-cache", "c", false, "no caching")
 	RootCmd.PersistentFlags().StringVarP(&outputFormat, "output", "o", "yaml", "output format yaml or json")
+	RootCmd.PersistentFlags().BoolVarP(&debugSwitch, "debug", "d", false, "enable debug level output")
 
 	cobra.EnableCommandSorting = false
 	cobra.EnablePrefixMatching = prefixMatching
