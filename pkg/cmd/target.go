@@ -556,23 +556,23 @@ func targetShoot(targetWriter TargetWriter, shoot gardencorev1beta1.Shoot, reade
 
 	// Get and cache seed kubeconfig for future commands
 	gardenName := target.Stack()[0].Name
-	pathSeedCache := filepath.Join(pathGardenHome, "cache", gardenName, "seeds")
+	// pathSeedCache := filepath.Join(pathGardenHome, "cache", gardenName, "seeds")
 	pathProjectCache := filepath.Join(pathGardenHome, "cache", gardenName, "projects")
 
-	gardenClientset, err := target.GardenerClient()
-	checkError(err)
-	seed, err := gardenClientset.CoreV1beta1().Seeds().Get(*shoot.Spec.SeedName, metav1.GetOptions{})
-	checkError(err)
+	// gardenClientset, err := target.GardenerClient()
+	// checkError(err)
+	// seed, err := gardenClientset.CoreV1beta1().Seeds().Get(*shoot.Spec.SeedName, metav1.GetOptions{})
+	// checkError(err)
 	gardenClient, err := target.K8SClientToKind(TargetKindGarden)
 	checkError(err)
-	seedKubeconfigSecret, err := gardenClient.CoreV1().Secrets(seed.Spec.SecretRef.Namespace).Get(seed.Spec.SecretRef.Name, metav1.GetOptions{})
-	checkError(err)
-	var seedCacheDir = filepath.Join(pathSeedCache, *shoot.Spec.SeedName)
-	err = os.MkdirAll(seedCacheDir, os.ModePerm)
-	checkError(err)
-	var seedKubeconfigPath = filepath.Join(seedCacheDir, "kubeconfig.yaml")
-	err = ioutil.WriteFile(seedKubeconfigPath, seedKubeconfigSecret.Data["kubeconfig"], 0644)
-	checkError(err)
+	// seedKubeconfigSecret, err := gardenClient.CoreV1().Secrets(seed.Spec.SecretRef.Namespace).Get(seed.Spec.SecretRef.Name, metav1.GetOptions{})
+	// checkError(err)
+	// var seedCacheDir = filepath.Join(pathSeedCache, *shoot.Spec.SeedName)
+	// err = os.MkdirAll(seedCacheDir, os.ModePerm)
+	// checkError(err)
+	// var seedKubeconfigPath = filepath.Join(seedCacheDir, "kubeconfig.yaml")
+	// err = ioutil.WriteFile(seedKubeconfigPath, seedKubeconfigSecret.Data["kubeconfig"], 0644)
+	// checkError(err)
 
 	// Get shoot kubeconfig
 	var shootKubeconfigSecretName = fmt.Sprintf("%s.kubeconfig", shoot.Name)
@@ -632,9 +632,10 @@ func targetShoot(targetWriter TargetWriter, shoot gardencorev1beta1.Shoot, reade
 
 	// Cache shoot kubeconfig
 	var shootCacheDir string
-	if target.Target[1].Kind == "seed" {
-		shootCacheDir = filepath.Join(pathSeedCache, target.Target[1].Name, shoot.Name)
-	} else if target.Target[1].Kind == "project" {
+	// if target.Target[1].Kind == "seed" {
+	// 	shootCacheDir = filepath.Join(pathSeedCache, target.Target[1].Name, shoot.Name)
+	// } else
+	if target.Target[1].Kind == "project" {
 		shootCacheDir = filepath.Join(pathProjectCache, target.Target[1].Name, shoot.Name)
 	}
 
