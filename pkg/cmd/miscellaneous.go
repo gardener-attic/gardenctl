@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"net/http"
 	"os"
 	"strconv"
 	"strings"
@@ -274,18 +275,14 @@ func getEmail(githubURL string) string {
 	if githubURL == "" {
 		return "null"
 	}
-	res, err := ExecCmdReturnOutput("bash", "-c", "curl -ks "+githubURL+"/api/v3/users/"+os.Getenv("USER"))
+	resp, err := http.Get(githubURL + "/api/v3/users/" + os.Getenv("USER"))
 	checkError(err)
-
-	if err != nil {
-		fmt.Println("Cmd was unsuccessful")
-		os.Exit(2)
-	}
-
+	defer resp.Body.Close()
+	userInfo, err := ioutil.ReadAll(resp.Body)
+	checkError(err)
 	var yamlOut map[string]interface{}
-	err = yaml.Unmarshal([]byte(res), &yamlOut)
+	err = yaml.Unmarshal(userInfo, &yamlOut)
 	checkError(err)
-
 	githubEmail := yamlOut["email"].(string)
 	fmt.Printf("used GitHub email: %s\n", githubEmail)
 	return githubEmail
@@ -344,7 +341,11 @@ func isIP(word string) bool {
 }
 
 func getPublicIP() string {
-	result, err := ExecCmdReturnOutput("bash", "-c", "curl icanhazip.com")
+	ipURL := "https://api.ipify.org?format=text"
+	resp, err := http.Get(ipURL)
 	checkError(err)
-	return result
+	defer resp.Body.Close()
+	ip, err := ioutil.ReadAll(resp.Body)
+	checkError(err)
+	return string(ip)
 }
