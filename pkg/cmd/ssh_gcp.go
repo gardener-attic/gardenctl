@@ -167,7 +167,7 @@ func (g *GCPInstanceAttribute) createBastionHostInstance() {
 			checkError(err)
 			ip := ""
 			for _, value := range words {
-				if isIP(value) && !strings.HasPrefix(value, "10.") {
+				if isIPv4(value) && !strings.HasPrefix(value, "10.") {
 					ip = value
 					break
 				}
