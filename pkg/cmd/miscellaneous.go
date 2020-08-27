@@ -22,6 +22,7 @@ import (
 	"io"
 	"io/ioutil"
 	"net/http"
+	"net/url"
 	"os"
 	"strconv"
 	"strings"
@@ -275,7 +276,11 @@ func getEmail(githubURL string) string {
 	if githubURL == "" {
 		return "null"
 	}
-	resp, err := http.Get(githubURL + "/api/v3/users/" + os.Getenv("USER"))
+	baseURL, err := url.Parse(githubURL)
+	checkError(err)
+	baseURL.Path += "/api/v3/users/"
+	baseURL.Path += url.PathEscape(os.Getenv("USER"))
+	resp, err := http.Get(baseURL.String())
 	checkError(err)
 	defer resp.Body.Close()
 	userInfo, err := ioutil.ReadAll(resp.Body)
@@ -341,8 +346,12 @@ func isIP(word string) bool {
 }
 
 func getPublicIP() string {
-	ipURL := "https://api.ipify.org?format=text"
-	resp, err := http.Get(ipURL)
+	ipURL, err := url.Parse("https://api.ipify.org")
+	checkError(err)
+	params := url.Values{}
+	params.Add("format", "text")
+	ipURL.RawQuery = params.Encode()
+	resp, err := http.Get(url.QueryEscape(ipURL.String()))
 	checkError(err)
 	defer resp.Body.Close()
 	ip, err := ioutil.ReadAll(resp.Body)
