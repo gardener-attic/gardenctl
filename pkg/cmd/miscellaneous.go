@@ -351,7 +351,7 @@ func getPublicIP() string {
 	params := url.Values{}
 	params.Add("format", "text")
 	ipURL.RawQuery = params.Encode()
-	resp, err := http.Get(url.QueryEscape(ipURL.String()))
+	resp, err := http.Get(ipURL.String())
 	checkError(err)
 	defer resp.Body.Close()
 	ip, err := ioutil.ReadAll(resp.Body)
