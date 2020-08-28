@@ -90,7 +90,7 @@ func getOrphanInfraResources() {
 	checkError(err)
 	infraType := shoot.Spec.Provider.Type
 
-    switch infraType {
+	switch infraType {
 		case "aws":
 				rs = getAWSInfraResources()
 		case "gcp":
@@ -116,14 +116,14 @@ func getOrphanInfraResources() {
 	tfstate := strings.ToLower(string(buf))
 	for _, rsid := range rs {
 		if !strings.Contains(tfstate, rsid) {
-			fmt.Printf("Orphan: resource id %s not found\n", rsid)
+			fmt.Printf("\nOrphan: resource id %s not found\n", rsid)
 			has_orphan = true
 		}
 	}
 	if (!has_orphan) {
 		fmt.Printf("\nNo orphan %s resource found\n", infraType)
 	} 
-	fmt.Printf("searched %s\n", pathTerraform + "/terraform.tfstate")
+	fmt.Printf("\nsearched %s\n", pathTerraform + "/terraform.tfstate")
 }
 
 func getAWSInfraResources() []string {
@@ -140,15 +140,15 @@ func getAWSInfraResources() []string {
 	capturedOutput, err := captured()
 	checkError(err)
 	re, _ := regexp.Compile(`VPCS.*(vpc-[a-z0-9]*)`)
-    values := re.FindAllStringSubmatch(capturedOutput, -1)
-    if len(values) > 0 {
+	values := re.FindAllStringSubmatch(capturedOutput, -1)
+	if len(values) > 0 {
     	for i:=0; i < len(values); i++ {
     		rs = append(rs, values[i][1])
     	}
     }
-    re, _ = regexp.Compile(`VPCS.*(dopt-[a-z0-9]*)`)
-    values = re.FindAllStringSubmatch(capturedOutput, -1)
-    if len(values) > 0 {
+	re, _ = regexp.Compile(`VPCS.*(dopt-[a-z0-9]*)`)
+	values = re.FindAllStringSubmatch(capturedOutput, -1)
+	if len(values) > 0 {
     	for i:=0; i < len(values); i++ {
     		rs = append(rs, values[i][1])
     	}
@@ -160,12 +160,12 @@ func getAWSInfraResources() []string {
 	capturedOutput, err = captured()
 	checkError(err)
 	re, _ = regexp.Compile(`:subnet\/(subnet-[a-z0-9]*)`)
-    values = re.FindAllStringSubmatch(capturedOutput, -1)
-    if len(values) > 0 {
+	values = re.FindAllStringSubmatch(capturedOutput, -1)
+	if len(values) > 0 {
     	for i:=0; i < len(values); i++ {
     		rs = append(rs, values[i][1])
     	}
-    }   
+	}   
     // fetch shoot security group resources
 	arguments = "aws ec2 describe-security-groups --filter Name=tag:kubernetes.io/cluster/" + shoottag + ",Values=1"
 	captured = capture()
@@ -173,12 +173,12 @@ func getAWSInfraResources() []string {
 	capturedOutput, err = captured()
 	checkError(err)
 	re, _ = regexp.Compile(`sg-[a-z0-9]*`)
-    values = re.FindAllStringSubmatch(capturedOutput, -1)
+	values = re.FindAllStringSubmatch(capturedOutput, -1)
 	if len(values) > 0 {
-    	for i:=0; i < len(values); i++ {
+		for i:=0; i < len(values); i++ {
     		rs = append(rs, values[i][0])
-    	}
-    }
+		}
+	}
     // fetch shoot route table resources
 	arguments = "aws ec2 describe-route-tables --filter Name=tag:kubernetes.io/cluster/" + shoottag + ",Values=1"
 	captured = capture()
@@ -225,6 +225,19 @@ func getAWSInfraResources() []string {
  		for i:=0; i < len(values); i++ {
     		rs = append(rs, values[i][0])
     	}
+	}
+	// fetch shoot bastion instance resource
+	arguments = "aws ec2 describe-instances --filter Name=tag:Name,Values=" + shoottag + "-bastions"
+	captured = capture()
+	operate("aws", arguments)
+	capturedOutput, err = captured()
+	checkError(err)
+	re, _ = regexp.Compile(`shoot--[a-z0-9-]*-bastions`)
+	values = re.FindAllStringSubmatch(capturedOutput, -1)
+	if len(values) > 0 {
+		for i:=0; i < len(values); i++ {
+			rs = append(rs, values[i][0])
+		}
 	}
 	return unique(rs)
 }
