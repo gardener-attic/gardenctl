@@ -90,11 +90,7 @@ func getOrphanInfraResources() {
 	checkError(err)
 	infraType := shoot.Spec.Provider.Type
 
-<<<<<<< HEAD
 	switch infraType {
-=======
-    switch infraType {
->>>>>>> be1ec437... list orphan infra resources
 		case "aws":
 				rs = getAWSInfraResources()
 		case "gcp":
@@ -120,22 +116,14 @@ func getOrphanInfraResources() {
 	tfstate := strings.ToLower(string(buf))
 	for _, rsid := range rs {
 		if !strings.Contains(tfstate, rsid) {
-<<<<<<< HEAD
 			fmt.Printf("\nOrphan: resource id %s not found\n", rsid)
-=======
-			fmt.Printf("Orphan: resource id %s not found\n", rsid)
->>>>>>> be1ec437... list orphan infra resources
 			has_orphan = true
 		}
 	}
 	if (!has_orphan) {
 		fmt.Printf("\nNo orphan %s resource found\n", infraType)
 	} 
-<<<<<<< HEAD
 	fmt.Printf("\nsearched %s\n", pathTerraform + "/terraform.tfstate")
-=======
-	fmt.Printf("searched %s\n", pathTerraform + "/terraform.tfstate")
->>>>>>> be1ec437... list orphan infra resources
 }
 
 func getAWSInfraResources() []string {
@@ -152,26 +140,15 @@ func getAWSInfraResources() []string {
 	capturedOutput, err := captured()
 	checkError(err)
 	re, _ := regexp.Compile(`VPCS.*(vpc-[a-z0-9]*)`)
-<<<<<<< HEAD
 	values := re.FindAllStringSubmatch(capturedOutput, -1)
 	if len(values) > 0 {
-=======
-    values := re.FindAllStringSubmatch(capturedOutput, -1)
-    if len(values) > 0 {
->>>>>>> be1ec437... list orphan infra resources
     	for i:=0; i < len(values); i++ {
     		rs = append(rs, values[i][1])
     	}
     }
-<<<<<<< HEAD
 	re, _ = regexp.Compile(`VPCS.*(dopt-[a-z0-9]*)`)
 	values = re.FindAllStringSubmatch(capturedOutput, -1)
 	if len(values) > 0 {
-=======
-    re, _ = regexp.Compile(`VPCS.*(dopt-[a-z0-9]*)`)
-    values = re.FindAllStringSubmatch(capturedOutput, -1)
-    if len(values) > 0 {
->>>>>>> be1ec437... list orphan infra resources
     	for i:=0; i < len(values); i++ {
     		rs = append(rs, values[i][1])
     	}
@@ -183,21 +160,12 @@ func getAWSInfraResources() []string {
 	capturedOutput, err = captured()
 	checkError(err)
 	re, _ = regexp.Compile(`:subnet\/(subnet-[a-z0-9]*)`)
-<<<<<<< HEAD
 	values = re.FindAllStringSubmatch(capturedOutput, -1)
 	if len(values) > 0 {
     	for i:=0; i < len(values); i++ {
     		rs = append(rs, values[i][1])
     	}
 	}   
-=======
-    values = re.FindAllStringSubmatch(capturedOutput, -1)
-    if len(values) > 0 {
-    	for i:=0; i < len(values); i++ {
-    		rs = append(rs, values[i][1])
-    	}
-    }   
->>>>>>> be1ec437... list orphan infra resources
     // fetch shoot security group resources
 	arguments = "aws ec2 describe-security-groups --filter Name=tag:kubernetes.io/cluster/" + shoottag + ",Values=1"
 	captured = capture()
@@ -205,21 +173,12 @@ func getAWSInfraResources() []string {
 	capturedOutput, err = captured()
 	checkError(err)
 	re, _ = regexp.Compile(`sg-[a-z0-9]*`)
-<<<<<<< HEAD
 	values = re.FindAllStringSubmatch(capturedOutput, -1)
 	if len(values) > 0 {
 		for i:=0; i < len(values); i++ {
     		rs = append(rs, values[i][0])
 		}
 	}
-=======
-    values = re.FindAllStringSubmatch(capturedOutput, -1)
-	if len(values) > 0 {
-    	for i:=0; i < len(values); i++ {
-    		rs = append(rs, values[i][0])
-    	}
-    }
->>>>>>> be1ec437... list orphan infra resources
     // fetch shoot route table resources
 	arguments = "aws ec2 describe-route-tables --filter Name=tag:kubernetes.io/cluster/" + shoottag + ",Values=1"
 	captured = capture()
@@ -267,7 +226,6 @@ func getAWSInfraResources() []string {
     		rs = append(rs, values[i][0])
     	}
 	}
-<<<<<<< HEAD
 	// fetch shoot bastion instance resource
 	arguments = "aws ec2 describe-instances --filter Name=tag:Name,Values=" + shoottag + "-bastions"
 	captured = capture()
@@ -281,8 +239,6 @@ func getAWSInfraResources() []string {
 			rs = append(rs, values[i][0])
 		}
 	}
-=======
->>>>>>> be1ec437... list orphan infra resources
 	return unique(rs)
 }
 
