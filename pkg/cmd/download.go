@@ -58,6 +58,15 @@ func downloadTerraformFiles(option string) string {
 	namespace := ""
 	var target Target
 	ReadTarget(pathTarget, &target)
+	// return path allow non operator download key file
+	if getRole() == "user" {
+		gardenName := target.Stack()[0].Name
+		projectName := target.Stack()[1].Name
+		shootName := target.Stack()[2].Name
+		pathTerraform := filepath.Join(pathGardenHome, "cache", gardenName, "projects", projectName, shootName)
+		return filepath.Join(pathGardenHome, pathTerraform)
+	}
+
 	var err error
 	Client, err = clientToTarget("garden")
 	checkError(err)
@@ -132,7 +141,7 @@ func downloadTerraformFiles(option string) string {
 	checkError(err)
 	err = ioutil.WriteFile(filepath.Join(pathGardenHome, pathTerraform, "terraform.tfvars"), []byte(secret.Data["terraform.tfvars"]), 0644)
 	checkError(err)
-	return (filepath.Join(pathGardenHome, pathTerraform))
+	return filepath.Join(pathGardenHome, pathTerraform)
 }
 
 func downloadLogs(option string) {

@@ -24,8 +24,8 @@ import (
 	openstackinstall "github.com/gardener/gardener-extension-provider-openstack/pkg/apis/openstack/install"
 	openstackv1alpha1 "github.com/gardener/gardener-extension-provider-openstack/pkg/apis/openstack/v1alpha1"
 	gardencorev1beta1 "github.com/gardener/gardener/pkg/apis/core/v1beta1"
-	gardencoreclientset "github.com/gardener/gardener/pkg/client/core/clientset/versioned"
 	"github.com/jmoiron/jsonq"
+	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
@@ -33,31 +33,34 @@ import (
 
 // operate executes a command on specified cli with pulled credentials for target
 func operate(provider, arguments string) {
-	secretName, region := "", ""
-	namespaceSecret := ""
-	profile := ""
+	secretName, region, namespaceSecret, profile := "", "", "", ""
 	var target Target
 	ReadTarget(pathTarget, &target)
 	var err error
+	var secret *v1.Secret
 	Client, err = clientToTarget("garden")
 	checkError(err)
-	gardenClientset, err := gardencoreclientset.NewForConfig(NewConfigFromBytes(*kubeconfig))
+
+	gardenClientset, err := target.GardenerClient()
 	checkError(err)
-	shootList, err := gardenClientset.CoreV1beta1().Shoots("").List(metav1.ListOptions{})
+
+	project, err := gardenClientset.CoreV1beta1().Projects().Get(target.Stack()[1].Name, metav1.GetOptions{})
 	checkError(err)
-	for _, shoot := range shootList.Items {
-		if shoot.Name == target.Target[2].Name && strings.HasSuffix(shoot.Namespace, target.Target[1].Name) {
-			secretBindingName := shoot.Spec.SecretBindingName
-			region = shoot.Spec.Region
-			namespaceSecretBinding := shoot.Namespace
-			profile = shoot.Spec.CloudProfileName
-			secretBinding, err := gardenClientset.CoreV1beta1().SecretBindings(namespaceSecretBinding).Get((secretBindingName), metav1.GetOptions{})
-			checkError(err)
-			secretName = secretBinding.SecretRef.Name
-			namespaceSecret = secretBinding.SecretRef.Namespace
-		}
-	}
-	secret, err := Client.CoreV1().Secrets(namespaceSecret).Get((secretName), metav1.GetOptions{})
+	shoot, err := gardenClientset.CoreV1beta1().Shoots(*project.Spec.Namespace).Get(target.Stack()[2].Name, metav1.GetOptions{})
+	checkError(err)
+
+	secretBindingName := shoot.Spec.SecretBindingName
+	region = shoot.Spec.Region
+	namespaceSecretBinding := shoot.Namespace
+	profile = shoot.Spec.CloudProfileName
+
+	secretBinding, err := gardenClientset.CoreV1beta1().SecretBindings(namespaceSecretBinding).Get((secretBindingName), metav1.GetOptions{})
+	checkError(err)
+
+	secretName = secretBinding.SecretRef.Name
+	namespaceSecret = secretBinding.SecretRef.Namespace
+
+	secret, err = Client.CoreV1().Secrets(namespaceSecret).Get((secretName), metav1.GetOptions{})
 	checkError(err)
 
 	switch provider {
@@ -65,9 +68,7 @@ func operate(provider, arguments string) {
 		accessKeyID := []byte(secret.Data["accessKeyID"])
 		secretAccessKey := []byte(secret.Data["secretAccessKey"])
 		err := ExecCmd(nil, arguments, false, "AWS_ACCESS_KEY_ID="+string(accessKeyID[:]), "AWS_SECRET_ACCESS_KEY="+string(secretAccessKey[:]), "AWS_DEFAULT_REGION="+region, "AWS_DEFAULT_OUTPUT=text")
-		if err != nil {
-			os.Exit(2)
-		}
+		checkError(err)
 	case "gcp":
 		serviceaccount := []byte(secret.Data["serviceaccount.json"])
 		data := map[string]interface{}{}
@@ -76,7 +77,7 @@ func operate(provider, arguments string) {
 		tmpFile, err := ioutil.TempFile(os.TempDir(), "tmpFile-")
 		checkError(err)
 		defer os.Remove(tmpFile.Name())
-		 _, err = tmpFile.Write(serviceaccount)
+		_, err = tmpFile.Write(serviceaccount)
 		checkError(err)
 		err = tmpFile.Close()
 		checkError(err)

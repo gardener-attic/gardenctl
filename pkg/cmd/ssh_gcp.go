@@ -85,7 +85,7 @@ func sshToGCPNode(nodeName, path, user, pathSSKeypair string, sshPublicKey []byt
 // fetchAttributes gets all the needed attributes for creating bastion host and its security group with given <nodeName>.
 func (g *GCPInstanceAttribute) fetchGCPAttributes(nodeName, path string) {
 	var err error
-	g.ShootName = getShootClusterName()
+	g.ShootName = getTechnicalID()
 	g.BastionHostName = g.ShootName + "-bastions"
 	g.FirewallRuleName = g.ShootName + "-allow-ssh-access"
 	g.Subnetwork = g.ShootName + "-nodes"
