@@ -99,6 +99,18 @@ githubURL: https://github.location.company.corp
 gardenClusters:
 - name: dev
   kubeConfig: ~/clusters/dev/kubeconfig.yaml
+  dashboardUrl: https://url_to_dashboard
+  accessRestrictions:
+  - key: seed.gardener.cloud/eu-access
+    notifyIf: true 
+    msg: warning msg
+    options:
+    - key: support.gardener.cloud/eu-access-for-cluster-addons
+      notifyIf: true
+      msg: warning msg
+    - key: support.gardener.cloud/eu-access-for-cluster-nodes
+      notifyIf: true
+      msg: warning msg
 - name: prod
   kubeConfig: ~/clusters/prod/kubeconfig.yaml
 ```
