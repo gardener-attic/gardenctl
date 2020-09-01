@@ -18,6 +18,7 @@ import (
 	"errors"
 	"fmt"
 	"io/ioutil"
+	"os"
 	"path/filepath"
 
 	gardencorev1beta1 "github.com/gardener/gardener/pkg/apis/core/v1beta1"
@@ -49,9 +50,7 @@ func NewSSHCmd(reader TargetReader, ioStreams IOStreams) *cobra.Command {
 			}
 
 			shoot, err := FetchShootFromTarget(target)
-			if err != nil {
-				return err
-			}
+			checkError(err)
 
 			if len(args) == 0 {
 				return printNodeNames(shoot.Name)
@@ -121,9 +120,7 @@ func getSSHKeypair(shoot *gardencorev1beta1.Shoot) *v1.Secret {
 // printNodeNames print all nodes in k8s cluster
 func printNodeNames(shootName string) error {
 	machineList, err := getMachineList(shootName)
-	if err != nil {
-		return err
-	}
+	checkError(err)
 
 	fmt.Println("Nodes:")
 	for _, machine := range machineList.Items {
@@ -147,20 +144,27 @@ echo "gardener ALL=(ALL) NOPASSWD:ALL" >/etc/sudoers.d/99-gardener-user
 }
 
 func getMachineList(shootName string) (*v1alpha1.MachineList, error) {
+	if getRole() == "user" {
+		var target Target
+		ReadTarget(pathTarget, &target)
+		clientset, err := target.K8SClientToKind("shoot")
+		checkError(err)
+		fmt.Printf("%s\n", "Nodes")
+		list, _ := clientset.CoreV1().Nodes().List(metav1.ListOptions{})
+		for _, node := range list.Items {
+			fmt.Printf("%s\n", node.Name)
+		}
+		os.Exit(0)
+	}
+
 	config, err := clientcmd.BuildConfigFromFlags("", getKubeConfigOfClusterType("seed"))
-	if err != nil {
-		return nil, err
-	}
+	checkError(err)
 	client, err := mcmv1alpha1.NewForConfig(config)
-	if err != nil {
-		return nil, err
-	}
+	checkError(err)
 
 	shootNamespace := getSeedNamespaceNameForShoot(shootName)
 	machines, err := client.MachineV1alpha1().Machines(shootNamespace).List(metav1.ListOptions{})
-	if err != nil {
-		return nil, err
-	}
+	checkError(err)
 
 	return machines, nil
 }

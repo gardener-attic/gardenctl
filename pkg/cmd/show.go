@@ -253,7 +253,7 @@ func showVpnShoot() {
 func showPrometheus() {
 	username, password = getMonitoringCredentials()
 	showPod("prometheus", "seed")
-	output, err := ExecCmdReturnOutput("bash", "-c", "export KUBECONFIG="+KUBECONFIG+"; kubectl get ingress prometheus -n "+getShootClusterName())
+	output, err := ExecCmdReturnOutput("bash", "-c", "export KUBECONFIG="+KUBECONFIG+"; kubectl get ingress prometheus -n "+getTechnicalID())
 	if err != nil {
 		fmt.Println("Cmd was unsuccessful")
 		os.Exit(2)
@@ -275,7 +275,7 @@ func showPrometheus() {
 func showAltermanager() {
 	username, password = getMonitoringCredentials()
 	showPod("alertmanager", "seed")
-	output, err := ExecCmdReturnOutput("bash", "-c", "export KUBECONFIG="+KUBECONFIG+"; kubectl get ingress alertmanager -n "+getShootClusterName())
+	output, err := ExecCmdReturnOutput("bash", "-c", "export KUBECONFIG="+KUBECONFIG+"; kubectl get ingress alertmanager -n "+getTechnicalID())
 	if err != nil {
 		fmt.Println("Cmd was unsuccessful")
 		os.Exit(2)
@@ -352,7 +352,7 @@ func showKubernetesDashboard() {
 func showGrafana() {
 	username, password = getMonitoringCredentials()
 	showPod("grafana", "seed")
-	output, err := ExecCmdReturnOutput("bash", "-c", "export KUBECONFIG="+KUBECONFIG+"; kubectl get ingress grafana -n "+getShootClusterName())
+	output, err := ExecCmdReturnOutput("bash", "-c", "export KUBECONFIG="+KUBECONFIG+"; kubectl get ingress grafana -n "+getTechnicalID())
 	if err != nil {
 		fmt.Println("Cmd was unsuccessful")
 		os.Exit(2)
@@ -382,7 +382,7 @@ func showKibana() {
 	if len(target.Target) == 2 {
 		namespace = "garden"
 	} else if len(target.Target) == 3 {
-		namespace = getShootClusterName()
+		namespace = getTechnicalID()
 	}
 
 	output, err := ExecCmdReturnOutput("bash", "-c", "export KUBECONFIG="+KUBECONFIG+"; kubectl get ingress kibana -n "+namespace)

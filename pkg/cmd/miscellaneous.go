@@ -15,7 +15,6 @@
 package cmd
 
 import (
-	"bufio"
 	"errors"
 	"flag"
 	"fmt"
@@ -116,32 +115,6 @@ func clientToTarget(target TargetKind) (*k8s.Clientset, error) {
 	checkError(err)
 	clientset, err := k8s.NewForConfig(config)
 	return clientset, err
-}
-
-// getShootClusterName returns the clustername of the shoot cluster
-func getShootClusterName() (clustername string) {
-	clustername = ""
-	file, _ := os.Open(getKubeConfigOfCurrentTarget())
-	defer file.Close()
-	scanner := bufio.NewScanner(file)
-	scanner.Split(bufio.ScanLines)
-	for scanner.Scan() {
-		if strings.Contains(scanner.Text(), "current-context:") {
-			clustername = strings.TrimPrefix(scanner.Text(), "current-context: ")
-		}
-	}
-	// retrieve full clustername
-	Client, err := clientToTarget("seed")
-	checkError(err)
-	namespaces, err := Client.CoreV1().Namespaces().List(metav1.ListOptions{})
-	checkError(err)
-	for _, namespace := range namespaces.Items {
-		if strings.HasSuffix(namespace.Name, clustername) {
-			clustername = namespace.Name
-			break
-		}
-	}
-	return clustername
 }
 
 // getMonitoringCredentials returns username and password required for url login to the montiring tools
@@ -357,4 +330,36 @@ func getPublicIP() string {
 	ip, err := ioutil.ReadAll(resp.Body)
 	checkError(err)
 	return string(ip)
+}
+
+// get role either user or operator
+func getRole() string {
+	var role string
+	// will refactor in https://github.com/gardener/gardenctl/issues/266
+	KUBECONFIG = getKubeConfigOfClusterType("garden")
+	out, err := ExecCmdReturnOutput("kubectl", "--kubeconfig="+KUBECONFIG, "auth", "can-i", "get", "secret", "-A")
+	if err == nil {
+		if out == "yes" {
+			role = "operator"
+		}
+	} else {
+		role = "user"
+	}
+	return role
+}
+
+/*
+getTechnicalID returns the Technical Id, which used as clustername of the shoot cluster
+*/
+func getTechnicalID() string {
+	var target Target
+	ReadTarget(pathTarget, &target)
+
+	gardenClientset, err := target.GardenerClient()
+	checkError(err)
+	project, err := gardenClientset.CoreV1beta1().Projects().Get(target.Stack()[1].Name, metav1.GetOptions{})
+	checkError(err)
+	shoot, err := gardenClientset.CoreV1beta1().Shoots(*project.Spec.Namespace).Get(target.Stack()[2].Name, metav1.GetOptions{})
+	checkError(err)
+	return shoot.Status.TechnicalID
 }
