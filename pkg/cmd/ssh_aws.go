@@ -223,13 +223,10 @@ func (a *AwsInstanceAttribute) createBastionHostSecurityGroup() {
 	arguments = fmt.Sprintf("aws ec2 create-tags --resources %s  --tags Key=component,Value=gardenctl", a.BastionSecurityGroupID)
 	operate("aws", arguments)
 
-	if net.IP.To4([]byte(a.MyPublicIP)) != nil {
+	if net.ParseIP(a.MyPublicIP).To4() != nil {
 		arguments = fmt.Sprintf("aws ec2 authorize-security-group-ingress --group-id %s --protocol tcp --port 22 --cidr %s/32", a.BastionSecurityGroupID, a.MyPublicIP)
-	} else if net.IP.To16([]byte(a.MyPublicIP)) != nil {
+	} else if net.ParseIP(a.MyPublicIP).To16() != nil {
 		arguments = fmt.Sprintf("aws ec2 authorize-security-group-ingress --group-id %s --ip-permissions IpProtocol=tcp,FromPort=22,ToPort=22,Ipv6Ranges=[{CidrIpv6=%s/64}]", a.BastionSecurityGroupID, a.MyPublicIP)
-	} else {
-		fmt.Printf("IP not valid:" + a.MyPublicIP)
-		os.Exit(0)
 	}
 	operate("aws", arguments)
 	fmt.Println("Bastion host security group set up.")
