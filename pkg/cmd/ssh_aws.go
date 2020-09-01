@@ -17,6 +17,7 @@ package cmd
 import (
 	"fmt"
 	"io/ioutil"
+	"net"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -56,7 +57,7 @@ type AwsInstanceAttribute struct {
 func sshToAWSNode(nodeName, path, user, pathSSKeypair string, sshPublicKey []byte, myPublicIP string) {
 	a := &AwsInstanceAttribute{}
 	a.SSHPublicKey = sshPublicKey
-	a.MyPublicIP = myPublicIP + "/32"
+	a.MyPublicIP = myPublicIP
 
 	fmt.Println("")
 
@@ -212,7 +213,7 @@ func (a *AwsInstanceAttribute) createBastionHostSecurityGroup() {
 		return
 	}
 
-	// create security group and ssh rule
+	// create security group for bastion host
 	arguments := fmt.Sprintf("aws ec2 create-security-group --group-name %s --description ssh-access --vpc-id %s", a.BastionSecurityGroupName, a.VpcID)
 	captured := capture()
 	operate("aws", arguments)
@@ -221,10 +222,17 @@ func (a *AwsInstanceAttribute) createBastionHostSecurityGroup() {
 	a.BastionSecurityGroupID = strings.Trim((capturedOutput), "\n")
 	arguments = fmt.Sprintf("aws ec2 create-tags --resources %s  --tags Key=component,Value=gardenctl", a.BastionSecurityGroupID)
 	operate("aws", arguments)
-	arguments = fmt.Sprintf("aws ec2 authorize-security-group-ingress --group-id %s --protocol tcp --port 22 --cidr %s", a.BastionSecurityGroupID, a.MyPublicIP)
+
+	if net.IP.To4([]byte(a.MyPublicIP)) != nil {
+		arguments = fmt.Sprintf("aws ec2 authorize-security-group-ingress --group-id %s --protocol tcp --port 22 --cidr %s/32", a.BastionSecurityGroupID, a.MyPublicIP)
+	} else if net.IP.To16([]byte(a.MyPublicIP)) != nil {
+		arguments = fmt.Sprintf("aws ec2 authorize-security-group-ingress --group-id %s --ip-permissions IpProtocol=tcp,FromPort=22,ToPort=22,Ipv6Ranges=[{CidrIpv6=%s/64}]", a.BastionSecurityGroupID, a.MyPublicIP)
+	} else {
+		fmt.Printf("IP not valid:" + a.MyPublicIP)
+		os.Exit(0)
+	}
 	operate("aws", arguments)
 	fmt.Println("Bastion host security group set up.")
-
 }
 
 func (a *AwsInstanceAttribute) createNodeHostSecurityGroup() {

@@ -20,10 +20,10 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
-	"strconv"
 	"strings"
 
 	"github.com/gardener/gardener/pkg/apis/core"
@@ -300,22 +300,8 @@ func capture() func() (string, error) {
 	}
 }
 
-func isIP(word string) bool {
-	parts := strings.Split(word, ".")
-	if len(parts) < 4 {
-		return false
-	}
-	for _, x := range parts {
-		if i, err := strconv.Atoi(x); err == nil {
-			if i < 0 || i > 255 {
-				return false
-			}
-		} else {
-			return false
-		}
-
-	}
-	return true
+func isIPv4(host string) bool {
+	return net.ParseIP(host) != nil && net.ParseIP(host).To4() != nil
 }
 
 func getPublicIP() string {
@@ -329,6 +315,10 @@ func getPublicIP() string {
 	defer resp.Body.Close()
 	ip, err := ioutil.ReadAll(resp.Body)
 	checkError(err)
+	if !isIPv4(string(ip)) {
+		fmt.Println("Not valid ipv4 address")
+		os.Exit(1)
+	}
 	return string(ip)
 }
 
