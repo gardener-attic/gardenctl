@@ -189,7 +189,7 @@ func runCommand(args []string) {
 func logPod(toMatch string, toTarget string, container string) {
 	var target Target
 	ReadTarget(pathTarget, &target)
-	if len(target.Target) < 3 {
+	if len(target.Target) < 3 || (len(target.Stack()) == 3 && target.Stack()[2].Kind == "namespace") {
 		fmt.Println("No shoot targeted")
 		os.Exit(2)
 	}
