@@ -26,6 +26,8 @@ import (
 	"os"
 	"strings"
 
+	authorizationv1 "k8s.io/api/authorization/v1"
+
 	"github.com/gardener/gardener/pkg/apis/core"
 	"github.com/gardener/gardener/pkg/apis/core/v1beta1"
 	gardencorev1beta1 "github.com/gardener/gardener/pkg/apis/core/v1beta1"
@@ -324,14 +326,23 @@ func getPublicIP() string {
 
 // get role either user or operator
 func getRole() string {
+	var target Target
 	var role string
-	// will refactor in https://github.com/gardener/gardenctl/issues/266
-	KUBECONFIG = getKubeConfigOfClusterType("garden")
-	out, err := ExecCmdReturnOutput("kubectl", "--kubeconfig="+KUBECONFIG, "auth", "can-i", "get", "secret", "-A")
-	if err == nil {
-		if out == "yes" {
-			role = "operator"
-		}
+	ReadTarget(pathTarget, &target)
+	clientset, err := target.K8SClientToKind("garden")
+	checkError(err)
+	ssar := &authorizationv1.SelfSubjectAccessReview{
+		Spec: authorizationv1.SelfSubjectAccessReviewSpec{
+			ResourceAttributes: &authorizationv1.ResourceAttributes{
+				Verb:     "get",
+				Resource: "secret",
+			},
+		},
+	}
+	ssar, err = clientset.AuthorizationV1().SelfSubjectAccessReviews().Create(ssar)
+	checkError(err)
+	if ssar.Status.Allowed {
+		role = "operator"
 	} else {
 		role = "user"
 	}
