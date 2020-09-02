@@ -16,6 +16,8 @@ package cmd
 
 import (
 	"errors"
+	"fmt"
+	"os"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -31,7 +33,10 @@ func NewAwsCmd(targetReader TargetReader) *cobra.Command {
 			if !CheckShootIsTargeted(target) {
 				return errors.New("no shoot targeted")
 			}
-
+			if !CheckToolInstalled("aws") {
+				fmt.Println("Please go to https://docs.aws.amazon.com/cli/latest/userguide/cli-chap-install.html for how to install aws cli")
+				os.Exit(2)
+			}
 			arguments := "aws " + strings.Join(args[:], " ")
 			operate("aws", arguments)
 
