@@ -43,11 +43,28 @@ func operate(provider, arguments string) {
 
 	gardenClientset, err := target.GardenerClient()
 	checkError(err)
-
-	project, err := gardenClientset.CoreV1beta1().Projects().Get(target.Stack()[1].Name, metav1.GetOptions{})
-	checkError(err)
-	shoot, err := gardenClientset.CoreV1beta1().Shoots(*project.Spec.Namespace).Get(target.Stack()[2].Name, metav1.GetOptions{})
-	checkError(err)
+	var shoot *gardencorev1beta1.Shoot
+	if target.Stack()[1].Kind == "project" {
+		project, err := gardenClientset.CoreV1beta1().Projects().Get(target.Stack()[1].Name, metav1.GetOptions{})
+		checkError(err)
+		shoot, err = gardenClientset.CoreV1beta1().Shoots(*project.Spec.Namespace).Get(target.Stack()[2].Name, metav1.GetOptions{})
+		checkError(err)
+	} else if target.Stack()[1].Kind == "seed" {
+		shootList, err := gardenClientset.CoreV1beta1().Shoots("").List(metav1.ListOptions{})
+		checkError(err)
+		var filteredShoots []gardencorev1beta1.Shoot
+		for _, s := range shootList.Items {
+			if s.Name == target.Stack()[2].Name {
+				filteredShoots = append(filteredShoots, s)
+			}
+		}
+		if len(filteredShoots) > 1 {
+			fmt.Println("There's more than one shoot with same name " + target.Stack()[2].Name + " in seed " + target.Stack()[1].Name)
+			fmt.Println("Please target the shoot using project")
+			os.Exit(2)
+		}
+		shoot = &(filteredShoots[0])
+	}
 
 	secretBindingName := shoot.Spec.SecretBindingName
 	region = shoot.Spec.Region
