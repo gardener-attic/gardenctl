@@ -54,7 +54,7 @@ func operate(provider, arguments string) {
 		checkError(err)
 		var filteredShoots []gardencorev1beta1.Shoot
 		for _, s := range shootList.Items {
-			if s.Name == target.Stack()[2].Name {
+			if s.Name == target.Stack()[2].Name && *s.Spec.SeedName == target.Stack()[1].Name {
 				filteredShoots = append(filteredShoots, s)
 			}
 		}
