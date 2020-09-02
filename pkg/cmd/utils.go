@@ -254,3 +254,13 @@ func GardenctlInfoLog(logMsg string) {
 	var logger = gardenerlogger.NewLogger("info")
 	logger.Infof(logMsg)
 }
+
+//CheckToolInstalled checks whether cliName is installed on local machine
+func CheckToolInstalled(cliName string) bool {
+	_, err := exec.LookPath(cliName)
+	if err != nil {
+		fmt.Println(cliName + " is not installed on your system")
+		return false
+	}
+	return true
+}
