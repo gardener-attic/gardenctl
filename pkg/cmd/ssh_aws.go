@@ -102,7 +102,7 @@ func sshToAWSNode(nodeName, path, user, pathSSKeypair string, sshPublicKey []byt
 	}
 }
 
-// fetchAwsAttributes gets all the needed attributes for creating bastion host and its security group with given <nodeName> by usering aws cli for non-operator user
+// fetchAwsAttributes gets all the needed attributes for creating bastion host and its security group with given <nodeName> by using aws cli for non-operator user
 func (a *AwsInstanceAttribute) fetchAwsAttributesByCLI(nodeName, path string) {
 	a.ShootName = getTechnicalID()
 	publicUtility := a.ShootName + "-public-utility-z0"
