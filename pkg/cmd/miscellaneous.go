@@ -317,9 +317,9 @@ func getPublicIP() string {
 	defer resp.Body.Close()
 	ip, err := ioutil.ReadAll(resp.Body)
 	checkError(err)
-	if !isIPv4(string(ip)) {
-		fmt.Println("Not valid ipv4 address")
-		os.Exit(1)
+	if net.ParseIP(string(ip)) == nil {
+		fmt.Printf("IP not valid:" + string(ip))
+		os.Exit(0)
 	}
 	return string(ip)
 }
