@@ -62,6 +62,10 @@ func downloadTerraformFiles(option string) string {
 	if getRole() == "user" {
 		gardenName := target.Stack()[0].Name
 		projectName := target.Stack()[1].Name
+		if (len(target.Stack()) < 3) || (len(target.Stack()) == 3 && target.Stack()[2].Kind == "namespace") {
+			fmt.Println("No Shoot targeted")
+			os.Exit(2)
+		}
 		shootName := target.Stack()[2].Name
 		pathTerraform := filepath.Join(pathGardenHome, "cache", gardenName, "projects", projectName, shootName)
 		return filepath.Join(pathGardenHome, pathTerraform)
@@ -73,7 +77,7 @@ func downloadTerraformFiles(option string) string {
 	gardenName := target.Stack()[0].Name
 	pathSeedCache := filepath.Join("cache", gardenName, "seeds")
 	pathProjectCache := filepath.Join("cache", gardenName, "projects")
-	if len(target.Stack()) < 3 && (option == "infra" || option == "internal-dns" || option == "external-dns" || option == "ingress" || option == "backup") {
+	if (len(target.Stack()) < 3 && (option == "infra" || option == "internal-dns" || option == "external-dns" || option == "ingress" || option == "backup")) || (len(target.Stack()) == 3 && target.Stack()[2].Kind == "namespace") {
 		fmt.Println("No Shoot targeted")
 		os.Exit(2)
 	} else if len(target.Stack()) < 3 {
