@@ -75,7 +75,7 @@ func sshToAZNode(nodeName, path, user, pathSSKeypair string, sshPublicKey []byte
 	fmt.Println("")
 
 	key := filepath.Join(pathSSKeypair, "key")
-	args := []string{"-i" + key, "-oStrictHostKeyChecking=no ", node}
+	args := []string{"-i" + key, "-oStrictHostKeyChecking=no", node}
 	if debugSwitch {
 		args = append([]string{"-vvv"}, args...)
 	}
