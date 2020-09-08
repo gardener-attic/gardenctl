@@ -37,7 +37,7 @@ func NewTerraformCmd(targetReader TargetReader) *cobra.Command {
 			}
 
 			arguments := "terraform " + strings.Join(args[:], " ")
-			terraform(arguments)
+			terraform(arguments, targetReader)
 
 			return nil
 		},
@@ -45,25 +45,24 @@ func NewTerraformCmd(targetReader TargetReader) *cobra.Command {
 }
 
 // terraform executes a terraform command on targeted cluster
-func terraform(args string) {
+func terraform(args string, targetReader TargetReader) {
 	_, err := exec.LookPath("terraform")
 	if err != nil {
 		fmt.Println("Terraform is not installed on your system")
 		os.Exit(2)
 	}
-	var target Target
-	ReadTarget(pathTarget, &target)
+	target := targetReader.ReadTarget(pathTarget)
 	gardenName := target.Stack()[0].Name
 	pathTerraform := ""
 
-	if target.Target[1].Kind == "project" {
-		pathTerraform = filepath.Join(pathGardenHome, "cache", gardenName, "projects", target.Target[1].Name, target.Target[2].Name, "terraform")
-	} else if target.Target[1].Kind == "seed" {
-		pathTerraform = filepath.Join(pathGardenHome, "cache", gardenName, "seeds", target.Target[1].Name, target.Target[2].Name, "terraform")
+	if target.Stack()[1].Kind == "project" {
+		pathTerraform = filepath.Join(pathGardenHome, "cache", gardenName, "projects", target.Stack()[1].Name, target.Stack()[2].Name, "terraform")
+	} else if target.Stack()[1].Kind == "seed" {
+		pathTerraform = filepath.Join(pathGardenHome, "cache", gardenName, "seeds", target.Stack()[1].Name, target.Stack()[2].Name, "terraform")
 	}
 
 	if strings.HasSuffix(args, "init") {
-		pathTerraform = downloadTerraformFiles("infra")
+		pathTerraform = downloadTerraformFiles("infra", targetReader)
 		fmt.Println("Downloaded terraform config to " + pathTerraform)
 	}
 
