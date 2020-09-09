@@ -15,6 +15,7 @@
 package cmd
 
 import (
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -30,42 +31,45 @@ import (
 )
 
 // NewDownloadCmd returns a new download command.
-func NewDownloadCmd() *cobra.Command {
+func NewDownloadCmd(targetReader TargetReader) *cobra.Command {
 	return &cobra.Command{
 		Use:   "download tf + (infra|internal-dns|external-dns|ingress|backup)\n  gardenctl download logs vpn\n ",
 		Short: "Download terraform configuration/state for local execution for the targeted shoot or log files",
-		Run: func(cmd *cobra.Command, args []string) {
+		RunE: func(cmd *cobra.Command, args []string) error {
 			if len(args) != 2 || !(args[1] == "infra" || args[1] == "internal-dns" || args[1] == "external-dns" || args[1] == "ingress" || args[1] == "backup" || args[1] == "vpn") {
-				fmt.Println("Command must be in the format:\n  download tf + (infra|internal-dns|external-dns|ingress|backup)\n  download logs vpn")
-				os.Exit(2)
+				return errors.New("Command must be in the format:\n  download tf + (infra|internal-dns|external-dns|ingress|backup)\n  download logs vpn")
 			}
 			switch args[0] {
 			case "tf":
-				path := downloadTerraformFiles(args[1])
+				path := downloadTerraformFiles(args[1], targetReader)
 				fmt.Println("Downloaded to " + path)
 			case "logs":
-				downloadLogs(args[1])
+				downloadLogs(args[1], targetReader)
 			default:
 				fmt.Println("Command must be in the format:\n  download tf + (infra|internal-dns|external-dns|ingress|backup)\n  download logs vpn")
 			}
+			return nil
 		},
 		ValidArgs: []string{"tf"},
 	}
 }
 
 // downloadTerraformFiles downloads the corresponding tf file
-func downloadTerraformFiles(option string) string {
+func downloadTerraformFiles(option string, targetReader TargetReader) string {
 	namespace := ""
-	var target Target
-	ReadTarget(pathTarget, &target)
+	target := targetReader.ReadTarget(pathTarget)
 	// return path allow non operator download key file
 	if getRole() == "user" {
-		gardenName := target.Stack()[0].Name
-		projectName := target.Stack()[1].Name
 		if (len(target.Stack()) < 3) || (len(target.Stack()) == 3 && target.Stack()[2].Kind == "namespace") {
 			fmt.Println("No Shoot targeted")
 			os.Exit(2)
+		} else if target.Stack()[1].Kind == "seed" {
+			fmt.Println("Currently target stack is garden/seed/shoot which doesn't allow user role to access shoot via seed")
+			fmt.Println("Please target shoot via `gardenctl target shoot` directly or target shoot via project")
+			os.Exit(2)
 		}
+		gardenName := target.Stack()[0].Name
+		projectName := target.Stack()[1].Name
 		shootName := target.Stack()[2].Name
 		pathTerraform := filepath.Join(pathGardenHome, "cache", gardenName, "projects", projectName, shootName)
 		return filepath.Join(pathGardenHome, pathTerraform)
@@ -122,20 +126,20 @@ func downloadTerraformFiles(option string) string {
 		Client, err = k8s.NewForConfig(config)
 		checkError(err)
 	}
-	cmTfConfig, err := Client.CoreV1().ConfigMaps(namespace).Get((target.Target[2].Name + "." + option + ".tf-config"), metav1.GetOptions{})
+	cmTfConfig, err := Client.CoreV1().ConfigMaps(namespace).Get((target.Stack()[2].Name + "." + option + ".tf-config"), metav1.GetOptions{})
 	checkError(err)
-	cmTfState, err := Client.CoreV1().ConfigMaps(namespace).Get((target.Target[2].Name + "." + option + ".tf-state"), metav1.GetOptions{})
+	cmTfState, err := Client.CoreV1().ConfigMaps(namespace).Get((target.Stack()[2].Name + "." + option + ".tf-state"), metav1.GetOptions{})
 	checkError(err)
-	secret, err := Client.CoreV1().Secrets(namespace).Get((target.Target[2].Name + "." + option + ".tf-vars"), metav1.GetOptions{})
+	secret, err := Client.CoreV1().Secrets(namespace).Get((target.Stack()[2].Name + "." + option + ".tf-vars"), metav1.GetOptions{})
 	checkError(err)
 	pathTerraform := ""
-	if target.Target[1].Kind == "project" {
-		CreateDir(filepath.Join(pathGardenHome, pathProjectCache, target.Target[1].Name, target.Target[2].Name, "terraform"), 0751)
-		pathTerraform = filepath.Join("cache", gardenName, "projects", target.Target[1].Name, target.Target[2].Name, "terraform")
+	if target.Stack()[1].Kind == "project" {
+		CreateDir(filepath.Join(pathGardenHome, pathProjectCache, target.Stack()[1].Name, target.Stack()[2].Name, "terraform"), 0751)
+		pathTerraform = filepath.Join("cache", gardenName, "projects", target.Stack()[1].Name, target.Stack()[2].Name, "terraform")
 
-	} else if target.Target[1].Kind == "seed" {
-		CreateDir(filepath.Join(pathGardenHome, pathSeedCache, target.Target[1].Name, target.Target[2].Name, "terraform"), 0751)
-		pathTerraform = filepath.Join("cache", gardenName, "seeds", target.Target[1].Name, target.Target[2].Name, "terraform")
+	} else if target.Stack()[1].Kind == "seed" {
+		CreateDir(filepath.Join(pathGardenHome, pathSeedCache, target.Stack()[1].Name, target.Stack()[2].Name, "terraform"), 0751)
+		pathTerraform = filepath.Join("cache", gardenName, "seeds", target.Stack()[1].Name, target.Stack()[2].Name, "terraform")
 	}
 	err = ioutil.WriteFile(filepath.Join(pathGardenHome, pathTerraform, "main.tf"), []byte(cmTfConfig.Data["main.tf"]), 0644)
 	checkError(err)
@@ -148,11 +152,10 @@ func downloadTerraformFiles(option string) string {
 	return filepath.Join(pathGardenHome, pathTerraform)
 }
 
-func downloadLogs(option string) {
+func downloadLogs(option string, targetReader TargetReader) {
 	dir, err := os.Getwd()
 	checkError(err)
-	var target Target
-	ReadTarget(pathTarget, &target)
+	target := targetReader.ReadTarget(pathTarget)
 	Client, err = clientToTarget("garden")
 	checkError(err)
 	gardenName := target.Stack()[0].Name
