@@ -16,6 +16,7 @@ package cmd
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -48,14 +49,17 @@ var flags *logFlags
 func NewLogsCmd() *cobra.Command {
 	flags = newLogsFlags()
 	cmd := &cobra.Command{
-		Use:   "logs (gardener-apiserver|gardener-controller-manager|gardener-dashboard|api|scheduler|controller-manager|etcd-operator|etcd-main[etcd backup-restore]|etcd-main-backup|etcd-events[etcd backup-restore]|addon-manager|vpn-seed|vpn-shoot|machine-controller-manager|kubernetes-dashboard|prometheus|grafana|alertmanager|tf (infra|dns|ingress)|cluster-autoscaler)",
-		Short: "Show and optionally follow logs of given component\n",
-		PreRun: func(cmd *cobra.Command, args []string) {
-			validateArgs(args)
+		Use:          "logs (gardener-apiserver|gardener-controller-manager|gardener-dashboard|api|scheduler|controller-manager|etcd-operator|etcd-main[etcd backup-restore]|etcd-main-backup|etcd-events[etcd backup-restore]|addon-manager|vpn-seed|vpn-shoot|machine-controller-manager|kubernetes-dashboard|prometheus|grafana|alertmanager|tf (infra|dns|ingress)|cluster-autoscaler)",
+		Short:        "Show and optionally follow logs of given component\n",
+		SilenceUsage: true,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			err := validateArgs(args)
+			if err != nil {
+				return err
+			}
 			validateFlags(flags)
-		},
-		Run: func(cmd *cobra.Command, args []string) {
 			runCommand(args)
+			return nil
 		},
 		ValidArgs: []string{"gardener-apiserver", "gardener-controller-manager", "gardener-dashboard", "api", "scheduler", "controller-manager", "etcd-operator", "etcd-main", "etcd-events", "addon-manager", "vpn-seed", "vpn-shoot", "auto-node-repair", "kubernetes-dashboard", "prometheus", "grafana", "alertmanager", "tf"},
 		Aliases:   []string{"log"},
@@ -69,23 +73,20 @@ func NewLogsCmd() *cobra.Command {
 	return cmd
 }
 
-func validateArgs(args []string) {
+func validateArgs(args []string) error {
 	if len(args) < 1 || len(args) > 3 {
-		fmt.Println("Command must be in the format: logs (gardener-apiserver|gardener-controller-manager|gardener-dashboard|api|scheduler|controller-manager|etcd-operator|etcd-main[etcd backup-restore]|etcd-events[etcd backup-restore]|addon-manager|vpn-seed|vpn-shoot|machine-controller-manager|kubernetes-dashboard|prometheus|grafana|alertmanager|tf (infra|dns|ingress)|cluster-autoscaler flags(--loki|--elasticsearch|--tail|--since|--since-time|--timestamps)")
-		os.Exit(2)
+		return errors.New("Command must be in the format: logs (gardener-apiserver|gardener-controller-manager|gardener-dashboard|api|scheduler|controller-manager|etcd-operator|etcd-main[etcd backup-restore]|etcd-events[etcd backup-restore]|addon-manager|vpn-seed|vpn-shoot|machine-controller-manager|kubernetes-dashboard|prometheus|grafana|alertmanager|tf (infra|dns|ingress)|cluster-autoscaler flags(--loki|--elasticsearch|--tail|--since|--since-time|--timestamps)")
 	}
 	var t Target
 	ReadTarget(pathTarget, &t)
 	if len(t.Target) < 3 && (args[0] != "gardener-apiserver") && (args[0] != "gardener-controller-manager") && (args[0] != "tf") && (args[0] != "kubernetes-dashboard") {
-		fmt.Println("No shoot targeted")
-		os.Exit(2)
+		return errors.New("No shoot targeted")
 	} else if (len(t.Target) < 2 && (args[0] == "tf")) || len(t.Target) < 3 && (args[0] == "tf") && (t.Target[1].Kind != "seed") {
-		fmt.Println("No seed or shoot targeted")
-		os.Exit(2)
+		return errors.New("No seed or shoot targeted")
 	} else if len(t.Target) == 0 {
-		fmt.Println("Target stack is empty")
-		os.Exit(2)
+		return errors.New("Target stack is empty")
 	}
+	return nil
 }
 
 func validateFlags(flags *logFlags) {
