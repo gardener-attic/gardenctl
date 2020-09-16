@@ -229,10 +229,7 @@ func (g *GCPInstanceAttribute) createBastionHostInstance() {
 
 // getGCPMachineClasses returns the machine classes for shoot
 func getGCPMachineClasses() *v1alpha1.GCPMachineClassList {
-	tempTarget := Target{}
-	ReadTarget(pathTarget, &tempTarget)
-	shootName := tempTarget.Target[2].Name
-	shootNamespace := getSeedNamespaceNameForShoot(shootName)
+	shootNamespace := getTechnicalID()
 
 	config, err := clientcmd.BuildConfigFromFlags("", getKubeConfigOfClusterType("seed"))
 	checkError(err)

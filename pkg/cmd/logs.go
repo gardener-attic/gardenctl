@@ -193,7 +193,7 @@ func logPod(toMatch string, toTarget string, container string) {
 		fmt.Println("No shoot targeted")
 		os.Exit(2)
 	}
-	namespace := getSeedNamespaceNameForShoot(target.Target[2].Name)
+	namespace := getTechnicalID()
 	var err error
 
 	project, err := getProjectForShoot()

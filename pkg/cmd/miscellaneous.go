@@ -31,7 +31,6 @@ import (
 	"github.com/gardener/gardener/pkg/apis/core"
 	"github.com/gardener/gardener/pkg/apis/core/v1beta1"
 	gardencorev1beta1 "github.com/gardener/gardener/pkg/apis/core/v1beta1"
-	gardencoreclientset "github.com/gardener/gardener/pkg/client/core/clientset/versioned"
 	"gopkg.in/yaml.v2"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
@@ -121,10 +120,7 @@ func clientToTarget(target TargetKind) (*k8s.Clientset, error) {
 
 // getMonitoringCredentials returns username and password required for url login to the montiring tools
 func getMonitoringCredentials() (username, password string) {
-	var target Target
-	ReadTarget(pathTarget, &target)
-	shootName := target.Target[2].Name
-	shootNamespace := getSeedNamespaceNameForShoot(shootName)
+	shootNamespace := getTechnicalID()
 	var err error
 	Client, err = clientToTarget("seed")
 	checkError(err)
@@ -145,7 +141,7 @@ func getLoggingCredentials() (username, password string) {
 		namespace = "garden"
 		secretName = "seed-logging-ingress-credentials"
 	} else if len(target.Target) == 3 {
-		namespace = getSeedNamespaceNameForShoot(target.Target[2].Name)
+		namespace = getTechnicalID()
 		secretName = "logging-ingress-credentials"
 	}
 	var err error
@@ -156,34 +152,6 @@ func getLoggingCredentials() (username, password string) {
 	username = string(monitoringSecret.Data["username"][:])
 	password = string(monitoringSecret.Data["password"][:])
 	return username, password
-}
-
-// getSeedNamespaceNameForShoot returns namespace name
-func getSeedNamespaceNameForShoot(shootName string) (namespaceSeed string) {
-	var target Target
-	ReadTarget(pathTarget, &target)
-	var err error
-	Client, err = clientToTarget("garden")
-	checkError(err)
-	gardenClientset, err := gardencoreclientset.NewForConfig(NewConfigFromBytes(*kubeconfig))
-	checkError(err)
-	var shoot *gardencorev1beta1.Shoot
-	if target.Stack()[1].Kind == "project" {
-		project, err := gardenClientset.CoreV1beta1().Projects().Get(target.Stack()[1].Name, metav1.GetOptions{})
-		checkError(err)
-		shoot, err = gardenClientset.CoreV1beta1().Shoots(*project.Spec.Namespace).Get(target.Stack()[2].Name, metav1.GetOptions{})
-		checkError(err)
-	} else {
-		shootList, err := gardenClientset.CoreV1beta1().Shoots("").List(metav1.ListOptions{})
-		checkError(err)
-		for index, s := range shootList.Items {
-			if s.Name == target.Stack()[2].Name && *s.Spec.SeedName == target.Stack()[1].Name {
-				shoot = &shootList.Items[index]
-				break
-			}
-		}
-	}
-	return shoot.Status.TechnicalID
 }
 
 // getProjectForShoot returns the Project for Shoot
@@ -349,18 +317,40 @@ func getRole() string {
 	return role
 }
 
+//get Project object base on local File ~/.garden/sessions/plantingSession/target stack()[1] input
+func getProjectObject() *gardencorev1beta1.Project {
+	var target Target
+	clientset, err := target.GardenerClient()
+	checkError(err)
+	ReadTarget(pathTarget, &target)
+	project, err := clientset.CoreV1beta1().Projects().Get(target.Stack()[1].Name, metav1.GetOptions{})
+	checkError(err)
+	return project
+}
+
+//get Shoot object base on local File ~/.garden/sessions/plantingSession/target stack()[2] input
+func getshootObject() *gardencorev1beta1.Shoot {
+	var target Target
+	clientset, err := target.GardenerClient()
+	checkError(err)
+	ReadTarget(pathTarget, &target)
+	project := getProjectObject()
+
+	shoot, err := clientset.CoreV1beta1().Shoots(*project.Spec.Namespace).Get(target.Stack()[2].Name, metav1.GetOptions{})
+	checkError(err)
+	return shoot
+}
+
+// get Seed Name base on local File ~/.garden/sessions/plantingSession/target Stack()[1] input
+func getSeedName() string {
+	shoot := getshootObject()
+	return *shoot.Spec.SeedName
+}
+
 /*
-getTechnicalID returns the Technical Id, which used as clustername of the shoot cluster
+getTechnicalID returns the Technical Id as shoot namespaces, shoot--i000000--demo
 */
 func getTechnicalID() string {
-	var target Target
-	ReadTarget(pathTarget, &target)
-
-	gardenClientset, err := target.GardenerClient()
-	checkError(err)
-	project, err := gardenClientset.CoreV1beta1().Projects().Get(target.Stack()[1].Name, metav1.GetOptions{})
-	checkError(err)
-	shoot, err := gardenClientset.CoreV1beta1().Shoots(*project.Spec.Namespace).Get(target.Stack()[2].Name, metav1.GetOptions{})
-	checkError(err)
+	shoot := getshootObject()
 	return shoot.Status.TechnicalID
 }

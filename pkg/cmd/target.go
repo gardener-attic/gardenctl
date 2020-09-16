@@ -27,7 +27,6 @@ import (
 	"strings"
 
 	gardencorev1beta1 "github.com/gardener/gardener/pkg/apis/core/v1beta1"
-	gardencoreclientset "github.com/gardener/gardener/pkg/client/core/clientset/versioned"
 	"github.com/spf13/cobra"
 	"gopkg.in/yaml.v2"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -685,31 +684,6 @@ func getProjectNameByShootNamespace(k8sClientToGarden kubernetes.Interface, shoo
 	return labelValue, nil
 }
 
-// getSeedForProject
-func getSeedForProject(shootName string) (seedName string) {
-	var err error
-	Client, err = clientToTarget("garden")
-	checkError(err)
-	gardenClientset, err := gardencoreclientset.NewForConfig(NewConfigFromBytes(*kubeconfig))
-	checkError(err)
-	shootList, err := gardenClientset.CoreV1beta1().Shoots("").List(metav1.ListOptions{})
-	// temporary solution , will clean up code in ticket move get seed out of targetShoot method #269
-	if err != nil {
-		if strings.Contains(err.Error(), "forbidden") {
-			fmt.Printf(warningColor, "\nWarning:\nYou are user role!\n\n")
-		} else {
-			checkError(err)
-		}
-	}
-
-	for _, item := range shootList.Items {
-		if item.Name == shootName {
-			seedName = *item.Spec.SeedName
-		}
-	}
-	return seedName
-}
-
 // getKubeConfigOfClusterType return config of specified type
 func getKubeConfigOfClusterType(clusterType TargetKind) (pathToKubeconfig string) {
 	var target Target
@@ -722,11 +696,11 @@ func getKubeConfigOfClusterType(clusterType TargetKind) (pathToKubeconfig string
 		if target.Target[1].Kind == "seed" {
 			pathToKubeconfig = filepath.Join(pathGardenHome, "cache", gardenName, "seeds", target.Target[1].Name, "kubeconfig.yaml")
 		} else {
-			pathToKubeconfig = filepath.Join(pathGardenHome, "cache", gardenName, "seeds", getSeedForProject(target.Target[2].Name), "kubeconfig.yaml")
+			pathToKubeconfig = filepath.Join(pathGardenHome, "cache", gardenName, "seeds", getSeedName(), "kubeconfig.yaml")
 		}
 	case TargetKindShoot:
 		if target.Target[1].Kind == "seed" {
-			pathToKubeconfig = filepath.Join(pathGardenHome, "cache", gardenName, "seeds", getSeedForProject(target.Target[2].Name), target.Target[2].Name, "kubeconfig.yaml")
+			pathToKubeconfig = filepath.Join(pathGardenHome, "cache", gardenName, "seeds", getSeedName(), target.Target[2].Name, "kubeconfig.yaml")
 		} else if target.Target[1].Kind == "project" {
 			pathToKubeconfig = filepath.Join(pathGardenHome, "cache", gardenName, "projects", target.Target[1].Name, target.Target[2].Name, "kubeconfig.yaml")
 		}

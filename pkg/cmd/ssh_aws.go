@@ -353,10 +353,7 @@ func (a *AwsInstanceAttribute) createBastionHostInstance() {
 
 // getAWSMachineClasses returns machine classes for the cluster nodes
 func getAWSMachineClasses() *v1alpha1.AWSMachineClassList {
-	tempTarget := Target{}
-	ReadTarget(pathTarget, &tempTarget)
-	shootName := tempTarget.Target[2].Name
-	shootNamespace := getSeedNamespaceNameForShoot(shootName)
+	shootNamespace := getTechnicalID()
 
 	config, err := clientcmd.BuildConfigFromFlags("", getKubeConfigOfClusterType("seed"))
 	checkError(err)

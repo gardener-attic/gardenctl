@@ -162,7 +162,7 @@ func getMachineList(shootName string) (*v1alpha1.MachineList, error) {
 	client, err := mcmv1alpha1.NewForConfig(config)
 	checkError(err)
 
-	shootNamespace := getSeedNamespaceNameForShoot(shootName)
+	shootNamespace := getTechnicalID()
 	machines, err := client.MachineV1alpha1().Machines(shootNamespace).List(metav1.ListOptions{})
 	checkError(err)
 

@@ -176,7 +176,7 @@ func showPod(toMatch string, toTarget TargetKind, targetReader TargetReader) {
 	if len(target.Stack()) == 2 {
 		namespace = "garden"
 	} else if len(target.Stack()) == 3 {
-		namespace = getSeedNamespaceNameForShoot(target.Stack()[2].Name)
+		namespace = getTechnicalID()
 	}
 
 	var err error

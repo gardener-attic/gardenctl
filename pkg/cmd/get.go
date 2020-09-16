@@ -194,7 +194,7 @@ func getSeed(name string, targetReader TargetReader, ioStreams IOStreams) error 
 		if len(target.Stack()) > 1 && target.Stack()[1].Kind == "seed" {
 			name = target.Stack()[1].Name
 		} else if len(target.Stack()) > 1 && target.Stack()[1].Kind == "project" && len(target.Stack()) == 3 {
-			name = getSeedForProject(target.Stack()[2].Name)
+			name = getSeedName()
 		} else {
 			return errors.New("no seed targeted or shoot targeted")
 		}
