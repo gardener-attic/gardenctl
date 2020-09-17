@@ -338,6 +338,7 @@ func getShootObject() *gardencorev1beta1.Shoot {
 	clientset, err := target.GardenerClient()
 	checkError(err)
 	shootName, err := lookupTargetInfo("shoot")
+	checkError(err)
 	projectName := getProjectObject()
 	shoot, err = clientset.CoreV1beta1().Shoots(*projectName.Spec.Namespace).Get(shootName, metav1.GetOptions{})
 	checkError(err)
@@ -389,6 +390,7 @@ func setTargetInfo() Target {
 		projectName := targetMap["project"]
 
 		project, err := clientset.CoreV1beta1().Projects().Get(projectName, metav1.GetOptions{})
+		checkError(err)
 		shoot, err := clientset.CoreV1beta1().Shoots(*project.Spec.Namespace).Get(shootname, metav1.GetOptions{})
 		checkError(err)
 		seedName := shoot.Spec.SeedName
