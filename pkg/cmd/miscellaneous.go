@@ -317,40 +317,102 @@ func getRole() string {
 	return role
 }
 
-//get Project object base on local File ~/.garden/sessions/plantingSession/target stack()[1] input
+//get Project object base on local File ~/.garden/sessions/plantingSession/target input
 func getProjectObject() *gardencorev1beta1.Project {
 	var target Target
 	clientset, err := target.GardenerClient()
 	checkError(err)
-	ReadTarget(pathTarget, &target)
-	project, err := clientset.CoreV1beta1().Projects().Get(target.Stack()[1].Name, metav1.GetOptions{})
+
+	projectName, err := lookupTargetInfo("project")
+	checkError(err)
+
+	project, err := clientset.CoreV1beta1().Projects().Get(projectName, metav1.GetOptions{})
 	checkError(err)
 	return project
 }
 
-//get Shoot object base on local File ~/.garden/sessions/plantingSession/target stack()[2] input
-func getshootObject() *gardencorev1beta1.Shoot {
+//get Shoot object base on local File ~/.garden/sessions/plantingSession/target input
+func getShootObject() *gardencorev1beta1.Shoot {
 	var target Target
+	var shoot *gardencorev1beta1.Shoot
 	clientset, err := target.GardenerClient()
 	checkError(err)
-	ReadTarget(pathTarget, &target)
-	project := getProjectObject()
-
-	shoot, err := clientset.CoreV1beta1().Shoots(*project.Spec.Namespace).Get(target.Stack()[2].Name, metav1.GetOptions{})
+	shootName, err := lookupTargetInfo("shoot")
+	projectName := getProjectObject()
+	shoot, err = clientset.CoreV1beta1().Shoots(*projectName.Spec.Namespace).Get(shootName, metav1.GetOptions{})
 	checkError(err)
+
 	return shoot
 }
 
-// get Seed Name base on local File ~/.garden/sessions/plantingSession/target Stack()[1] input
+// get Seed Name base on local File ~/.garden/sessions/plantingSession/target input
 func getSeedName() string {
-	shoot := getshootObject()
-	return *shoot.Spec.SeedName
+	seedName, err := lookupTargetInfo("seed")
+	checkError(err)
+	return seedName
 }
 
 /*
 getTechnicalID returns the Technical Id as shoot namespaces, shoot--i000000--demo
 */
 func getTechnicalID() string {
-	shoot := getshootObject()
+	shoot := getShootObject()
 	return shoot.Status.TechnicalID
+}
+
+/*
+set up target info always retun garden,project,seed,shoot
+*/
+func setTargetInfo() Target {
+	var target Target
+	ReadTarget(pathTarget, &target)
+
+	// create map[key]value
+	targetMap := make(map[string]string)
+	for _, t := range target.Stack() {
+		targetMap[string(t.Kind)] = string(t.Name)
+	}
+
+	// if seed in map add Meta data Project "garden"
+	if _, ok := targetMap["seed"]; ok {
+		new := target.Stack()[:]
+		new = append(new, TargetMeta{
+			Kind: TargetKindProject,
+			Name: "garden",
+		})
+		target.SetStack(new)
+	} else {
+		clientset, err := target.GardenerClient()
+		checkError(err)
+
+		shootname := targetMap["shoot"]
+		projectName := targetMap["project"]
+
+		project, err := clientset.CoreV1beta1().Projects().Get(projectName, metav1.GetOptions{})
+		shoot, err := clientset.CoreV1beta1().Shoots(*project.Spec.Namespace).Get(shootname, metav1.GetOptions{})
+		checkError(err)
+		seedName := shoot.Spec.SeedName
+		new := target.Stack()[:]
+		new = append(new, TargetMeta{
+			Kind: TargetKindSeed,
+			Name: *seedName,
+		})
+		target.SetStack(new)
+
+	}
+	return target
+}
+
+/*
+lookupTargetInfo("project") return "garden-i000000"
+*/
+func lookupTargetInfo(kindName string) (string, error) {
+	list := setTargetInfo()
+	for _, t := range list.Stack() {
+		if string(t.Kind) == kindName {
+			return string(t.Name), nil
+		}
+	}
+
+	return "", fmt.Errorf("Kind %q not found", kindName)
 }
