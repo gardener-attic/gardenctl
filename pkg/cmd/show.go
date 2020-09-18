@@ -247,7 +247,7 @@ func showVpnShoot(targetReader TargetReader) {
 func showPrometheus(targetReader TargetReader) {
 	username, password = getMonitoringCredentials()
 	showPod("prometheus", "seed", targetReader)
-	output, err := ExecCmdReturnOutput("bash", "-c", "export KUBECONFIG="+KUBECONFIG+"; kubectl get ingress prometheus -n "+getTechnicalID())
+	output, err := ExecCmdReturnOutput("bash", "-c", "export KUBECONFIG="+KUBECONFIG+"; kubectl get ingress prometheus -n "+getTechnicalID("shoot"))
 	if err != nil {
 		fmt.Println("Cmd was unsuccessful")
 		os.Exit(2)
@@ -269,7 +269,7 @@ func showPrometheus(targetReader TargetReader) {
 func showAltermanager(targetReader TargetReader) {
 	username, password = getMonitoringCredentials()
 	showPod("alertmanager", "seed", targetReader)
-	output, err := ExecCmdReturnOutput("bash", "-c", "export KUBECONFIG="+KUBECONFIG+"; kubectl get ingress alertmanager -n "+getTechnicalID())
+	output, err := ExecCmdReturnOutput("bash", "-c", "export KUBECONFIG="+KUBECONFIG+"; kubectl get ingress alertmanager -n "+getTechnicalID("shoot"))
 	if err != nil {
 		fmt.Println("Cmd was unsuccessful")
 		os.Exit(2)
@@ -345,11 +345,13 @@ func showKubernetesDashboard(targetReader TargetReader) {
 func showGrafana(targetReader TargetReader) {
 	username, password = getMonitoringCredentials()
 	showPod("grafana", "seed", targetReader)
-	output, err := ExecCmdReturnOutput("bash", "-c", "export KUBECONFIG="+KUBECONFIG+"; kubectl get ingress grafana -n "+getTechnicalID())
+	output, err := ExecCmdReturnOutput("bash", "-c", "export KUBECONFIG="+KUBECONFIG+"; kubectl get ingress grafana -n "+getTechnicalID("seed"))
 	if err != nil {
 		fmt.Println("Cmd was unsuccessful")
 		os.Exit(2)
 	}
+	//TODO "grafana-operators-xx" and "grafana-users-xxx" Pods return and with msg "Cmd was unsuccessful" as wel before refactor getTechnicalID . will check later
+
 	list := strings.Split(output, " ")
 	url := "-"
 	for _, val := range list {
@@ -375,7 +377,7 @@ func showKibana(targetReader TargetReader) {
 	if len(target.Target) == 2 {
 		namespace = "garden"
 	} else if len(target.Target) == 3 {
-		namespace = getTechnicalID()
+		namespace = getTechnicalID("shoot") //TODO 1) target shoot, 2) "secrets "logging-ingress-credentials" not found" before refactor getTechnicalID, will check later
 	}
 
 	output, err := ExecCmdReturnOutput("bash", "-c", "export KUBECONFIG="+KUBECONFIG+"; kubectl get ingress kibana -n "+namespace)

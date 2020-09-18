@@ -350,17 +350,23 @@ func getRole() string {
 }
 
 /*
-getTechnicalID returns the Technical Id, which used as clustername of the shoot cluster
+getTechnicalID returns the Technical Id for shoot or seed, used for namespace, clustername,
 */
-func getTechnicalID() string {
+func getTechnicalID(shootName string) string {
 	var target Target
 	ReadTarget(pathTarget, &target)
+	var out string
+	var err error
+	switch shootName {
+	case "shoot":
+		KUBECONFIG := getKubeConfigOfClusterType("shoot")
+		out, err = ExecCmdReturnOutput("kubectl", "--kubeconfig="+KUBECONFIG, "config", "view", "-o", "jsonpath={.clusters[0].name}")
+		checkError(err)
+	case "seed":
+		KUBECONFIG := getKubeConfigOfClusterType("seed")
+		out, err = ExecCmdReturnOutput("kubectl", "--kubeconfig="+KUBECONFIG, "config", "view", "-o", "jsonpath={.clusters[0].name}")
+		checkError(err)
+	}
 
-	gardenClientset, err := target.GardenerClient()
-	checkError(err)
-	project, err := gardenClientset.CoreV1beta1().Projects().Get(target.Stack()[1].Name, metav1.GetOptions{})
-	checkError(err)
-	shoot, err := gardenClientset.CoreV1beta1().Shoots(*project.Spec.Namespace).Get(target.Stack()[2].Name, metav1.GetOptions{})
-	checkError(err)
-	return shoot.Status.TechnicalID
+	return out
 }

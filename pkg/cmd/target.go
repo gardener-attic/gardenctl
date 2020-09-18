@@ -688,6 +688,7 @@ func getProjectNameByShootNamespace(k8sClientToGarden kubernetes.Interface, shoo
 // getSeedForProject
 func getSeedForProject(shootName string) (seedName string) {
 	var err error
+	technicalID := getTechnicalID("shoot")
 	Client, err = clientToTarget("garden")
 	checkError(err)
 	gardenClientset, err := gardencoreclientset.NewForConfig(NewConfigFromBytes(*kubeconfig))
@@ -703,7 +704,7 @@ func getSeedForProject(shootName string) (seedName string) {
 	}
 
 	for _, item := range shootList.Items {
-		if item.Name == shootName {
+		if item.Name == shootName && technicalID == item.Status.TechnicalID {
 			seedName = *item.Spec.SeedName
 		}
 	}
