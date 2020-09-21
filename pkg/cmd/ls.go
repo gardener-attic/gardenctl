@@ -348,8 +348,7 @@ func getSeedsWithShootsForProject(ioStreams IOStreams) {
 //getNamespaces get all namespaces based on current kubeconfig
 func getNamespaces(ioStreams IOStreams) {
 	currentConfig := getKubeConfigOfCurrentTarget()
-
-	out, err := ExecCmdReturnOutput("bash", "-c", "export KUBECONFIG="+currentConfig+"; kubectl get ns")
+	out, err := ExecCmdReturnOutput("kubectl", "--kubeconfig="+currentConfig, "get", "ns")
 	if err != nil {
 		fmt.Println(err)
 	}
