@@ -17,6 +17,7 @@ package cmd
 import (
 	"errors"
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -49,6 +50,9 @@ func NewShowCmd(targetReader TargetReader) *cobra.Command {
 				fmt.Println("Target stack is empty")
 				os.Exit(2)
 			}
+
+			// Set up global map variable targetInfo and key validation check
+
 			switch args[0] {
 			case "operator":
 				showOperator()
@@ -245,17 +249,10 @@ func showVpnShoot(targetReader TargetReader) {
 func showPrometheus(targetReader TargetReader) {
 	username, password = getMonitoringCredentials()
 	showPod("prometheus", "seed", targetReader)
-	output, err := ExecCmdReturnOutput("kubectl", "--kubeconfig="+KUBECONFIG, "get", "ingress", "prometheus", "-n", getTechnicalID())
+	KUBECONFIG := getKubeConfigOfClusterType("seed")
+	url, err := ExecCmdReturnOutput("kubectl", "--kubeconfig="+KUBECONFIG, "get", "ingress", "prometheus", "-n", getFromTargetInfo("shootTechnicalID"), "--no-headers", "-o", "custom-columns=:spec.rules[].host")
 	if err != nil {
-		fmt.Println("Cmd was unsuccessful")
-		os.Exit(2)
-	}
-	list := strings.Split(output, " ")
-	url := "-"
-	for _, val := range list {
-		if strings.HasPrefix(val, "p.") {
-			url = val
-		}
+		log.Fatalf("Cmd was unsuccessful")
 	}
 	url = "https://" + username + ":" + password + "@" + url
 	fmt.Println("URL: " + url)
@@ -267,7 +264,7 @@ func showPrometheus(targetReader TargetReader) {
 func showAltermanager(targetReader TargetReader) {
 	username, password = getMonitoringCredentials()
 	showPod("alertmanager", "seed", targetReader)
-	output, err := ExecCmdReturnOutput("kubectl", "--kubeconfig="+KUBECONFIG, "get", "ingress", "alertmanager", "-n", getTechnicalID())
+	output, err := ExecCmdReturnOutput("kubectl", "--kubeconfig="+KUBECONFIG, "get", "ingress", "alertmanager", "-n", getFromTargetInfo("shootTechnicalID"))
 	if err != nil {
 		fmt.Println("Cmd was unsuccessful")
 		os.Exit(2)
@@ -343,10 +340,9 @@ func showKubernetesDashboard(targetReader TargetReader) {
 func showGrafana(targetReader TargetReader) {
 	username, password = getMonitoringCredentials()
 	showPod("grafana", "seed", targetReader)
-	output, err := ExecCmdReturnOutput("kubectl", "--kubeconfig="+KUBECONFIG, "get", "ingress", "grafana", "-n", getTechnicalID())
+	output, err := ExecCmdReturnOutput("kubectl", "--kubeconfig="+KUBECONFIG, "get", "ingress", "grafana", "-n", getFromTargetInfo("shootTechnicalID"))
 	if err != nil {
-		fmt.Println("Cmd was unsuccessful")
-		os.Exit(2)
+		log.Fatalf("Cmd was unsuccessful")
 	}
 	list := strings.Split(output, " ")
 	url := "-"
