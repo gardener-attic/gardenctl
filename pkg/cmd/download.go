@@ -205,8 +205,9 @@ func downloadLogs(option string, targetReader TargetReader) {
 		pathLogsSeeds := filepath.Join(dir, "seeds", *shoot.Spec.SeedName, shoot.ObjectMeta.GetNamespace(), shoot.Name, "logs", "vpn")
 		for _, pod := range pods.Items {
 			if strings.Contains(pod.Name, "prometheus-0") {
-				fmt.Println("bash", "-c", "export KUBECONFIG="+KUBECONFIG+"; kubectl logs "+pod.Name+" -c "+"vpn-seed"+" -n "+shoot.Status.TechnicalID)
-				output, err := ExecCmdReturnOutput("bash", "-c", "export KUBECONFIG="+KUBECONFIG+"; kubectl logs "+pod.Name+" -c "+"vpn-seed"+" -n "+shoot.Status.TechnicalID)
+				args := []string{"--kubeconfig=" + KUBECONFIG, "logs", pod.Name, "-c", "prometheus", "-n", shoot.Status.TechnicalID}
+				fmt.Println(strings.Join(append([]string{"kubectl"}, args...), " "))
+				output, err := ExecCmdReturnOutput("kubectl", args...)
 				if err != nil {
 					fmt.Println("Could not execute cmd")
 					continue
@@ -218,13 +219,15 @@ func downloadLogs(option string, targetReader TargetReader) {
 				}
 			}
 			if strings.Contains(pod.Name, "kube-apiserver") {
-				fmt.Println("bash", "-c", "export KUBECONFIG="+KUBECONFIG+"; kubectl logs "+pod.Name+" -c "+"vpn-seed"+" -n "+shoot.Status.TechnicalID)
-				output, err := ExecCmdReturnOutput("bash", "-c", "export KUBECONFIG="+KUBECONFIG+"; kubectl logs "+pod.Name+" -c "+"vpn-seed"+" -n "+shoot.Status.TechnicalID)
+				args := []string{"--kubeconfig=" + KUBECONFIG, "logs", pod.Name, "-c", "vpn-seed", "-n", shoot.Status.TechnicalID}
+				fmt.Println(strings.Join(append([]string{"kubectl"}, args...), " "))
+				output, err := ExecCmdReturnOutput("kubectl", args...)
 				if err != nil {
 					fmt.Println("Could not execute cmd")
 					continue
 				}
-				err = ioutil.WriteFile(filepath.Join(pathLogsSeeds, "vpn-seed-", pod.Name), []byte(output), 0644)
+
+				err = ioutil.WriteFile(filepath.Join(pathLogsSeeds, strings.Join(append([]string{"vpn-seed-"}, pod.Name), "")), []byte(output), 0644)
 				if err != nil {
 					fmt.Println("Could not write logs")
 					continue
@@ -261,8 +264,9 @@ func downloadLogs(option string, targetReader TargetReader) {
 		pathLogsShoots := filepath.Join(dir, "seeds", *shoot.Spec.SeedName, shoot.ObjectMeta.GetNamespace(), shoot.Name, "logs", "vpn")
 		for _, pod := range pods.Items {
 			if strings.Contains(pod.Name, "vpn-shoot-") {
-				fmt.Println("bash", "-c", "export KUBECONFIG="+KUBECONFIG+"; kubectl logs "+pod.Name+" -n "+"kube-system")
-				output, err := ExecCmdReturnOutput("bash", "-c", "export KUBECONFIG="+KUBECONFIG+"; kubectl logs "+pod.Name+" -n "+"kube-system")
+				args := []string{"--kubeconfig=" + KUBECONFIG, "logs", pod.Name, "-n", "kube-system"}
+				fmt.Println(strings.Join(append([]string{"kubectl"}, args...), " "))
+				output, err := ExecCmdReturnOutput("kubectl", args...)
 				if err != nil {
 					fmt.Println("Could not execute cmd")
 					continue
