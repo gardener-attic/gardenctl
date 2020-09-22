@@ -1127,14 +1127,14 @@ func namespaceWrapper(targetReader TargetReader, targetWriter TargetWriter, kube
 
 	currentConfig := getKubeConfigOfCurrentTarget()
 
-	out, err := ExecCmdReturnOutput("bash", "-c", "export KUBECONFIG="+currentConfig+"; kubectl config current-context")
+	out, err := ExecCmdReturnOutput("kubectl", "--kubeconfig="+currentConfig, "config", "current-context")
 	if err != nil {
 		fmt.Println(err)
 	}
 	currentConext := strings.TrimSuffix(string(out), "\n")
 	fmt.Println("Namespace:")
 	fmt.Printf("Set namespace to %s for current context %s \n", kubectlNameSpace, currentConext)
-	out, err = ExecCmdReturnOutput("bash", "-c", "export KUBECONFIG="+currentConfig+"; kubectl config set-context "+currentConext+" --namespace="+kubectlNameSpace)
+	out, err = ExecCmdReturnOutput("kubectl", "--kubeconfig="+currentConfig, "config", "set-context", currentConext, "--namespace="+kubectlNameSpace)
 	if err != nil {
 		fmt.Println(err)
 		return err
