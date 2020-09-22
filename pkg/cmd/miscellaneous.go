@@ -335,7 +335,7 @@ func getRole() string {
 		Spec: authorizationv1.SelfSubjectAccessReviewSpec{
 			ResourceAttributes: &authorizationv1.ResourceAttributes{
 				Verb:     "get",
-				Resource: "secret",
+				Resource: "secrets",
 			},
 		},
 	}
