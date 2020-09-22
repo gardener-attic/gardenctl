@@ -134,7 +134,7 @@ func showOperator() {
 // showUI opens the gardener landing page
 func showGardenerDashboard() {
 	showPodGarden("gardener-dashboard", "garden")
-	output, err := ExecCmdReturnOutput("bash", "-c", "export KUBECONFIG="+KUBECONFIG+"; kubectl get ingress gardener-dashboard-ingress -n garden")
+	output, err := ExecCmdReturnOutput("kubectl", "--kubeconfig="+KUBECONFIG, "get", "ingress", "gardener-dashboard-ingress", "-n", "garden")
 	if err != nil {
 		fmt.Println("Cmd was unsuccessful")
 		os.Exit(2)
@@ -247,7 +247,7 @@ func showVpnShoot(targetReader TargetReader) {
 func showPrometheus(targetReader TargetReader) {
 	username, password = getMonitoringCredentials()
 	showPod("prometheus", "seed", targetReader)
-	output, err := ExecCmdReturnOutput("bash", "-c", "export KUBECONFIG="+KUBECONFIG+"; kubectl get ingress prometheus -n "+getTechnicalID())
+	output, err := ExecCmdReturnOutput("kubectl", "--kubeconfig="+KUBECONFIG, "get", "ingress", "prometheus", "-n", getTechnicalID())
 	if err != nil {
 		fmt.Println("Cmd was unsuccessful")
 		os.Exit(2)
@@ -269,7 +269,7 @@ func showPrometheus(targetReader TargetReader) {
 func showAltermanager(targetReader TargetReader) {
 	username, password = getMonitoringCredentials()
 	showPod("alertmanager", "seed", targetReader)
-	output, err := ExecCmdReturnOutput("bash", "-c", "export KUBECONFIG="+KUBECONFIG+"; kubectl get ingress alertmanager -n "+getTechnicalID())
+	output, err := ExecCmdReturnOutput("kubectl", "--kubeconfig="+KUBECONFIG, "get", "ingress", "alertmanager", "-n", getTechnicalID())
 	if err != nil {
 		fmt.Println("Cmd was unsuccessful")
 		os.Exit(2)
@@ -345,7 +345,7 @@ func showKubernetesDashboard(targetReader TargetReader) {
 func showGrafana(targetReader TargetReader) {
 	username, password = getMonitoringCredentials()
 	showPod("grafana", "seed", targetReader)
-	output, err := ExecCmdReturnOutput("bash", "-c", "export KUBECONFIG="+KUBECONFIG+"; kubectl get ingress grafana -n "+getTechnicalID())
+	output, err := ExecCmdReturnOutput("kubectl", "--kubeconfig="+KUBECONFIG, "get", "ingress", "grafana", "-n", getTechnicalID())
 	if err != nil {
 		fmt.Println("Cmd was unsuccessful")
 		os.Exit(2)
@@ -378,7 +378,7 @@ func showKibana(targetReader TargetReader) {
 		namespace = getTechnicalID()
 	}
 
-	output, err := ExecCmdReturnOutput("bash", "-c", "export KUBECONFIG="+KUBECONFIG+"; kubectl get ingress kibana -n "+namespace)
+	output, err := ExecCmdReturnOutput("kubectl", "--kubeconfig="+KUBECONFIG, "get", "ingress", "kibana", "-n", namespace)
 	if err != nil {
 		fmt.Println("Cmd was unsuccessful")
 		os.Exit(2)
@@ -407,7 +407,7 @@ func showTerraform(name string) {
 	count := 0
 	for _, pod := range pods.Items {
 		if strings.Contains(pod.Name, name) && pod.Status.Phase == "Running" {
-			output, err = ExecCmdReturnOutput("bash", "-c", "export KUBECONFIG="+KUBECONFIG+"; kubectl get pods "+pod.Name+" -o wide -n "+pod.Namespace)
+			output, err = ExecCmdReturnOutput("kubectl", "--kubeconfig="+KUBECONFIG, "get", "pods", pod.Name, "-o", "wide", "-n", pod.Namespace)
 			if err != nil {
 				fmt.Println("Cmd was unsuccessful")
 				os.Exit(2)
