@@ -49,7 +49,7 @@ var flags *logFlags
 func NewLogsCmd() *cobra.Command {
 	flags = newLogsFlags()
 	cmd := &cobra.Command{
-		Use:          "logs (gardener-apiserver|gardener-controller-manager|gardener-dashboard|api|scheduler|controller-manager|etcd-operator|etcd-main[etcd backup-restore]|etcd-main-backup|etcd-events[etcd backup-restore]|addon-manager|vpn-seed|vpn-shoot|machine-controller-manager|kubernetes-dashboard|prometheus|grafana|alertmanager|tf (infra|dns|ingress)|cluster-autoscaler)",
+		Use:          "logs (gardener-apiserver|gardener-controller-manager|gardener-dashboard|api|scheduler|controller-manager|etcd-operator|etcd-main[etcd backup-restore]|etcd-main-backup|etcd-events[etcd backup-restore]|addon-manager|vpn-seed|vpn-shoot|machine-controller-manager|kubernetes-dashboard|prometheus|grafana|alertmanager|gardenlet|tf (infra|dns|ingress)|cluster-autoscaler)",
 		Short:        "Show and optionally follow logs of given component\n",
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -61,7 +61,7 @@ func NewLogsCmd() *cobra.Command {
 			runCommand(args)
 			return nil
 		},
-		ValidArgs: []string{"gardener-apiserver", "gardener-controller-manager", "gardener-dashboard", "api", "scheduler", "controller-manager", "etcd-operator", "etcd-main", "etcd-events", "addon-manager", "vpn-seed", "vpn-shoot", "auto-node-repair", "kubernetes-dashboard", "prometheus", "grafana", "alertmanager", "tf"},
+		ValidArgs: []string{"gardener-apiserver", "gardener-controller-manager", "gardener-dashboard", "api", "scheduler", "controller-manager", "etcd-operator", "etcd-main", "etcd-events", "addon-manager", "vpn-seed", "vpn-shoot", "auto-node-repair", "kubernetes-dashboard", "prometheus", "grafana", "alertmanager", "gardenlet", "tf"},
 		Aliases:   []string{"log"},
 	}
 	cmd.Flags().Int64Var(&flags.tail, "tail", 200, "Lines of recent log file to display. Defaults to 200 with no selector, if a selector is provided takes the number of specified lines (max 100 000 for loki).")
@@ -75,7 +75,7 @@ func NewLogsCmd() *cobra.Command {
 
 func validateArgs(args []string) error {
 	if len(args) < 1 || len(args) > 3 {
-		return errors.New("Command must be in the format: logs (gardener-apiserver|gardener-controller-manager|gardener-dashboard|api|scheduler|controller-manager|etcd-operator|etcd-main[etcd backup-restore]|etcd-events[etcd backup-restore]|addon-manager|vpn-seed|vpn-shoot|machine-controller-manager|kubernetes-dashboard|prometheus|grafana|alertmanager|tf (infra|dns|ingress)|cluster-autoscaler flags(--loki|--elasticsearch|--tail|--since|--since-time|--timestamps)")
+		return errors.New("Command must be in the format: logs (gardener-apiserver|gardener-controller-manager|gardener-dashboard|api|scheduler|controller-manager|etcd-operator|etcd-main[etcd backup-restore]|etcd-events[etcd backup-restore]|addon-manager|vpn-seed|vpn-shoot|machine-controller-manager|kubernetes-dashboard|prometheus|grafana|alertmanager|gardenlet|tf (infra|dns|ingress)|cluster-autoscaler flags(--loki|--elasticsearch|--tail|--since|--since-time|--timestamps)")
 	}
 	var t Target
 	ReadTarget(pathTarget, &t)
@@ -159,6 +159,8 @@ func runCommand(args []string) {
 		logsGrafana()
 	case "alertmanager":
 		logsAlertmanager()
+	case "gardenlet":
+		logsGardenlet()
 	case "cluster-autoscaler":
 		logsClusterAutoscaler()
 	case "tf":
@@ -409,6 +411,14 @@ func logPodGarden(toMatch, namespace string) {
 	showLogsFromKubectl(namespace, toMatch, emptyString)
 }
 
+// logPodSeed print logfiles for Seed pods
+func logPodSeed(toMatch, namespace string) {
+	var err error
+	Client, err = clientToTarget("seed")
+	checkError(err)
+	showLogsFromKubectl(namespace, toMatch, emptyString)
+}
+
 // logPodGardenImproved print logfiles for garden pods
 func logPodGardenImproved(podName string) {
 	var target Target
@@ -563,6 +573,10 @@ func logsPrometheus() {
 // logsGrafana prints the logfiles of grafana pod
 func logsGrafana() {
 	logPod("grafana", "seed", "grafana")
+}
+
+func logsGardenlet() {
+	logPodSeed("gardenlet", "garden")
 }
 
 // logsAlertmanager prints the logfiles of alertmanager
