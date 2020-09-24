@@ -173,7 +173,7 @@ func NewConfigFromBytes(kubeconfig string) *restclient.Config {
 // ValidateClientConfig validates that the auth info of a given kubeconfig doesn't have unsupported fields.
 func ValidateClientConfig(config clientcmdapi.Config) error {
 	validFields := []string{"client-certificate-data", "client-key-data", "token", "username", "password"}
-	pathOfKubeconfig := getKubeConfigOfCurrentTarget()
+	// pathOfKubeconfig := getKubeConfigOfCurrentTarget()
 	for user, authInfo := range config.AuthInfos {
 		switch {
 		case authInfo.ClientCertificate != "":
@@ -185,11 +185,11 @@ func ValidateClientConfig(config clientcmdapi.Config) error {
 		case authInfo.Impersonate != "" || len(authInfo.ImpersonateGroups) > 0:
 			return fmt.Errorf("impersonation is not supported, these are the valid fields: %+v", validFields)
 		case authInfo.AuthProvider != nil && len(authInfo.AuthProvider.Config) > 0:
-			fmt.Printf("Kubeconfig under path %s contains auth provider configurations that could contain malicious code. Please only continue if you have verified it to be uncritical\n", pathOfKubeconfig)
+			// fmt.Printf("Kubeconfig under path %s contains auth provider configurations that could contain malicious code. Please only continue if you have verified it to be uncritical\n", pathOfKubeconfig)
 			return nil
 			// 	return fmt.Errorf("auth provider configurations are not supported (user %q), these are the valid fields: %+v", user, validFields)
 		case authInfo.Exec != nil:
-			fmt.Printf("Kubeconfig under path %s contains exec configurations that could contain malicious code. Please only continue if you have verified it to be uncritical\n", pathOfKubeconfig)
+			// fmt.Printf("Kubeconfig under path %s contains exec configurations that could contain malicious code. Please only continue if you have verified it to be uncritical\n", pathOfKubeconfig)
 			return nil
 			// 	return fmt.Errorf("exec configurations are not supported (user %q), these are the valid fields: %+v", user, validFields)
 		}
