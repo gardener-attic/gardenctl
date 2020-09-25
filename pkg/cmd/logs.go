@@ -22,15 +22,12 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
-	"text/tabwriter"
 	"time"
 
 	"github.com/Masterminds/semver"
 	"github.com/spf13/cobra"
-	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
-	k8s "k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/clientcmd"
 )
 
@@ -38,8 +35,6 @@ const (
 	maxLokiLogs           = 100000
 	fourteenDaysInSeconds = 60 * 60 * 24 * 14
 	emptyString           = ""
-	esLogsPerRequest      = 10000
-	unauthorized          = "Unauthorized"
 )
 
 //flags passed to the command
@@ -68,14 +63,13 @@ func NewLogsCmd() *cobra.Command {
 	cmd.Flags().DurationVar(&flags.sinceSeconds, "since", flags.sinceSeconds, "Only return logs newer than a relative duration like 5s, 2m, or 3h. Defaults to all logs. Only one of since-time / since may be used.")
 	cmd.Flags().StringVar(&flags.sinceTime, "since-time", flags.sinceTime, "Only return logs after a specific date (RFC3339). Defaults to all logs. Only one of since-time / since may be used.")
 	cmd.Flags().BoolVar(&flags.loki, "loki", flags.loki, "If the flag is set the logs are retrieved and shown from Loki, otherwise from the kubelet.")
-	cmd.Flags().BoolVar(&flags.elasticsearch, "elasticsearch", flags.elasticsearch, "If the flag is set the logs are retrieved and shown from elasticsearch, otherwise from the kubelet.")
 
 	return cmd
 }
 
 func validateArgs(args []string) error {
 	if len(args) < 1 || len(args) > 3 {
-		return errors.New("Command must be in the format: logs (gardener-apiserver|gardener-controller-manager|gardener-dashboard|api|scheduler|controller-manager|etcd-operator|etcd-main[etcd backup-restore]|etcd-events[etcd backup-restore]|addon-manager|vpn-seed|vpn-shoot|machine-controller-manager|kubernetes-dashboard|prometheus|grafana|alertmanager|gardenlet|tf (infra|dns|ingress)|cluster-autoscaler flags(--loki|--elasticsearch|--tail|--since|--since-time|--timestamps)")
+		return errors.New("Command must be in the format: logs (gardener-apiserver|gardener-controller-manager|gardener-dashboard|api|scheduler|controller-manager|etcd-operator|etcd-main[etcd backup-restore]|etcd-events[etcd backup-restore]|addon-manager|vpn-seed|vpn-shoot|machine-controller-manager|kubernetes-dashboard|prometheus|grafana|alertmanager|gardenlet|tf (infra|dns|ingress)|cluster-autoscaler flags(--loki|--tail|--since|--since-time|--timestamps)")
 	}
 	var t Target
 	ReadTarget(pathTarget, &t)
@@ -104,11 +98,8 @@ func validateFlags(flags *logFlags) {
 	} else if flags.tail < 0 {
 		fmt.Println("Incorrect value for flag: --tail, value must be greater 0")
 		os.Exit(2)
-	} else if flags.loki && flags.elasticsearch {
-		fmt.Println(fmt.Sprintf("Logs command cannot contain --elasticsearch and --loki in the same time"))
-		os.Exit(2)
-	} else if (flags.loki || flags.elasticsearch) && flags.tail > maxLokiLogs {
-		fmt.Println(fmt.Sprintf("Maximum number of logs that can be fetched from loki|elasticsearch is %d", maxLokiLogs))
+	} else if flags.loki && flags.tail > maxLokiLogs {
+		fmt.Println(fmt.Sprintf("Maximum number of logs that can be fetched from loki is %d", maxLokiLogs))
 		os.Exit(2)
 	}
 }
@@ -228,22 +219,6 @@ func logPod(toMatch string, toTarget string, container string) {
 			os.Exit(2)
 		}
 
-	} else if flags.elasticsearch {
-		if !greaterThanLokiRelease.Check(gardenerVersion) {
-			credentials, err := getCredentials(namespace)
-
-			if err == nil {
-				username := credentials.Data["username"]
-				password := credentials.Data["password"]
-				showLogsFromElasticsearch(namespace, toMatch, container, string(username), string(password))
-			} else {
-				showLogsFromElasticsearch(namespace, toMatch, container, emptyString, emptyString)
-			}
-		} else {
-			fmt.Println("--elasticsearch flag is no longer available for gardener version >= 1.8.0")
-			fmt.Println("Current version: " + gardenerVersion.String())
-			os.Exit(2)
-		}
 	} else {
 		showLogsFromKubectl(namespace, toMatch, container)
 	}
@@ -263,16 +238,6 @@ func showLogsFromKubectl(namespace, toMatch, container string) {
 	}
 }
 
-func getCredentials(namespace string) (*v1.Secret, error) {
-	oldConfig := KUBECONFIG
-	config, err := clientcmd.BuildConfigFromFlags("", getKubeConfigOfClusterType("seed"))
-	checkError(err)
-	clientset, err := k8s.NewForConfig(config)
-	checkError(err)
-	KUBECONFIG = oldConfig
-	return clientset.CoreV1().Secrets(namespace).Get("logging-ingress-credentials", metav1.GetOptions{})
-}
-
 func showLogsFromLoki(namespace, toMatch, container string) {
 	output, err := ExecCmdReturnOutput("bash", "-c", buildLokiCommand(namespace, toMatch, container))
 	checkError(err)
@@ -283,28 +248,6 @@ func showLogsFromLoki(namespace, toMatch, container string) {
 	checkError(err)
 
 	fmt.Println(response)
-}
-
-func showLogsFromElasticsearch(namespace, toMatch, container, username, password string) {
-	output, err := ExecCmdReturnOutput("bash", "-c", buildElasticsearchCommand(namespace, toMatch, container, username, password))
-	checkError(err)
-	if output == unauthorized {
-		fmt.Println("You have no permissions to read from elasticsearch")
-		os.Exit(2)
-	}
-
-	responses := buildElasticsearchResponses(output, namespace, toMatch, container, username, password)
-	var logs strings.Builder
-	for i := len(responses) - 1; i >= 0; i-- {
-		logs.WriteString(responses[i].String())
-		if i != 0 {
-			logs.WriteString("\n")
-		}
-	}
-
-	w := tabwriter.NewWriter(os.Stdout, 6, 4, 3, ' ', 0)
-	fmt.Fprintln(w, logs.String())
-	w.Flush()
 }
 
 func buildKubectlCommand(namespace, podName, container string) string {
@@ -342,65 +285,6 @@ func buildLokiCommand(namespace, podName, container string) string {
 
 	endCommand := fmt.Sprintf("kubectl --kubeconfig=%s exec loki-0 -n %s -- %s", KUBECONFIG, namespace, command)
 	return endCommand
-}
-
-func buildElasticsearchCommand(namespace, podName, container, username, password string) string {
-	query := createElasticQuery(podName, container)
-	bytes, err := json.Marshal(query)
-	checkError(err)
-	command := fmt.Sprintf("kubectl --kubeconfig=%s exec elasticsearch-logging-0 -n %s -- curl -X GET -H \"Content-Type:application/json\" localhost:9200/_all/_search?scroll=1m -d '%s'", KUBECONFIG, namespace, string(bytes))
-	if username != emptyString && password != emptyString {
-		command += fmt.Sprintf(" --user %s:%s", username, password)
-	}
-
-	return command
-}
-
-func buildElasticsearchScrollCommand(namespace, podName, container, scrollID, username, password string) string {
-	request := scrollRequest{Scroll: "1m", ScrollID: scrollID}
-	bytes, err := json.Marshal(request)
-	checkError(err)
-
-	scrollCommand := fmt.Sprintf("kubectl --kubeconfig=%s exec elasticsearch-logging-0 -n %s -- curl -X POST -H \"Content-Type:application/json\" localhost:9200/_search/scroll -d '%s'", KUBECONFIG, namespace, string(bytes))
-	if username != emptyString && password != emptyString {
-		scrollCommand += fmt.Sprintf(" --user %s:%s", username, password)
-	}
-	return scrollCommand
-}
-
-func buildElasticsearchResponses(output, namespace, toMatch, container, username, password string) []logResponseElasticsearch {
-	responses := make([]logResponseElasticsearch, 0)
-
-	byteOutput := []byte(output)
-	var response logResponseElasticsearch
-	err := json.Unmarshal(byteOutput, &response)
-	checkError(err)
-
-	responses = append(responses, response)
-
-	scrollID := response.ScrollID
-	logsToFetch := flags.tail - esLogsPerRequest
-	for logsToFetch > 0 {
-		output, err := ExecCmdReturnOutput("bash", "-c", buildElasticsearchScrollCommand(namespace, toMatch, container, scrollID, username, password))
-		checkError(err)
-
-		byteOutput := []byte(output)
-		logResponse := new(logResponseElasticsearch)
-		err = json.Unmarshal(byteOutput, logResponse)
-		checkError(err)
-
-		if int(logsToFetch) < len(logResponse.Hits.Hits) {
-			start := esLogsPerRequest - logsToFetch
-			logResponse.Hits.Hits = logResponse.Hits.Hits[start:]
-		}
-
-		responses = append(responses, *logResponse)
-
-		scrollID = logResponse.ScrollID
-		logsToFetch -= esLogsPerRequest
-	}
-
-	return responses
 }
 
 // logPodGarden print logfiles for garden pods
@@ -642,11 +526,10 @@ func logsIngress(str string) {
 }
 
 type logFlags struct {
-	sinceSeconds  time.Duration
-	sinceTime     string
-	tail          int64
-	loki          bool
-	elasticsearch bool
+	sinceSeconds time.Duration
+	sinceTime    string
+	tail         int64
+	loki         bool
 }
 
 func newLogsFlags() *logFlags {
@@ -663,123 +546,11 @@ type logResponseLoki struct {
 	} `json:"data"`
 }
 
-type logResponseElasticsearch struct {
-	ScrollID string `json:"_scroll_id"`
-	Hits     struct {
-		Hits []struct {
-			Source struct {
-				Timestamp time.Time `json:"@timestamp"`
-				Log       string    `json:"log"`
-				Severity  string    `json:"severity"`
-				Source    string    `json:"source"`
-			} `json:"_source"`
-		} `json:"hits"`
-	} `json:"hits"`
-}
-
 type logMessage struct {
 	Log      string `json:"log"`
 	Severity string `json:"severity"`
 	Process  string `json:"pid"`
 	Source   string `json:"source"`
-}
-
-type rng struct {
-	Range struct {
-		Timestamp rangeTimestamp `json:"@timestamp"`
-	} `json:"range"`
-}
-
-type rangeTimestamp struct {
-	Gte string `json:"gte"`
-}
-
-type podNameMatchPhrase struct {
-	MatchPhrase struct {
-		Value string `json:"kubernetes.pod_name"`
-	} `json:"match_phrase"`
-}
-
-type containerNameMatchPhrase struct {
-	MatchPhrase struct {
-		Value string `json:"kubernetes.container_name"`
-	} `json:"match_phrase"`
-}
-
-type query struct {
-	Bool struct {
-		MatchPhrases []interface{} `json:"must"`
-	} `json:"bool"`
-}
-
-type requestQuery struct {
-	Query  query    `json:"query"`
-	Size   int64    `json:"size"`
-	Source []string `json:"_source"`
-	Sort   struct {
-		Timestamp string `json:"@timestamp"`
-	} `json:"sort"`
-}
-
-type scrollRequest struct {
-	Scroll   string `json:"scroll"`
-	ScrollID string `json:"scroll_id"`
-}
-
-func newRequestQuery(size int64, r rng, sources []string, matchPhrases []interface{}) *requestQuery {
-	q := new(requestQuery)
-	q.Query.Bool.MatchPhrases = append(q.Query.Bool.MatchPhrases, matchPhrases...)
-	q.Sort.Timestamp = "desc"
-	q.Size = size
-	q.Source = append(q.Source, sources...)
-	return q
-}
-
-func createElasticQuery(podName, containerName string) requestQuery {
-	matchPhrases := buildMatchPhrases(podName, containerName)
-	sources := []string{"@timestamp", "severity", "source", "log"}
-
-	if flags.sinceSeconds == 0 {
-		flags.sinceSeconds = fourteenDaysInSeconds * time.Second
-	}
-
-	timestamp := rangeTimestamp{Gte: fmt.Sprintf("now-%ds", int64(flags.sinceSeconds.Seconds()))}
-	rng := rng{
-		Range: struct {
-			Timestamp rangeTimestamp `json:"@timestamp"`
-		}{
-			Timestamp: timestamp,
-		}}
-	matchPhrases = append(matchPhrases, rng)
-
-	min := flags.tail
-	if min > esLogsPerRequest {
-		min = esLogsPerRequest
-	}
-
-	return *newRequestQuery(min, rng, sources, matchPhrases)
-}
-
-func buildMatchPhrases(podName, containerName string) []interface{} {
-	matchPhrases := make([]interface{}, 0)
-	podNameMatchPhrase := podNameMatchPhrase{
-		MatchPhrase: struct {
-			Value string `json:"kubernetes.pod_name"`
-		}{
-			Value: podName,
-		}}
-	matchPhrases = append(matchPhrases, podNameMatchPhrase)
-	if containerName != "" {
-		containerNameMatchPhrase := containerNameMatchPhrase{
-			MatchPhrase: struct {
-				Value string `json:"kubernetes.container_name"`
-			}{
-				Value: containerName,
-			}}
-		matchPhrases = append(matchPhrases, containerNameMatchPhrase)
-	}
-
-	return matchPhrases
 }
 
 func (msg logMessage) String() string {
@@ -819,17 +590,6 @@ func (response logResponseLoki) String() string {
 	}
 
 	return allLogs.String()
-}
-
-func (response logResponseElasticsearch) String() string {
-	hits := response.Hits.Hits
-	length := len(hits)
-	output := make([]string, 0, length)
-	for i := length - 1; i >= 0; i-- {
-		source := hits[i].Source
-		output = append(output, strings.TrimSpace(fmt.Sprintf("%v\t%v\t%v\t%v", source.Timestamp, source.Severity, source.Source, source.Log)))
-	}
-	return strings.Join(output, "\n")
 }
 
 func parseTimeInRFC(unixTime string) string {
