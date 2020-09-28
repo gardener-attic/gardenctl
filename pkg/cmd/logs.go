@@ -145,7 +145,7 @@ func runCommand(args []string) {
 	case "addon-manager":
 		logsAddonManager()
 	case "vpn-seed":
-		logsVpnSeed()
+		logsVpnSeed(args[1])
 	case "vpn-shoot":
 		logsVpnShoot()
 	case "machine-controller-manager":
@@ -408,6 +408,31 @@ func logPodGarden(toMatch, namespace string) {
 	showLogsFromKubectl(namespace, toMatch, emptyString)
 }
 
+// logPodSeed print logfiles for seed pods
+func logPodSeed(toMatch, namespace string, container string) {
+	var err error
+	Client, err = clientToTarget(TargetKindSeed)
+	checkError(err)
+	if container != emptyString {
+		showLogsFromKubectl(namespace, toMatch, container)
+	} else {
+		showLogsFromKubectl(namespace, toMatch, emptyString)
+	}
+}
+
+// logPodShoot print logfiles for shoot pods
+func logPodShoot(toMatch, namespace string, container string) {
+	var err error
+	Client, err = clientToTarget(TargetKindShoot)
+	checkError(err)
+	if container != emptyString {
+		container = " -c " + container
+		showLogsFromKubectl(namespace, toMatch, container)
+	} else {
+		showLogsFromKubectl(namespace, toMatch, emptyString)
+	}
+}
+
 // logPodGardenImproved print logfiles for garden pods
 func logPodGardenImproved(podName string) {
 	var target Target
@@ -475,11 +500,9 @@ func logsControllerManager() {
 }
 
 // logsVpnSeed prints the logfile of the vpn-seed container
-func logsVpnSeed() {
+func logsVpnSeed(shootName string) {
 	fmt.Println("-----------------------Kube-Apiserver")
-	logPod("kube-apiserver", "seed", "vpn-seed")
-	fmt.Println("-----------------------Prometheus")
-	logPod("prometheus", "seed", "vpn-seed")
+	logPodSeed("kube-apiserver", shootName, "vpn-seed")
 }
 
 // logsEtcdOpertor prints the logfile of the etcd-operator
