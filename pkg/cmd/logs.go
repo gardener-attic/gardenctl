@@ -419,7 +419,8 @@ func logsAddonManager() {
 
 // logsVpnShoot prints the logfile of vpn-shoot
 func logsVpnShoot() {
-	logPod("vpn-shoot", "shoot", emptyString)
+	fmt.Println("-----------------------vpn-shoot")
+	logPodShoot("vpn-shoot", "kube-system", emptyString)
 }
 
 // logsMachineControllerManager prints the logfile of machine-controller-manager
