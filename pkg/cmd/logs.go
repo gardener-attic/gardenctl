@@ -48,7 +48,7 @@ var flags *logFlags
 func NewLogsCmd() *cobra.Command {
 	flags = newLogsFlags()
 	cmd := &cobra.Command{
-		Use:   "logs (gardener-apiserver|gardener-controller-manager|gardener-dashboard|api|scheduler|controller-manager|etcd-operator|etcd-main[etcd backup-restore]|etcd-main-backup|etcd-events[etcd backup-restore]|addon-manager|vpn-seed|vpn-shoot|machine-controller-manager|kubernetes-dashboard|prometheus|grafana|alertmanager|tf (infra|dns|ingress)|cluster-autoscaler)",
+		Use:   "logs (gardener-apiserver|gardener-controller-manager|gardener-dashboard|api|scheduler|controller-manager|etcd-operator|etcd-main[etcd backup-restore]|etcd-main-backup|etcd-events[etcd backup-restore]|addon-manager|vpn-seed (namespace)|vpn-shoot|machine-controller-manager|kubernetes-dashboard|prometheus|grafana|alertmanager|tf (infra|dns|ingress)|cluster-autoscaler)",
 		Short: "Show and optionally follow logs of given component\n",
 		PreRun: func(cmd *cobra.Command, args []string) {
 			validateArgs(args)
@@ -145,7 +145,7 @@ func runCommand(args []string) {
 	case "addon-manager":
 		logsAddonManager()
 	case "vpn-seed":
-		logsVpnSeed()
+		logsVpnSeed(args[1])
 	case "vpn-shoot":
 		logsVpnShoot()
 	case "machine-controller-manager":
@@ -408,6 +408,31 @@ func logPodGarden(toMatch, namespace string) {
 	showLogsFromKubectl(namespace, toMatch, emptyString)
 }
 
+// logPodGarden print logfiles for garden pods
+func logPodSeed(toMatch, namespace string, container string) {
+	var err error
+	Client, err = clientToTarget("seed")
+	checkError(err)
+	if container != emptyString {
+		showLogsFromKubectl(namespace, toMatch, container)
+	} else {
+		showLogsFromKubectl(namespace, toMatch, emptyString)
+	}
+}
+
+// logPodGarden print logfiles for garden pods
+func logPodShoot(toMatch, namespace string, container string) {
+	var err error
+	Client, err = clientToTarget(TargetKindShoot)
+	checkError(err)
+	if container != emptyString {
+		container = " -c " + container
+		showLogsFromKubectl(namespace, toMatch, container)
+	} else {
+		showLogsFromKubectl(namespace, toMatch, emptyString)
+	}
+}
+
 // logPodGardenImproved print logfiles for garden pods
 func logPodGardenImproved(podName string) {
 	var target Target
@@ -475,11 +500,9 @@ func logsControllerManager() {
 }
 
 // logsVpnSeed prints the logfile of the vpn-seed container
-func logsVpnSeed() {
+func logsVpnSeed(shootName string) {
 	fmt.Println("-----------------------Kube-Apiserver")
-	logPod("kube-apiserver", "seed", "vpn-seed")
-	fmt.Println("-----------------------Prometheus")
-	logPod("prometheus", "seed", "vpn-seed")
+	logPodSeed("kube-apiserver", shootName, "vpn-seed")
 }
 
 // logsEtcdOpertor prints the logfile of the etcd-operator
