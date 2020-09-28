@@ -91,7 +91,7 @@ func sshToAZNode(nodeName, path, user, pathSSKeypair string, sshPublicKey []byte
 
 // fetchAttributes gets all the needed attributes for creating bastion host and its security group with given <nodeName>.
 func (a *AzureInstanceAttribute) fetchAzureAttributes(nodeName, path string) {
-	a.ShootName = getTechnicalID()
+	a.ShootName = getShootClusterName()
 	a.NamePublicIP = "sshIP"
 	var err error
 

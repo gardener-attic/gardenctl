@@ -15,6 +15,7 @@
 package cmd
 
 import (
+	"bufio"
 	"errors"
 	"flag"
 	"fmt"
@@ -117,6 +118,32 @@ func clientToTarget(target TargetKind) (*k8s.Clientset, error) {
 	checkError(err)
 	clientset, err := k8s.NewForConfig(config)
 	return clientset, err
+}
+
+// getShootClusterName returns the clustername of the shoot cluster
+func getShootClusterName() (clustername string) {
+	clustername = ""
+	file, _ := os.Open(getKubeConfigOfCurrentTarget())
+	defer file.Close()
+	scanner := bufio.NewScanner(file)
+	scanner.Split(bufio.ScanLines)
+	for scanner.Scan() {
+		if strings.Contains(scanner.Text(), "current-context:") {
+			clustername = strings.TrimPrefix(scanner.Text(), "current-context: ")
+		}
+	}
+	// retrieve full clustername
+	Client, err := clientToTarget("seed")
+	checkError(err)
+	namespaces, err := Client.CoreV1().Namespaces().List(metav1.ListOptions{})
+	checkError(err)
+	for _, namespace := range namespaces.Items {
+		if strings.HasSuffix(namespace.Name, clustername) {
+			clustername = namespace.Name
+			break
+		}
+	}
+	return clustername
 }
 
 // getMonitoringCredentials returns username and password required for url login to the montiring tools
@@ -335,7 +362,7 @@ func getRole() string {
 		Spec: authorizationv1.SelfSubjectAccessReviewSpec{
 			ResourceAttributes: &authorizationv1.ResourceAttributes{
 				Verb:     "get",
-				Resource: "secret",
+				Resource: "secrets",
 			},
 		},
 	}
