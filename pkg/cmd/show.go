@@ -15,8 +15,8 @@
 package cmd
 
 import (
+	"errors"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -24,34 +24,28 @@ import (
 
 	"github.com/pkg/browser"
 	"github.com/spf13/cobra"
-	"gopkg.in/yaml.v2"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/clientcmd"
 )
 
 // NewShowCmd returns a new show command.
-func NewShowCmd() *cobra.Command {
+func NewShowCmd(targetReader TargetReader) *cobra.Command {
 	return &cobra.Command{
 		Use:   "show (operator|gardener-dashboard|api|scheduler|controller-manager|etcd-operator|etcd-main|etcd-events|addon-manager|vpn-seed|vpn-shoot|machine-controller-manager|kubernetes-dashboard|prometheus|grafana|alertmanager|tf (infra|dns|ingress)|cluster-autoscaler)",
 		Short: `Show details about endpoint/service and open in default browser if applicable`,
-		Run: func(cmd *cobra.Command, args []string) {
+		RunE: func(cmd *cobra.Command, args []string) error {
 			if len(args) < 1 || len(args) > 2 {
-				fmt.Println("Command must be in the format: show (operator|gardener-dashboard|api|scheduler|controller-manager|etcd-operator|etcd-main|etcd-events|addon-manager|vpn-seed|vpn-shoot|machine-controller-manager|kubernetes-dashboard|prometheus|grafana|alertmanager|tf (infra|dns|ingress)|cluster-autoscaler)")
-				os.Exit(2)
+				return errors.New("Command must be in the format: show (operator|gardener-dashboard|api|scheduler|controller-manager|etcd-operator|etcd-main|etcd-events|addon-manager|vpn-seed|vpn-shoot|machine-controller-manager|kubernetes-dashboard|prometheus|grafana|alertmanager|tf (infra|dns|ingress)|cluster-autoscaler)")
 			}
-			var t Target
-			targetFile, err := ioutil.ReadFile(pathTarget)
-			checkError(err)
-			err = yaml.Unmarshal(targetFile, &t)
-			checkError(err)
-			if len(t.Target) < 3 && (args[0] != "operator") && (args[0] != "tf") && (args[0] != "kubernetes-dashboard") && (args[0] != "etcd-operator") && (args[0] != "kibana") {
+			t := targetReader.ReadTarget(pathTarget)
+			if (len(t.Stack()) < 3 || (len(t.Stack()) == 3 && t.Stack()[2].Kind == "namespace")) && (args[0] != "operator") && (args[0] != "tf") && (args[0] != "kubernetes-dashboard") && (args[0] != "etcd-operator") && (args[0] != "kibana") {
 				fmt.Println("No shoot targeted")
 				os.Exit(2)
-			} else if (len(t.Target) < 2 && (args[0] == "tf")) || len(t.Target) < 3 && (args[0] == "tf") && (t.Target[1].Kind != "seed") || (len(t.Target) < 2 && (args[0] == "kibana")) {
+			} else if (len(t.Stack()) < 2 && (args[0] == "tf")) || len(t.Stack()) < 3 && (args[0] == "tf") && (t.Stack()[1].Kind != "seed") || (len(t.Stack()) < 2 && (args[0] == "kibana")) {
 				fmt.Println("No seed or shoot targeted")
 				os.Exit(2)
-			} else if len(t.Target) == 0 {
+			} else if len(t.Stack()) == 0 {
 				fmt.Println("Target stack is empty")
 				os.Exit(2)
 			}
@@ -61,35 +55,35 @@ func NewShowCmd() *cobra.Command {
 			case "gardener-dashboard":
 				showGardenerDashboard()
 			case "api":
-				showAPIServer()
+				showAPIServer(targetReader)
 			case "scheduler":
-				showScheduler()
+				showScheduler(targetReader)
 			case "controller-manager":
-				showControllerManager()
+				showControllerManager(targetReader)
 			case "etcd-operator":
 				showEtcdOperator()
 			case "etcd-main":
-				showEtcdMain()
+				showEtcdMain(targetReader)
 			case "etcd-events":
-				showEtcdEvents()
+				showEtcdEvents(targetReader)
 			case "addon-manager":
-				showAddonManager()
+				showAddonManager(targetReader)
 			case "vpn-seed":
-				showVpnSeed()
+				showVpnSeed(targetReader)
 			case "vpn-shoot":
-				showVpnShoot()
+				showVpnShoot(targetReader)
 			case "machine-controller-manager":
-				showMachineControllerManager()
+				showMachineControllerManager(targetReader)
 			case "kubernetes-dashboard":
-				showKubernetesDashboard()
+				showKubernetesDashboard(targetReader)
 			case "prometheus":
-				showPrometheus()
+				showPrometheus(targetReader)
 			case "grafana":
-				showGrafana()
+				showGrafana(targetReader)
 			case "alertmanager":
-				showAltermanager()
+				showAltermanager(targetReader)
 			case "kibana":
-				showKibana()
+				showKibana(targetReader)
 			case "tf":
 				if len(args) == 1 {
 					showTf()
@@ -106,10 +100,11 @@ func NewShowCmd() *cobra.Command {
 					fmt.Println("Command must be in the format: show (operator|gardener-dashboard|api|scheduler|controller-manager|etcd-operator|etcd-main|etcd-events|addon-manager|vpn-seed|vpn-shoot|machine-controller-manager|kubernetes-dashboard|prometheus|grafana|alertmanager|tf (infra|dns|ingress)|cluster-autoscaler)")
 				}
 			case "cluster-autoscaler":
-				showClusterAutoscaler()
+				showClusterAutoscaler(targetReader)
 			default:
 				fmt.Println("Command must be in the format: show (operator|gardener-dashboard|api|scheduler|controller-manager|etcd-operator|etcd-main|etcd-events|addon-manager|vpn-seed|vpn-shoot|machine-controller-manager|kubernetes-dashboard|prometheus|grafana|alertmanager|tf (infra|dns|ingress)|cluster-autoscaler)")
 			}
+			return nil
 		},
 		ValidArgs: []string{"operator", "gardener-dashboard", "api", "scheduler", "controller-manager", "etcd-operator", "etcd-main", "etcd-events", "addon-manager", "vpn-seed", "vpn-shoot", "machine-controller-manager", "kubernetes-dashboard", "prometheus", "grafana", "alertmanager", "tf", "cluster-autoscaler"},
 	}
@@ -139,7 +134,7 @@ func showOperator() {
 // showUI opens the gardener landing page
 func showGardenerDashboard() {
 	showPodGarden("gardener-dashboard", "garden")
-	output, err := ExecCmdReturnOutput("bash", "-c", "export KUBECONFIG="+KUBECONFIG+"; kubectl get ingress gardener-dashboard-ingress -n garden")
+	output, err := ExecCmdReturnOutput("kubectl", "--kubeconfig="+KUBECONFIG, "get", "ingress", "gardener-dashboard-ingress", "-n", "garden")
 	if err != nil {
 		fmt.Println("Cmd was unsuccessful")
 		os.Exit(2)
@@ -174,15 +169,14 @@ func showGardenerDashboard() {
 }
 
 // showPod is an abstraction to show pods in seed cluster controlplane or kube-system namespace of shoot
-func showPod(toMatch string, toTarget TargetKind) {
-	var target Target
-	ReadTarget(pathTarget, &target)
+func showPod(toMatch string, toTarget TargetKind, targetReader TargetReader) {
+	target := targetReader.ReadTarget(pathTarget)
 
 	var namespace string
-	if len(target.Target) == 2 {
+	if len(target.Stack()) == 2 {
 		namespace = "garden"
-	} else if len(target.Target) == 3 {
-		namespace = getSeedNamespaceNameForShoot(target.Target[2].Name)
+	} else if len(target.Stack()) == 3 {
+		namespace = getSeedNamespaceNameForShoot(target.Stack()[2].Name)
 	}
 
 	var err error
@@ -204,18 +198,18 @@ func showPod(toMatch string, toTarget TargetKind) {
 }
 
 // showAPIServer shows the pod for the api-server running in the targeted seed cluster
-func showAPIServer() {
-	showPod("kube-apiserver", "seed")
+func showAPIServer(targetReader TargetReader) {
+	showPod("kube-apiserver", "seed", targetReader)
 }
 
 // showScheduler shows the pod for the running scheduler in the targeted seed cluster
-func showScheduler() {
-	showPod("kube-scheduler", "seed")
+func showScheduler(targetReader TargetReader) {
+	showPod("kube-scheduler", "seed", targetReader)
 }
 
 // showControllerManager shows the pod for the running controller-manager in the targeted seed cluster
-func showControllerManager() {
-	showPod("kube-controller-manager", "seed")
+func showControllerManager(targetReader TargetReader) {
+	showPod("kube-controller-manager", "seed", targetReader)
 }
 
 // showEtcdOperator shows the pod for the running etcd-operator in the targeted garden cluster
@@ -224,36 +218,36 @@ func showEtcdOperator() {
 }
 
 // showEtcdMain shows the pod for the running etcd-main in the targeted seed cluster
-func showEtcdMain() {
-	showPod("etcd-main", "seed")
+func showEtcdMain(targetReader TargetReader) {
+	showPod("etcd-main", "seed", targetReader)
 }
 
 // showEtcdEvents shows the pod for the running etcd-events in the targeted seed cluster
-func showEtcdEvents() {
-	showPod("etcd-events", "seed")
+func showEtcdEvents(targetReader TargetReader) {
+	showPod("etcd-events", "seed", targetReader)
 }
 
 // showAddonManager shows the pod for the running addon-manager in the targeted seed cluster
-func showAddonManager() {
-	showPod("kube-addon-manager", "seed")
+func showAddonManager(targetReader TargetReader) {
+	showPod("kube-addon-manager", "seed", targetReader)
 }
 
 // showVpnSeed shows the pod for the running vpn-seed in the targeted seed cluster
-func showVpnSeed() {
-	showPod("kube-apiserver", "seed")
-	showPod("prometheus-0", "seed")
+func showVpnSeed(targetReader TargetReader) {
+	showPod("kube-apiserver", "seed", targetReader)
+	showPod("prometheus-0", "seed", targetReader)
 }
 
 // showVpnShoot shows the pod for the running vpn-shoot in the targeted shoot cluster
-func showVpnShoot() {
-	showPod("vpn-shoot", "shoot")
+func showVpnShoot(targetReader TargetReader) {
+	showPod("vpn-shoot", "shoot", targetReader)
 }
 
 // showPrometheus shows the prometheus pod in the targeted seed cluster
-func showPrometheus() {
+func showPrometheus(targetReader TargetReader) {
 	username, password = getMonitoringCredentials()
-	showPod("prometheus", "seed")
-	output, err := ExecCmdReturnOutput("bash", "-c", "export KUBECONFIG="+KUBECONFIG+"; kubectl get ingress prometheus -n "+getTechnicalID())
+	showPod("prometheus", "seed", targetReader)
+	output, err := ExecCmdReturnOutput("kubectl", "--kubeconfig="+KUBECONFIG, "get", "ingress", "prometheus", "-n", getTechnicalID())
 	if err != nil {
 		fmt.Println("Cmd was unsuccessful")
 		os.Exit(2)
@@ -272,10 +266,10 @@ func showPrometheus() {
 }
 
 // showAltermanager shows the prometheus pods in the targeted seed cluster
-func showAltermanager() {
+func showAltermanager(targetReader TargetReader) {
 	username, password = getMonitoringCredentials()
-	showPod("alertmanager", "seed")
-	output, err := ExecCmdReturnOutput("bash", "-c", "export KUBECONFIG="+KUBECONFIG+"; kubectl get ingress alertmanager -n "+getTechnicalID())
+	showPod("alertmanager", "seed", targetReader)
+	output, err := ExecCmdReturnOutput("kubectl", "--kubeconfig="+KUBECONFIG, "get", "ingress", "alertmanager", "-n", getTechnicalID())
 	if err != nil {
 		fmt.Println("Cmd was unsuccessful")
 		os.Exit(2)
@@ -294,16 +288,15 @@ func showAltermanager() {
 }
 
 // showMachineControllerManager shows the prometheus pods in the targeted seed cluster
-func showMachineControllerManager() {
-	showPod("machine-controller-manager", "seed")
+func showMachineControllerManager(targetReader TargetReader) {
+	showPod("machine-controller-manager", "seed", targetReader)
 }
 
 // showKubernetesDashboard shows the kubernetes dashboard for the targeted cluster
-func showKubernetesDashboard() {
-	var target Target
-	ReadTarget(pathTarget, &target)
+func showKubernetesDashboard(targetReader TargetReader) {
+	target := targetReader.ReadTarget(pathTarget)
 	gardenName := target.Stack()[0].Name
-	if len(target.Target) == 1 {
+	if len(target.Stack()) == 1 {
 		var err error
 		Client, err = clientToTarget("garden")
 		checkError(err)
@@ -315,11 +308,11 @@ func showKubernetesDashboard() {
 				checkError(err)
 			}
 		}
-	} else if len(target.Target) == 2 {
+	} else if len(target.Stack()) == 2 {
 		namespace := "kube-system"
-		if len(target.Target) == 2 && target.Target[1].Kind == "seed" {
-			KUBECONFIG = filepath.Join(pathGardenHome, "cache", gardenName, "seeds", target.Target[1].Name, "kubeconfig.yaml")
-		} else if len(target.Target) == 2 && target.Target[1].Kind == "project" {
+		if len(target.Stack()) == 2 && target.Stack()[1].Kind == "seed" {
+			KUBECONFIG = filepath.Join(pathGardenHome, "cache", gardenName, "seeds", target.Stack()[1].Name, "kubeconfig.yaml")
+		} else if len(target.Stack()) == 2 && target.Stack()[1].Kind == "project" {
 			fmt.Println("Project targeted")
 			os.Exit(2)
 		}
@@ -335,9 +328,9 @@ func showKubernetesDashboard() {
 				checkError(err)
 			}
 		}
-	} else if len(target.Target) == 3 {
-		showPod("kubernetes-dashboard", "shoot")
-	} else if len(target.Target) == 0 {
+	} else if len(target.Stack()) == 3 {
+		showPod("kubernetes-dashboard", "shoot", targetReader)
+	} else if len(target.Stack()) == 0 {
 		fmt.Println("No target")
 		os.Exit(2)
 	}
@@ -349,10 +342,10 @@ func showKubernetesDashboard() {
 }
 
 // showGrafana shows the grafana dashboard for the targeted cluster
-func showGrafana() {
+func showGrafana(targetReader TargetReader) {
 	username, password = getMonitoringCredentials()
-	showPod("grafana", "seed")
-	output, err := ExecCmdReturnOutput("bash", "-c", "export KUBECONFIG="+KUBECONFIG+"; kubectl get ingress grafana -n "+getTechnicalID())
+	showPod("grafana", "seed", targetReader)
+	output, err := ExecCmdReturnOutput("kubectl", "--kubeconfig="+KUBECONFIG, "get", "ingress", "grafana", "-n", getTechnicalID())
 	if err != nil {
 		fmt.Println("Cmd was unsuccessful")
 		os.Exit(2)
@@ -371,9 +364,9 @@ func showGrafana() {
 }
 
 // showKibana shows the kibana dashboard for the targeted cluster
-func showKibana() {
+func showKibana(targetReader TargetReader) {
 	username, password = getLoggingCredentials()
-	showPod("kibana", "seed")
+	showPod("kibana", "seed", targetReader)
 
 	var target Target
 	ReadTarget(pathTarget, &target)
@@ -385,7 +378,7 @@ func showKibana() {
 		namespace = getTechnicalID()
 	}
 
-	output, err := ExecCmdReturnOutput("bash", "-c", "export KUBECONFIG="+KUBECONFIG+"; kubectl get ingress kibana -n "+namespace)
+	output, err := ExecCmdReturnOutput("kubectl", "--kubeconfig="+KUBECONFIG, "get", "ingress", "kibana", "-n", namespace)
 	if err != nil {
 		fmt.Println("Cmd was unsuccessful")
 		os.Exit(2)
@@ -414,7 +407,7 @@ func showTerraform(name string) {
 	count := 0
 	for _, pod := range pods.Items {
 		if strings.Contains(pod.Name, name) && pod.Status.Phase == "Running" {
-			output, err = ExecCmdReturnOutput("bash", "-c", "export KUBECONFIG="+KUBECONFIG+"; kubectl get pods "+pod.Name+" -o wide -n "+pod.Namespace)
+			output, err = ExecCmdReturnOutput("kubectl", "--kubeconfig="+KUBECONFIG, "get", "pods", pod.Name, "-o", "wide", "-n", pod.Namespace)
 			if err != nil {
 				fmt.Println("Cmd was unsuccessful")
 				os.Exit(2)
@@ -450,6 +443,6 @@ func showIngress() {
 }
 
 // showClusterAutoscaler shows the pod for the running cluster-autoscaler in the targeted seed cluster
-func showClusterAutoscaler() {
-	showPod("cluster-autoscaler", "seed")
+func showClusterAutoscaler(targetReader TargetReader) {
+	showPod("cluster-autoscaler", "seed", targetReader)
 }

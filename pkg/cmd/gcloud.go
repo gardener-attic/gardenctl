@@ -16,6 +16,8 @@ package cmd
 
 import (
 	"errors"
+	"fmt"
+	"os"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -30,6 +32,10 @@ func NewGcloudCmd(targetReader TargetReader) *cobra.Command {
 			target := targetReader.ReadTarget(pathTarget)
 			if !CheckShootIsTargeted(target) {
 				return errors.New("no shoot targeted")
+			}
+			if !CheckToolInstalled("gcloud") {
+				fmt.Println("Please go to https://cloud.google.com/sdk/install for how to install gcloud")
+				os.Exit(2)
 			}
 
 			arguments := "gcloud " + strings.Join(args[:], " ")

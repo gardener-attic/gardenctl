@@ -16,6 +16,8 @@ package cmd
 
 import (
 	"errors"
+	"fmt"
+	"os"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -31,7 +33,10 @@ func NewAzCmd(targetReader TargetReader) *cobra.Command {
 			if !CheckShootIsTargeted(target) {
 				return errors.New("no shoot targeted")
 			}
-
+			if !CheckToolInstalled("az") {
+				fmt.Println("Please go to https://docs.microsoft.com/en-us/cli/azure/install-azure-cli?view=azure-cli-latest for how to install az cli")
+				os.Exit(2)
+			}
 			arguments := "az " + strings.Join(args[:], " ")
 			operate("az", arguments)
 
