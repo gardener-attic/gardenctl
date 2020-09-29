@@ -5,13 +5,29 @@ on:
     types:
       - published
 jobs:
-  update-hombrew-tap:
+  update_gardenctl_in_homebrew_tap:
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v2
+      - name: Build the binary-files
+        id: build_binary_files
+        run: |
+          sudo apt-get update
+          sudo apt-get install make -y
+          make build
+          echo ::set-output name=latest_release_filtered_tag::${GITHUB_REF##*/}
+      - name: Upload binaries to release
+        uses: AButler/upload-release-assets@v2.0
+        with:
+          files: 'bin/darwin-amd64/gardenctl-darwin-amd64;bin/linux-amd64/gardenctl-linux-amd64'
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+          release-tag: ${{ steps.build_binary_files.outputs.latest_release_filtered_tag }}
       - name: Send update with latest versions to gardener/homebrew-tap
         run: |
-          echo '{"event_type": "update", "client_payload": { "tag": "'"$GITHUB_REF"'", "sha": "'"$GITHUB_SHA"'"}}'
+          mac_sha256sum=$(sha256sum bin/darwin-amd64/gardenctl-darwin-amd64 | awk '{print $1}')
+          linux_sha256sum=$(sha256sum bin/linux-amd64/gardenctl-linux-amd64 | awk '{print $1}')
+          echo '{"event_type": "update", "client_payload": { "tag": "'"${{ steps.build_binary_files.outputs.latest_release_filtered_tag }}"'", "mac_sha": "'"$mac_sha256sum"'", "linux_sha": "'"$linux_sha256sum"'"}}'
           curl -X POST https://api.github.com/repos/gardener/homebrew-tap/dispatches \
           -H 'Accept: application/vnd.github.everest-preview+json' \
           -u ${{ secrets.ACCESS_TOKEN }} \
-          --data '{"event_type": "update", "client_payload": { "tag": "'"$GITHUB_REF"'", "sha": "'"$GITHUB_SHA"'"}}'
+          --data '{"event_type": "update", "client_payload": { "tag": "'"${{ steps.build_binary_files.outputs.latest_release_filtered_tag }}"'", "mac_sha": "'"$mac_sha256sum"'", "linux_sha": "'"$linux_sha256sum"'"}}'

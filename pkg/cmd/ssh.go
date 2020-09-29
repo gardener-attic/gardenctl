@@ -56,7 +56,7 @@ func NewSSHCmd(reader TargetReader, ioStreams IOStreams) *cobra.Command {
 				return printNodeNames(shoot.Name)
 			}
 
-			path := downloadTerraformFiles("infra")
+			path := downloadTerraformFiles("infra", reader)
 			if path != "" {
 				path = filepath.Join(path, "terraform.tfstate")
 			}

@@ -17,6 +17,7 @@ package cmd
 import (
 	"fmt"
 	"io/ioutil"
+	"net"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -49,11 +50,16 @@ type GCPInstanceAttribute struct {
 func sshToGCPNode(nodeName, path, user, pathSSKeypair string, sshPublicKey []byte, myPublicIP string) {
 	g := &GCPInstanceAttribute{}
 	g.SSHPublicKey = sshPublicKey
-	g.MyPublicIP = myPublicIP + "/32"
+	g.MyPublicIP = myPublicIP
 	fmt.Println("")
 
 	fmt.Println("(1/4) Fetching data from target shoot cluster")
-	g.fetchGCPAttributes(nodeName, path)
+	if getRole() == "user" {
+		g.fetchGCPAttributesByCLI(nodeName, path)
+	} else {
+		g.fetchGCPAttributes(nodeName, path)
+	}
+
 	fmt.Println("Data fetched from target shoot cluster.")
 	fmt.Println("")
 
@@ -71,15 +77,46 @@ func sshToGCPNode(nodeName, path, user, pathSSKeypair string, sshPublicKey []byt
 	time.Sleep(45 * time.Second)
 
 	key := filepath.Join(pathSSKeypair, "key")
-	sshCmd := fmt.Sprintf("ssh -i " + key + " -o \"ProxyCommand ssh -W %%h:%%p -i " + key + " -o IdentitiesOnly=yes -o StrictHostKeyChecking=no " + bastionNode + "\" " + node + " -o IdentitiesOnly=yes -o StrictHostKeyChecking=no")
-	fmt.Println(sshCmd)
-	cmd := exec.Command("bash", "-c", sshCmd)
+
+	proxyCommandArgs := []string{"-W%h:%p", "-i" + key, "-oIdentitiesOnly=yes", "-oStrictHostKeyChecking=no", bastionNode}
+	if debugSwitch {
+		proxyCommandArgs = append([]string{"-vvv"}, proxyCommandArgs...)
+	}
+	args := []string{"-i" + key, "-oProxyCommand=ssh " + strings.Join(proxyCommandArgs[:], " "), node, "-oIdentitiesOnly=yes", "-oStrictHostKeyChecking=no"}
+	if debugSwitch {
+		args = append([]string{"-vvv"}, args...)
+	}
+	fmt.Println("ssh " + strings.Join(args[:], " "))
+	cmd := exec.Command("ssh", args...)
 	cmd.Stdout = os.Stdout
 	cmd.Stdin = os.Stdin
 	cmd.Stderr = os.Stderr
 	if err := cmd.Run(); err != nil {
 		fmt.Println(err)
 	}
+}
+
+// fetchAwsAttributes gets all the needed attributes for creating bastion host and its security group with given <nodeName> by using gcp cli for non-operator user
+func (g *GCPInstanceAttribute) fetchGCPAttributesByCLI(nodeName, path string) {
+	var err error
+	g.ShootName = getTechnicalID()
+	g.BastionHostName = g.ShootName + "-bastions"
+	g.FirewallRuleName = g.ShootName + "-allow-ssh-access"
+	g.Subnetwork = g.ShootName + "-nodes"
+
+	arguments := ("gcloud compute instances list --filter=" + nodeName + " --format=value(zone)")
+	captured := capture()
+	operate("gcp", arguments)
+	g.Zone, err = captured()
+	checkError(err)
+
+	arguments = fmt.Sprintf("gcloud compute instances describe %s --zone %s --format=value(networkInterfaces.network.scope(networks))", nodeName, g.Zone)
+	captured = capture()
+	operate("gcp", arguments)
+	capturedOutput, err := captured()
+	checkError(err)
+	g.VpcName = strings.Trim(strings.Trim(capturedOutput, "\n"), "']")
+	g.UserData = getBastionUserData(g.SSHPublicKey)
 }
 
 // fetchAttributes gets all the needed attributes for creating bastion host and its security group with given <nodeName>.
@@ -120,14 +157,19 @@ func (g *GCPInstanceAttribute) fetchGCPAttributes(nodeName, path string) {
 
 // createBastionHostFirewallRule finds the or creates a security group for the bastion host.
 func (g *GCPInstanceAttribute) createBastionHostFirewallRule() {
-	var err error
 	fmt.Println("Add ssh rule")
-	arguments := "gcloud " + fmt.Sprintf("compute firewall-rules create %s --network %s --allow tcp:22 --source-ranges=%s", g.FirewallRuleName, g.ShootName, g.MyPublicIP)
-	captured := capture()
-	operate("gcp", arguments)
-	capturedOutput, err := captured()
-	checkError(err)
-	fmt.Println(capturedOutput)
+	if net.ParseIP(g.MyPublicIP).To4() != nil {
+		var err error
+		arguments := "gcloud " + fmt.Sprintf("compute firewall-rules create %s --network %s --allow tcp:22 --source-ranges=%s/32", g.FirewallRuleName, g.ShootName, g.MyPublicIP)
+		captured := capture()
+		operate("gcp", arguments)
+		capturedOutput, err := captured()
+		checkError(err)
+		fmt.Println(capturedOutput)
+	} else {
+		fmt.Println("IPv6 is currently not fully supported by gardenctl: " + g.MyPublicIP)
+	}
+
 }
 
 // createBastionHostInstance finds or creates a bastion host instance.

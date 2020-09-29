@@ -17,9 +17,11 @@ package cmd
 import (
 	"fmt"
 	"io/ioutil"
+	"log"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 
 	gardencorev1beta1 "github.com/gardener/gardener/pkg/apis/core/v1beta1"
@@ -34,8 +36,14 @@ import (
 // checkError checks if an error during execution occurred
 func checkError(err error) {
 	if err != nil {
-		fmt.Println(err.Error())
-		os.Exit(2)
+		if debugSwitch {
+			_, fn, line, _ := runtime.Caller(1)
+			log.Printf("[error] %s:%d \n %v", fn, line, err)
+			os.Exit(2)
+		} else {
+			fmt.Println(err.Error())
+			os.Exit(2)
+		}
 	}
 }
 
@@ -253,4 +261,14 @@ func GardenctlDebugLog(logMsg string) {
 func GardenctlInfoLog(logMsg string) {
 	var logger = gardenerlogger.NewLogger("info")
 	logger.Infof(logMsg)
+}
+
+//CheckToolInstalled checks whether cliName is installed on local machine
+func CheckToolInstalled(cliName string) bool {
+	_, err := exec.LookPath(cliName)
+	if err != nil {
+		fmt.Println(cliName + " is not installed on your system")
+		return false
+	}
+	return true
 }

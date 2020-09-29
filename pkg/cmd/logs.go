@@ -320,6 +320,14 @@ func logPodShoot(toMatch, namespace string, container string) {
 	}
 }
 
+// logPodSeed print logfiles for Seed pods
+func logPodSeed(toMatch, namespace string) {
+	var err error
+	Client, err = clientToTarget("seed")
+	checkError(err)
+	showLogsFromKubectl(namespace, toMatch, emptyString)
+}
+
 // logPodGardenImproved print logfiles for garden pods
 func logPodGardenImproved(podName string) {
 	var target Target
