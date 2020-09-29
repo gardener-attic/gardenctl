@@ -39,10 +39,10 @@ func NewShowCmd(targetReader TargetReader) *cobra.Command {
 				return errors.New("Command must be in the format: show (operator|gardener-dashboard|api|scheduler|controller-manager|etcd-operator|etcd-main|etcd-events|addon-manager|vpn-seed|vpn-shoot|machine-controller-manager|kubernetes-dashboard|prometheus|grafana|alertmanager|tf (infra|dns|ingress)|cluster-autoscaler)")
 			}
 			t := targetReader.ReadTarget(pathTarget)
-			if (len(t.Stack()) < 3 || (len(t.Stack()) == 3 && t.Stack()[2].Kind == "namespace")) && (args[0] != "operator") && (args[0] != "tf") && (args[0] != "kubernetes-dashboard") && (args[0] != "etcd-operator") && (args[0] != "kibana") {
+			if (len(t.Stack()) < 3 || (len(t.Stack()) == 3 && t.Stack()[2].Kind == "namespace")) && (args[0] != "operator") && (args[0] != "tf") && (args[0] != "kubernetes-dashboard") && (args[0] != "etcd-operator") {
 				fmt.Println("No shoot targeted")
 				os.Exit(2)
-			} else if (len(t.Stack()) < 2 && (args[0] == "tf")) || len(t.Stack()) < 3 && (args[0] == "tf") && (t.Stack()[1].Kind != "seed") || (len(t.Stack()) < 2 && (args[0] == "kibana")) {
+			} else if (len(t.Stack()) < 2 && (args[0] == "tf")) || len(t.Stack()) < 3 && (args[0] == "tf") && (t.Stack()[1].Kind != "seed") {
 				fmt.Println("No seed or shoot targeted")
 				os.Exit(2)
 			} else if len(t.Stack()) == 0 {
@@ -82,8 +82,6 @@ func NewShowCmd(targetReader TargetReader) *cobra.Command {
 				showGrafana(targetReader)
 			case "alertmanager":
 				showAltermanager(targetReader)
-			case "kibana":
-				showKibana(targetReader)
 			case "tf":
 				if len(args) == 1 {
 					showTf()
@@ -354,39 +352,6 @@ func showGrafana(targetReader TargetReader) {
 	url := "-"
 	for _, val := range list {
 		if strings.HasPrefix(val, "g.") {
-			url = val
-		}
-	}
-	url = "https://" + username + ":" + password + "@" + url
-	fmt.Println("URL: " + url)
-	err = browser.OpenURL(url)
-	checkError(err)
-}
-
-// showKibana shows the kibana dashboard for the targeted cluster
-func showKibana(targetReader TargetReader) {
-	username, password = getLoggingCredentials()
-	showPod("kibana", "seed", targetReader)
-
-	var target Target
-	ReadTarget(pathTarget, &target)
-
-	var namespace string
-	if len(target.Target) == 2 {
-		namespace = "garden"
-	} else if len(target.Target) == 3 {
-		namespace = getTechnicalID()
-	}
-
-	output, err := ExecCmdReturnOutput("kubectl", "--kubeconfig="+KUBECONFIG, "get", "ingress", "kibana", "-n", namespace)
-	if err != nil {
-		fmt.Println("Cmd was unsuccessful")
-		os.Exit(2)
-	}
-	list := strings.Split(output, " ")
-	url := "-"
-	for _, val := range list {
-		if strings.HasPrefix(val, "k.") {
 			url = val
 		}
 	}
