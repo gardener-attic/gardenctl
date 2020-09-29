@@ -63,7 +63,7 @@ func NewInfraCmd(targetReader TargetReader) *cobra.Command {
 					case "azure":
 						rs = getAzureInfraResources()
 					case "gcp":
-						return errors.New("infra type not supported")
+						rs = getGCPInfraResources()
 					case "openstack":
 						return errors.New("infra type not supported")
 					case "alicloud":
@@ -198,6 +198,65 @@ func getAzureInfraResources() []string {
 	// fetch shoot route resources
 	capturedOutput = execInfraOperator("az", "az network route-table list -g "+shoottag)
 	rs = findInfraResourcesMatch(`\"id\".*routes\/([a-z0-9-]*)\"`, capturedOutput, rs)
+
+	return unique(rs)
+}
+
+func getGCPInfraResources() []string {
+	rs := make([]string, 0)
+	shoottag := getTechnicalID()
+
+	// fetch shoot subnet resource
+	capturedOutput := execInfraOperator("gcp", "gcloud compute networks subnets list")
+	if strings.Contains(capturedOutput, shoottag+"-nodes") {
+		rsShootSubnet := make([]string, 0)
+		rsShootSubnet = findInfraResourcesMatch(shoottag+"-nodes(.*)", capturedOutput, rsShootSubnet)
+		if len(rsShootSubnet) > 0 {
+			rsShootSubnet = strings.Fields(rsShootSubnet[0])
+			shootVpc := rsShootSubnet[1]
+			rs = append(rs, shoottag+"-nodes")
+
+			// fetch shoot vpc resource
+			capturedOutput = execInfraOperator("gcp", "gcloud compute networks list")
+			if strings.Contains(capturedOutput, shootVpc) {
+				rs = append(rs, shootVpc)
+			}
+
+			// fetch shoot cloud router resource
+			capturedOutput = execInfraOperator("gcp", "gcloud compute routers list")
+			if strings.Contains(capturedOutput, shootVpc) {
+				rsShootRouter := make([]string, 0)
+				rsShootRouter = findInfraResourcesMatch("(.*)"+shootVpc, capturedOutput, rsShootRouter)
+				if len(rsShootRouter) > 0 {
+					rsShootRouter = strings.Fields(rsShootRouter[0])
+					shootRouter := rsShootRouter[0]
+					shootRouterRegion := rsShootRouter[1]
+					if strings.Contains(capturedOutput, shootRouter) {
+						rs = append(rs, shootRouter)
+
+						// fetch shoot cloud nat resource
+						capturedOutput = execInfraOperator("gcp", "gcloud compute routers nats list --router="+shootRouter+" --router-region="+shootRouterRegion)
+						if strings.Contains(capturedOutput, shoottag+"-cloud-nat") {
+							rs = append(rs, shoottag+"-cloud-nat")
+						}
+					}
+				}
+			}
+		}
+	}
+
+	// fetch shoot service account
+	capturedOutput = execInfraOperator("gcp", "gcloud iam service-accounts list")
+	if strings.Contains(capturedOutput, shoottag) {
+		rsserviceAccount := make([]string, 0)
+		rsserviceAccount = findInfraResourcesMatch(shoottag+"(.*)False", capturedOutput, rsserviceAccount)
+		if len(rsserviceAccount) > 0 {
+			serviceAccount := strings.TrimSpace(rsserviceAccount[0])
+			if strings.Contains(capturedOutput, serviceAccount) {
+				rs = append(rs, serviceAccount)
+			}
+		}
+	}
 
 	return unique(rs)
 }
