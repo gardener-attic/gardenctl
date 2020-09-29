@@ -65,7 +65,7 @@ func NewInfraCmd(targetReader TargetReader) *cobra.Command {
 					case "gcp":
 						rs = getGCPInfraResources()
 					case "openstack":
-						return errors.New("infra type not supported")
+						rs = getOstackInfraResources()
 					case "alicloud":
 						return errors.New("infra type not supported")
 					default:
@@ -255,6 +255,70 @@ func getGCPInfraResources() []string {
 			if strings.Contains(capturedOutput, serviceAccount) {
 				rs = append(rs, serviceAccount)
 			}
+		}
+	}
+
+	return unique(rs)
+}
+
+func getOstackInfraResources() []string {
+	rs := make([]string, 0)
+	shoottag := getTechnicalID()
+
+	// fetch shoot network id
+	capturedOutput := execInfraOperator("openstack", "openstack network list")
+	if strings.Contains(capturedOutput, shoottag) {
+		rsShootNetwork := make([]string, 0)
+		rsShootNetwork = findInfraResourcesMatch("(.*)"+shoottag, capturedOutput, rsShootNetwork)
+		if len(rsShootNetwork) > 0 {
+			rsShootNetwork = strings.Fields(rsShootNetwork[0])
+			rsNetworkID := rsShootNetwork[1]
+			rs = append(rs, rsNetworkID)
+		}
+	}
+
+	// fetch shoot subnet id
+	capturedOutput = execInfraOperator("openstack", "openstack subnet list")
+	if strings.Contains(capturedOutput, shoottag) {
+		rsShootSubnet := make([]string, 0)
+		rsShootSubnet = findInfraResourcesMatch("(.*)"+shoottag, capturedOutput, rsShootSubnet)
+		if len(rsShootSubnet) > 0 {
+			rsShootSubnet = strings.Fields(rsShootSubnet[0])
+			rsSubnet := rsShootSubnet[1]
+			rs = append(rs, rsSubnet)
+		}
+	}
+
+	// fetch shoot router id
+	capturedOutput = execInfraOperator("openstack", "openstack router list")
+	if strings.Contains(capturedOutput, shoottag) {
+		rsShootRouter := make([]string, 0)
+		rsShootRouter = findInfraResourcesMatch("(.*)"+shoottag, capturedOutput, rsShootRouter)
+		if len(rsShootRouter) > 0 {
+			rsShootRouter = strings.Fields(rsShootRouter[0])
+			rsRouter := rsShootRouter[1]
+			rs = append(rs, rsRouter)
+
+			// fetch shoot floating network id
+			capturedOutput = execInfraOperator("openstack", "openstack floating ip list --router "+rsRouter+" -f value")
+			rsShootFloatingNetwork := make([]string, 0)
+			rsShootFloatingNetwork = findInfraResourcesMatch(`([a-z0-9-]{36})`, capturedOutput, rsShootFloatingNetwork)
+			if len(rsShootFloatingNetwork) > 0 {
+				rsFloatingNetwork := rsShootFloatingNetwork[2]
+				rs = append(rs, rsFloatingNetwork)
+			}
+		}
+	}
+
+	// fetch shoot security group id
+	capturedOutput = execInfraOperator("openstack", "openstack security group list")
+	if strings.Contains(capturedOutput, shoottag) {
+		rsShootSecurityGroup := make([]string, 0)
+		rsShootSecurityGroup = findInfraResourcesMatch("(.*)"+shoottag, capturedOutput, rsShootSecurityGroup)
+		if len(rsShootSecurityGroup) > 0 {
+			rsShootSecurityGroup = strings.Fields(rsShootSecurityGroup[0])
+			rsSecurityGroup := rsShootSecurityGroup[1]
+			rs = append(rs, rsSecurityGroup)
 		}
 	}
 
