@@ -408,6 +408,19 @@ func logPodGarden(toMatch, namespace string) {
 	showLogsFromKubectl(namespace, toMatch, emptyString)
 }
 
+// logPodShoot print logfiles for pods that are in the shoot
+func logPodShoot(toMatch, namespace string, container string) {
+	var err error
+	Client, err = clientToTarget(TargetKindShoot)
+	checkError(err)
+	if container != emptyString {
+		container = " -c " + container
+		showLogsFromKubectl(namespace, toMatch, container)
+	} else {
+		showLogsFromKubectl(namespace, toMatch, emptyString)
+	}
+}
+
 // logPodGardenImproved print logfiles for garden pods
 func logPodGardenImproved(podName string) {
 	var target Target
@@ -509,7 +522,8 @@ func logsAddonManager() {
 
 // logsVpnShoot prints the logfile of vpn-shoot
 func logsVpnShoot() {
-	logPod("vpn-shoot", "shoot", emptyString)
+	fmt.Println("-----------------------vpn-shoot")
+	logPodShoot("vpn-shoot", "kube-system", emptyString)
 }
 
 // logsMachineControllerManager prints the logfile of machine-controller-manager
