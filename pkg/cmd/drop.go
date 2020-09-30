@@ -137,12 +137,12 @@ func drop(targetWriter TargetWriter) {
 //set current namespace to default
 func setNamespaceDefault() {
 	cfg := getKubeConfigOfCurrentTarget()
-	out, err := ExecCmdReturnOutput("bash", "-c", "export KUBECONFIG="+cfg+"; kubectl config current-context")
+	out, err := ExecCmdReturnOutput("kubectl", "--kubeconfig="+cfg, "config", "current-context")
 	if err != nil {
 		fmt.Println(err)
 	}
 	currentConext := strings.TrimSuffix(string(out), "\n")
-	_, err = ExecCmdReturnOutput("bash", "-c", "export KUBECONFIG="+cfg+"; kubectl config set-context "+currentConext+" --namespace=default")
+	_, err = ExecCmdReturnOutput("kubectl", "--kubeconfig="+cfg, "config", "set-context "+currentConext, " --namespace=default")
 	if err != nil {
 		fmt.Println(err)
 	}

@@ -17,17 +17,14 @@ package cmd
 import (
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"net"
 	"os"
 	"os/exec"
 	"path/filepath"
-	"regexp"
 	"strings"
 	"time"
 
-	"github.com/Masterminds/semver"
 	"github.com/jmoiron/jsonq"
-	"gopkg.in/yaml.v2"
 )
 
 // AzureInstanceAttribute stores all the critical information for creating an instance on Azure.
@@ -45,10 +42,12 @@ type AzureInstanceAttribute struct {
 // sshToAZNode provides cmds to ssh to az via a node name and clean it up afterwards
 func sshToAZNode(nodeName, path, user, pathSSKeypair string, sshPublicKey []byte, myPublicIP string) {
 	a := &AzureInstanceAttribute{}
-	a.MyPublicIP = myPublicIP + "/32"
+	a.MyPublicIP = myPublicIP
 	fmt.Println("")
 	fmt.Println("(1/4) Fetching data from target shoot cluster")
+
 	a.fetchAzureAttributes(nodeName, path)
+
 	fmt.Println("Data fetched from target shoot cluster.")
 	fmt.Println("")
 
@@ -76,8 +75,12 @@ func sshToAZNode(nodeName, path, user, pathSSKeypair string, sshPublicKey []byte
 	fmt.Println("")
 
 	key := filepath.Join(pathSSKeypair, "key")
-	sshCmd := fmt.Sprintf("ssh -i " + key + " -o StrictHostKeyChecking=no " + node)
-	cmd := exec.Command("bash", "-c", sshCmd)
+	args := []string{"-i" + key, "-oStrictHostKeyChecking=no", node}
+	if debugSwitch {
+		args = append([]string{"-vvv"}, args...)
+	}
+
+	cmd := exec.Command("ssh", args...)
 	cmd.Stdout = os.Stdout
 	cmd.Stdin = os.Stdin
 	cmd.Stderr = os.Stderr
@@ -92,68 +95,28 @@ func (a *AzureInstanceAttribute) fetchAzureAttributes(nodeName, path string) {
 	a.NamePublicIP = "sshIP"
 	var err error
 
-	yamlData, err := ioutil.ReadFile(path)
-	checkError(err)
-	var yamlOut map[string]interface{}
-	err = yaml.Unmarshal([]byte(yamlData), &yamlOut)
-	checkError(err)
+	a.RescourceGroupName = a.ShootName
+	a.SecurityGroupName = a.ShootName + "-workers"
+	a.NicName = nodeName + "-nic"
 
-	terraformVersion := yamlOut["terraform_version"].(string)
-	c, err := semver.NewConstraint(">= 0.12.0")
-	if err != nil {
-		fmt.Println("Handle version not being parsable.")
-		os.Exit(2)
-	}
-	v, err := semver.NewVersion(terraformVersion)
-	if err != nil {
-		fmt.Println("Handle version not being parsable.")
-		os.Exit(2)
-	}
-	if c.Check(v) {
-		a.RescourceGroupName = yamlOut["outputs"].(map[interface{}]interface{})["resourceGroupName"].(map[interface{}]interface{})["value"].(string)
-		a.SecurityGroupName = yamlOut["outputs"].(map[interface{}]interface{})["securityGroupName"].(map[interface{}]interface{})["value"].(string)
-	} else {
-		a.RescourceGroupName = yamlOut["modules"].(map[interface{}]interface{})["outputs"].(map[interface{}]interface{})["resourceGroupName"].(map[interface{}]interface{})["value"].(string)
-		a.SecurityGroupName = yamlOut["modules"].(map[interface{}]interface{})["outputs"].(map[interface{}]interface{})["securityGroupName"].(map[interface{}]interface{})["value"].(string)
-	}
-
-	targetMachineName, err := fetchAzureMachineNameByNodeName(a.ShootName, nodeName)
-	checkError(err)
-
-	// remove invisible control character which are somehow encoded in the *v1.Node object
-	re := regexp.MustCompile("[[:^ascii:]]")
-	a.NicName = re.ReplaceAllLiteralString(targetMachineName+"-nic", "")
-
-	// parse sku type (Basic,Standard,...) from lbs
-	arguments := fmt.Sprintf("az network lb list --resource-group %s", a.RescourceGroupName)
+	arguments := fmt.Sprintf("az network lb list -g %s  --query [].sku.name -o tsv", a.RescourceGroupName)
 	captured := capture()
 	operate("az", arguments)
-	skuType, err := captured()
+	a.SkuType, err = captured()
 	checkError(err)
-	tmpfile, err := ioutil.TempFile(os.TempDir(), "lbs.json")
-	checkError(err)
-	defer os.Remove(tmpfile.Name())
-
-	_, err = tmpfile.Write([]byte(skuType))
-	checkError(err)
-
-	jsonData, err := ioutil.ReadFile(tmpfile.Name())
-	checkError(err)
-
-	var jsonOut []interface{}
-	err = json.Unmarshal([]byte(jsonData), &jsonOut)
-	checkError(err)
-
-	a.SkuType = jsonOut[0].(map[string]interface{})["sku"].(map[string]interface{})["name"].(string)
-	a.SkuType = strings.Trim(a.SkuType, "\"")
 	fmt.Println(a.SkuType)
 }
 
 // addNsgRule creates a nsg rule to open the ssh port
 func (a *AzureInstanceAttribute) addNsgRule() {
 	fmt.Println("Opened SSH Port.")
-	arguments := fmt.Sprintf("az network nsg rule create --resource-group %s  --nsg-name %s --name ssh --protocol Tcp --priority 1000 --source-address-prefixes %s --destination-port-range 22", a.RescourceGroupName, a.SecurityGroupName, a.MyPublicIP)
-	operate("az", arguments)
+	if net.ParseIP(a.MyPublicIP).To4() != nil {
+		arguments := fmt.Sprintf("az network nsg rule create --resource-group %s  --nsg-name %s --name ssh --protocol Tcp --priority 1000 --source-address-prefixes %s/32 --destination-port-range 22", a.RescourceGroupName, a.SecurityGroupName, a.MyPublicIP)
+		operate("az", arguments)
+	} else {
+		fmt.Println("IPv6 is currently not fully supported by gardenctl: " + a.MyPublicIP)
+	}
+
 }
 
 // createPublicIP creates the public ip for nic
@@ -187,22 +150,6 @@ func (a *AzureInstanceAttribute) configureNic() {
 	operate("az", arguments)
 	_, err = captured()
 	checkError(err)
-}
-
-// fetchAzureMachineNameByNodeName returns the name of machine with the given <nodeName>.
-func fetchAzureMachineNameByNodeName(shootName, nodeName string) (string, error) {
-	machines, err := getMachineList(shootName)
-	if err != nil {
-		return "", err
-	}
-
-	for _, machine := range machines.Items {
-		if machine.Status.Node == nodeName {
-			return machine.Name, nil
-		}
-	}
-
-	return "", fmt.Errorf("Cannot find Machine for node %q", nodeName)
 }
 
 // cleanupAzure cleans up all created azure resources required for ssh connection

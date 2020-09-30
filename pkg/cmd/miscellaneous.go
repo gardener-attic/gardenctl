@@ -136,28 +136,6 @@ func getMonitoringCredentials() (username, password string) {
 	return username, password
 }
 
-// getLoggingCredentials returns username and password required for url login to the kibana dashboard
-func getLoggingCredentials() (username, password string) {
-	var target Target
-	ReadTarget(pathTarget, &target)
-	var namespace, secretName string
-	if len(target.Target) == 2 {
-		namespace = "garden"
-		secretName = "seed-logging-ingress-credentials"
-	} else if len(target.Target) == 3 {
-		namespace = getSeedNamespaceNameForShoot(target.Target[2].Name)
-		secretName = "logging-ingress-credentials"
-	}
-	var err error
-	Client, err = clientToTarget("seed")
-	checkError(err)
-	monitoringSecret, err := Client.CoreV1().Secrets(namespace).Get((secretName), metav1.GetOptions{})
-	checkError(err)
-	username = string(monitoringSecret.Data["username"][:])
-	password = string(monitoringSecret.Data["password"][:])
-	return username, password
-}
-
 // getSeedNamespaceNameForShoot returns namespace name
 func getSeedNamespaceNameForShoot(shootName string) (namespaceSeed string) {
 	var target Target
@@ -317,9 +295,9 @@ func getPublicIP() string {
 	defer resp.Body.Close()
 	ip, err := ioutil.ReadAll(resp.Body)
 	checkError(err)
-	if !isIPv4(string(ip)) {
-		fmt.Println("Not valid ipv4 address")
-		os.Exit(1)
+	if net.ParseIP(string(ip)) == nil {
+		fmt.Printf("IP not valid:" + string(ip))
+		os.Exit(0)
 	}
 	return string(ip)
 }
@@ -335,7 +313,7 @@ func getRole() string {
 		Spec: authorizationv1.SelfSubjectAccessReviewSpec{
 			ResourceAttributes: &authorizationv1.ResourceAttributes{
 				Verb:     "get",
-				Resource: "secret",
+				Resource: "secrets",
 			},
 		},
 	}
