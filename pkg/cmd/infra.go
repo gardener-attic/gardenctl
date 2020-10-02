@@ -15,6 +15,7 @@
 package cmd
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io/ioutil"
@@ -67,7 +68,7 @@ func NewInfraCmd(targetReader TargetReader) *cobra.Command {
 					case "openstack":
 						rs = getOstackInfraResources()
 					case "alicloud":
-						return errors.New("infra type not supported")
+						rs = getAliCloudInfraResources()
 					default:
 						return errors.New("infra type not found")
 					}
@@ -319,6 +320,108 @@ func getOstackInfraResources() []string {
 			rsShootSecurityGroup = strings.Fields(rsShootSecurityGroup[0])
 			rsSecurityGroup := rsShootSecurityGroup[1]
 			rs = append(rs, rsSecurityGroup)
+		}
+	}
+
+	return unique(rs)
+}
+
+func getAliCloudInfraResources() []string {
+	rs := make([]string, 0)
+	shoottag := getTechnicalID()
+
+	// fetch shoot vpc id
+	capturedOutput := execInfraOperator("aliyun", "aliyun vpc DescribeVpcs --VpcName "+shoottag+"-vpc")
+	if !strings.Contains(capturedOutput, "VpcId") {
+		capturedOutput = execInfraOperator("aliyun", "aliyun ecs DescribeInstances --InstanceName "+shoottag+"*")
+	}
+	rs = findInfraResourcesMatch(`\"VpcId\": \"(.*)\"`, capturedOutput, rs)
+	if len(rs) > 0 && string(rs[0][0]) == "v" && string(rs[0][2]) == "c" {
+		// fetch shoot vrouter gateway id
+		rs = findInfraResourcesMatch(`\"(vrt\-[a-z0-9]*)\"`, capturedOutput, rs)
+		// fetch shoot router table id
+		rs = findInfraResourcesMatch(`\"(vtb\-[a-z0-9]*)\"`, capturedOutput, rs)
+		// fetch shoot vswitch id
+		capturedOutput = execInfraOperator("aliyun", "aliyun vpc DescribeVSwitches --VpcId "+rs[0])
+		if strings.Contains(capturedOutput, shoottag) {
+			capturedOutput = capturedOutput[strings.Index(capturedOutput, "{"):]
+			var jsonOut map[string]interface{}
+			err := json.Unmarshal([]byte(capturedOutput), &jsonOut)
+			checkError(err)
+			data := jsonOut["VSwitches"].(map[string]interface{})
+			for _, v := range data {
+				switch v := v.(type) {
+				case []interface{}:
+					for _, u := range v {
+						VSwitchName := u.(map[string]interface{})["VSwitchName"].(string)
+						if strings.Contains(VSwitchName, shoottag) {
+							VSwitchID := u.(map[string]interface{})["VSwitchId"].(string)
+							rs = append(rs, VSwitchID)
+						}
+					}
+				}
+			}
+		}
+		// fetch shoot nat gateway id
+		capturedOutput = execInfraOperator("aliyun", "aliyun vpc DescribeNatGateways --VpcId "+rs[0])
+		rs = findInfraResourcesMatch(`\"(ngw\-[a-z0-9]*)\"`, capturedOutput, rs)
+		// fetch shoot security group id
+		capturedOutput = execInfraOperator("aliyun", "aliyun ecs DescribeSecurityGroups --SecurityGroupName "+shoottag+"-sg")
+		rs = findInfraResourcesMatch(`\"(sg\-[a-z0-9]*)\"`, capturedOutput, rs)
+		for _, rsid := range rs {
+			if strings.HasPrefix(rsid, "ngw") {
+				// fetch shoot snat table id
+				capturedOutput = execInfraOperator("aliyun", "aliyun vpc DescribeNatGateways --NatGatewayId "+rsid)
+				rs = findInfraResourcesMatch(`\"(stb\-[a-z0-9]*)\"`, capturedOutput, rs)
+				// fetch shoot snat entry
+				for _, rsid := range rs {
+					if strings.HasPrefix(rsid, "stb") {
+						capturedOutput = execInfraOperator("aliyun", "aliyun vpc DescribeSnatTableEntries --SnatTableId "+rsid)
+						capturedOutput = capturedOutput[strings.Index(capturedOutput, "{"):]
+						var jsonOut map[string]interface{}
+						err := json.Unmarshal([]byte(capturedOutput), &jsonOut)
+						checkError(err)
+						data := jsonOut["SnatTableEntries"].(map[string]interface{})
+						for _, v := range data {
+							switch v := v.(type) {
+							case []interface{}:
+								for _, u := range v {
+									SnatEntryID := u.(map[string]interface{})["SnatEntryId"].(string)
+									SourceVSwitchID := u.(map[string]interface{})["SourceVSwitchId"].(string)
+									for _, rsid := range rs {
+										if strings.HasPrefix(rsid, "vsw") {
+											if strings.Contains(rsid, SourceVSwitchID) {
+												rs = append(rs, SnatEntryID)
+											}
+										}
+									}
+								}
+							}
+						}
+					}
+				}
+				// fetch shoot elastic ip address
+				capturedOutput = execInfraOperator("aliyun", "aliyun vpc DescribeEipAddresses --AssociatedInstanceId "+rsid+" --AssociatedInstanceType Nat")
+				if strings.Contains(capturedOutput, shoottag) {
+					capturedOutput = capturedOutput[strings.Index(capturedOutput, "{"):]
+					var jsonOut map[string]interface{}
+					err := json.Unmarshal([]byte(capturedOutput), &jsonOut)
+					checkError(err)
+					data := jsonOut["EipAddresses"].(map[string]interface{})
+					for _, v := range data {
+						switch v := v.(type) {
+						case []interface{}:
+							for _, u := range v {
+								Name := u.(map[string]interface{})["Name"].(string)
+								if strings.Contains(Name, shoottag) {
+									AllocationID := u.(map[string]interface{})["AllocationId"].(string)
+									rs = append(rs, AllocationID)
+								}
+							}
+						}
+					}
+				}
+			}
 		}
 	}
 
