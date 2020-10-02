@@ -68,7 +68,7 @@ func NewInfraCmd(targetReader TargetReader) *cobra.Command {
 					case "openstack":
 						rs = getOstackInfraResources()
 					case "alicloud":
-						rs = getAliInfraResources()
+						rs = getAliCloudInfraResources()
 					default:
 						return errors.New("infra type not found")
 					}
@@ -326,7 +326,7 @@ func getOstackInfraResources() []string {
 	return unique(rs)
 }
 
-func getAliInfraResources() []string {
+func getAliCloudInfraResources() []string {
 	rs := make([]string, 0)
 	shoottag := getTechnicalID()
 
@@ -337,8 +337,6 @@ func getAliInfraResources() []string {
 	}
 	rs = findInfraResourcesMatch(`\"VpcId\": \"(.*)\"`, capturedOutput, rs)
 	if len(rs) > 0 && string(rs[0][0]) == "v" && string(rs[0][2]) == "c" {
-		// fetch shoot vswitch id
-		rs = findInfraResourcesMatch(`\"(vsw\-[a-z0-9]*)\"`, capturedOutput, rs)
 		// fetch shoot vrouter gateway id
 		rs = findInfraResourcesMatch(`\"(vrt\-[a-z0-9]*)\"`, capturedOutput, rs)
 		// fetch shoot router table id
