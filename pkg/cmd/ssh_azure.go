@@ -15,16 +15,12 @@
 package cmd
 
 import (
-	"encoding/json"
 	"fmt"
 	"net"
 	"os"
 	"os/exec"
 	"path/filepath"
-	"strings"
 	"time"
-
-	"github.com/jmoiron/jsonq"
 )
 
 // AzureInstanceAttribute stores all the critical information for creating an instance on Azure.
@@ -93,17 +89,13 @@ func sshToAZNode(nodeName, path, user, pathSSKeypair string, sshPublicKey []byte
 func (a *AzureInstanceAttribute) fetchAzureAttributes(nodeName, path string) {
 	a.ShootName = getFromTargetInfo("shootTechnicalID")
 	a.NamePublicIP = "sshIP"
-	var err error
 
 	a.RescourceGroupName = a.ShootName
 	a.SecurityGroupName = a.ShootName + "-workers"
 	a.NicName = nodeName + "-nic"
 
-	arguments := fmt.Sprintf("az network lb list -g %s  --query [].sku.name -o tsv", a.RescourceGroupName)
-	captured := capture()
-	operate("az", arguments)
-	a.SkuType, err = captured()
-	checkError(err)
+	arguments := fmt.Sprintf(" network lb list -g %s  --query [].sku.name -o tsv", a.RescourceGroupName)
+	a.SkuType = operate("az", arguments)
 	fmt.Println(a.SkuType)
 }
 
@@ -111,7 +103,7 @@ func (a *AzureInstanceAttribute) fetchAzureAttributes(nodeName, path string) {
 func (a *AzureInstanceAttribute) addNsgRule() {
 	fmt.Println("Opened SSH Port.")
 	if net.ParseIP(a.MyPublicIP).To4() != nil {
-		arguments := fmt.Sprintf("az network nsg rule create --resource-group %s  --nsg-name %s --name ssh --protocol Tcp --priority 1000 --source-address-prefixes %s/32 --destination-port-range 22", a.RescourceGroupName, a.SecurityGroupName, a.MyPublicIP)
+		arguments := fmt.Sprintf(" network nsg rule create --resource-group %s  --nsg-name %s --name ssh --protocol Tcp --priority 1000 --source-address-prefixes %s/32 --destination-port-range 22", a.RescourceGroupName, a.SecurityGroupName, a.MyPublicIP)
 		operate("az", arguments)
 	} else {
 		fmt.Println("IPv6 is currently not fully supported by gardenctl: " + a.MyPublicIP)
@@ -121,35 +113,20 @@ func (a *AzureInstanceAttribute) addNsgRule() {
 
 // createPublicIP creates the public ip for nic
 func (a *AzureInstanceAttribute) createPublicIP() {
-	var err error
 	fmt.Println("Create public ip")
-	arguments := fmt.Sprintf("az network public-ip create -g %s -n %s --sku %s --allocation-method static --tags component=gardenctl", a.RescourceGroupName, a.NamePublicIP, a.SkuType)
-	captured := capture()
+	arguments := fmt.Sprintf(" network public-ip create -g %s -n %s --sku %s --allocation-method static --tags component=gardenctl", a.RescourceGroupName, a.NamePublicIP, a.SkuType)
 	operate("az", arguments)
-	a.PublicIP, err = captured()
-	checkError(err)
+	arguments = fmt.Sprintf(" network public-ip list -g %s --query [?tags.component=='gardenctl'].ipAddress --output tsv", a.RescourceGroupName)
+	a.PublicIP = operate("az", arguments)
 	fmt.Println(a.PublicIP)
-	data := map[string]interface{}{}
-	dec := json.NewDecoder(strings.NewReader(a.PublicIP))
-	err = dec.Decode(&data)
-	checkError(err)
-	jq := jsonq.NewQuery(data)
-	a.PublicIP, err = jq.String("publicIp", "ipAddress")
-	if err != nil {
-		os.Exit(2)
-	}
 }
 
 // configureNic attaches a public ip to the nic
 func (a *AzureInstanceAttribute) configureNic() {
-	var err error
 	fmt.Println("Add public ip to nic")
 	fmt.Println("")
-	arguments := fmt.Sprintf("az network nic ip-config update -g %s --nic-name %s --public-ip-address %s -n %s", a.RescourceGroupName, a.NicName, a.NamePublicIP, a.NicName)
-	captured := capture()
+	arguments := fmt.Sprintf(" network nic ip-config update -g %s --nic-name %s --public-ip-address %s -n %s", a.RescourceGroupName, a.NicName, a.NamePublicIP, a.NicName)
 	operate("az", arguments)
-	_, err = captured()
-	checkError(err)
 }
 
 // cleanupAzure cleans up all created azure resources required for ssh connection
@@ -157,34 +134,23 @@ func (a *AzureInstanceAttribute) cleanupAzure() {
 	fmt.Println("")
 	fmt.Println("(4/4) Cleanup")
 
-	var err error
-
 	// remove ssh rule
 	fmt.Println("")
 	fmt.Println("  (1/3) Remove SSH rule")
-	arguments := fmt.Sprintf("az network nsg rule delete --resource-group %s  --nsg-name %s --name ssh", a.RescourceGroupName, a.SecurityGroupName)
-	captured := capture()
+	arguments := fmt.Sprintf(" network nsg rule delete --resource-group %s  --nsg-name %s --name ssh", a.RescourceGroupName, a.SecurityGroupName)
 	operate("az", arguments)
-	_, err = captured()
-	checkError(err)
 
 	// remove public ip address from nic
 	fmt.Println("")
 	fmt.Println("  (2/3) Remove public ip from nic")
-	arguments = fmt.Sprintf("az network nic ip-config update -g %s --nic-name %s --public-ip-address %s -n %s --remove publicIPAddress", a.RescourceGroupName, a.NicName, a.NamePublicIP, a.NicName)
-	captured = capture()
+	arguments = fmt.Sprintf(" network nic ip-config update -g %s --nic-name %s --public-ip-address %s -n %s --remove publicIPAddress", a.RescourceGroupName, a.NicName, a.NamePublicIP, a.NicName)
 	operate("az", arguments)
-	_, err = captured()
-	checkError(err)
 
 	// delete ip
 	fmt.Println("")
 	fmt.Println("  (3/3) Delete public ip")
-	arguments = fmt.Sprintf("az network public-ip delete -g %s -n %s", a.RescourceGroupName, a.NamePublicIP)
-	captured = capture()
+	arguments = fmt.Sprintf(" network public-ip delete -g %s -n %s", a.RescourceGroupName, a.NamePublicIP)
 	operate("az", arguments)
-	_, err = captured()
-	checkError(err)
 	fmt.Println("")
 	fmt.Println("Configuration successfully cleaned up.")
 }
