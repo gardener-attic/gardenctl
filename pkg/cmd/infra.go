@@ -114,7 +114,7 @@ func GetOrphanInfraResources(rs []string, terraformstate string) error {
 
 func getAWSInfraResources() []string {
 	rs := make([]string, 0)
-	shoottag := getFromTargetInfo("shootTechnicalID")
+	shoottag := getTechnicalID()
 
 	// fetch shoot vpc resources
 	capturedOutput := execInfraOperator("aws", "aws ec2 describe-vpcs --filter Name=tag:kubernetes.io/cluster/"+shoottag+",Values=1")
@@ -166,7 +166,7 @@ func getAWSInfraResources() []string {
 
 func getAzureInfraResources() []string {
 	rs := make([]string, 0)
-	shoottag := getFromTargetInfo("shootTechnicalID")
+	shoottag := getTechnicalID()
 
 	// fetch shoot resource group
 	capturedOutput := execInfraOperator("az", "az group show --name "+shoottag)
@@ -205,7 +205,7 @@ func getAzureInfraResources() []string {
 
 func getGCPInfraResources() []string {
 	rs := make([]string, 0)
-	shoottag := getFromTargetInfo("shootTechnicalID")
+	shoottag := getTechnicalID()
 
 	// fetch shoot subnet resource
 	capturedOutput := execInfraOperator("gcp", "gcloud compute networks subnets list")

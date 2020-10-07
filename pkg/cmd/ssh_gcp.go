@@ -99,7 +99,7 @@ func sshToGCPNode(nodeName, path, user, pathSSKeypair string, sshPublicKey []byt
 // fetchAwsAttributes gets all the needed attributes for creating bastion host and its security group with given <nodeName> by using gcp cli for non-operator user
 func (g *GCPInstanceAttribute) fetchGCPAttributesByCLI(nodeName, path string) {
 	var err error
-	g.ShootName = getFromTargetInfo("shootTechnicalID")
+	g.ShootName = getTechnicalID()
 	g.BastionHostName = g.ShootName + "-bastions"
 	g.FirewallRuleName = g.ShootName + "-allow-ssh-access"
 	g.Subnetwork = g.ShootName + "-nodes"
@@ -122,7 +122,7 @@ func (g *GCPInstanceAttribute) fetchGCPAttributesByCLI(nodeName, path string) {
 // fetchAttributes gets all the needed attributes for creating bastion host and its security group with given <nodeName>.
 func (g *GCPInstanceAttribute) fetchGCPAttributes(nodeName, path string) {
 	var err error
-	g.ShootName = getFromTargetInfo("shootTechnicalID")
+	g.ShootName = getTechnicalID()
 	g.BastionHostName = g.ShootName + "-bastions"
 	g.FirewallRuleName = g.ShootName + "-allow-ssh-access"
 	g.Subnetwork = g.ShootName + "-nodes"

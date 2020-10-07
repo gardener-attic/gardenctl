@@ -189,7 +189,12 @@ func logPod(toMatch string, toTarget string, container string) {
 	}
 	namespace := getSeedNamespaceNameForShoot(target.Target[2].Name)
 	var err error
-	shoot, err := getShootObject()
+
+	project, err := getProjectForShoot()
+	checkError(err)
+	shootName := target.Target[2].Name
+
+	shoot, err := Client.GardenerV1beta1().Shoots(*project.Spec.Namespace).Get(shootName, metav1.GetOptions{})
 	checkError(err)
 
 	gardenerVersion, err := semver.NewVersion(shoot.Status.Gardener.Version)
@@ -306,9 +311,7 @@ func logPodGardenImproved(podName string) {
 	checkError(err)
 	pods, err := Client.CoreV1().Pods("garden").List(metav1.ListOptions{})
 	checkError(err)
-	project, err := getTargetName("project")
-	checkError(err)
-	shootName, err := getTargetName("shoot")
+	project, err := getProjectForShoot()
 	checkError(err)
 
 	for _, pod := range pods.Items {
@@ -320,7 +323,7 @@ func logPodGardenImproved(podName string) {
 			}
 			lines := strings.Split("time="+output, `time=`)
 			for _, line := range lines {
-				if strings.Contains(line, ("shoot=" + project + "/" + shootName)) {
+				if strings.Contains(line, ("shoot=" + project.Name + "/" + target.Target[2].Name)) {
 					fmt.Print(line)
 				}
 			}
