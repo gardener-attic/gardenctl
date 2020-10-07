@@ -32,6 +32,7 @@ var gardenConfig string
 var pathGardenHome string
 var sessionID string
 var debugSwitch bool
+var targetInfo = make(map[string]string)
 
 // RootCmd represents the base command when called without any subcommands
 var RootCmd = &cobra.Command{
