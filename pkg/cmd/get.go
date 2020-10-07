@@ -39,6 +39,7 @@ func NewGetCmd(targetReader TargetReader, configReader ConfigReader,
 			if len(args) < 1 || len(args) > 2 {
 				return errors.New("command must be in the format: get [(garden|project|seed|shoot|target) <name>]")
 			}
+
 			switch args[0] {
 			case "project":
 				if len(args) == 1 {
