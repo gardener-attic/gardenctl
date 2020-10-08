@@ -109,7 +109,7 @@ func sshToAWSNode(nodeName, path, user, pathSSKeypair string, sshPublicKey []byt
 
 // fetchAwsAttributes gets all the needed attributes for creating bastion host and its security group with given <nodeName> by using aws cli for non-operator user
 func (a *AwsInstanceAttribute) fetchAwsAttributesByCLI(nodeName, path string) {
-	a.ShootName = getTechnicalID()
+	a.ShootName = getFromTargetInfo("shootTechnicalID")
 	publicUtility := a.ShootName + "-public-utility-z0"
 	arguments := fmt.Sprintf("aws ec2 describe-subnets --filters Name=tag:Name,Values=" + publicUtility + " --query Subnets[*].SubnetId")
 	captured := capture()
@@ -143,7 +143,7 @@ func (a *AwsInstanceAttribute) fetchAwsAttributesByCLI(nodeName, path string) {
 
 // fetchAwsAttributes gets all the needed attributes for creating bastion host and its security group with given <nodeName>.
 func (a *AwsInstanceAttribute) fetchAwsAttributes(nodeName, path string) {
-	a.ShootName = getTechnicalID()
+	a.ShootName = getFromTargetInfo("shootTechnicalID")
 
 	yamlData, err := ioutil.ReadFile(path)
 	checkError(err)

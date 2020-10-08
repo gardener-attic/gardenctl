@@ -118,7 +118,7 @@ func sshToAlicloudNode(nodeName, path, user, pathSSKeypair string, sshPublicKey 
 
 // fetchAttributes gets all the needed attributes for creating bastion host and its security group with given <nodeName>.
 func (a *AliyunInstanceAttribute) fetchAttributes(nodeName string) {
-	a.ShootName = getTechnicalID()
+	a.ShootName = getFromTargetInfo("shootTechnicalID")
 	var err error
 	a.InstanceID, err = fetchAlicloudInstanceIDByNodeName(nodeName)
 	checkError(err)
@@ -616,7 +616,7 @@ func cleanupAliyunBastionHost() {
 
 	fmt.Println("")
 	fmt.Println("(2/4) Fetching data from target shoot cluster")
-	a.ShootName = getTechnicalID()
+	a.ShootName = getFromTargetInfo("shootTechnicalID")
 	a.BastionInstanceName = a.ShootName + "-bastion"
 	a.BastionSecurityGroupName = a.ShootName + "-bsg"
 	fmt.Println("Data fetched from target shoot cluster.")
