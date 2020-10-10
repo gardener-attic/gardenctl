@@ -32,6 +32,7 @@ var gardenConfig string
 var pathGardenHome string
 var sessionID string
 var debugSwitch bool
+var targetInfo = make(map[string]string)
 
 // RootCmd represents the base command when called without any subcommands
 var RootCmd = &cobra.Command{
@@ -130,7 +131,7 @@ func init() {
 
 	RootCmd.PersistentFlags().BoolVarP(&cachevar, "no-cache", "c", false, "no caching")
 	RootCmd.PersistentFlags().StringVarP(&outputFormat, "output", "o", "yaml", "output format yaml or json")
-	RootCmd.PersistentFlags().BoolVarP(&debugSwitch, "debug", "d", false, "enable debug level output")
+	RootCmd.PersistentFlags().BoolVarP(&debugSwitch, "verbose", "d", false, "enable verbose output")
 
 	cobra.EnableCommandSorting = false
 	cobra.EnablePrefixMatching = prefixMatching
@@ -141,7 +142,7 @@ func init() {
 		NewTargetCmd(targetReader, targetWriter, configReader, ioStreams, kubeconfigReader),
 		NewDropCmd(targetReader, targetWriter, ioStreams),
 		NewGetCmd(targetReader, configReader, kubeconfigReader, kubeconfigWriter, ioStreams))
-	RootCmd.AddCommand(NewDownloadCmd(), NewShowCmd(), NewLogsCmd())
+	RootCmd.AddCommand(NewDownloadCmd(targetReader), NewShowCmd(targetReader), NewLogsCmd())
 	RootCmd.AddCommand(NewRegisterCmd(), NewUnregisterCmd())
 	RootCmd.AddCommand(NewCompletionCmd())
 	RootCmd.AddCommand(NewShellCmd(targetReader, ioStreams))
@@ -149,6 +150,7 @@ func init() {
 	RootCmd.AddCommand(NewKubectlCmd(), NewKaCmd(), NewKsCmd(), NewKgCmd(), NewKnCmd())
 	RootCmd.AddCommand(NewKubectxCmd())
 	RootCmd.AddCommand(NewTerraformCmd(targetReader))
+	RootCmd.AddCommand(NewInfraCmd(targetReader))
 	RootCmd.AddCommand(NewAliyunCmd(targetReader), NewAwsCmd(targetReader), NewAzCmd(targetReader), NewGcloudCmd(targetReader), NewOpenstackCmd(targetReader))
 	RootCmd.AddCommand(NewInfoCmd(targetReader, ioStreams))
 	RootCmd.AddCommand(NewVersionCmd(), NewUpdateCheckCmd())

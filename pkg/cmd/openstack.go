@@ -16,6 +16,8 @@ package cmd
 
 import (
 	"errors"
+	"fmt"
+	"os"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -31,7 +33,10 @@ func NewOpenstackCmd(targetReader TargetReader) *cobra.Command {
 			if !CheckShootIsTargeted(target) {
 				return errors.New("no shoot targeted")
 			}
-
+			if !CheckToolInstalled("openstack") {
+				fmt.Println("Please go to https://docs.openstack.org/newton/user-guide/common/cli-install-openstack-command-line-clients.html for how to install openstack cli")
+				os.Exit(2)
+			}
 			arguments := "openstack " + strings.Join(args[:], " ")
 			operate("openstack", arguments)
 

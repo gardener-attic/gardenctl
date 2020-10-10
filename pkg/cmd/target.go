@@ -599,18 +599,21 @@ func targetShoot(targetWriter TargetWriter, shoot gardencorev1beta1.Shoot, reade
 		target.Target = append(target.Target, TargetMeta{"shoot", shoot.Name})
 	} else if len(target.Target) == 2 {
 		drop(targetWriter)
-		if target.Target[1].Kind == "seed" {
+		if target.Target[1].Kind == "seed" && getRole() != "user" {
 			target.Target[1].Kind = "seed"
 			target.Target[1].Name = *shoot.Spec.SeedName
 		} else if target.Target[1].Kind == "project" {
 			target.Target[1].Kind = "project"
 			target.Target[1].Name = projectName
+		} else {
+			fmt.Println("You are user role and can't target shoot via seed, please target shoot via project")
+			os.Exit(2)
 		}
 		target.Target = append(target.Target, TargetMeta{"shoot", shoot.Name})
 	} else if len(target.Target) == 3 {
 		drop(targetWriter)
 		drop(targetWriter)
-		if len(target.Target) > 2 && target.Target[1].Kind == "seed" {
+		if len(target.Target) > 2 && target.Target[1].Kind == "seed" && getRole() != "user" {
 			target.Target = target.Target[:len(target.Target)-2]
 			target.Target = append(target.Target, TargetMeta{"seed", *shoot.Spec.SeedName})
 			target.Target = append(target.Target, TargetMeta{"shoot", shoot.Name})
@@ -618,12 +621,15 @@ func targetShoot(targetWriter TargetWriter, shoot gardencorev1beta1.Shoot, reade
 			target.Target = target.Target[:len(target.Target)-2]
 			target.Target = append(target.Target, TargetMeta{"project", projectName})
 			target.Target = append(target.Target, TargetMeta{"shoot", shoot.Name})
+		} else {
+			fmt.Println("You are user role and can't target shoot via seed, please target shoot via project")
+			os.Exit(2)
 		}
 	} else if len(target.Target) == 4 {
 		drop(targetWriter)
 		drop(targetWriter)
 		drop(targetWriter)
-		if len(target.Target) > 3 && target.Target[1].Kind == "seed" {
+		if len(target.Target) > 3 && target.Target[1].Kind == "seed" && getRole() != "user" {
 			target.Target = target.Target[:len(target.Target)-3]
 			target.Target = append(target.Target, TargetMeta{"seed", *shoot.Spec.SeedName})
 			target.Target = append(target.Target, TargetMeta{"shoot", shoot.Name})
@@ -631,6 +637,9 @@ func targetShoot(targetWriter TargetWriter, shoot gardencorev1beta1.Shoot, reade
 			target.Target = target.Target[:len(target.Target)-3]
 			target.Target = append(target.Target, TargetMeta{"project", projectName})
 			target.Target = append(target.Target, TargetMeta{"shoot", shoot.Name})
+		} else {
+			fmt.Println("You are user role and can't target shoot via seed, please target shoot via project")
+			os.Exit(2)
 		}
 	}
 
@@ -1118,14 +1127,14 @@ func namespaceWrapper(targetReader TargetReader, targetWriter TargetWriter, kube
 
 	currentConfig := getKubeConfigOfCurrentTarget()
 
-	out, err := ExecCmdReturnOutput("bash", "-c", "export KUBECONFIG="+currentConfig+"; kubectl config current-context")
+	out, err := ExecCmdReturnOutput("kubectl", "--kubeconfig="+currentConfig, "config", "current-context")
 	if err != nil {
 		fmt.Println(err)
 	}
 	currentConext := strings.TrimSuffix(string(out), "\n")
 	fmt.Println("Namespace:")
 	fmt.Printf("Set namespace to %s for current context %s \n", kubectlNameSpace, currentConext)
-	out, err = ExecCmdReturnOutput("bash", "-c", "export KUBECONFIG="+currentConfig+"; kubectl config set-context "+currentConext+" --namespace="+kubectlNameSpace)
+	out, err = ExecCmdReturnOutput("kubectl", "--kubeconfig="+currentConfig, "config", "set-context", currentConext, "--namespace="+kubectlNameSpace)
 	if err != nil {
 		fmt.Println(err)
 		return err
