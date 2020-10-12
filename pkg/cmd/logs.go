@@ -137,7 +137,7 @@ func runCommand(args []string) {
 	case "addon-manager":
 		logsAddonManager()
 	case "vpn-seed":
-		logsVpnSeed()
+		logsVpnSeed(args[1])
 	case "vpn-shoot":
 		logsVpnShoot()
 	case "machine-controller-manager":
@@ -291,11 +291,15 @@ func logPodGarden(toMatch, namespace string) {
 }
 
 // logPodSeed print logfiles for Seed pods
-func logPodSeed(toMatch, namespace string) {
+func logPodSeed(toMatch, namespace string, container string) {
 	var err error
-	Client, err = clientToTarget("seed")
+	Client, err = clientToTarget(TargetKindSeed)
 	checkError(err)
-	showLogsFromKubectl(namespace, toMatch, emptyString)
+	if container != emptyString {
+		showLogsFromKubectl(namespace, toMatch, container)
+	} else {
+		showLogsFromKubectl(namespace, toMatch, emptyString)
+	}
 }
 
 // logPodShoot print logfiles for shoot pods
@@ -380,11 +384,9 @@ func logsControllerManager() {
 }
 
 // logsVpnSeed prints the logfile of the vpn-seed container
-func logsVpnSeed() {
+func logsVpnSeed(shootName string) {
 	fmt.Println("-----------------------Kube-Apiserver")
-	logPod("kube-apiserver", "seed", "vpn-seed")
-	fmt.Println("-----------------------Prometheus")
-	logPod("prometheus", "seed", "vpn-seed")
+	logPodSeed("kube-apiserver", shootName, "vpn-seed")
 }
 
 // logsEtcdOpertor prints the logfile of the etcd-operator
@@ -471,7 +473,7 @@ func logsGrafana() {
 }
 
 func logsGardenlet() {
-	logPodSeed("gardenlet", "garden")
+	logPodSeed("gardenlet", "garden", emptyString)
 }
 
 // logsAlertmanager prints the logfiles of alertmanager
