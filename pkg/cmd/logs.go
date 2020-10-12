@@ -73,9 +73,9 @@ func validateArgs(args []string) error {
 	}
 	var t Target
 	ReadTarget(pathTarget, &t)
-	if len(t.Target) < 3 && (args[0] != "gardener-apiserver") && (args[0] != "gardener-controller-manager") && (args[0] != "tf") && (args[0] != "kubernetes-dashboard") {
+	if !isTargeted("shoot") && (args[0] != "gardener-apiserver") && (args[0] != "gardener-controller-manager") && (args[0] != "tf") && (args[0] != "kubernetes-dashboard") {
 		return errors.New("No shoot targeted")
-	} else if (len(t.Target) < 2 && (args[0] == "tf")) || len(t.Target) < 3 && (args[0] == "tf") && (t.Target[1].Kind != "seed") {
+	} else if (!isTargeted("seed") && (args[0] == "tf")) || !isTargeted("shoot", "seed") && (args[0] == "tf") {
 		return errors.New("No seed or shoot targeted")
 	} else if len(t.Target) == 0 {
 		return errors.New("Target stack is empty")
@@ -183,11 +183,11 @@ func runCommand(args []string) {
 func logPod(toMatch string, toTarget string, container string) {
 	var target Target
 	ReadTarget(pathTarget, &target)
-	if len(target.Target) < 3 || (len(target.Stack()) == 3 && target.Stack()[2].Kind == "namespace") {
+	if !isTargeted("shoot") {
 		fmt.Println("No shoot targeted")
 		os.Exit(2)
 	}
-	namespace := getSeedNamespaceNameForShoot(target.Target[2].Name)
+	namespace := getFromTargetInfo("shootTechnicalID")
 	var err error
 	shoot, err := getShootObject()
 	checkError(err)
@@ -323,10 +323,8 @@ func logPodGardenImproved(podName string) {
 	checkError(err)
 	pods, err := Client.CoreV1().Pods("garden").List(metav1.ListOptions{})
 	checkError(err)
-	project, err := getTargetName("project")
-	checkError(err)
-	shootName, err := getTargetName("shoot")
-	checkError(err)
+	project := getTargetName("project")
+	shootName := getTargetName("shoot")
 
 	for _, pod := range pods.Items {
 		if strings.Contains(pod.Name, podName) {
@@ -430,21 +428,22 @@ func logsKubernetesDashboard() {
 	var target Target
 	ReadTarget(pathTarget, &target)
 	namespace := "kube-system"
-	if len(target.Target) == 3 {
+	if isTargeted("shoot") {
 		var err error
 		Client, err = clientToTarget("shoot")
 		checkError(err)
-	} else if len(target.Target) == 2 && target.Target[1].Kind == "seed" {
-		gardenName := target.Stack()[0].Name
-		KUBECONFIG = filepath.Join(pathGardenHome, "cache", gardenName, "seeds", target.Target[1].Name, "kubeconfig.yaml")
+	} else if isTargeted("seed") {
+		gardenName := getTargetName("garden")
+		seedName := getTargetName("seed")
+		KUBECONFIG = filepath.Join(pathGardenHome, "cache", gardenName, "seeds", seedName, "kubeconfig.yaml")
 		config, err := clientcmd.BuildConfigFromFlags(emptyString, KUBECONFIG)
 		checkError(err)
 		Client, err = kubernetes.NewForConfig(config)
 		checkError(err)
-	} else if len(target.Target) == 2 && target.Target[1].Kind == "project" {
+	} else if isTargeted("project") {
 		fmt.Println("Project targeted")
 		os.Exit(2)
-	} else if len(target.Target) == 1 {
+	} else if isTargeted("garden") {
 		var err error
 		Client, err = clientToTarget("garden")
 		checkError(err)

@@ -65,14 +65,15 @@ func NewSSHCmd(reader TargetReader, ioStreams IOStreams) *cobra.Command {
 			fmt.Printf(warningColor, "\nWarning:\nBe aware that you are entering an untrusted environment!\nDo not enter credentials or sensitive data within the ssh session that cluster owners should not have access to.\n")
 			fmt.Println("")
 
-			gardenName := target.Stack()[0].Name
-			shootName := target.Stack()[2].Name
 			var pathSSKeypair string
-			if target.Stack()[1].Kind == TargetKindProject {
-				projectName := target.Stack()[1].Name
+			gardenName := getTargetName("garden")
+			shootName := getTargetName("shoot")
+			seedName := getTargetName("seed")
+			projectName := getTargetName("project")
+
+			if isTargeted("project") {
 				pathSSKeypair = filepath.Join(pathGardenHome, "cache", gardenName, "projects", projectName, shootName)
 			} else {
-				seedName := target.Stack()[1].Name
 				pathSSKeypair = filepath.Join(pathGardenHome, "cache", gardenName, "seeds", seedName, shootName)
 			}
 

@@ -167,7 +167,7 @@ func NewTargetCmd(targetReader TargetReader, targetWriter TargetWriter, configRe
 
 			default:
 				target := targetReader.ReadTarget(pathTarget)
-				if len(target.Stack()) < 1 {
+				if !isTargeted("garden") {
 					return errors.New("no garden cluster targeted")
 				} else if garden && !seed && !project {
 					gardens := resolveNameGarden(configReader, args[0])
@@ -442,7 +442,7 @@ func targetSeed(targetReader TargetReader, targetWriter TargetWriter, name strin
 	Client, err = clientToTarget("garden")
 	checkError(err)
 	target := targetReader.ReadTarget(pathTarget)
-	gardenName := target.Stack()[0].Name
+	gardenName := getTargetName("garden")
 	gardenClientset, err := target.GardenerClient()
 	checkError(err)
 	seed, err := gardenClientset.CoreV1beta1().Seeds().Get(name, metav1.GetOptions{})
@@ -490,21 +490,21 @@ func resolveNameShoot(target TargetInterface, name string) []gardencorev1beta1.S
 	}
 
 	var shootList *gardencorev1beta1.ShootList
-	if len(target.Stack()) == 2 && target.Stack()[1].Kind == TargetKindProject {
-		projectName := target.Stack()[1].Name
+	if len(target.Stack()) == 2 && isTargeted("project") {
+		projectName := getTargetName("project")
 		project, err := gardenClientset.CoreV1beta1().Projects().Get(projectName, metav1.GetOptions{})
 		checkError(err)
 
 		projectNamespace := project.Spec.Namespace
 		shootList, err = gardenClientset.CoreV1beta1().Shoots(*projectNamespace).List(listOptions)
 		checkError(err)
-	} else if len(target.Stack()) == 2 && target.Stack()[1].Kind == TargetKindSeed {
+	} else if len(target.Stack()) == 2 && isTargeted("seed") {
 		shootList, err = gardenClientset.CoreV1beta1().Shoots("").List(listOptions)
 		checkError(err)
 
 		var filteredShoots []gardencorev1beta1.Shoot
 		for _, shoot := range shootList.Items {
-			if *shoot.Spec.SeedName == target.Stack()[1].Name {
+			if *shoot.Spec.SeedName == getTargetName("seed") {
 				filteredShoots = append(filteredShoots, shoot)
 			}
 		}
@@ -555,7 +555,7 @@ func targetShoot(targetWriter TargetWriter, shoot gardencorev1beta1.Shoot, reade
 	ReadTarget(pathTarget, &target)
 
 	// Get and cache seed kubeconfig for future commands
-	gardenName := target.Stack()[0].Name
+	gardenName := getTargetName("garden")
 	pathSeedCache := filepath.Join(pathGardenHome, "cache", gardenName, "seeds")
 	pathProjectCache := filepath.Join(pathGardenHome, "cache", gardenName, "projects")
 
@@ -599,10 +599,10 @@ func targetShoot(targetWriter TargetWriter, shoot gardencorev1beta1.Shoot, reade
 		target.Target = append(target.Target, TargetMeta{"shoot", shoot.Name})
 	} else if len(target.Target) == 2 {
 		drop(targetWriter)
-		if target.Target[1].Kind == "seed" && getRole() != "user" {
+		if isTargeted("seed") && getRole() != "user" {
 			target.Target[1].Kind = "seed"
 			target.Target[1].Name = *shoot.Spec.SeedName
-		} else if target.Target[1].Kind == "project" {
+		} else if isTargeted("project") {
 			target.Target[1].Kind = "project"
 			target.Target[1].Name = projectName
 		} else {
@@ -613,11 +613,11 @@ func targetShoot(targetWriter TargetWriter, shoot gardencorev1beta1.Shoot, reade
 	} else if len(target.Target) == 3 {
 		drop(targetWriter)
 		drop(targetWriter)
-		if len(target.Target) > 2 && target.Target[1].Kind == "seed" && getRole() != "user" {
+		if len(target.Target) > 2 && isTargeted("seed") && getRole() != "user" {
 			target.Target = target.Target[:len(target.Target)-2]
 			target.Target = append(target.Target, TargetMeta{"seed", *shoot.Spec.SeedName})
 			target.Target = append(target.Target, TargetMeta{"shoot", shoot.Name})
-		} else if len(target.Target) > 2 && target.Target[1].Kind == "project" {
+		} else if len(target.Target) > 2 && isTargeted("project") {
 			target.Target = target.Target[:len(target.Target)-2]
 			target.Target = append(target.Target, TargetMeta{"project", projectName})
 			target.Target = append(target.Target, TargetMeta{"shoot", shoot.Name})
@@ -629,11 +629,11 @@ func targetShoot(targetWriter TargetWriter, shoot gardencorev1beta1.Shoot, reade
 		drop(targetWriter)
 		drop(targetWriter)
 		drop(targetWriter)
-		if len(target.Target) > 3 && target.Target[1].Kind == "seed" && getRole() != "user" {
+		if len(target.Target) > 3 && isTargeted("seed") && getRole() != "user" {
 			target.Target = target.Target[:len(target.Target)-3]
 			target.Target = append(target.Target, TargetMeta{"seed", *shoot.Spec.SeedName})
 			target.Target = append(target.Target, TargetMeta{"shoot", shoot.Name})
-		} else if len(target.Target) > 3 && target.Target[1].Kind == "project" {
+		} else if len(target.Target) > 3 && isTargeted("project") {
 			target.Target = target.Target[:len(target.Target)-3]
 			target.Target = append(target.Target, TargetMeta{"project", projectName})
 			target.Target = append(target.Target, TargetMeta{"shoot", shoot.Name})
@@ -649,10 +649,10 @@ func targetShoot(targetWriter TargetWriter, shoot gardencorev1beta1.Shoot, reade
 
 	// Cache shoot kubeconfig
 	var shootCacheDir string
-	if target.Target[1].Kind == "seed" {
-		shootCacheDir = filepath.Join(pathSeedCache, target.Target[1].Name, shoot.Name)
-	} else if target.Target[1].Kind == "project" {
-		shootCacheDir = filepath.Join(pathProjectCache, target.Target[1].Name, shoot.Name)
+	if isTargeted("seed") {
+		shootCacheDir = filepath.Join(pathSeedCache, getTargetName("seed"), shoot.Name)
+	} else if isTargeted("project") {
+		shootCacheDir = filepath.Join(pathProjectCache, getTargetName("project"), shoot.Name)
 	}
 
 	err = os.MkdirAll(shootCacheDir, os.ModePerm)
@@ -693,7 +693,7 @@ func getSeedForProject(shootName string) (seedName string) {
 	gardenClientset, err := gardencoreclientset.NewForConfig(NewConfigFromBytes(*kubeconfig))
 	checkError(err)
 	shootList, err := gardenClientset.CoreV1beta1().Shoots("").List(metav1.ListOptions{})
-	// temporary solution , will clean up code in ticket move get seed out of targetShoot method #269
+	//TODO temporary solution , will clean up code in ticket move get seed out of targetShoot method #269
 	if err != nil {
 		if strings.Contains(err.Error(), "forbidden") {
 			fmt.Printf(warningColor, "\nWarning:\nYou are user role!\n\n")
@@ -714,21 +714,21 @@ func getSeedForProject(shootName string) (seedName string) {
 func getKubeConfigOfClusterType(clusterType TargetKind) (pathToKubeconfig string) {
 	var target Target
 	ReadTarget(pathTarget, &target)
-	gardenName := target.Stack()[0].Name
+	gardenName := getTargetName("garden")
 	switch clusterType {
 	case TargetKindGarden:
 		pathToKubeconfig = TidyKubeconfigWithHomeDir(getGardenKubeConfig())
 	case TargetKindSeed:
-		if target.Target[1].Kind == "seed" {
-			pathToKubeconfig = filepath.Join(pathGardenHome, "cache", gardenName, "seeds", target.Target[1].Name, "kubeconfig.yaml")
+		if isTargeted("seed") {
+			pathToKubeconfig = filepath.Join(pathGardenHome, "cache", gardenName, "seeds", getTargetName("seed"), "kubeconfig.yaml")
 		} else {
-			pathToKubeconfig = filepath.Join(pathGardenHome, "cache", gardenName, "seeds", getSeedForProject(target.Target[2].Name), "kubeconfig.yaml")
+			pathToKubeconfig = filepath.Join(pathGardenHome, "cache", gardenName, "seeds", getSeedForProject(getTargetName("shoot")), "kubeconfig.yaml")
 		}
 	case TargetKindShoot:
-		if target.Target[1].Kind == "seed" {
-			pathToKubeconfig = filepath.Join(pathGardenHome, "cache", gardenName, "seeds", getSeedForProject(target.Target[2].Name), target.Target[2].Name, "kubeconfig.yaml")
-		} else if target.Target[1].Kind == "project" {
-			pathToKubeconfig = filepath.Join(pathGardenHome, "cache", gardenName, "projects", target.Target[1].Name, target.Target[2].Name, "kubeconfig.yaml")
+		if isTargeted("seed") {
+			pathToKubeconfig = filepath.Join(pathGardenHome, "cache", gardenName, "seeds", getSeedForProject(getTargetName("shoot")), getTargetName("shoot"), "kubeconfig.yaml")
+		} else if isTargeted("project") {
+			pathToKubeconfig = filepath.Join(pathGardenHome, "cache", gardenName, "projects", getTargetName("project"), getTargetName("shoot"), "kubeconfig.yaml")
 		}
 	}
 	return pathToKubeconfig
@@ -756,18 +756,18 @@ func getKubeConfigOfCurrentTarget() (pathToKubeconfig string) {
 		os.Exit(2)
 	}
 
-	gardenName := target.Stack()[0].Name
+	gardenName := getTargetName("garden")
 	if len(target.Target) == 1 {
 		pathToKubeconfig = TidyKubeconfigWithHomeDir(getGardenKubeConfig())
-	} else if (len(target.Target) == 2) && (target.Target[1].Kind != "project") {
-		pathToKubeconfig = filepath.Join(pathGardenHome, "cache", gardenName, "seeds", target.Target[1].Name, "kubeconfig.yaml")
-	} else if (len(target.Target) == 2) && (target.Target[1].Kind == "project") {
-		pathToKubeconfig = getGardenKubeConfigViaGardenName(target.Target[0].Name)
+	} else if (len(target.Target) == 2) && isTargeted("seed") {
+		pathToKubeconfig = filepath.Join(pathGardenHome, "cache", gardenName, "seeds", getTargetName("seed"), "kubeconfig.yaml")
+	} else if (len(target.Target) == 2) && isTargeted("project") {
+		pathToKubeconfig = getGardenKubeConfigViaGardenName(getTargetName("garden"))
 	} else if len(target.Target) == 3 {
-		if target.Target[1].Kind == "seed" {
-			pathToKubeconfig = filepath.Join(pathGardenHome, "cache", gardenName, "seeds", target.Target[1].Name, target.Target[2].Name, "kubeconfig.yaml")
-		} else if target.Target[1].Kind == "project" {
-			pathToKubeconfig = filepath.Join(pathGardenHome, "cache", gardenName, "projects", target.Target[1].Name, target.Target[2].Name, "kubeconfig.yaml")
+		if isTargeted("seed") {
+			pathToKubeconfig = filepath.Join(pathGardenHome, "cache", gardenName, "seeds", getTargetName("seed"), getTargetName("shoot"), "kubeconfig.yaml")
+		} else if isTargeted("project") {
+			pathToKubeconfig = filepath.Join(pathGardenHome, "cache", gardenName, "projects", getTargetName("project"), getTargetName("shoot"), "kubeconfig.yaml")
 		}
 	}
 	return pathToKubeconfig
@@ -784,7 +784,7 @@ func getGardenKubeConfig() (pathToGardenKubeConfig string) {
 	checkError(err)
 	ReadTarget(pathTarget, &target)
 	for _, value := range gardenClusters.GardenClusters {
-		if value.Name == target.Target[0].Name {
+		if value.Name == getTargetName("garden") {
 			pathToGardenKubeConfig = value.KubeConfig
 		}
 	}
@@ -1010,7 +1010,7 @@ func seedWrapper(targetReader TargetReader, targetWriter TargetWriter, configRea
 		return errors.New("command must be in the format: target seed NAME")
 	}
 	target := targetReader.ReadTarget(pathTarget)
-	if len(target.Stack()) < 1 {
+	if !isTargeted("garden") {
 		return errors.New("no garden cluster targeted")
 	}
 	seeds := resolveNameSeed(target, args[1])
@@ -1189,13 +1189,13 @@ func targetNamespace(targetWriter TargetWriter, ns string) error {
 		return errors.New("the length is 0 and illegal. at least one garden needs to be targeted")
 	}
 	if len(target.Target) == 1 {
-		if string(target.Target[0].Kind) != "garden" {
+		if !isTargeted("garden") {
 			return errors.New("if one element in target, this needs to be garden")
 		}
 		target.Target = append(target.Target, TargetMeta{"namespace", ns})
 	}
 	if len(target.Target) == 2 {
-		if target.Target[1].Kind != "namespace" {
+		if !isTargeted("namespace") {
 			target.Target = append(target.Target, TargetMeta{"namespace", ns})
 		} else {
 			target.Target = target.Target[:len(target.Target)-1]
@@ -1203,7 +1203,7 @@ func targetNamespace(targetWriter TargetWriter, ns string) error {
 		}
 	}
 	if len(target.Target) == 3 {
-		if target.Target[2].Kind != "namespace" {
+		if !isTargeted("namespace") {
 			target.Target = append(target.Target, TargetMeta{"namespace", ns})
 		} else {
 			target.Target = target.Target[:len(target.Target)-1]

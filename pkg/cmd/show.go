@@ -40,10 +40,10 @@ func NewShowCmd(targetReader TargetReader) *cobra.Command {
 				return errors.New("Command must be in the format: show (operator|gardener-dashboard|api|scheduler|controller-manager|etcd-operator|etcd-main|etcd-events|addon-manager|vpn-seed|vpn-shoot|machine-controller-manager|kubernetes-dashboard|prometheus|grafana|alertmanager|tf (infra|dns|ingress)|cluster-autoscaler)")
 			}
 			t := targetReader.ReadTarget(pathTarget)
-			if (len(t.Stack()) < 3 || (len(t.Stack()) == 3 && t.Stack()[2].Kind == "namespace")) && (args[0] != "operator") && (args[0] != "tf") && (args[0] != "kubernetes-dashboard") && (args[0] != "etcd-operator") {
+			if !isTargeted("shoot") && (args[0] != "operator") && (args[0] != "tf") && (args[0] != "kubernetes-dashboard") && (args[0] != "etcd-operator") {
 				fmt.Println("No shoot targeted")
 				os.Exit(2)
-			} else if (len(t.Stack()) < 2 && (args[0] == "tf")) || len(t.Stack()) < 3 && (args[0] == "tf") && (t.Stack()[1].Kind != "seed") {
+			} else if (!isTargeted("seed") && (args[0] == "tf")) || !isTargeted("shoot", "seed") && (args[0] == "tf") {
 				fmt.Println("No seed or shoot targeted")
 				os.Exit(2)
 			} else if len(t.Stack()) == 0 {
@@ -172,13 +172,12 @@ func showGardenerDashboard() {
 
 // showPod is an abstraction to show pods in seed cluster controlplane or kube-system namespace of shoot
 func showPod(toMatch string, toTarget TargetKind, targetReader TargetReader) {
-	target := targetReader.ReadTarget(pathTarget)
 
 	var namespace string
-	if len(target.Stack()) == 2 {
+	if isTargeted("seed") {
 		namespace = "garden"
-	} else if len(target.Stack()) == 3 {
-		namespace = getSeedNamespaceNameForShoot(target.Stack()[2].Name)
+	} else if isTargeted("shoot") {
+		namespace = getFromTargetInfo("shootTechnicalID")
 	}
 
 	var err error
@@ -290,8 +289,8 @@ func showMachineControllerManager(targetReader TargetReader) {
 // showKubernetesDashboard shows the kubernetes dashboard for the targeted cluster
 func showKubernetesDashboard(targetReader TargetReader) {
 	target := targetReader.ReadTarget(pathTarget)
-	gardenName := target.Stack()[0].Name
-	if len(target.Stack()) == 1 {
+	gardenName := getTargetName("garden")
+	if isTargeted("seed") || isTargeted("project") {
 		var err error
 		Client, err = clientToTarget("garden")
 		checkError(err)
@@ -303,11 +302,11 @@ func showKubernetesDashboard(targetReader TargetReader) {
 				checkError(err)
 			}
 		}
-	} else if len(target.Stack()) == 2 {
+	} else if isTargeted("seed") || isTargeted("project") {
 		namespace := "kube-system"
-		if len(target.Stack()) == 2 && target.Stack()[1].Kind == "seed" {
-			KUBECONFIG = filepath.Join(pathGardenHome, "cache", gardenName, "seeds", target.Stack()[1].Name, "kubeconfig.yaml")
-		} else if len(target.Stack()) == 2 && target.Stack()[1].Kind == "project" {
+		if isTargeted("seed") {
+			KUBECONFIG = filepath.Join(pathGardenHome, "cache", gardenName, "seeds", getTargetName("seed"), "kubeconfig.yaml")
+		} else if isTargeted("project") {
 			fmt.Println("Project targeted")
 			os.Exit(2)
 		}
@@ -323,7 +322,7 @@ func showKubernetesDashboard(targetReader TargetReader) {
 				checkError(err)
 			}
 		}
-	} else if len(target.Stack()) == 3 {
+	} else if isTargeted("shoot") {
 		showPod("kubernetes-dashboard", "shoot", targetReader)
 	} else if len(target.Stack()) == 0 {
 		fmt.Println("No target")

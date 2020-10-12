@@ -69,9 +69,9 @@ func NewLsCmd(targetReader TargetReader, configReader ConfigReader, ioStreams IO
 			case "shoots":
 				if len(target.Stack()) == 1 {
 					return printProjectsWithShoots(target, ioStreams)
-				} else if len(target.Stack()) == 2 && target.Stack()[1].Kind == "seed" {
+				} else if isTargeted("seed") && getRole() == "operator" {
 					getProjectsWithShootsForSeed(ioStreams)
-				} else if len(target.Stack()) == 2 && target.Stack()[1].Kind == "project" {
+				} else if isTargeted("project") {
 					getSeedsWithShootsForProject(ioStreams)
 				}
 			case "issues":
@@ -299,7 +299,7 @@ func getSeedsWithShootsForProject(ioStreams IOStreams) {
 	gardenClientset, err := target.GardenerClient()
 	checkError(err)
 
-	projectName := target.Target[1].Name
+	projectName := getTargetName("project")
 	project, err := gardenClientset.CoreV1beta1().Projects().Get(projectName, metav1.GetOptions{})
 	checkError(err)
 
@@ -331,7 +331,8 @@ func getSeedsWithShootsForProject(ioStreams IOStreams) {
 		}
 	}
 	if len(seedsFiltered.Seeds) == 0 {
-		fmt.Printf("Project %s is empty\n", target.Target[1].Name)
+		projectName := getTargetName("project")
+		fmt.Printf("Project %s is empty\n", projectName)
 		os.Exit(2)
 	}
 	if outputFormat == "yaml" {

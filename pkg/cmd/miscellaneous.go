@@ -147,7 +147,7 @@ func getSeedNamespaceNameForShoot(shootName string) (namespaceSeed string) {
 	gardenClientset, err := gardencoreclientset.NewForConfig(NewConfigFromBytes(*kubeconfig))
 	checkError(err)
 	var shoot *gardencorev1beta1.Shoot
-	if target.Stack()[1].Kind == "project" {
+	if isTargeted("project") {
 		project, err := gardenClientset.CoreV1beta1().Projects().Get(target.Stack()[1].Name, metav1.GetOptions{})
 		checkError(err)
 		shoot, err = gardenClientset.CoreV1beta1().Shoots(*project.Spec.Namespace).Get(target.Stack()[2].Name, metav1.GetOptions{})
@@ -173,17 +173,15 @@ func getProjectObject() (*v1beta1.Project, error) {
 	checkError(err)
 
 	if isTargeted("project") {
-		projectName, err := getTargetName("project")
+		projectName := getTargetName("project")
 		checkError(err)
 		return Client.GardenerV1beta1().Projects().Get(projectName, metav1.GetOptions{})
 	} else if isTargeted("seed", "shoot") {
 		if getRole() == "user" {
 			return nil, errors.New("can't determine project. Target project instead of seed")
 		}
-		seedName, err := getTargetName("seed")
-		checkError(err)
-		shootName, err := getTargetName("shoot")
-		checkError(err)
+		seedName := getTargetName("seed")
+		shootName := getTargetName("shoot")
 
 		shootList, err := Client.GardenerV1beta1().Shoots(metav1.NamespaceAll).List(metav1.ListOptions{
 			FieldSelector: fields.SelectorFromSet(
@@ -221,8 +219,7 @@ func getShootObject() (*v1beta1.Shoot, error) {
 	checkError(err)
 	project, err := getProjectObject()
 	checkError(err)
-	shootName, err := getTargetName("shoot")
-	checkError(err)
+	shootName := getTargetName("shoot")
 	shoot, err := gardenClientset.CoreV1beta1().Shoots(*project.Spec.Namespace).Get(shootName, metav1.GetOptions{})
 	checkError(err)
 	return shoot, nil
@@ -385,15 +382,20 @@ func getTargetMapInfo() {
 /*
 lookup Target Kind ("kind value") return Target Name "name value" from target file ~/.garden/sessions/plantingSession/target
 */
-func getTargetName(Kind string) (string, error) {
+func getTargetName(Kind string) string {
 	var target Target
 	ReadTarget(pathTarget, &target)
+	targetMap := make(map[string]interface{})
 	for _, t := range target.Stack() {
-		if string(t.Kind) == Kind {
-			return string(t.Name), nil
-		}
+		targetMap[string(t.Kind)] = string(t.Name)
 	}
-	return "", errors.New("Kind:" + Kind + "not found from ~/.garden/sessions/plantingSession/target")
+
+	value, exists := targetMap[Kind]
+	if !exists {
+		log.Fatalf("Kind: " + Kind + " not found from ~/.garden/sessions/plantingSession/target")
+	}
+
+	return fmt.Sprintf("%v", value)
 }
 
 /*

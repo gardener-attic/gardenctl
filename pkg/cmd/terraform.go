@@ -51,14 +51,14 @@ func terraform(args string, targetReader TargetReader) {
 		fmt.Println("Terraform is not installed on your system")
 		os.Exit(2)
 	}
-	target := targetReader.ReadTarget(pathTarget)
-	gardenName := target.Stack()[0].Name
+
+	gardenName := getTargetName("garden")
 	pathTerraform := ""
 
-	if target.Stack()[1].Kind == "project" {
-		pathTerraform = filepath.Join(pathGardenHome, "cache", gardenName, "projects", target.Stack()[1].Name, target.Stack()[2].Name, "terraform")
-	} else if target.Stack()[1].Kind == "seed" {
-		pathTerraform = filepath.Join(pathGardenHome, "cache", gardenName, "seeds", target.Stack()[1].Name, target.Stack()[2].Name, "terraform")
+	if isTargeted("project") {
+		pathTerraform = filepath.Join(pathGardenHome, "cache", gardenName, "projects", gardenName, getTargetName("project"), "terraform")
+	} else if isTargeted("seed") {
+		pathTerraform = filepath.Join(pathGardenHome, "cache", gardenName, "seeds", gardenName, getTargetName("seed"), "terraform")
 	}
 
 	if strings.HasSuffix(args, "init") {
