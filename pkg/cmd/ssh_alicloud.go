@@ -106,7 +106,7 @@ func sshToAlicloudNode(nodeName, path, user, pathSSKeypair string, sshPublicKey 
 	a.startBastionHostInstance()
 	fmt.Println("Bastion host started.")
 
-	sshCmd := "ssh -i " + pathSSKeypair + "key -o \"ProxyCommand ssh -i " + pathSSKeypair + "key -o StrictHostKeyChecking=no -W " + a.PrivateIP + ":22 " + a.BastionSSHUser + "@" + a.BastionIP + "\" " + user + "@" + a.PrivateIP + " -o StrictHostKeyChecking=no"
+	sshCmd := "ssh -i " + pathSSKeypair + "/key -o \"ProxyCommand ssh -i " + pathSSKeypair + "/key -o StrictHostKeyChecking=no -W " + a.PrivateIP + ":22 " + a.BastionSSHUser + "@" + a.BastionIP + "\" " + user + "@" + a.PrivateIP + " -o StrictHostKeyChecking=no"
 	cmd := exec.Command("bash", "-c", sshCmd)
 	cmd.Stdout = os.Stdout
 	cmd.Stdin = os.Stdin
