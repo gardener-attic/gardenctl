@@ -18,7 +18,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
+	"log"
 	"os"
+	"os/exec"
 	"strings"
 
 	openstackinstall "github.com/gardener/gardener-extension-provider-openstack/pkg/apis/openstack/install"
@@ -32,7 +34,7 @@ import (
 )
 
 // operate executes a command on specified cli with pulled credentials for target
-func operate(provider, arguments string) {
+func operate(provider, arguments string) string {
 	secretName, region, namespaceSecret, profile := "", "", "", ""
 	var target Target
 	ReadTarget(pathTarget, &target)
@@ -80,12 +82,20 @@ func operate(provider, arguments string) {
 	secret, err = Client.CoreV1().Secrets(namespaceSecret).Get((secretName), metav1.GetOptions{})
 	checkError(err)
 
+	var out []byte
 	switch provider {
 	case "aws":
 		accessKeyID := []byte(secret.Data["accessKeyID"])
 		secretAccessKey := []byte(secret.Data["secretAccessKey"])
-		err := ExecCmd(nil, arguments, false, "AWS_ACCESS_KEY_ID="+string(accessKeyID[:]), "AWS_SECRET_ACCESS_KEY="+string(secretAccessKey[:]), "AWS_DEFAULT_REGION="+region, "AWS_DEFAULT_OUTPUT=text")
-		checkError(err)
+		args := strings.Fields(arguments)
+		cmd := exec.Command("aws", args...)
+		newEnv := append(os.Environ(), "AWS_ACCESS_KEY_ID="+string(accessKeyID[:]), "AWS_SECRET_ACCESS_KEY="+string(secretAccessKey[:]), "AWS_DEFAULT_REGION="+region, "AWS_DEFAULT_OUTPUT=text")
+		cmd.Env = newEnv
+		out, err = cmd.CombinedOutput()
+		if err != nil {
+			log.Fatalf("AWS CLI failed with %s\n%s\n", out, err)
+		}
+
 	case "gcp":
 		serviceaccount := []byte(secret.Data["serviceaccount.json"])
 		data := map[string]interface{}{}
@@ -127,10 +137,15 @@ func operate(provider, arguments string) {
 		if err != nil {
 			os.Exit(2)
 		}
-		err = ExecCmd(nil, arguments+" --account="+account+" --project="+project, false)
+
+		arguments := arguments + " --account=" + account + " --project=" + project
+		args := strings.Fields(arguments)
+		cmd := exec.Command("gcloud", args...)
+		out, err = cmd.CombinedOutput()
 		if err != nil {
-			os.Exit(2)
+			log.Fatalf("gcloud CLI failed with %s\n%s\n", out, err)
 		}
+
 		err = ExecCmd(nil, "gcloud config set account "+tmpAccount, false)
 		if err != nil {
 			os.Exit(2)
@@ -140,14 +155,20 @@ func operate(provider, arguments string) {
 		clientSecret := []byte(secret.Data["clientSecret"])
 		tenantID := []byte(secret.Data["tenantID"])
 		subscriptionID := []byte(secret.Data["subscriptionID"])
+
 		err := ExecCmd(nil, "az login --service-principal -u "+string(clientID[:])+" -p "+string(clientSecret[:])+" --tenant "+string(tenantID[:]), true)
 		if err != nil {
 			os.Exit(2)
 		}
-		err = ExecCmd(nil, arguments+" --subscription "+string(subscriptionID[:]), false)
+
+		arguments := arguments + " --subscription " + string(subscriptionID[:])
+		args := strings.Fields(arguments)
+		cmd := exec.Command("az", args...)
+		out, err = cmd.CombinedOutput()
 		if err != nil {
-			os.Exit(2)
+			log.Fatalf("az CLI failed with %s\n%s\n", out, err)
 		}
+
 	case "openstack":
 		authURL := ""
 		cloudProfileList, err := gardenClientset.CoreV1beta1().CloudProfiles().List(metav1.ListOptions{})
@@ -181,6 +202,7 @@ func operate(provider, arguments string) {
 			os.Exit(2)
 		}
 	}
+	return (strings.TrimSpace(string(out[:])))
 }
 
 func getOpenstackCloudProfileConfig(in *gardencorev1beta1.CloudProfile) (*openstackv1alpha1.CloudProfileConfig, error) {
