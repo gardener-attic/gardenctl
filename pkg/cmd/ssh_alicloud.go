@@ -171,6 +171,12 @@ func (a *AliyunInstanceAttribute) createBastionHostSecurityGroup() {
 			securityGroupExists = true
 			a.BastionSecurityGroupID, err = securityGroup.String("SecurityGroupId")
 			checkError(err)
+			fmt.Println("Configuring bastion host security group rules...")
+			createSGCmdString := "aliyun ecs AuthorizeSecurityGroup --Policy Accept --NicType intranet --Priority 1 --SourceCidrIp " + a.MyPublicIP + " --PortRange 22/22 --IpProtocol tcp --SecurityGroupId=" + a.BastionSecurityGroupID
+			_, err = ExecCmdReturnOutput("bash", "-c", createSGCmdString)
+			checkError(err)
+			time.Sleep(time.Second * 10)
+			fmt.Println("Bastion host security group rules configured.")
 		}
 	}
 
@@ -201,7 +207,8 @@ func (a *AliyunInstanceAttribute) createBastionHostSecurityGroup() {
 			os.Exit(2)
 		}
 		fmt.Println("Configuring bastion host security group rules...")
-		_, err = ExecCmdReturnOutput("bash", "-c", "aliyun ecs AuthorizeSecurityGroup --Policy Accept --NicType intranet --Priority 1 --SourceCidrIp %s --PortRange 22/22 --IpProtocol tcp --SecurityGroupId="+a.BastionSecurityGroupID, a.MyPublicIP)
+		createSGCmdString := "aliyun ecs AuthorizeSecurityGroup --Policy Accept --NicType intranet --Priority 1 --SourceCidrIp " + a.MyPublicIP + " --PortRange 22/22 --IpProtocol tcp --SecurityGroupId=" + a.BastionSecurityGroupID
+		_, err = ExecCmdReturnOutput("bash", "-c", createSGCmdString)
 		checkError(err)
 		time.Sleep(time.Second * 10)
 		fmt.Println("Bastion host security group rules configured.")
