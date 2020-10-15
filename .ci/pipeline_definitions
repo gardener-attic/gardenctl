@@ -37,11 +37,11 @@ gardenctl:
         release:
           release_callback: './.ci/update_latest_version'
         slack:
-          default_channel: 'internal_scp_workspace'
           channel_cfgs:
-            internal_scp_workspace:
-              channel_name: 'C9CEBQPGE' #sap-tech-gardener
-              slack_cfg_name: 'scp_workspace'
+          - channel_name: 'C9CEBQPGE' #sap-tech-gardener
+            slack_cfg_name: 'scp_workspace'
+          - channel_name: 'C01BKP30K1U' #sap-tech-gardenctl
+            slack_cfg_name: 'scp_workspace'
         publish:
           dockerimages:
             gardenctl:
