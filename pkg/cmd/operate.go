@@ -186,11 +186,17 @@ func operate(provider, arguments string) string {
 		password := []byte(secret.Data["password"])
 		tenantName := []byte(secret.Data["tenantName"])
 		username := []byte(secret.Data["username"])
-		err = ExecCmd(nil, arguments, false, "OS_IDENTITY_API_VERSION=3", "OS_AUTH_VERSION=3", "OS_AUTH_STRATEGY=keystone", "OS_AUTH_URL="+authURL, "OS_TENANT_NAME="+string(tenantName[:]),
-			"OS_PROJECT_DOMAIN_NAME="+string(domainName[:]), "OS_USER_DOMAIN_NAME="+string(domainName[:]), "OS_USERNAME="+string(username[:]), "OS_PASSWORD="+string(password[:]), "OS_REGION_NAME="+region)
+
+		args := strings.Fields(arguments)
+		cmd := exec.Command("openstack", args...)
+		newEnv := append(os.Environ(), "OS_IDENTITY_API_VERSION=3", "OS_AUTH_VERSION=3", "OS_AUTH_STRATEGY=keystone", "OS_AUTH_URL="+authURL, "OS_TENANT_NAME="+string(tenantName[:]), "OS_PROJECT_DOMAIN_NAME="+string(domainName[:]), "OS_USER_DOMAIN_NAME="+string(domainName[:]), "OS_USERNAME="+string(username[:]), "OS_PASSWORD="+string(password[:]), "OS_REGION_NAME="+region)
+		cmd.Env = newEnv
+		out, err = cmd.CombinedOutput()
 		if err != nil {
-			os.Exit(2)
+			fmt.Println(err)
+			log.Fatalf("Openstack CLI failed with %s\n%s\n", out, err)
 		}
+
 	case "aliyun":
 		accessKeyID := []byte(secret.Data["accessKeyID"])
 		accessKeySecret := []byte(secret.Data["accessKeySecret"])
