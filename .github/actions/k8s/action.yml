@@ -1,0 +1,20 @@
+name: 'Apply a k8s manifest'
+description: 'This actions will apply k8s manifest'
+inputs:
+  path-to-file:
+    description: 'The path to the manifest to apply'
+    required: true
+  shoot-name: 
+    description: 'The name of the shoot'
+    required: true  
+runs:
+  using: "composite"
+  steps: 
+    - run: kubectl apply -f ${{ inputs.path-to-file }}
+      shell: bash
+    - run: kubectl patch shoot ${{ inputs.shoot-name }} -p '{"spec":{"hibernation":{"enabled":false}}}'
+      shell: bash
+    - run: while [[ $(kubectl get shoot ${{ inputs.shoot-name }} | awk -v i=2 -v j=6 'FNR == i {print $j}') != "Awake" ]]; do echo 'Waiting for the cluster to wake up...'; sleep 5; done
+      shell: bash
+    - run: echo Completed!
+      shell: bash

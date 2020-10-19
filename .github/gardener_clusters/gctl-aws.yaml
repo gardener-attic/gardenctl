@@ -1,0 +1,91 @@
+kind: Shoot
+apiVersion: core.gardener.cloud/v1beta1
+metadata:
+  name: gctl-aws
+  namespace: garden-gardenctl
+  labels:
+    shoot.gardener.cloud/status: healthy
+  annotations:
+    gardener.cloud/created-by: daniel.pacrami@sap.com
+  finalizers:
+    - gardener
+spec:
+  addons:
+    kubernetesDashboard:
+      enabled: false
+      authenticationMode: token
+    nginxIngress:
+      enabled: false
+      externalTrafficPolicy: Cluster
+  cloudProfileName: aws
+  dns:
+    domain: gctl-aws.gardenctl.shoot.dev.k8s-hana.ondemand.com
+  hibernation:
+    enabled: true
+    schedules:
+      - start: '00 17 * * 1,2,3,4,5'
+        location: America/New_York
+  kubernetes:
+    allowPrivilegedContainers: true
+    kubeAPIServer:
+      enableBasicAuthentication: false
+    kubeControllerManager:
+      nodeCIDRMaskSize: 24
+    kubeProxy:
+      mode: IPTables
+    kubelet:
+      failSwapOn: true
+      kubeReserved:
+        cpu: 80m
+        memory: 1Gi
+    version: 1.19.1
+  networking:
+    type: calico
+    pods: 100.96.0.0/11
+    nodes: 10.250.0.0/16
+    services: 100.64.0.0/13
+  maintenance:
+    autoUpdate:
+      kubernetesVersion: true
+      machineImageVersion: true
+    timeWindow:
+      begin: 060000+0000
+      end: 070000+0000
+  provider:
+    type: aws
+    controlPlaneConfig:
+      apiVersion: aws.provider.extensions.gardener.cloud/v1alpha1
+      kind: ControlPlaneConfig
+    infrastructureConfig:
+      apiVersion: aws.provider.extensions.gardener.cloud/v1alpha1
+      kind: InfrastructureConfig
+      networks:
+        vpc:
+          cidr: 10.250.0.0/16
+        zones:
+          - name: eu-west-1c
+            workers: 10.250.0.0/19
+            public: 10.250.32.0/20
+            internal: 10.250.48.0/20
+    workers:
+      - name: gctl-aws
+        machine:
+          type: t3.small
+          image:
+            name: gardenlinux
+            version: 27.1.0
+        maximum: 2
+        minimum: 1
+        maxSurge: 1
+        maxUnavailable: 0
+        volume:
+          type: gp2
+          size: 50Gi
+        zones:
+          - eu-west-1c
+        systemComponents:
+          allow: true
+  purpose: evaluation
+  region: eu-west-1
+  secretBindingName: aws-idefixops
+  seedName: aws

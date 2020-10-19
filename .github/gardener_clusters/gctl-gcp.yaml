@@ -1,0 +1,83 @@
+kind: Shoot
+apiVersion: core.gardener.cloud/v1beta1
+metadata:
+  name: gctl-gcp
+  namespace: garden-gardenctl
+  labels:
+    shoot.gardener.cloud/status: healthy
+  annotations:
+    gardener.cloud/created-by: daniel.pacrami@sap.com
+  finalizers:
+    - gardener
+spec:
+  addons:
+    kubernetesDashboard:
+      enabled: false
+      authenticationMode: token
+  cloudProfileName: gcp
+  dns:
+    domain: gctl-gcp.gardenctl.shoot.dev.k8s-hana.ondemand.com
+  hibernation:
+    enabled: true
+    schedules:
+      - start: '00 17 * * 1,2,3,4,5'
+        location: America/New_York
+  kubernetes:
+    allowPrivilegedContainers: true
+    kubeAPIServer:
+      enableBasicAuthentication: false
+    kubeControllerManager:
+      nodeCIDRMaskSize: 24
+    kubeProxy:
+      mode: IPTables
+    kubelet:
+      failSwapOn: true
+      kubeReserved:
+        cpu: 80m
+        memory: 1Gi
+    version: 1.19.1
+  networking:
+    type: calico
+    pods: 100.96.0.0/11
+    nodes: 10.250.0.0/16
+    services: 100.64.0.0/13
+  maintenance:
+    autoUpdate:
+      kubernetesVersion: true
+      machineImageVersion: true
+    timeWindow:
+      begin: 090000+0000
+      end: 100000+0000
+  provider:
+    type: gcp
+    controlPlaneConfig:
+      apiVersion: gcp.provider.extensions.gardener.cloud/v1alpha1
+      kind: ControlPlaneConfig
+      zone: europe-west1-d
+    infrastructureConfig:
+      apiVersion: gcp.provider.extensions.gardener.cloud/v1alpha1
+      kind: InfrastructureConfig
+      networks:
+        workers: 10.250.0.0/16
+    workers:
+      - name: gctl-gcp
+        machine:
+          type: n1-standard-2
+          image:
+            name: gardenlinux
+            version: 27.1.0
+        maximum: 2
+        minimum: 1
+        maxSurge: 1
+        maxUnavailable: 0
+        volume:
+          type: pd-standard
+          size: 50Gi
+        zones:
+          - europe-west1-d
+        systemComponents:
+          allow: true
+  purpose: evaluation
+  region: europe-west1
+  secretBindingName: gcp-idefixops
+  seedName: gcp
