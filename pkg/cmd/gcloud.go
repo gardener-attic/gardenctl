@@ -38,8 +38,8 @@ func NewGcloudCmd(targetReader TargetReader) *cobra.Command {
 				os.Exit(2)
 			}
 
-			arguments := "gcloud " + strings.Join(args[:], " ")
-			operate("gcp", arguments)
+			arguments := strings.Join(args[:], " ")
+			fmt.Println(operate("gcp", arguments))
 
 			return nil
 		},

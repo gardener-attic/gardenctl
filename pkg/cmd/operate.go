@@ -88,7 +88,6 @@ func operate(provider, arguments string) string {
 		accessKeyID := []byte(secret.Data["accessKeyID"])
 		secretAccessKey := []byte(secret.Data["secretAccessKey"])
 		args := strings.Fields(arguments)
-		args = args[1:]
 		cmd := exec.Command("aws", args...)
 		newEnv := append(os.Environ(), "AWS_ACCESS_KEY_ID="+string(accessKeyID[:]), "AWS_SECRET_ACCESS_KEY="+string(secretAccessKey[:]), "AWS_DEFAULT_REGION="+region, "AWS_DEFAULT_OUTPUT=text")
 		cmd.Env = newEnv
@@ -96,7 +95,6 @@ func operate(provider, arguments string) string {
 		if err != nil {
 			log.Fatalf("AWS CLI failed with %s\n%s\n", out, err)
 		}
-		fmt.Println(strings.TrimSpace(string(out[:])))
 
 	case "gcp":
 		serviceaccount := []byte(secret.Data["serviceaccount.json"])
@@ -142,7 +140,6 @@ func operate(provider, arguments string) string {
 
 		arguments := arguments + " --account=" + account + " --project=" + project
 		args := strings.Fields(arguments)
-		args = args[1:]
 		cmd := exec.Command("gcloud", args...)
 		out, err = cmd.CombinedOutput()
 		if err != nil {
@@ -153,7 +150,7 @@ func operate(provider, arguments string) string {
 		if err != nil {
 			os.Exit(2)
 		}
-		fmt.Println(strings.TrimSpace(string(out[:])))
+
 	case "az":
 		clientID := []byte(secret.Data["clientID"])
 		clientSecret := []byte(secret.Data["clientSecret"])
@@ -167,13 +164,11 @@ func operate(provider, arguments string) string {
 
 		arguments := arguments + " --subscription " + string(subscriptionID[:])
 		args := strings.Fields(arguments)
-		args = args[1:]
 		cmd := exec.Command("az", args...)
 		out, err = cmd.CombinedOutput()
 		if err != nil {
 			log.Fatalf("az CLI failed with %s\n%s\n", out, err)
 		}
-		fmt.Println(strings.TrimSpace(string(out[:])))
 
 	case "openstack":
 		authURL := ""

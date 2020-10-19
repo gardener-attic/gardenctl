@@ -37,8 +37,8 @@ func NewAzCmd(targetReader TargetReader) *cobra.Command {
 				fmt.Println("Please go to https://docs.microsoft.com/en-us/cli/azure/install-azure-cli?view=azure-cli-latest for how to install az cli")
 				os.Exit(2)
 			}
-			arguments := "az " + strings.Join(args[:], " ")
-			operate("az", arguments)
+			arguments := strings.Join(args[:], " ")
+			fmt.Println(operate("az", arguments))
 
 			return nil
 		},
