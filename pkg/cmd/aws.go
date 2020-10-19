@@ -37,8 +37,8 @@ func NewAwsCmd(targetReader TargetReader) *cobra.Command {
 				fmt.Println("Please go to https://docs.aws.amazon.com/cli/latest/userguide/cli-chap-install.html for how to install aws cli")
 				os.Exit(2)
 			}
-			arguments := "aws " + strings.Join(args[:], " ")
-			operate("aws", arguments)
+			arguments := strings.Join(args[:], " ")
+			fmt.Println(operate("aws", arguments))
 
 			return nil
 		},
