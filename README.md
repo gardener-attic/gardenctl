@@ -190,6 +190,9 @@ Targets represent a hierarchical structure of resources. On top, there is/are th
 - Show logs from garden nodes   
 `gardenctl target -g garden-name`  
 `gardenctl logs gardener-apiserver | gardener-controller-manager`  
+- SSH to shoot nodes (please unset any proxy env vars like `HTTPS` and `HTTP` before this command)  
+`gardenctl k get nodes`  
+`gardenctl ssh node_name`
 
 ## Advanced usage based on JsonQuery
 
