@@ -97,6 +97,7 @@ func NewSSHCmd(reader TargetReader, ioStreams IOStreams) *cobra.Command {
 			case "alicloud":
 				sshToAlicloudNode(args[0], path, user, pathSSKeypair, sshPublicKey, myPublicIP)
 			case "openstack":
+				sshToOpenstackNode(args[0], path, user, pathSSKeypair, sshPublicKey, myPublicIP)
 			default:
 				return fmt.Errorf("infrastructure type %q not found", infraType)
 			}

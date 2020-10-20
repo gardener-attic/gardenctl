@@ -37,8 +37,8 @@ func NewOpenstackCmd(targetReader TargetReader) *cobra.Command {
 				fmt.Println("Please go to https://docs.openstack.org/newton/user-guide/common/cli-install-openstack-command-line-clients.html for how to install openstack cli")
 				os.Exit(2)
 			}
-			arguments := "openstack " + strings.Join(args[:], " ")
-			operate("openstack", arguments)
+			arguments := strings.Join(args[:], " ")
+			fmt.Println(operate("openstack", arguments))
 
 			return nil
 		},
