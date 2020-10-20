@@ -15,17 +15,14 @@
 package cmd
 
 import (
-	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"path/filepath"
+	"io/ioutil"
+	"log"
 
-	gardencorev1beta1 "github.com/gardener/gardener/pkg/apis/core/v1beta1"
-	yaml2 "github.com/ghodss/yaml"
+	"github.com/ghodss/yaml"
 	"github.com/spf13/cobra"
-	yaml "gopkg.in/yaml.v2"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 // NewGetCmd returns a new get command.
@@ -39,60 +36,39 @@ func NewGetCmd(targetReader TargetReader, configReader ConfigReader,
 			if len(args) < 1 || len(args) > 2 {
 				return errors.New("command must be in the format: get [(garden|project|seed|shoot|target) <name>]")
 			}
+
 			switch args[0] {
+
 			case "project":
-				if len(args) == 1 {
-					err = getProject("", targetReader, ioStreams)
-					if err != nil {
-						return err
-					}
-				} else if len(args) == 2 {
-					err = getProject(args[1], targetReader, ioStreams)
-					if err != nil {
-						return err
-					}
+				if isTargeted("project") {
+					printProjectKubeconfig(targetReader, ioStreams)
+				} else {
+					return errors.New("no project targeted")
 				}
 			case "garden":
-				if len(args) == 1 {
-					err = getGarden("", configReader, targetReader, kubeconfigReader, ioStreams)
-					if err != nil {
-						return err
-					}
-				} else if len(args) == 2 {
-					err = getGarden(args[1], configReader, targetReader, kubeconfigReader, ioStreams)
-					if err != nil {
-						return err
-					}
+				if isTargeted("garden") {
+					printGardenKubeconfig(configReader, targetReader, kubeconfigReader, ioStreams)
+				} else {
+					return errors.New("no garden targeted")
 				}
+
 			case "seed":
-				if len(args) == 1 {
-					err = getSeed("", targetReader, ioStreams)
-					if err != nil {
-						return err
-					}
-				} else if len(args) == 2 {
-					err = getSeed(args[1], targetReader, ioStreams)
-					if err != nil {
-						return err
-					}
+				if isTargeted("seed") {
+					printSeedKubeconfig(targetReader, ioStreams)
+				} else {
+					return errors.New("no seed targeted")
 				}
+
 			case "shoot":
-				if len(args) == 1 {
-					err = getShoot("", targetReader, kubeconfigWriter, ioStreams)
-					if err != nil {
-						return err
-					}
-				} else if len(args) == 2 {
-					err = getShoot(args[1], targetReader, kubeconfigWriter, ioStreams)
-					if err != nil {
-						return err
-					}
+				if isTargeted("shoot") {
+					printShootKubeconfig(targetReader, kubeconfigWriter, ioStreams)
+				} else {
+					return errors.New("no shoot targeted")
 				}
+
 			case "target":
-				err = getTarget(targetReader, ioStreams)
-				if err != nil {
-					return err
-				}
+				getTarget(targetReader, ioStreams)
+
 			default:
 				fmt.Fprint(ioStreams.Out, "command must be in the format: get [project|garden|seed|shoot|target] + <NAME>")
 			}
@@ -105,252 +81,89 @@ func NewGetCmd(targetReader TargetReader, configReader ConfigReader,
 	return cmd
 }
 
-// getProject lists
-func getProject(name string, targetReader TargetReader, ioStreams IOStreams) error {
-	target := targetReader.ReadTarget(pathTarget)
-	if name == "" {
-		if len(target.Stack()) < 2 {
-			return errors.New("no project targeted")
-		} else if len(target.Stack()) > 1 && target.Stack()[1].Kind == "project" {
-			name = target.Stack()[1].Name
-		} else if len(target.Stack()) > 1 && target.Stack()[1].Kind == "seed" {
-			return errors.New("seed targeted, project expected")
-		}
-	}
-	clientset, err := target.GardenerClient()
+func print(path string) {
+	content, err := ioutil.ReadFile(path)
 	if err != nil {
-		return err
+		log.Fatal(err)
 	}
-	project, err := clientset.CoreV1beta1().Projects().Get(name, metav1.GetOptions{})
+
+	text := string(content)
+	fmt.Println(text)
+}
+
+// printProjectKubeconfig lists
+func printProjectKubeconfig(targetReader TargetReader, ioStreams IOStreams) {
+	project, err := getProjectObject()
 	if err != nil {
-		return err
+		log.Fatal(err, "get Project Object failed")
 	}
+	var output []byte
 	if outputFormat == "yaml" {
-		var output []byte
 		if output, err = yaml.Marshal(project); err != nil {
-			return err
+			log.Fatal(err, "output yaml error")
 		}
-		fmt.Fprint(ioStreams.Out, string(output))
 	} else if outputFormat == "json" {
-		var output []byte
 		if output, err = json.MarshalIndent(project, "", "  "); err != nil {
-			return err
+			log.Fatal(err, "output json error")
 		}
-		fmt.Fprint(ioStreams.Out, string(output))
 	}
-
-	return nil
+	fmt.Fprint(ioStreams.Out, string(output))
 }
 
-// getGarden lists kubeconfig of garden cluster
-func getGarden(name string, configReader ConfigReader, targetReader TargetReader, kubeconfigReader KubeconfigReader, ioStreams IOStreams) error {
-	if name == "" {
-		target := targetReader.ReadTarget(pathTarget)
-		if len(target.Stack()) > 0 {
-			name = target.Stack()[0].Name
-		} else {
-			return errors.New("no garden targeted")
-		}
-	}
-
-	config := configReader.ReadConfig(pathGardenConfig)
-	match := false
-	for index, garden := range config.GardenClusters {
-		if garden.Name == name {
-			pathToKubeconfig := config.GardenClusters[index].KubeConfig
-			pathToKubeconfig = TidyKubeconfigWithHomeDir(pathToKubeconfig)
-			kubeconfig, err := kubeconfigReader.ReadKubeconfig(pathToKubeconfig)
-			if err != nil {
-				return err
-			}
-			if outputFormat == "yaml" {
-				fmt.Fprint(ioStreams.Out, fmt.Sprintf("%s\n", kubeconfig))
-			} else if outputFormat == "json" {
-				y, err := yaml2.YAMLToJSON(kubeconfig)
-				if err != nil {
-					return err
-				}
-				var out bytes.Buffer
-				if err = json.Indent(&out, y, "", "  "); err != nil {
-					return err
-				}
-				fmt.Fprint(ioStreams.Out, out.String())
-			}
-			match = true
-		}
-	}
-	if !match {
-		return fmt.Errorf("no garden cluster found for %s", name)
-	}
-
-	return nil
+// printGardenKubeconfig lists kubeconfig of garden cluster
+func printGardenKubeconfig(configReader ConfigReader, targetReader TargetReader, kubeconfigReader KubeconfigReader, ioStreams IOStreams) {
+	print(getKubeConfigOfClusterType("garden"))
 }
 
-// getSeed lists kubeconfig of seed cluster
-func getSeed(name string, targetReader TargetReader, ioStreams IOStreams) error {
-	target := targetReader.ReadTarget(pathTarget)
-	if name == "" {
-		if len(target.Stack()) > 1 && target.Stack()[1].Kind == "seed" {
-			name = target.Stack()[1].Name
-		} else if len(target.Stack()) > 1 && target.Stack()[1].Kind == "project" && len(target.Stack()) == 3 {
-			name = getSeedForProject(target.Stack()[2].Name)
-		} else {
-			return errors.New("no seed targeted or shoot targeted")
-		}
-	}
-	client, err := target.K8SClientToKind(TargetKindGarden)
-	if err != nil {
-		return err
-	}
-	gardenClientset, err := target.GardenerClient()
-	if err != nil {
-		return err
-	}
-	seed, err := gardenClientset.CoreV1beta1().Seeds().Get(name, metav1.GetOptions{})
-	if err != nil {
-		return err
-	}
-	kubeSecret, err := client.CoreV1().Secrets(seed.Spec.SecretRef.Namespace).Get(seed.Spec.SecretRef.Name, metav1.GetOptions{})
-	if err != nil {
-		return err
-	}
+// printSeedKubeconfig lists kubeconfig of seed cluster
+func printSeedKubeconfig(targetReader TargetReader, ioStreams IOStreams) {
 	if outputFormat == "yaml" {
-		fmt.Fprint(ioStreams.Out, fmt.Sprintf("%s\n", kubeSecret.Data["kubeconfig"]))
+		print(getKubeConfigOfClusterType("seed"))
 	} else if outputFormat == "json" {
-		y, err := yaml2.YAMLToJSON(kubeSecret.Data["kubeconfig"])
-		if err != nil {
-			return err
-		}
-		var out bytes.Buffer
-		if err = json.Indent(&out, y, "", "  "); err != nil {
-			return err
-		}
-		fmt.Fprint(ioStreams.Out, out.String())
+		yaml2json(ioStreams, "seed")
 	}
-
-	return nil
 }
 
-// getShoot lists kubeconfig of shoot
-func getShoot(name string, targetReader TargetReader, kubeconfigWriter KubeconfigWriter, ioStreams IOStreams) error {
-	target := targetReader.ReadTarget(pathTarget)
-	if name == "" {
-		if !CheckShootIsTargeted(target) {
-			return errors.New("no shoot targeted")
-		}
-	} else if name != "" {
-		if len(target.Stack()) < 2 {
-			return errors.New("no seed or project targeted")
-		}
+// printShootKubeconfig lists kubeconfig of shoot
+func printShootKubeconfig(targetReader TargetReader, kubeconfigWriter KubeconfigWriter, ioStreams IOStreams) {
+	if outputFormat == "yaml" {
+		print(getKubeConfigOfClusterType("shoot"))
+	} else if outputFormat == "json" {
+		yaml2json(ioStreams, "shoot")
 	}
-	client, err := target.K8SClientToKind(TargetKindGarden)
-	if err != nil {
-		return err
-	}
-	gardenClientset, err := target.GardenerClient()
-	if err != nil {
-		return err
-	}
-	var namespace string
-	var shoot *gardencorev1beta1.Shoot
-	if target.Stack()[1].Kind == "project" {
-		project, err := gardenClientset.CoreV1beta1().Projects().Get(target.Stack()[1].Name, metav1.GetOptions{})
-		if err != nil {
-			return err
-		}
-		if name == "" {
-			shoot, err = gardenClientset.CoreV1beta1().Shoots(*project.Spec.Namespace).Get(target.Stack()[2].Name, metav1.GetOptions{})
-			if err != nil {
-				return err
-			}
-		}
-		if name != "" {
-			shoot, err = gardenClientset.CoreV1beta1().Shoots(*project.Spec.Namespace).Get(name, metav1.GetOptions{})
-			if err != nil {
-				return err
-			}
-		}
-		namespace = shoot.Status.TechnicalID
-	}
-	if target.Stack()[1].Kind == "seed" {
-		shootList, err := gardenClientset.CoreV1beta1().Shoots("").List(metav1.ListOptions{})
-		if err != nil {
-			return err
-		}
-		for index, s := range shootList.Items {
-			if s.Name == target.Stack()[2].Name && *s.Spec.SeedName == target.Stack()[1].Name {
-				if (name == "") && (s.Name == target.Stack()[2].Name) {
-					shoot = &shootList.Items[index]
-					namespace = shootList.Items[index].Status.TechnicalID
-					break
-				}
-				if (name != "") && (s.Name == name) {
-					shoot = &shootList.Items[index]
-					namespace = shootList.Items[index].Status.TechnicalID
-					break
-				}
-			}
-		}
-	}
-	seed, err := gardenClientset.CoreV1beta1().Seeds().Get(*shoot.Spec.SeedName, metav1.GetOptions{})
-	if err != nil {
-		return err
-	}
-	kubeSecret, err := client.CoreV1().Secrets(seed.Spec.SecretRef.Namespace).Get(seed.Spec.SecretRef.Name, metav1.GetOptions{})
-	if err != nil {
-		return err
-	}
-	gardenName := target.Stack()[0].Name
-	kubeconfigPath := filepath.Join(pathGardenHome, "cache", gardenName, "seeds", seed.Spec.SecretRef.Name, "kubeconfig.yaml")
-	err = kubeconfigWriter.Write(kubeconfigPath, kubeSecret.Data["kubeconfig"])
+}
+
+func yaml2json(ioStreams IOStreams, clusterType TargetKind) {
+	buffer, err := ioutil.ReadFile(getKubeConfigOfClusterType(clusterType))
 	checkError(err)
-	KUBECONFIG = kubeconfigPath
-
-	seedClient, err := target.K8SClientToKind(TargetKindSeed)
-	if err != nil {
-		return err
+	y, err := yaml.YAMLToJSON(buffer)
+	checkError(err)
+	var output []byte
+	if output, err = json.MarshalIndent(string(y), "", " "); err != nil {
+		log.Fatal(err, "out json error")
 	}
-	kubeSecret, err = seedClient.CoreV1().Secrets(namespace).Get("kubecfg", metav1.GetOptions{})
-	if err != nil {
-		return err
-	}
-	if outputFormat == "yaml" {
-		fmt.Fprint(ioStreams.Out, fmt.Sprintf("%s\n", kubeSecret.Data["kubeconfig"]))
-	} else if outputFormat == "json" {
-		y, err := yaml2.YAMLToJSON(kubeSecret.Data["kubeconfig"])
-		if err != nil {
-			return err
-		}
-		var out bytes.Buffer
-		if err = json.Indent(&out, y, "", "  "); err != nil {
-			return err
-		}
-		fmt.Fprint(ioStreams.Out, out.String())
-	}
-
-	return nil
+	fmt.Fprint(ioStreams.Out, string(output))
 }
 
 // getTarget prints the target stack.
-func getTarget(targetReader TargetReader, ioStreams IOStreams) (err error) {
+func getTarget(targetReader TargetReader, ioStreams IOStreams) {
 	target := targetReader.ReadTarget(pathTarget)
+	var err error
 	if len(target.Stack()) == 0 {
-		return errors.New("target stack is empty")
+		log.Fatal("target stack is empty")
 	}
 
 	if outputFormat == "yaml" {
 		var output []byte
 		if output, err = yaml.Marshal(target); err != nil {
-			return err
+			log.Fatal(err, "out yaml error")
 		}
 		fmt.Fprint(ioStreams.Out, string(output))
 	} else if outputFormat == "json" {
 		var output []byte
 		if output, err = json.MarshalIndent(target, "", "  "); err != nil {
-			return err
+			log.Fatal(err, "out json error")
 		}
 		fmt.Fprint(ioStreams.Out, string(output))
 	}
-
-	return nil
 }

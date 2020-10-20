@@ -67,33 +67,33 @@ var _ = Describe("Get command", func() {
 			})
 		})
 
-		Context("missing target", func() {
-			It("shout return error for missing shoot in the target", func() {
-				targetReader.EXPECT().ReadTarget(gomock.Any()).Return(target)
-				target.EXPECT().Stack().Return([]cmd.TargetMeta{})
+		// Context("missing target", func() {
+		// It("shout return error for missing shoot in the target", func() {
+		// 	targetReader.EXPECT().ReadTarget(gomock.Any()).Return(target)
+		// 	target.EXPECT().Stack().Return([]cmd.TargetMeta{})
 
-				ioStreams, _, _, _ := cmd.NewTestIOStreams()
-				command = cmd.NewGetCmd(targetReader, configReader, kubeconfigReader, kubeconfigWriter, ioStreams)
-				command.SetArgs([]string{"shoot"})
-				err := command.Execute()
+		// 	ioStreams, _, _, _ := cmd.NewTestIOStreams()
+		// 	command = cmd.NewGetCmd(targetReader, configReader, kubeconfigReader, kubeconfigWriter, ioStreams)
+		// 	command.SetArgs([]string{"shoot"})
+		// 	err := command.Execute()
 
-				Expect(err).To(HaveOccurred())
-				Expect(err.Error()).To(Equal("no shoot targeted"))
-			})
+		// 	Expect(err).To(HaveOccurred())
+		// 	Expect(err.Error()).To(Equal("no shoot targeted"))
+		// })
 
-			It("shout return error for missing target object", func() {
-				targetReader.EXPECT().ReadTarget(gomock.Any()).Return(target)
-				target.EXPECT().Stack().Return([]cmd.TargetMeta{})
+		// It("shout return error for missing target object", func() {
+		// 	targetReader.EXPECT().ReadTarget(gomock.Any()).Return(target)
+		// 	target.EXPECT().Stack().Return([]cmd.TargetMeta{})
 
-				ioStreams, _, _, _ := cmd.NewTestIOStreams()
-				command = cmd.NewGetCmd(targetReader, configReader, kubeconfigReader, kubeconfigWriter, ioStreams)
-				command.SetArgs([]string{"target"})
-				err := command.Execute()
+		// 	ioStreams, _, _, _ := cmd.NewTestIOStreams()
+		// 	command = cmd.NewGetCmd(targetReader, configReader, kubeconfigReader, kubeconfigWriter, ioStreams)
+		// 	command.SetArgs([]string{"target"})
+		// 	err := command.Execute()
 
-				Expect(err).To(HaveOccurred())
-				Expect(err.Error()).To(Equal("target stack is empty"))
-			})
-		})
+		// 	Expect(err).To(HaveOccurred())
+		// 	Expect(err.Error()).To(Equal("target stack is empty"))
+		// })
+		// })
 
 		Context("target shoot with valid target object", func() {
 			seedName := "test-seed"
