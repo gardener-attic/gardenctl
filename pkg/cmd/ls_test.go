@@ -19,6 +19,9 @@ import (
 	mockcmd "github.com/gardener/gardenctl/pkg/mock/cmd"
 	"github.com/golang/mock/gomock"
 	"github.com/spf13/cobra"
+	"log"
+	"strings"
+	"testing"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -108,3 +111,18 @@ var _ = Describe("Ls command", func() {
 		})
 	})
 })
+
+func Test_getNamespacesInfo(t *testing.T) {
+	cmd.InitCmdVariables()
+	info := cmd.GetNamespacesInfo()
+	log.Printf("%+v", info)
+	if !strings.HasPrefix(info, "NAME") {
+		t.Error("expected to see the column names")
+	}
+	if !strings.Contains(info, "default") {
+		t.Error("no default namespace found")
+	}
+	if !strings.Contains(info, "kube-system") {
+		t.Error("no kube-system namespace found")
+	}
+}

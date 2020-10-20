@@ -86,6 +86,14 @@ __gardenctl_custom_func() {
 // Execute adds all child commands to the root command and sets flags appropriately.
 // This is called by main.main(). It only needs to happen once to the rootCmd.
 func Execute() {
+	InitCmdVariables()
+	if err := RootCmd.Execute(); err != nil {
+		os.Exit(1)
+	}
+}
+
+//InitCmdVariables extracted as a separate method to make it possible for tests to init all required variables
+func InitCmdVariables() {
 	pathGardenHome = os.Getenv("GARDENCTL_HOME")
 	if pathGardenHome == "" {
 		pathGardenHome = pathDefault
@@ -110,9 +118,6 @@ func Execute() {
 		CreateFileIfNotExists(pathGardenConfig, 0644)
 	}
 	GetGardenClusterKubeConfigFromConfig(pathGardenConfig, pathTarget)
-	if err := RootCmd.Execute(); err != nil {
-		os.Exit(1)
-	}
 }
 
 func init() {

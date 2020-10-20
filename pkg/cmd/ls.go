@@ -77,7 +77,7 @@ func NewLsCmd(targetReader TargetReader, configReader ConfigReader, ioStreams IO
 			case "issues":
 				getIssues(target, ioStreams)
 			case "namespaces":
-				getNamespaces(ioStreams)
+				printNamespaces(ioStreams)
 			default:
 				return errors.New("command must be in the format: ls [gardens|projects|seeds|shoots|issues|namespaces]")
 			}
@@ -345,14 +345,20 @@ func getSeedsWithShootsForProject(ioStreams IOStreams) {
 	}
 }
 
-//getNamespaces get all namespaces based on current kubeconfig
-func getNamespaces(ioStreams IOStreams) {
+//printNamespaces get all namespaces based on current kubeconfig
+func printNamespaces(ioStreams IOStreams) {
+	out := GetNamespacesInfo()
+	fmt.Println(string(out))
+}
+
+//GetNamespacesInfo return output of command *kubectl get ns* execution as a string for current kubeconfig
+func GetNamespacesInfo() string {
 	currentConfig := getKubeConfigOfCurrentTarget()
 	out, err := ExecCmdReturnOutput("kubectl", "--kubeconfig="+currentConfig, "get", "ns")
 	if err != nil {
 		fmt.Println(err)
 	}
-	fmt.Println(string(out))
+	return out
 }
 
 // getProjectForNamespace returns name of project for a shoot
