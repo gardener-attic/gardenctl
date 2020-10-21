@@ -16,27 +16,43 @@ package cmd_test
 
 import (
 	"github.com/gardener/gardenctl/pkg/cmd"
-	. "github.com/onsi/ginkgo"
-	. "github.com/onsi/gomega"
+	mockcmd "github.com/gardener/gardenctl/pkg/mock/cmd"
+	"github.com/golang/mock/gomock"
 	"github.com/spf13/cobra"
+
 	"regexp"
 	"strings"
+
+	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/gomega"
 )
 
 var _ = Describe("Logs and kubecmd command", func() {
 
 	var (
-		command *cobra.Command
-
-		execute = func(command *cobra.Command, args []string) error {
+		ctrl         *gomock.Controller
+		targetReader *mockcmd.MockTargetReader
+		command      *cobra.Command
+		execute      = func(command *cobra.Command, args []string) error {
 			command.SetArgs(args)
 			return command.Execute()
 		}
 	)
 
+	BeforeEach(func() {
+		ctrl = gomock.NewController(GinkgoT())
+		targetReader = mockcmd.NewMockTargetReader(ctrl)
+	})
+
+	AfterEach(func() {
+		ctrl.Finish()
+	})
+
+	var ()
+
 	Context("with < 1 args", func() {
 		It("should return error", func() {
-			command = cmd.NewLogsCmd()
+			command = cmd.NewLogsCmd(targetReader)
 			err := execute(command, []string{})
 
 			Expect(err).To(HaveOccurred())

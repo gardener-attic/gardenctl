@@ -70,10 +70,10 @@ type AliyunInstanceTypeSpec struct {
 }
 
 // sshToAlicloudNode provides cmds to ssh to alicloud via a public ip and clean it up afterwards.
-func sshToAlicloudNode(nodeName, path, user, pathSSKeypair string, sshPublicKey []byte, myPublicIP string) {
+func sshToAlicloudNode(targetReader TargetReader, nodeName, path, user, pathSSKeypair string, sshPublicKey []byte, myPublicIP string) {
 	// Check if this is a cleanup command
 	if nodeName == "cleanup" {
-		cleanupAliyunBastionHost()
+		cleanupAliyunBastionHost(targetReader)
 		return
 	}
 
@@ -87,7 +87,7 @@ func sshToAlicloudNode(nodeName, path, user, pathSSKeypair string, sshPublicKey 
 	a.MyPublicIP = myPublicIP + "/32"
 	fmt.Println("")
 	fmt.Println("(2/5) Fetching data from target shoot cluster")
-	a.fetchAttributes(nodeName)
+	a.fetchAttributes(targetReader, nodeName)
 	fmt.Println("Data fetched from target shoot cluster.")
 
 	fmt.Println("")
@@ -95,7 +95,7 @@ func sshToAlicloudNode(nodeName, path, user, pathSSKeypair string, sshPublicKey 
 	a.createBastionHostSecurityGroup()
 	fmt.Println("Bastion host security group set up.")
 
-	defer checkIsDeletionWanted(a.BastionInstanceID)
+	defer checkIsDeletionWanted(targetReader, a.BastionInstanceID)
 
 	fmt.Println("")
 	fmt.Println("(4/5) Setting up bastion host")
@@ -119,8 +119,8 @@ func sshToAlicloudNode(nodeName, path, user, pathSSKeypair string, sshPublicKey 
 }
 
 // fetchAttributes gets all the needed attributes for creating bastion host and its security group with given <nodeName>.
-func (a *AliyunInstanceAttribute) fetchAttributes(nodeName string) {
-	a.ShootName = getFromTargetInfo("shootTechnicalID")
+func (a *AliyunInstanceAttribute) fetchAttributes(targetReader TargetReader, nodeName string) {
+	a.ShootName = GetFromTargetInfo(targetReader, "shootTechnicalID")
 	var err error
 	a.InstanceID, err = fetchAlicloudInstanceIDByNodeName(nodeName)
 	checkError(err)
@@ -590,7 +590,7 @@ func (a *AliyunInstanceAttribute) getMinimumInstanceSpec() string {
 }
 
 //checkIsDeletionWanted checks if the user wants to delete the created IAS resources
-func checkIsDeletionWanted(bastionInstanceID string) {
+func checkIsDeletionWanted(targetReader TargetReader, bastionInstanceID string) {
 	fmt.Println("Would you like to cleanup the created bastion? (y/n)")
 
 	reader := bufio.NewReader(os.Stdin)
@@ -600,7 +600,7 @@ func checkIsDeletionWanted(bastionInstanceID string) {
 	switch char {
 	case 'y', 'Y':
 		fmt.Println("Cleanup")
-		cleanupAliyunBastionHost()
+		cleanupAliyunBastionHost(targetReader)
 	case 'n', 'N':
 		fmt.Println("- Run following command to hibernate bastion host:")
 		fmt.Println("gardenctl aliyun ecs StopInstance -- --InstanceId=" + bastionInstanceID)
@@ -613,7 +613,7 @@ func checkIsDeletionWanted(bastionInstanceID string) {
 }
 
 // cleanupAlicloudBastionHost cleans up the bastion host for the targeted cluster.
-func cleanupAliyunBastionHost() {
+func cleanupAliyunBastionHost(targetReader TargetReader) {
 	fmt.Println("Cleaning up bastion host configurations...")
 
 	fmt.Println("")
@@ -625,7 +625,7 @@ func cleanupAliyunBastionHost() {
 
 	fmt.Println("")
 	fmt.Println("(2/4) Fetching data from target shoot cluster")
-	a.ShootName = getFromTargetInfo("shootTechnicalID")
+	a.ShootName = GetFromTargetInfo(targetReader, "shootTechnicalID")
 	a.BastionInstanceName = a.ShootName + "-bastion"
 	a.BastionSecurityGroupName = a.ShootName + "-bsg"
 	fmt.Println("Data fetched from target shoot cluster.")

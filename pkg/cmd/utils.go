@@ -41,11 +41,9 @@ func checkError(err error) {
 	if err != nil {
 		if debugSwitch {
 			_, fn, line, _ := runtime.Caller(1)
-			log.Printf("[error] %s:%d \n %v", fn, line, err)
-			os.Exit(2)
+			log.Fatalf("[error] %s:%d \n %v", fn, line, err)
 		} else {
-			fmt.Println(err.Error())
-			os.Exit(2)
+			log.Fatalf(err.Error())
 		}
 	}
 }

@@ -60,15 +60,15 @@ func NewInfraCmd(targetReader TargetReader) *cobra.Command {
 
 					switch infraType {
 					case "aws":
-						rs = getAWSInfraResources()
+						rs = getAWSInfraResources(targetReader)
 					case "azure":
-						rs = getAzureInfraResources()
+						rs = getAzureInfraResources(targetReader)
 					case "gcp":
-						rs = getGCPInfraResources()
+						rs = getGCPInfraResources(targetReader)
 					case "openstack":
-						rs = getOstackInfraResources()
+						rs = getOstackInfraResources(targetReader)
 					case "alicloud":
-						rs = getAliCloudInfraResources()
+						rs = getAliCloudInfraResources(targetReader)
 					default:
 						return errors.New("infra type not found")
 					}
@@ -112,68 +112,68 @@ func GetOrphanInfraResources(rs []string, terraformstate string) error {
 	return nil
 }
 
-func getAWSInfraResources() []string {
+func getAWSInfraResources(targetReader TargetReader) []string {
 	rs := make([]string, 0)
-	shoottag := getFromTargetInfo("shootTechnicalID")
+	shoottag := GetFromTargetInfo(targetReader, "shootTechnicalID")
 
 	// fetch shoot vpc resources
-	capturedOutput := execInfraOperator("aws", "aws ec2 describe-vpcs --filter Name=tag:kubernetes.io/cluster/"+shoottag+",Values=1")
+	capturedOutput := execInfraOperator("aws", "ec2 describe-vpcs --filter Name=tag:kubernetes.io/cluster/"+shoottag+",Values=1")
 	rs = findInfraResourcesMatch(`VPCS.*(vpc-[a-z0-9]*)`, capturedOutput, rs)
 
 	// fetch shoot subnet resources
-	capturedOutput = execInfraOperator("aws", "aws ec2 describe-subnets --filter Name=tag:kubernetes.io/cluster/"+shoottag+",Values=1")
+	capturedOutput = execInfraOperator("aws", "ec2 describe-subnets --filter Name=tag:kubernetes.io/cluster/"+shoottag+",Values=1")
 	rs = findInfraResourcesMatch(`SUBNETS.*:subnet\/(subnet-[a-z0-9]*)`, capturedOutput, rs)
 
 	// fetch shoot dhcp options resources
-	capturedOutput = execInfraOperator("aws", "aws ec2 describe-dhcp-options --filter Name=tag:kubernetes.io/cluster/"+shoottag+",Values=1")
+	capturedOutput = execInfraOperator("aws", "ec2 describe-dhcp-options --filter Name=tag:kubernetes.io/cluster/"+shoottag+",Values=1")
 	rs = findInfraResourcesMatch(`DHCPOPTIONS.*(dopt-[a-z0-9]*)`, capturedOutput, rs)
 
 	// fetch shoot ip address resources
-	capturedOutput = execInfraOperator("aws", "aws ec2 describe-addresses --filter Name=tag:kubernetes.io/cluster/"+shoottag+",Values=1")
+	capturedOutput = execInfraOperator("aws", "ec2 describe-addresses --filter Name=tag:kubernetes.io/cluster/"+shoottag+",Values=1")
 	rs = findInfraResourcesMatch(`ADDRESSES.*(eipalloc-[a-z0-9]*)`, capturedOutput, rs)
 
 	// fetch shoot nat gateway resources
-	capturedOutput = execInfraOperator("aws", "aws ec2 describe-nat-gateways --filter Name=tag:kubernetes.io/cluster/"+shoottag+",Values=1")
+	capturedOutput = execInfraOperator("aws", "ec2 describe-nat-gateways --filter Name=tag:kubernetes.io/cluster/"+shoottag+",Values=1")
 	rs = findInfraResourcesMatch(`NATGATEWAYS.*(nat-[a-z0-9]*)`, capturedOutput, rs)
 	rs = findInfraResourcesMatch(`NATGATEWAYADDRESSES.*(eni-[a-z0-9]*)`, capturedOutput, rs)
 
 	// fetch shoot internet gateway resources
-	capturedOutput = execInfraOperator("aws", "aws ec2 describe-internet-gateways --filter Name=tag:kubernetes.io/cluster/"+shoottag+",Values=1")
+	capturedOutput = execInfraOperator("aws", "ec2 describe-internet-gateways --filter Name=tag:kubernetes.io/cluster/"+shoottag+",Values=1")
 	rs = findInfraResourcesMatch(`INTERNETGATEWAYS.*(igw-[a-z0-9]*)`, capturedOutput, rs)
 
 	// fetch shoot security group resources
-	capturedOutput = execInfraOperator("aws", "aws ec2 describe-security-groups --filter Name=tag:kubernetes.io/cluster/"+shoottag+",Values=1")
+	capturedOutput = execInfraOperator("aws", "ec2 describe-security-groups --filter Name=tag:kubernetes.io/cluster/"+shoottag+",Values=1")
 	rs = findInfraResourcesMatch(`SECURITYGROUPS.*(sg-[a-z0-9]*)`, capturedOutput, rs)
 
 	// fetch shoot route table resources
-	capturedOutput = execInfraOperator("aws", "aws ec2 describe-route-tables --filter Name=tag:kubernetes.io/cluster/"+shoottag+",Values=1")
+	capturedOutput = execInfraOperator("aws", "ec2 describe-route-tables --filter Name=tag:kubernetes.io/cluster/"+shoottag+",Values=1")
 	rs = findInfraResourcesMatch(`ROUTETABLES.*(rtb-[a-z0-9]*)`, capturedOutput, rs)
 
 	// fetch shoot instance resources
-	capturedOutput = execInfraOperator("aws", "aws ec2 describe-instances --filter Name=tag:kubernetes.io/cluster/"+shoottag+",Values=1")
+	capturedOutput = execInfraOperator("aws", "ec2 describe-instances --filter Name=tag:kubernetes.io/cluster/"+shoottag+",Values=1")
 	rs = findInfraResourcesMatch(`IAMINSTANCEPROFILE.*:instance-profile\/(shoot--[a-z0-9-]*-nodes)`, capturedOutput, rs)
 
 	// fetch shoot bastion instance resource
-	capturedOutput = execInfraOperator("aws", "aws ec2 describe-instances --filter Name=tag:Name,Values="+shoottag+"-bastions")
+	capturedOutput = execInfraOperator("aws", "ec2 describe-instances --filter Name=tag:Name,Values="+shoottag+"-bastions")
 	rs = findInfraResourcesMatch(`INSTANCES.*(i-[a-z0-9]*)`, capturedOutput, rs)
 
 	// fetch shoot bastion security group
-	capturedOutput = execInfraOperator("aws", "aws ec2 describe-security-groups --filter Name=tag:component,Values=gardenctl")
+	capturedOutput = execInfraOperator("aws", "ec2 describe-security-groups --filter Name=tag:component,Values=gardenctl")
 	rs = findInfraResourcesMatch("SECURITYGROUPS.*(sg-[a-z0-9]*).*"+shoottag, capturedOutput, rs)
 
 	return unique(rs)
 }
 
-func getAzureInfraResources() []string {
+func getAzureInfraResources(targetReader TargetReader) []string {
 	rs := make([]string, 0)
-	shoottag := getFromTargetInfo("shootTechnicalID")
+	shoottag := GetFromTargetInfo(targetReader, "shootTechnicalID")
 
 	// fetch shoot resource group
-	capturedOutput := execInfraOperator("az", "az group show --name "+shoottag)
+	capturedOutput := execInfraOperator("az", "group show --name "+shoottag)
 	rs = findInfraResourcesMatch(`\"id\".*(resourceGroups\/[a-z0-9-]*)\"`, capturedOutput, rs)
 
 	// fetch shoot vnet resources
-	capturedOutput = execInfraOperator("az", "az network vnet list -g "+shoottag)
+	capturedOutput = execInfraOperator("az", "network vnet list -g "+shoottag)
 	vnets := make([]string, 0)
 	vnets = findInfraResourcesMatch(`\"id\".*(virtualNetworks\/[a-z0-9-]*)\"`, capturedOutput, vnets)
 	rs = findInfraResourcesMatch(`\"id\".*(virtualNetworks\/[a-z0-9-]*)\"`, capturedOutput, rs)
@@ -183,32 +183,32 @@ func getAzureInfraResources() []string {
 		for _, vnet := range vnets {
 			s := strings.Split(vnet, "/")
 			vnetName := s[1]
-			capturedOutput = execInfraOperator("az", "az network vnet subnet list -g "+shoottag+" --vnet-name "+vnetName)
+			capturedOutput = execInfraOperator("az", "network vnet subnet list -g "+shoottag+" --vnet-name "+vnetName)
 			rs = findInfraResourcesMatch(`\"id\".*(subnets\/[a-z0-9-]*)\"`, capturedOutput, rs)
 		}
 	}
 
 	// fetch shoot nic resources
-	capturedOutput = execInfraOperator("az", "az network nic list -g "+shoottag)
+	capturedOutput = execInfraOperator("az", "network nic list -g "+shoottag)
 	rs = findInfraResourcesMatch(`\"id\".*(networkInterfaces\/[a-z0-9-]*)\"`, capturedOutput, rs)
 
 	// fetch shoot security group resources
-	capturedOutput = execInfraOperator("az", "az network nsg list -g "+shoottag)
+	capturedOutput = execInfraOperator("az", "network nsg list -g "+shoottag)
 	rs = findInfraResourcesMatch(`\"id\".*(networkSecurityGroups\/[a-z0-9-]*)\"`, capturedOutput, rs)
 
 	// fetch shoot route resources
-	capturedOutput = execInfraOperator("az", "az network route-table list -g "+shoottag)
+	capturedOutput = execInfraOperator("az", "network route-table list -g "+shoottag)
 	rs = findInfraResourcesMatch(`\"id\".*routes\/([a-z0-9-]*)\"`, capturedOutput, rs)
 
 	return unique(rs)
 }
 
-func getGCPInfraResources() []string {
+func getGCPInfraResources(targetReader TargetReader) []string {
 	rs := make([]string, 0)
-	shoottag := getFromTargetInfo("shootTechnicalID")
+	shoottag := GetFromTargetInfo(targetReader, "shootTechnicalID")
 
 	// fetch shoot subnet resource
-	capturedOutput := execInfraOperator("gcp", "gcloud compute networks subnets list")
+	capturedOutput := execInfraOperator("gcp", "compute networks subnets list")
 	if strings.Contains(capturedOutput, shoottag+"-nodes") {
 		rsShootSubnet := make([]string, 0)
 		rsShootSubnet = findInfraResourcesMatch(shoottag+"-nodes(.*)", capturedOutput, rsShootSubnet)
@@ -218,13 +218,13 @@ func getGCPInfraResources() []string {
 			rs = append(rs, shoottag+"-nodes")
 
 			// fetch shoot vpc resource
-			capturedOutput = execInfraOperator("gcp", "gcloud compute networks list")
+			capturedOutput = execInfraOperator("gcp", "compute networks list")
 			if strings.Contains(capturedOutput, shootVpc) {
 				rs = append(rs, shootVpc)
 			}
 
 			// fetch shoot cloud router resource
-			capturedOutput = execInfraOperator("gcp", "gcloud compute routers list")
+			capturedOutput = execInfraOperator("gcp", "compute routers list")
 			if strings.Contains(capturedOutput, shootVpc) {
 				rsShootRouter := make([]string, 0)
 				rsShootRouter = findInfraResourcesMatch("(.*)"+shootVpc, capturedOutput, rsShootRouter)
@@ -236,7 +236,7 @@ func getGCPInfraResources() []string {
 						rs = append(rs, shootRouter)
 
 						// fetch shoot cloud nat resource
-						capturedOutput = execInfraOperator("gcp", "gcloud compute routers nats list --router="+shootRouter+" --router-region="+shootRouterRegion)
+						capturedOutput = execInfraOperator("gcp", "compute routers nats list --router="+shootRouter+" --router-region="+shootRouterRegion)
 						if strings.Contains(capturedOutput, shoottag+"-cloud-nat") {
 							rs = append(rs, shoottag+"-cloud-nat")
 						}
@@ -247,7 +247,7 @@ func getGCPInfraResources() []string {
 	}
 
 	// fetch shoot service account
-	capturedOutput = execInfraOperator("gcp", "gcloud iam service-accounts list")
+	capturedOutput = execInfraOperator("gcp", "iam service-accounts list")
 	if strings.Contains(capturedOutput, shoottag) {
 		rsserviceAccount := make([]string, 0)
 		rsserviceAccount = findInfraResourcesMatch(shoottag+"(.*)False", capturedOutput, rsserviceAccount)
@@ -262,9 +262,9 @@ func getGCPInfraResources() []string {
 	return unique(rs)
 }
 
-func getOstackInfraResources() []string {
+func getOstackInfraResources(targetReader TargetReader) []string {
 	rs := make([]string, 0)
-	shoottag := getFromTargetInfo("shootTechnicalID")
+	shoottag := GetFromTargetInfo(targetReader, "shootTechnicalID")
 
 	// fetch shoot network id
 	capturedOutput := execInfraOperator("openstack", "openstack network list")
@@ -326,9 +326,9 @@ func getOstackInfraResources() []string {
 	return unique(rs)
 }
 
-func getAliCloudInfraResources() []string {
+func getAliCloudInfraResources(targetReader TargetReader) []string {
 	rs := make([]string, 0)
-	shoottag := getFromTargetInfo("shootTechnicalID")
+	shoottag := GetFromTargetInfo(targetReader, "shootTechnicalID")
 
 	// fetch shoot vpc id
 	capturedOutput := execInfraOperator("aliyun", "aliyun vpc DescribeVpcs --VpcName "+shoottag+"-vpc")
@@ -429,10 +429,7 @@ func getAliCloudInfraResources() []string {
 }
 
 func execInfraOperator(provider string, arguments string) string {
-	captured := capture()
-	operate(provider, arguments)
-	capturedOutput, err := captured()
-	checkError(err)
+	capturedOutput := operate(provider, arguments)
 	return capturedOutput
 }
 

@@ -69,7 +69,7 @@ var _ = Describe("Get command", func() {
 
 		Context("missing target", func() {
 			It("shout return error for missing shoot in the target", func() {
-				targetReader.EXPECT().ReadTarget(gomock.Any()).Return(target)
+				targetReader.EXPECT().ReadTarget(gomock.Any()).Return(target).AnyTimes()
 				target.EXPECT().Stack().Return([]cmd.TargetMeta{})
 
 				ioStreams, _, _, _ := cmd.NewTestIOStreams()
@@ -82,7 +82,7 @@ var _ = Describe("Get command", func() {
 			})
 
 			It("shout return error for missing target object", func() {
-				targetReader.EXPECT().ReadTarget(gomock.Any()).Return(target)
+				targetReader.EXPECT().ReadTarget(gomock.Any()).Return(target).AnyTimes()
 				target.EXPECT().Stack().Return([]cmd.TargetMeta{})
 
 				ioStreams, _, _, _ := cmd.NewTestIOStreams()
@@ -97,7 +97,7 @@ var _ = Describe("Get command", func() {
 
 		Context("target shoot with valid target object", func() {
 			seedName := "test-seed"
-
+			nameSpace := "test-namespace"
 			k8sClientToGarden := kubernetesfake.NewSimpleClientset(
 				&corev1.Namespace{
 					ObjectMeta: metav1.ObjectMeta{
@@ -133,12 +133,28 @@ var _ = Describe("Get command", func() {
 				},
 				&gardencorev1beta1.Shoot{
 					ObjectMeta: metav1.ObjectMeta{
-						Name: "test-shoot",
+						Name:      "test-shoot",
+						Namespace: "test-namespace",
 					},
 					Spec: gardencorev1beta1.ShootSpec{
 						SeedName: &seedName,
 					},
-				})
+				},
+				&gardencorev1beta1.ShootList{
+					Items: []gardencorev1beta1.Shoot{},
+				},
+				&gardencorev1beta1.Project{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "test-project",
+					},
+					Spec: gardencorev1beta1.ProjectSpec{
+						Namespace: &nameSpace,
+					},
+				},
+				&gardencorev1beta1.ProjectList{
+					Items: []gardencorev1beta1.Project{},
+				},
+			)
 
 			targetMeta := []cmd.TargetMeta{
 				{
@@ -150,7 +166,7 @@ var _ = Describe("Get command", func() {
 					Name: "test-seed",
 				},
 				{
-					Kind: cmd.TargetKindSeed,
+					Kind: cmd.TargetKindShoot,
 					Name: "test-shoot",
 				},
 			}
@@ -166,7 +182,7 @@ var _ = Describe("Get command", func() {
 			kubeconfig := []byte("test-kubeconfig")
 
 			It("should pass on get garden", func() {
-				targetReader.EXPECT().ReadTarget(gomock.Any()).Return(target)
+				targetReader.EXPECT().ReadTarget(gomock.Any()).Return(target).AnyTimes()
 				configReader.EXPECT().ReadConfig(gomock.Any()).Return(gardenConfig)
 				kubeconfigReader.EXPECT().ReadKubeconfig(gomock.Any()).Return(kubeconfig, nil)
 				target.EXPECT().Stack().Return(targetMeta).AnyTimes()
@@ -180,10 +196,10 @@ var _ = Describe("Get command", func() {
 			})
 
 			It("should pass on get seed", func() {
-				targetReader.EXPECT().ReadTarget(gomock.Any()).Return(target)
+				targetReader.EXPECT().ReadTarget(gomock.Any()).Return(target).AnyTimes()
 				target.EXPECT().K8SClientToKind(cmd.TargetKindGarden).Return(k8sClientToGarden, nil)
 				target.EXPECT().Stack().Return(targetMeta).AnyTimes()
-				target.EXPECT().GardenerClient().Return(clientSet, nil)
+				target.EXPECT().GardenerClient().Return(clientSet, nil).AnyTimes()
 
 				ioStreams, _, _, _ := cmd.NewTestIOStreams()
 				command = cmd.NewGetCmd(targetReader, configReader, kubeconfigReader, kubeconfigWriter, ioStreams)
@@ -194,11 +210,11 @@ var _ = Describe("Get command", func() {
 			})
 
 			It("should pass on get shoot", func() {
-				targetReader.EXPECT().ReadTarget(gomock.Any()).Return(target)
-				target.EXPECT().K8SClientToKind(cmd.TargetKindGarden).Return(k8sClientToGarden, nil)
-				target.EXPECT().K8SClientToKind(cmd.TargetKindSeed).Return(k8sClientToGarden, nil)
+				targetReader.EXPECT().ReadTarget(gomock.Any()).Return(target).AnyTimes()
+				target.EXPECT().K8SClientToKind(cmd.TargetKindGarden).Return(k8sClientToGarden, nil).AnyTimes()
+				target.EXPECT().K8SClientToKind(cmd.TargetKindSeed).Return(k8sClientToGarden, nil).AnyTimes()
 				target.EXPECT().Stack().Return(targetMeta).AnyTimes()
-				target.EXPECT().GardenerClient().Return(clientSet, nil)
+				target.EXPECT().GardenerClient().Return(clientSet, nil).AnyTimes()
 				kubeconfigWriter.EXPECT().Write(gomock.Any(), gomock.Any()).Return(nil)
 
 				ioStreams, _, _, _ := cmd.NewTestIOStreams()
@@ -210,20 +226,21 @@ var _ = Describe("Get command", func() {
 			})
 
 			It("should pass on get target", func() {
-				targetReader.EXPECT().ReadTarget(gomock.Any()).Return(target)
-				target.EXPECT().Stack().Return(targetMeta).AnyTimes()
-				target.EXPECT().Stack().Return(targetMeta).AnyTimes()
+				targetReader.EXPECT().ReadTarget(gomock.Any()).Return(target).AnyTimes()
+				target.EXPECT().Stack().Return([]cmd.TargetMeta{})
 
 				ioStreams, _, _, _ := cmd.NewTestIOStreams()
 				command = cmd.NewGetCmd(targetReader, configReader, kubeconfigReader, kubeconfigWriter, ioStreams)
 				command.SetArgs([]string{"target"})
 				err := command.Execute()
 
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(Equal("target stack is empty"))
+
 			})
 
 			It("should fail on get project", func() {
-				targetReader.EXPECT().ReadTarget(gomock.Any()).Return(target)
+				targetReader.EXPECT().ReadTarget(gomock.Any()).Return(target).AnyTimes()
 				target.EXPECT().Stack().Return(targetMeta).AnyTimes()
 
 				ioStreams, _, _, _ := cmd.NewTestIOStreams()
@@ -232,7 +249,7 @@ var _ = Describe("Get command", func() {
 				err := command.Execute()
 
 				Expect(err).To(HaveOccurred())
-				Expect(err.Error()).To(Equal("seed targeted, project expected"))
+				Expect(err.Error()).To(Equal("no project targeted"))
 			})
 		})
 	})

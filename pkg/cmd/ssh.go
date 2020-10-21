@@ -38,13 +38,13 @@ const (
 )
 
 // NewSSHCmd returns a new ssh command.
-func NewSSHCmd(reader TargetReader, ioStreams IOStreams) *cobra.Command {
+func NewSSHCmd(targetReader TargetReader, ioStreams IOStreams) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:          "ssh",
 		Short:        "SSH to a node",
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			target := reader.ReadTarget(pathTarget)
+			target := targetReader.ReadTarget(pathTarget)
 			if !CheckShootIsTargeted(target) {
 				return errors.New("no shoot targeted")
 			}
@@ -53,10 +53,10 @@ func NewSSHCmd(reader TargetReader, ioStreams IOStreams) *cobra.Command {
 			checkError(err)
 
 			if len(args) == 0 {
-				return printNodeNames(shoot.Name)
+				return printNodeNames(targetReader, shoot.Name)
 			}
 
-			path := downloadTerraformFiles("infra", reader)
+			path := downloadTerraformFiles("infra", targetReader)
 			if path != "" {
 				path = filepath.Join(path, "terraform.tfstate")
 			}
@@ -89,13 +89,13 @@ func NewSSHCmd(reader TargetReader, ioStreams IOStreams) *cobra.Command {
 			infraType := shoot.Spec.Provider.Type
 			switch infraType {
 			case "aws":
-				sshToAWSNode(args[0], path, user, pathSSKeypair, sshPublicKey, myPublicIP)
+				sshToAWSNode(targetReader, args[0], path, user, pathSSKeypair, sshPublicKey, myPublicIP)
 			case "gcp":
-				sshToGCPNode(args[0], path, user, pathSSKeypair, sshPublicKey, myPublicIP)
+				sshToGCPNode(targetReader, args[0], path, user, pathSSKeypair, sshPublicKey, myPublicIP)
 			case "azure":
-				sshToAZNode(args[0], path, user, pathSSKeypair, sshPublicKey, myPublicIP)
+				sshToAZNode(targetReader, args[0], path, user, pathSSKeypair, sshPublicKey, myPublicIP)
 			case "alicloud":
-				sshToAlicloudNode(args[0], path, user, pathSSKeypair, sshPublicKey, myPublicIP)
+				sshToAlicloudNode(targetReader, args[0], path, user, pathSSKeypair, sshPublicKey, myPublicIP)
 			case "openstack":
 				sshToOpenstackNode(args[0], path, user, pathSSKeypair, sshPublicKey, myPublicIP)
 			default:
@@ -119,8 +119,8 @@ func getSSHKeypair(shoot *gardencorev1beta1.Shoot) *v1.Secret {
 }
 
 // printNodeNames print all nodes in k8s cluster
-func printNodeNames(shootName string) error {
-	machineList, err := getMachineList(shootName)
+func printNodeNames(targetReader TargetReader, shootName string) error {
+	machineList, err := getMachineList(targetReader, shootName)
 	checkError(err)
 
 	fmt.Println("Nodes:")
@@ -144,8 +144,8 @@ echo "gardener ALL=(ALL) NOPASSWD:ALL" >/etc/sudoers.d/99-gardener-user
 	return []byte(userData)
 }
 
-func getMachineList(shootName string) (*v1alpha1.MachineList, error) {
-	if getRole() == "user" {
+func getMachineList(targetReader TargetReader, shootName string) (*v1alpha1.MachineList, error) {
+	if getRole(targetReader) == "user" {
 		var target Target
 		ReadTarget(pathTarget, &target)
 		clientset, err := target.K8SClientToKind("shoot")

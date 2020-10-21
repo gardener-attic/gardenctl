@@ -47,7 +47,7 @@ type AwsInstanceAttribute struct {
 }
 
 // sshToAWSNode provides cmds to ssh to aws via a bastions host and clean it up afterwards
-func sshToAWSNode(nodeName, path, user, pathSSKeypair string, sshPublicKey []byte, myPublicIP string) {
+func sshToAWSNode(targetReader TargetReader, nodeName, path, user, pathSSKeypair string, sshPublicKey []byte, myPublicIP string) {
 	a := &AwsInstanceAttribute{}
 	a.SSHPublicKey = sshPublicKey
 	a.MyPublicIP = myPublicIP
@@ -56,7 +56,7 @@ func sshToAWSNode(nodeName, path, user, pathSSKeypair string, sshPublicKey []byt
 
 	fmt.Println("(1/4) Fetching data from target shoot cluster")
 
-	a.fetchAwsAttributes(nodeName, path)
+	a.fetchAwsAttributes(targetReader, nodeName, path)
 
 	fmt.Println("Data fetched from target shoot cluster.")
 	fmt.Println("")
@@ -103,8 +103,8 @@ func sshToAWSNode(nodeName, path, user, pathSSKeypair string, sshPublicKey []byt
 }
 
 // fetchAwsAttributes gets all the needed attributes for creating bastion host and its security group with given <nodeName>.
-func (a *AwsInstanceAttribute) fetchAwsAttributes(nodeName, path string) {
-	a.ShootName = getFromTargetInfo("shootTechnicalID")
+func (a *AwsInstanceAttribute) fetchAwsAttributes(targetReader TargetReader, nodeName, path string) {
+	a.ShootName = GetFromTargetInfo(targetReader, "shootTechnicalID")
 	publicUtility := a.ShootName + "-public-utility-z0"
 	arguments := fmt.Sprintf("ec2 describe-subnets --filters Name=tag:Name,Values=" + publicUtility + " --query Subnets[*].SubnetId")
 	a.SubnetID = strings.Trim(operate("aws", arguments), "\n")

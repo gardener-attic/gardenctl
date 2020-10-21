@@ -248,7 +248,7 @@ func showPrometheus(targetReader TargetReader) {
 	username, password = getMonitoringCredentials()
 	showPod("prometheus", "seed", targetReader)
 	KUBECONFIG := getKubeConfigOfClusterType("seed")
-	url, err := ExecCmdReturnOutput("kubectl", "--kubeconfig="+KUBECONFIG, "get", "ingress", "prometheus", "-n", getFromTargetInfo("shootTechnicalID"), "--no-headers", "-o", "custom-columns=:spec.rules[].host")
+	url, err := ExecCmdReturnOutput("kubectl", "--kubeconfig="+KUBECONFIG, "get", "ingress", "prometheus", "-n", GetFromTargetInfo(targetReader, "shootTechnicalID"), "--no-headers", "-o", "custom-columns=:spec.rules[].host")
 	if err != nil {
 		log.Fatalf("Cmd was unsuccessful")
 	}
@@ -316,7 +316,7 @@ func showKubernetesDashboard(targetReader TargetReader) {
 func showGrafana(targetReader TargetReader) {
 	username, password = getMonitoringCredentials()
 	showPod("grafana", "seed", targetReader)
-	output, err := ExecCmdReturnOutput("kubectl", "--kubeconfig="+KUBECONFIG, "get", "ingress", "grafana", "-n", getFromTargetInfo("shootTechnicalID"))
+	output, err := ExecCmdReturnOutput("kubectl", "--kubeconfig="+KUBECONFIG, "get", "ingress", "grafana", "-n", GetFromTargetInfo(targetReader, "shootTechnicalID"))
 	if err != nil {
 		log.Fatalf("Cmd was unsuccessful")
 	}

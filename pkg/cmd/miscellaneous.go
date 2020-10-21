@@ -18,14 +18,12 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"io"
 	"io/ioutil"
 	"log"
 	"net"
 	"net/http"
 	"net/url"
 	"os"
-	"strings"
 
 	authorizationv1 "k8s.io/api/authorization/v1"
 
@@ -165,69 +163,6 @@ func getSeedNamespaceNameForShoot(shootName string) (namespaceSeed string) {
 	return shoot.Status.TechnicalID
 }
 
-//getProjectObject returns the Project for Shoot
-func getProjectObject() (*v1beta1.Project, error) {
-	var target Target
-	ReadTarget(pathTarget, &target)
-	Client, err := target.K8SClientToKind("garden")
-	checkError(err)
-
-	if isTargeted("project") {
-		projectName, err := getTargetName("project")
-		checkError(err)
-		return Client.GardenerV1beta1().Projects().Get(projectName, metav1.GetOptions{})
-	} else if isTargeted("seed", "shoot") {
-		if getRole() == "user" {
-			return nil, errors.New("can't determine project. Target project instead of seed")
-		}
-		seedName, err := getTargetName("seed")
-		checkError(err)
-		shootName, err := getTargetName("shoot")
-		checkError(err)
-
-		shootList, err := Client.GardenerV1beta1().Shoots(metav1.NamespaceAll).List(metav1.ListOptions{
-			FieldSelector: fields.SelectorFromSet(
-				fields.Set{
-					core.ShootSeedName: seedName,
-					"metadata.name":    shootName,
-				}).String(),
-		})
-		checkError(err)
-		if len(shootList.Items) == 0 {
-			return nil, errors.New("No shoot found with name " + shootName + " that is running on the seed " + seedName)
-		} else if len(shootList.Items) > 1 {
-			return nil, errors.New("There are multiple shoots with the name " + shootName + " that are running on the seed " + seedName)
-		}
-		projectNamespace := shootList.Items[0].Namespace
-
-		projectList, err := Client.GardenerV1beta1().Projects().List(metav1.ListOptions{})
-		checkError(err)
-
-		for _, p := range projectList.Items {
-			if *p.Spec.Namespace == projectNamespace {
-				return &p, nil
-			}
-		}
-	}
-
-	return nil, errors.New("can't determine project")
-}
-
-//getShootObject return shoot object and error
-func getShootObject() (*v1beta1.Shoot, error) {
-	var target Target
-	ReadTarget(pathTarget, &target)
-	gardenClientset, err := target.GardenerClient()
-	checkError(err)
-	project, err := getProjectObject()
-	checkError(err)
-	shootName, err := getTargetName("shoot")
-	checkError(err)
-	shoot, err := gardenClientset.CoreV1beta1().Shoots(*project.Spec.Namespace).Get(shootName, metav1.GetOptions{})
-	checkError(err)
-	return shoot, nil
-}
-
 // getTargetType returns error and name of type
 func getTargetType() (TargetKind, error) {
 	var target Target
@@ -282,28 +217,6 @@ func getGithubURL() string {
 	return gardenConfig.GithubURL
 }
 
-func capture() func() (string, error) {
-	r, w, err := os.Pipe()
-	if err != nil {
-		panic(err)
-	}
-	done := make(chan error, 1)
-	save := os.Stdout
-	os.Stdout = w
-	var buf strings.Builder
-	go func() {
-		_, err := io.Copy(&buf, r)
-		r.Close()
-		done <- err
-	}()
-	return func() (string, error) {
-		os.Stdout = save
-		w.Close()
-		err := <-done
-		return buf.String(), err
-	}
-}
-
 func isIPv4(host string) bool {
 	return net.ParseIP(host) != nil && net.ParseIP(host).To4() != nil
 }
@@ -327,10 +240,9 @@ func getPublicIP() string {
 }
 
 // get role either user or operator
-func getRole() string {
-	var target Target
+func getRole(targetReader TargetReader) string {
 	var role string
-	ReadTarget(pathTarget, &target)
+	target := targetReader.ReadTarget(pathTarget)
 	clientset, err := target.K8SClientToKind("garden")
 	checkError(err)
 	ssar := &authorizationv1.SelfSubjectAccessReview{
@@ -355,18 +267,18 @@ func getRole() string {
 getTargetMapInfo retun garden,project,seed,shoot,shootTechnicalID to global targetInfo
 Use `getFromTargetInfo()` instead
 */
-func getTargetMapInfo() {
+func getTargetMapInfo(targetReader TargetReader) {
+	target := targetReader.ReadTarget(pathTarget)
 	if len(targetInfo) > 0 {
 		return
 	}
-	var target Target
-	ReadTarget(pathTarget, &target)
+
 	for _, t := range target.Stack() {
 		targetInfo[string(t.Kind)] = string(t.Name)
 	}
 
-	if isTargeted("shoot") {
-		shoot, err := getShootObject()
+	if IsTargeted(targetReader, "shoot") {
+		shoot, err := GetTargetedShootObject(targetReader)
 		checkError(err)
 		targetInfo["shootTechnicalID"] = shoot.Status.TechnicalID
 
@@ -376,32 +288,34 @@ func getTargetMapInfo() {
 	}
 
 	if targetInfo["project"] == "" {
-		projectObj, err := getProjectObject()
+		projectObj, err := GetTargetedProjectObject(targetReader)
 		checkError(err)
 		targetInfo["project"] = projectObj.Name
 	}
 }
 
 /*
-lookup Target Kind ("kind value") return Target Name "name value" from target file ~/.garden/sessions/plantingSession/target
+GetTargetName lookup Target Kind ("kind value") return Target Name "name value" from target file ~/.garden/sessions/plantingSession/target
 */
-func getTargetName(Kind string) (string, error) {
-	var target Target
-	ReadTarget(pathTarget, &target)
+func GetTargetName(targetReader TargetReader, Kind string) (string, error) {
+	target := targetReader.ReadTarget(pathTarget)
 	for _, t := range target.Stack() {
 		if string(t.Kind) == Kind {
 			return string(t.Name), nil
 		}
 	}
-	return "", errors.New("Kind:" + Kind + "not found from ~/.garden/sessions/plantingSession/target")
+	return "", errors.New("Kind: " + Kind + " not found from ~/.garden/sessions/plantingSession/target")
 }
 
 /*
-check if target Kind is exist in target file ~/.garden/sessions/plantingSession/target
+IsTargeted check if target Kind is exist in target file ~/.garden/sessions/plantingSession/target
 */
-func isTargeted(args ...string) bool {
-	var target Target
-	ReadTarget(pathTarget, &target)
+func IsTargeted(targetReader TargetReader, args ...string) bool {
+	target := targetReader.ReadTarget(pathTarget)
+	//target stack is empty return true
+	if len(args) == 0 && len(target.Stack()) == 0 {
+		return false
+	}
 
 	targetMap := make(map[string]interface{})
 	for _, t := range target.Stack() {
@@ -418,12 +332,123 @@ func isTargeted(args ...string) bool {
 	return true
 }
 
-//getFromTargetInfo validation value from global map targetInfo garden/project/shoot/seed/shootTechnicalID/....
-func getFromTargetInfo(key string) string {
-	getTargetMapInfo()
+//GetFromTargetInfo validation value from global map targetInfo garden/project/shoot/seed/shootTechnicalID/....
+func GetFromTargetInfo(targetReader TargetReader, key string) string {
+	getTargetMapInfo(targetReader)
 	value := targetInfo[key]
 	if value == "" {
 		log.Fatalf("value %s not found in targetInfo\n", key)
 	}
 	return value
+}
+
+// GetShootObject return shoot object and error
+func GetShootObject(targetReader TargetReader, name string) (*v1beta1.Shoot, error) {
+	target := targetReader.ReadTarget(pathTarget)
+	gardenClientset, err := target.GardenerClient()
+	if err != nil {
+		return nil, err
+	}
+	project, err := GetTargetedProjectObject(targetReader)
+	if err != nil {
+		return nil, err
+	}
+	return gardenClientset.CoreV1beta1().Shoots(*project.Spec.Namespace).Get(name, metav1.GetOptions{})
+}
+
+//GetTargetedShootObject target Project/Seed to Shoot retrun targeted shoot object
+func GetTargetedShootObject(targetReader TargetReader) (*v1beta1.Shoot, error) {
+	name, err := GetTargetName(targetReader, "shoot")
+	if err != nil {
+		return nil, err
+	}
+	return GetShootObject(targetReader, name)
+}
+
+//GetTargetedProjectObject target Project/Seed to Shoot returns targeted project object
+func GetTargetedProjectObject(targetReader TargetReader) (*v1beta1.Project, error) {
+	target := targetReader.ReadTarget(pathTarget)
+	Client, err := target.GardenerClient()
+	checkError(err)
+	if IsTargeted(targetReader, "project") {
+		name, err := GetTargetName(targetReader, "project")
+		checkError(err)
+		return GetProjectObject(targetReader, name)
+	} else if IsTargeted(targetReader, "seed", "shoot") {
+		seedName, err := GetTargetName(targetReader, "seed")
+		checkError(err)
+		shootName, err := GetTargetName(targetReader, "shoot")
+		checkError(err)
+		shootList, err := Client.CoreV1beta1().Shoots("").List(metav1.ListOptions{
+			FieldSelector: fields.SelectorFromSet(
+				fields.Set{
+					core.ShootSeedName: seedName,
+					"metadata.name":    shootName,
+				}).String(),
+		})
+		if err != nil {
+			return nil, err
+		}
+		if len(shootList.Items) == 0 {
+			return nil, errors.New("No shoot found with name " + shootName + " that is running on the seed " + seedName)
+		} else if len(shootList.Items) > 1 {
+			return nil, errors.New("There are multiple shoots with the name " + shootName + " that are running on the seed " + seedName)
+		}
+		projectNamespace := shootList.Items[0].Namespace
+
+		projectList, err := Client.CoreV1beta1().Projects().List(metav1.ListOptions{})
+		if err != nil {
+			return nil, err
+		}
+
+		for _, p := range projectList.Items {
+			if *p.Spec.Namespace == projectNamespace {
+				return &p, nil
+			}
+		}
+	}
+
+	return nil, errors.New("can't determine project")
+}
+
+//GetProjectObject with name option retrun project object
+func GetProjectObject(targetReader TargetReader, name string) (*v1beta1.Project, error) {
+	target := targetReader.ReadTarget(pathTarget)
+	gardenClientset, err := target.GardenerClient()
+	if err != nil {
+		return nil, err
+	}
+	return gardenClientset.CoreV1beta1().Projects().Get(name, metav1.GetOptions{})
+}
+
+//GetSeedObject with name option retrun seed object
+func GetSeedObject(targetReader TargetReader, name string) (*v1beta1.Seed, error) {
+	target := targetReader.ReadTarget(pathTarget)
+	gardenClientset, err := target.GardenerClient()
+	if err != nil {
+		return nil, err
+	}
+	return gardenClientset.CoreV1beta1().Seeds().Get(name, metav1.GetOptions{})
+}
+
+//GetTargetedSeedObject target Project/Seed to Shoot retrun targeted seed object
+func GetTargetedSeedObject(targetReader TargetReader) (*v1beta1.Seed, error) {
+	var name string
+	var err error
+	if IsTargeted(targetReader, "seed") {
+		var err error
+		name, err = GetTargetName(targetReader, "seed")
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		var shoot *v1beta1.Shoot
+		shoot, err = GetTargetedShootObject(targetReader)
+		if err != nil {
+			return nil, err
+		}
+		name = *shoot.Spec.SeedName
+	}
+
+	return GetSeedObject(targetReader, name)
 }

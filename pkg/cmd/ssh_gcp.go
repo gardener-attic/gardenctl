@@ -40,14 +40,14 @@ type GCPInstanceAttribute struct {
 }
 
 // sshToGCPNode provides cmds to ssh to gcp via a public ip and clean it up afterwards
-func sshToGCPNode(nodeName, path, user, pathSSKeypair string, sshPublicKey []byte, myPublicIP string) {
+func sshToGCPNode(targetReader TargetReader, nodeName, path, user, pathSSKeypair string, sshPublicKey []byte, myPublicIP string) {
 	g := &GCPInstanceAttribute{}
 	g.SSHPublicKey = sshPublicKey
 	g.MyPublicIP = myPublicIP
 	fmt.Println("")
 
 	fmt.Println("(1/4) Fetching data from target shoot cluster")
-	g.fetchGCPAttributes(nodeName, path)
+	g.fetchGCPAttributes(targetReader, nodeName, path)
 
 	fmt.Println("Data fetched from target shoot cluster.")
 	fmt.Println("")
@@ -89,8 +89,8 @@ func sshToGCPNode(nodeName, path, user, pathSSKeypair string, sshPublicKey []byt
 }
 
 // fetchAwsAttributes gets all the needed attributes for creating bastion host and its security group with given <nodeName> by using gcp cli for non-operator user
-func (g *GCPInstanceAttribute) fetchGCPAttributes(nodeName, path string) {
-	g.ShootName = getFromTargetInfo("shootTechnicalID")
+func (g *GCPInstanceAttribute) fetchGCPAttributes(targetReader TargetReader, nodeName, path string) {
+	g.ShootName = GetFromTargetInfo(targetReader, "shootTechnicalID")
 	g.BastionHostName = g.ShootName + "-bastions"
 	g.FirewallRuleName = g.ShootName + "-allow-ssh-access"
 	g.Subnetwork = g.ShootName + "-nodes"

@@ -60,7 +60,7 @@ func downloadTerraformFiles(option string, targetReader TargetReader) string {
 	namespace := ""
 	target := targetReader.ReadTarget(pathTarget)
 	// return path allow non operator download key file
-	if getRole() == "user" {
+	if getRole(targetReader) == "user" {
 		if (len(target.Stack()) < 3) || (len(target.Stack()) == 3 && target.Stack()[2].Kind == "namespace") {
 			fmt.Println("No Shoot targeted")
 			os.Exit(2)

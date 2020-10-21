@@ -248,7 +248,7 @@ func NewTargetCmd(targetReader TargetReader, targetWriter TargetWriter, configRe
 				if len(shoots) == 0 {
 					fmt.Println("No match for " + args[0])
 				} else if len(shoots) == 1 {
-					targetShoot(targetWriter, shoots[0], configReader)
+					targetShoot(targetReader, targetWriter, shoots[0], configReader)
 				} else if len(shoots) > 1 {
 					k8sClientToGarden, err := target.K8SClientToKind(TargetKindGarden)
 					checkError(err)
@@ -550,7 +550,7 @@ func resolveNameShoot(target TargetInterface, name string) []gardencorev1beta1.S
 }
 
 // targetShoot targets shoot cluster with project as default value in stack
-func targetShoot(targetWriter TargetWriter, shoot gardencorev1beta1.Shoot, reader ConfigReader) {
+func targetShoot(targetReader TargetReader, targetWriter TargetWriter, shoot gardencorev1beta1.Shoot, reader ConfigReader) {
 	var target Target
 	ReadTarget(pathTarget, &target)
 
@@ -599,7 +599,7 @@ func targetShoot(targetWriter TargetWriter, shoot gardencorev1beta1.Shoot, reade
 		target.Target = append(target.Target, TargetMeta{"shoot", shoot.Name})
 	} else if len(target.Target) == 2 {
 		drop(targetWriter)
-		if target.Target[1].Kind == "seed" && getRole() != "user" {
+		if target.Target[1].Kind == "seed" && getRole(targetReader) != "user" {
 			target.Target[1].Kind = "seed"
 			target.Target[1].Name = *shoot.Spec.SeedName
 		} else if target.Target[1].Kind == "project" {
@@ -613,7 +613,7 @@ func targetShoot(targetWriter TargetWriter, shoot gardencorev1beta1.Shoot, reade
 	} else if len(target.Target) == 3 {
 		drop(targetWriter)
 		drop(targetWriter)
-		if len(target.Target) > 2 && target.Target[1].Kind == "seed" && getRole() != "user" {
+		if len(target.Target) > 2 && target.Target[1].Kind == "seed" && getRole(targetReader) != "user" {
 			target.Target = target.Target[:len(target.Target)-2]
 			target.Target = append(target.Target, TargetMeta{"seed", *shoot.Spec.SeedName})
 			target.Target = append(target.Target, TargetMeta{"shoot", shoot.Name})
@@ -629,7 +629,7 @@ func targetShoot(targetWriter TargetWriter, shoot gardencorev1beta1.Shoot, reade
 		drop(targetWriter)
 		drop(targetWriter)
 		drop(targetWriter)
-		if len(target.Target) > 3 && target.Target[1].Kind == "seed" && getRole() != "user" {
+		if len(target.Target) > 3 && target.Target[1].Kind == "seed" && getRole(targetReader) != "user" {
 			target.Target = target.Target[:len(target.Target)-3]
 			target.Target = append(target.Target, TargetMeta{"seed", *shoot.Spec.SeedName})
 			target.Target = append(target.Target, TargetMeta{"shoot", shoot.Name})
@@ -1096,7 +1096,7 @@ func shootWrapper(targetReader TargetReader, targetWriter TargetWriter, configRe
 	if len(shoots) == 0 {
 		return fmt.Errorf("no match for %q", args[1])
 	} else if len(shoots) == 1 {
-		targetShoot(targetWriter, shoots[0], configReader)
+		targetShoot(targetReader, targetWriter, shoots[0], configReader)
 	} else if len(shoots) > 1 {
 		k8sClientToGarden, err := target.K8SClientToKind(TargetKindGarden)
 		checkError(err)
