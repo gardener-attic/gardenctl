@@ -17,7 +17,10 @@ package cmd_test
 import (
 	"os"
 
+	"github.com/gardener/gardenctl/pkg/cmd"
 	. "github.com/gardener/gardenctl/pkg/cmd"
+	mockcmd "github.com/gardener/gardenctl/pkg/mock/cmd"
+	"github.com/golang/mock/gomock"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -81,5 +84,55 @@ gardenClusters:
 	var _ = AfterSuite(func() {
 		os.Remove(pathTarget)
 		os.Remove(pathGardenConfig)
+	})
+
+	Describe("Miscellaneous", func() {
+		var (
+			ctrl         *gomock.Controller
+			targetReader *mockcmd.MockTargetReader
+			target       = &cmd.Target{
+				Target: []cmd.TargetMeta{
+					{
+						Kind: cmd.TargetKindGarden,
+						Name: "test-garden",
+					},
+				},
+			}
+		)
+
+		BeforeEach(func() {
+			ctrl = gomock.NewController(GinkgoT())
+			targetReader = mockcmd.NewMockTargetReader(ctrl)
+		})
+
+		AfterEach(func() {
+			ctrl.Finish()
+		})
+
+		Context("IsTargeted Testing", func() {
+			It("target seed should return False", func() {
+				targetReader.EXPECT().ReadTarget(gomock.Any()).Return(target)
+				Expect(IsTargetedTest(targetReader, "seed")).To(BeFalse())
+			})
+
+			It("target garden should return true", func() {
+				targetReader.EXPECT().ReadTarget(gomock.Any()).Return(target)
+				Expect(IsTargetedTest(targetReader, "garden")).To(BeTrue())
+			})
+
+			It("target empty should return true", func() {
+				targetReader.EXPECT().ReadTarget(gomock.Any()).Return(target)
+				Expect(IsTargetedTest(targetReader)).To(BeTrue())
+			})
+		})
+
+		Context("GetTargetName garden", func() {
+			It("should return err==nil", func() {
+				targetReader.EXPECT().ReadTarget(gomock.Any()).Return(target)
+				_, err := GetTargetNameTest(targetReader, "garden")
+				Expect(err).To(BeNil())
+			})
+		})
+
 	})
 })

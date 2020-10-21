@@ -386,8 +386,21 @@ func getTargetMapInfo() {
 lookup Target Kind ("kind value") return Target Name "name value" from target file ~/.garden/sessions/plantingSession/target
 */
 func getTargetName(Kind string) (string, error) {
+	//if you modify getTargetName Please also modify GetTargetNameTest,
+	//as GetTargetName used for miscellaneous_test.go for teting purposes.
 	var target Target
 	ReadTarget(pathTarget, &target)
+	for _, t := range target.Stack() {
+		if string(t.Kind) == Kind {
+			return string(t.Name), nil
+		}
+	}
+	return "", errors.New("Kind:" + Kind + "not found from ~/.garden/sessions/plantingSession/target")
+}
+
+//GetTargetNameTest for getTargetName testing
+func GetTargetNameTest(targetReader TargetReader, Kind string) (string, error) {
+	target := targetReader.ReadTarget(pathTarget)
 	for _, t := range target.Stack() {
 		if string(t.Kind) == Kind {
 			return string(t.Name), nil
@@ -400,8 +413,15 @@ func getTargetName(Kind string) (string, error) {
 check if target Kind is exist in target file ~/.garden/sessions/plantingSession/target
 */
 func isTargeted(args ...string) bool {
+	//if you modify isTargeted Please also modify IsTargetedTest,
+	//as IsTargeted used for miscellaneous_test.go for teting purposes.
 	var target Target
 	ReadTarget(pathTarget, &target)
+
+	//target stack is empty return true
+	if len(args) == 0 && len(target.Stack()) == 0 {
+		return true
+	}
 
 	targetMap := make(map[string]interface{})
 	for _, t := range target.Stack() {
@@ -415,6 +435,29 @@ func isTargeted(args ...string) bool {
 		}
 	}
 
+	return true
+}
+
+//IsTargetedTest for isTargeted testing
+func IsTargetedTest(targetReader TargetReader, args ...string) bool {
+	target := targetReader.ReadTarget(pathTarget)
+
+	//target stack is empty return true
+	if len(args) == 0 && len(target.Stack()) == 0 {
+		return true
+	}
+
+	targetMap := make(map[string]interface{})
+	for _, t := range target.Stack() {
+		targetMap[string(t.Kind)] = string(t.Name)
+	}
+
+	for _, t := range args {
+		if _, ok := targetMap[t]; ok {
+		} else {
+			return false
+		}
+	}
 	return true
 }
 
