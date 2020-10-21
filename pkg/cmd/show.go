@@ -33,11 +33,11 @@ import (
 // NewShowCmd returns a new show command.
 func NewShowCmd(targetReader TargetReader) *cobra.Command {
 	return &cobra.Command{
-		Use:   "show (operator|gardener-dashboard|api|scheduler|controller-manager|etcd-operator|etcd-main|etcd-events|addon-manager|vpn-seed|vpn-shoot|machine-controller-manager|kubernetes-dashboard|prometheus|grafana|alertmanager|tf (infra|dns|ingress)|cluster-autoscaler)",
+		Use:   "show (operator|gardener-dashboard|api|scheduler|controller-manager|etcd-operator|etcd-main|etcd-events|addon-manager|vpn-seed|vpn-shoot|machine-controller-manager|kubernetes-dashboard|prometheus|grafana|tf (infra|dns|ingress)|cluster-autoscaler)",
 		Short: `Show details about endpoint/service and open in default browser if applicable`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if len(args) < 1 || len(args) > 2 {
-				return errors.New("Command must be in the format: show (operator|gardener-dashboard|api|scheduler|controller-manager|etcd-operator|etcd-main|etcd-events|addon-manager|vpn-seed|vpn-shoot|machine-controller-manager|kubernetes-dashboard|prometheus|grafana|alertmanager|tf (infra|dns|ingress)|cluster-autoscaler)")
+				return errors.New("Command must be in the format: show (operator|gardener-dashboard|api|scheduler|controller-manager|etcd-operator|etcd-main|etcd-events|addon-manager|vpn-seed|vpn-shoot|machine-controller-manager|kubernetes-dashboard|prometheus|grafana|tf (infra|dns|ingress)|cluster-autoscaler)")
 			}
 			t := targetReader.ReadTarget(pathTarget)
 			if (len(t.Stack()) < 3 || (len(t.Stack()) == 3 && t.Stack()[2].Kind == "namespace")) && (args[0] != "operator") && (args[0] != "tf") && (args[0] != "kubernetes-dashboard") && (args[0] != "etcd-operator") {
@@ -84,8 +84,6 @@ func NewShowCmd(targetReader TargetReader) *cobra.Command {
 				showPrometheus(targetReader)
 			case "grafana":
 				showGrafana(targetReader)
-			case "alertmanager":
-				showAltermanager(targetReader)
 			case "tf":
 				if len(args) == 1 {
 					showTf()
@@ -99,16 +97,16 @@ func NewShowCmd(targetReader TargetReader) *cobra.Command {
 				case "ingress":
 					showIngress()
 				default:
-					fmt.Println("Command must be in the format: show (operator|gardener-dashboard|api|scheduler|controller-manager|etcd-operator|etcd-main|etcd-events|addon-manager|vpn-seed|vpn-shoot|machine-controller-manager|kubernetes-dashboard|prometheus|grafana|alertmanager|tf (infra|dns|ingress)|cluster-autoscaler)")
+					fmt.Println("Command must be in the format: show (operator|gardener-dashboard|api|scheduler|controller-manager|etcd-operator|etcd-main|etcd-events|addon-manager|vpn-seed|vpn-shoot|machine-controller-manager|kubernetes-dashboard|prometheus|grafana|tf (infra|dns|ingress)|cluster-autoscaler)")
 				}
 			case "cluster-autoscaler":
 				showClusterAutoscaler(targetReader)
 			default:
-				fmt.Println("Command must be in the format: show (operator|gardener-dashboard|api|scheduler|controller-manager|etcd-operator|etcd-main|etcd-events|addon-manager|vpn-seed|vpn-shoot|machine-controller-manager|kubernetes-dashboard|prometheus|grafana|alertmanager|tf (infra|dns|ingress)|cluster-autoscaler)")
+				fmt.Println("Command must be in the format: show (operator|gardener-dashboard|api|scheduler|controller-manager|etcd-operator|etcd-main|etcd-events|addon-manager|vpn-seed|vpn-shoot|machine-controller-manager|kubernetes-dashboard|prometheus|grafana|tf (infra|dns|ingress)|cluster-autoscaler)")
 			}
 			return nil
 		},
-		ValidArgs: []string{"operator", "gardener-dashboard", "api", "scheduler", "controller-manager", "etcd-operator", "etcd-main", "etcd-events", "addon-manager", "vpn-seed", "vpn-shoot", "machine-controller-manager", "kubernetes-dashboard", "prometheus", "grafana", "alertmanager", "tf", "cluster-autoscaler"},
+		ValidArgs: []string{"operator", "gardener-dashboard", "api", "scheduler", "controller-manager", "etcd-operator", "etcd-main", "etcd-events", "addon-manager", "vpn-seed", "vpn-shoot", "machine-controller-manager", "kubernetes-dashboard", "prometheus", "grafana", "tf", "cluster-autoscaler"},
 	}
 }
 
@@ -253,28 +251,6 @@ func showPrometheus(targetReader TargetReader) {
 	url, err := ExecCmdReturnOutput("kubectl", "--kubeconfig="+KUBECONFIG, "get", "ingress", "prometheus", "-n", getFromTargetInfo("shootTechnicalID"), "--no-headers", "-o", "custom-columns=:spec.rules[].host")
 	if err != nil {
 		log.Fatalf("Cmd was unsuccessful")
-	}
-	url = "https://" + username + ":" + password + "@" + url
-	fmt.Println("URL: " + url)
-	err = browser.OpenURL(url)
-	checkError(err)
-}
-
-// showAltermanager shows the prometheus pods in the targeted seed cluster
-func showAltermanager(targetReader TargetReader) {
-	username, password = getMonitoringCredentials()
-	showPod("alertmanager", "seed", targetReader)
-	output, err := ExecCmdReturnOutput("kubectl", "--kubeconfig="+KUBECONFIG, "get", "ingress", "alertmanager", "-n", getFromTargetInfo("shootTechnicalID"))
-	if err != nil {
-		fmt.Println("Cmd was unsuccessful")
-		os.Exit(2)
-	}
-	list := strings.Split(output, " ")
-	url := "-"
-	for _, val := range list {
-		if strings.HasPrefix(val, "a.") {
-			url = val
-		}
 	}
 	url = "https://" + username + ":" + password + "@" + url
 	fmt.Println("URL: " + url)
