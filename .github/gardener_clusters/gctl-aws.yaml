@@ -85,7 +85,7 @@ spec:
           - eu-west-1c
         systemComponents:
           allow: true
-  purpose: evaluation
+  purpose: testing
   region: eu-west-1
   secretBindingName: aws-idefixops
   seedName: aws

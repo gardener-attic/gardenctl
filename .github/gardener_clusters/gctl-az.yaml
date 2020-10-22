@@ -79,7 +79,7 @@ spec:
           - '2'
         systemComponents:
           allow: true
-  purpose: evaluation
+  purpose: testing
   region: westeurope
   secretBindingName: azure-playgroud
   seedName: az

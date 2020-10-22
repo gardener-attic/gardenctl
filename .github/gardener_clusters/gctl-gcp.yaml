@@ -77,7 +77,7 @@ spec:
           - europe-west1-d
         systemComponents:
           allow: true
-  purpose: evaluation
+  purpose: testing
   region: europe-west1
   secretBindingName: gcp-idefixops
   seedName: gcp

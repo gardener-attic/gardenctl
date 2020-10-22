@@ -77,7 +77,7 @@ spec:
           - eu-nl-1a
         systemComponents:
           allow: true
-  purpose: development
+  purpose: testing
   region: eu-nl-1
   secretBindingName: gardenctl-tests-cluster
   seedName: ccee-m3
