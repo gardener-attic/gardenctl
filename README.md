@@ -186,7 +186,7 @@ Targets represent a hierarchical structure of resources. On top, there is/are th
 `gardenctl logs tf infra shoot-name`
 - Show logs from shoot nodes  
 `gardenctl target -g garden-name -t shoot-name`  
-`gardenctl logs api | scheduler | controller-manager | etcd-main -c etcd |etcd-main -c backup-restore | vpn-seed | vpn-shoot | machine-controller-manager | prometheus |grafana | alertmanager | cluster-autoscaler`
+`gardenctl logs api | scheduler | controller-manager | etcd-main -c etcd |etcd-main -c backup-restore | vpn-seed | vpn-shoot | machine-controller-manager | prometheus |grafana | cluster-autoscaler`
 - Show logs from garden nodes   
 `gardenctl target -g garden-name`  
 `gardenctl logs gardener-apiserver | gardener-controller-manager`  
