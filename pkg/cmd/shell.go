@@ -226,9 +226,12 @@ func buildRootPod(name, namespace, image, hostname string) *corev1.Pod {
 			},
 			Tolerations: []corev1.Toleration{
 				{
-					Key:      "node-role.kubernetes.io/master",
 					Operator: corev1.TolerationOpExists,
 					Effect:   corev1.TaintEffectNoSchedule,
+				},
+				{
+					Operator: corev1.TolerationOpExists,
+					Effect:   corev1.TaintEffectNoExecute,
 				},
 			},
 			Volumes: []corev1.Volume{
