@@ -228,6 +228,19 @@ func getShootObject() (*v1beta1.Shoot, error) {
 	return shoot, nil
 }
 
+//getShootObject return shoot object and error
+func getSeedObject() (*v1beta1.Seed, error) {
+	var target Target
+	ReadTarget(pathTarget, &target)
+	gardenClientset, err := target.GardenerClient()
+	checkError(err)
+	shoot, err := getShootObject()
+	checkError(err)
+	seed, err := gardenClientset.CoreV1beta1().Seeds().Get(*shoot.Spec.SeedName, metav1.GetOptions{})
+	checkError(err)
+	return seed, nil
+}
+
 // getTargetType returns error and name of type
 func getTargetType() (TargetKind, error) {
 	var target Target
