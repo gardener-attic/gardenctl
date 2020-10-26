@@ -69,11 +69,9 @@ func NewLsCmd(targetReader TargetReader, configReader ConfigReader, ioStreams IO
 				return printIssues(target, ioStreams.Out, outputFormat)
 			case "namespaces":
 				return printNamespaces(ioStreams.Out)
-			default:
-				return errors.New("command must be in the format: " + cmd.Use)
 			}
 
-			return nil
+			return errors.New("command must be in the format: " + cmd.Use)
 		},
 		ValidArgs: []string{"issues", "projects", "gardens", "seeds", "shoots", "namespaces"},
 	}
