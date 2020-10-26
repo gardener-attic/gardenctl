@@ -18,13 +18,11 @@ import (
 	"bytes"
 	"fmt"
 	. "github.com/gardener/gardenctl/pkg/cmd"
+	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/gomega"
 	yaml "gopkg.in/yaml.v2"
 	"os"
 	"strings"
-	"testing"
-
-	. "github.com/onsi/ginkgo"
-	. "github.com/onsi/gomega"
 )
 
 var _ = Describe("Utils", func() {
@@ -138,75 +136,38 @@ var _ = Describe("Utils", func() {
 			Expect(target.Target[2].Name).To(Equal("shoot-test"))
 		})
 	})
-})
 
-func TestPrintoutObject(t *testing.T) {
-	type netstedTestStruct struct {
-		Field2 string
-	}
-	type testStruct struct {
-		Field0 string
-		Field1 netstedTestStruct
-	}
-
-	sample1 := testStruct{
-		Field0: "value0",
-		Field1: netstedTestStruct{
-			Field2: "value2",
-		},
-	}
-
-	type args struct {
-		objectToPrint interface{}
-		outputFormat  string
-	}
-
-	tests := []struct {
-		name       string
-		args       args
-		wantWriter string
-		wantErr    bool
-	}{
-		{
-			name: "yaml output format",
-			args: args{
-				objectToPrint: sample1,
-				outputFormat:  "yaml",
+	Context("Check output format", func() {
+		type netstedTestStruct struct {
+			Field2 string
+		}
+		type testStruct struct {
+			Field0 string
+			Field1 netstedTestStruct
+		}
+		sample1 := testStruct{
+			Field0: "value0",
+			Field1: netstedTestStruct{
+				Field2: "value2",
 			},
-			wantWriter: "field0: value0\nfield1:\n  field2: value2\n",
-			wantErr:    false,
-		},
-		{
-			name: "json output format",
-			args: args{
-				objectToPrint: sample1,
-				outputFormat:  "json",
-			},
-			wantWriter: "{\n  \"Field0\": \"value0\",\n  \"Field1\": {\n    \"Field2\": \"value2\"\n  }\n}",
-			wantErr:    false,
-		},
-		{
-			name: "unknown output format",
-			args: args{
-				objectToPrint: sample1,
-				outputFormat:  "veryNewFormat",
-			},
-			wantWriter: "",
-			wantErr:    true,
-		},
-	}
+		}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
+		It("should return json", func() {
 			writer := &bytes.Buffer{}
-			err := PrintoutObject(tt.args.objectToPrint, writer, tt.args.outputFormat)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("PrintoutObject() error = %v, wantErr %v", err, tt.wantErr)
-				return
-			}
-			if gotWriter := writer.String(); gotWriter != tt.wantWriter {
-				t.Errorf("PrintoutObject() gotWriter = %q, want %q", gotWriter, tt.wantWriter)
-			}
+			err := PrintoutObject(sample1, writer, "json")
+			Expect(err).To(BeNil())
+			Expect(writer.String()).To(Equal("{\n  \"Field0\": \"value0\",\n  \"Field1\": {\n    \"Field2\": \"value2\"\n  }\n}"))
 		})
-	}
-}
+		It("should return yaml", func() {
+			writer := &bytes.Buffer{}
+			err := PrintoutObject(sample1, writer, "yaml")
+			Expect(err).To(BeNil())
+			Expect(writer.String()).To(Equal("field0: value0\nfield1:\n  field2: value2\n"))
+		})
+		It("should return error", func() {
+			writer := &bytes.Buffer{}
+			err := PrintoutObject(sample1, writer, "unkFormat")
+			Expect(err).NotTo(BeNil())
+		})
+	})
+})
