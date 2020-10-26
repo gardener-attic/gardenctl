@@ -15,7 +15,10 @@
 package cmd
 
 import (
+	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"log"
 	"os"
@@ -271,4 +274,24 @@ func CheckToolInstalled(cliName string) bool {
 		return false
 	}
 	return true
+}
+
+//PrintoutObject print object in yaml or json format. Pass os.Stdout if desired
+func PrintoutObject(objectToPrint interface{}, writer io.Writer, outputFormat string) error {
+	if outputFormat == "yaml" {
+		yaml, err := yaml.Marshal(objectToPrint)
+		if err != nil {
+			return err
+		}
+		fmt.Fprint(writer, string(yaml))
+	} else if outputFormat == "json" {
+		json, err := json.MarshalIndent(objectToPrint, "", "  ")
+		if err != nil {
+			return err
+		}
+		fmt.Fprint(writer, string(json))
+	} else {
+		return errors.New("output format not supported: '" + outputFormat + "'")
+	}
+	return nil
 }
