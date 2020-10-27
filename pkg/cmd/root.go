@@ -154,6 +154,7 @@ func init() {
 	RootCmd.AddCommand(NewAliyunCmd(targetReader), NewAwsCmd(targetReader), NewAzCmd(targetReader), NewGcloudCmd(targetReader), NewOpenstackCmd(targetReader))
 	RootCmd.AddCommand(NewInfoCmd(targetReader, ioStreams))
 	RootCmd.AddCommand(NewVersionCmd(), NewUpdateCheckCmd())
+	RootCmd.AddCommand(NewDiagCmd(targetReader, ioStreams))
 
 	RootCmd.SuggestionsMinimumDistance = suggestionsMinimumDistance
 	RootCmd.BashCompletionFunction = bashCompletionFunc
