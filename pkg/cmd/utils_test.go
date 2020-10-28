@@ -15,15 +15,14 @@
 package cmd_test
 
 import (
+	"bytes"
 	"fmt"
-	"os"
-	"strings"
-
 	. "github.com/gardener/gardenctl/pkg/cmd"
-	yaml "gopkg.in/yaml.v2"
-
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	yaml "gopkg.in/yaml.v2"
+	"os"
+	"strings"
 )
 
 var _ = Describe("Utils", func() {
@@ -135,6 +134,40 @@ var _ = Describe("Utils", func() {
 	Context("After creating target object", func() {
 		It("name of shoot cluster should be garden-test", func() {
 			Expect(target.Target[2].Name).To(Equal("shoot-test"))
+		})
+	})
+
+	Context("Check output format", func() {
+		type netstedTestStruct struct {
+			Field2 string
+		}
+		type testStruct struct {
+			Field0 string
+			Field1 netstedTestStruct
+		}
+		sample1 := testStruct{
+			Field0: "value0",
+			Field1: netstedTestStruct{
+				Field2: "value2",
+			},
+		}
+
+		It("should return json", func() {
+			writer := &bytes.Buffer{}
+			err := PrintoutObject(sample1, writer, "json")
+			Expect(err).To(BeNil())
+			Expect(writer.String()).To(Equal("{\n  \"Field0\": \"value0\",\n  \"Field1\": {\n    \"Field2\": \"value2\"\n  }\n}"))
+		})
+		It("should return yaml", func() {
+			writer := &bytes.Buffer{}
+			err := PrintoutObject(sample1, writer, "yaml")
+			Expect(err).To(BeNil())
+			Expect(writer.String()).To(Equal("field0: value0\nfield1:\n  field2: value2\n"))
+		})
+		It("should return error", func() {
+			writer := &bytes.Buffer{}
+			err := PrintoutObject(sample1, writer, "unkFormat")
+			Expect(err).NotTo(BeNil())
 		})
 	})
 })

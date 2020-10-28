@@ -810,8 +810,7 @@ func getGardenKubeConfigViaGardenName(name string) (pathToGardenKubeConfig strin
 func gardenWrapper(targetReader TargetReader, targetWriter TargetWriter, configReader ConfigReader, ioStreams IOStreams, args []string) error {
 	if len(args) == 1 {
 		// Print Garden clusters
-		PrintGardenClusters(configReader, "yaml", ioStreams)
-		return nil
+		return PrintGardenClusters(configReader, ioStreams.Out, "yaml")
 	} else if len(args) > 2 {
 		return errors.New("command must be in the format: target garden NAME")
 	}

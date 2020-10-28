@@ -103,7 +103,8 @@ var _ = Describe("Ls command", func() {
 			configReader.EXPECT().ReadConfig(gomock.Any()).Return(gardenConfig)
 
 			ioStreams, _, out, _ := cmd.NewTestIOStreams()
-			cmd.PrintGardenClusters(configReader, "yaml", ioStreams)
+			err := cmd.PrintGardenClusters(configReader, ioStreams.Out, "yaml")
+			Expect(err).To(BeNil())
 			Expect(out.String()).To(Equal("gardenClusters:\n- name: prod-1\n- name: prod-2\n"))
 		})
 	})

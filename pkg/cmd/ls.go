@@ -15,15 +15,14 @@
 package cmd
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 
 	gardencorev1beta1 "github.com/gardener/gardener/pkg/apis/core/v1beta1"
 	gardencoreclientset "github.com/gardener/gardener/pkg/client/core/clientset/versioned"
 	"github.com/spf13/cobra"
-	"gopkg.in/yaml.v2"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -44,9 +43,9 @@ func NewLsCmd(targetReader TargetReader, configReader ConfigReader, ioStreams IO
 			}
 			switch args[0] {
 			case "projects":
-				return printProjectsWithShoots(target, ioStreams)
+				return printProjectsWithShoots(target, ioStreams.Out, outputFormat)
 			case "gardens":
-				PrintGardenClusters(configReader, outputFormat, ioStreams)
+				return PrintGardenClusters(configReader, ioStreams.Out, outputFormat)
 			case "seeds":
 				clientset, err := target.GardenerClient()
 				checkError(err)
@@ -57,32 +56,22 @@ func NewLsCmd(targetReader TargetReader, configReader ConfigReader, ioStreams IO
 					sm.Seed = seed.Name
 					seeds.Seeds = append(seeds.Seeds, sm)
 				}
-				if outputFormat == "yaml" {
-					y, err := yaml.Marshal(seeds)
-					checkError(err)
-					os.Stdout.Write(y)
-				} else if outputFormat == "json" {
-					j, err := json.MarshalIndent(seeds, "", "  ")
-					checkError(err)
-					fmt.Fprint(ioStreams.Out, string(j))
-				}
+				return PrintoutObject(seeds, ioStreams.Out, outputFormat)
 			case "shoots":
 				if len(target.Stack()) == 1 {
-					return printProjectsWithShoots(target, ioStreams)
+					return printProjectsWithShoots(target, ioStreams.Out, outputFormat)
 				} else if len(target.Stack()) == 2 && target.Stack()[1].Kind == "seed" {
-					getProjectsWithShootsForSeed(ioStreams)
+					return printProjectsWithShootsForSeed(ioStreams.Out, outputFormat)
 				} else if len(target.Stack()) == 2 && target.Stack()[1].Kind == "project" {
-					getSeedsWithShootsForProject(ioStreams)
+					return printSeedsWithShootsForProject(ioStreams.Out, outputFormat)
 				}
 			case "issues":
-				getIssues(target, ioStreams)
+				return printIssues(target, ioStreams.Out, outputFormat)
 			case "namespaces":
-				getNamespaces(ioStreams)
-			default:
-				return errors.New("command must be in the format: ls [gardens|projects|seeds|shoots|issues|namespaces]")
+				return printNamespaces(ioStreams.Out)
 			}
 
-			return nil
+			return errors.New("command must be in the format: " + cmd.Use)
 		},
 		ValidArgs: []string{"issues", "projects", "gardens", "seeds", "shoots", "namespaces"},
 	}
@@ -91,7 +80,7 @@ func NewLsCmd(targetReader TargetReader, configReader ConfigReader, ioStreams IO
 }
 
 // printProjectsWithShoots lists list of projects with shoots
-func printProjectsWithShoots(target TargetInterface, ioStreams IOStreams) error {
+func printProjectsWithShoots(target TargetInterface, writer io.Writer, outFormat string) error {
 	gardenClientset, err := target.GardenerClient()
 	if err != nil {
 		return err
@@ -121,25 +110,11 @@ func printProjectsWithShoots(target TargetInterface, ioStreams IOStreams) error 
 		projects.Projects = append(projects.Projects, pm)
 	}
 
-	if outputFormat == "yaml" {
-		y, err := yaml.Marshal(projects)
-		if err != nil {
-			return err
-		}
-		os.Stdout.Write(y)
-	} else if outputFormat == "json" {
-		j, err := json.MarshalIndent(projects, "", "  ")
-		if err != nil {
-			return err
-		}
-		fmt.Fprint(ioStreams.Out, string(j))
-	}
-
-	return nil
+	return PrintoutObject(projects, writer, outFormat)
 }
 
 // PrintGardenClusters prints all Garden cluster in the Garden config
-func PrintGardenClusters(reader ConfigReader, outFormat string, ioStreams IOStreams) {
+func PrintGardenClusters(reader ConfigReader, writer io.Writer, outFormat string) error {
 	config := reader.ReadConfig(pathGardenConfig)
 
 	var gardens GardenClusters
@@ -148,15 +123,7 @@ func PrintGardenClusters(reader ConfigReader, outFormat string, ioStreams IOStre
 		gm.Name = garden.Name
 		gardens.GardenClusters = append(gardens.GardenClusters, gm)
 	}
-	if outFormat == "yaml" {
-		y, err := yaml.Marshal(gardens)
-		checkError(err)
-		fmt.Fprint(ioStreams.Out, string(y))
-	} else if outFormat == "json" {
-		j, err := json.MarshalIndent(gardens, "", "  ")
-		checkError(err)
-		fmt.Fprint(ioStreams.Out, string(j))
-	}
+	return PrintoutObject(gardens, writer, outFormat)
 }
 
 // getSeeds returns list of seeds
@@ -166,8 +133,8 @@ func getSeeds(clientset gardencoreclientset.Interface) *gardencorev1beta1.SeedLi
 	return seedList
 }
 
-// getProjectsWithShootsForSeed
-func getProjectsWithShootsForSeed(ioStreams IOStreams) {
+// printProjectsWithShootsForSeed
+func printProjectsWithShootsForSeed(writer io.Writer, outFormat string) error {
 	var target Target
 	ReadTarget(pathTarget, &target)
 	var projects Projects
@@ -197,19 +164,11 @@ func getProjectsWithShootsForSeed(ioStreams IOStreams) {
 		fmt.Printf("No shoots for %s\n", target.Target[1].Name)
 		os.Exit(2)
 	}
-	if outputFormat == "yaml" {
-		y, err := yaml.Marshal(projects)
-		checkError(err)
-		os.Stdout.Write(y)
-	} else if outputFormat == "json" {
-		j, err := json.MarshalIndent(projects, "", "  ")
-		checkError(err)
-		fmt.Fprint(ioStreams.Out, string(j))
-	}
+	return PrintoutObject(projects, writer, outFormat)
 }
 
-// getIssues lists broken shoot clusters
-func getIssues(target TargetInterface, ioStreams IOStreams) {
+// printIssues lists broken shoot clusters
+func printIssues(target TargetInterface, writer io.Writer, outFormat string) error {
 	gardenClientset, err := target.GardenerClient()
 	checkError(err)
 	shootList, err := gardenClientset.CoreV1beta1().Shoots("").List(metav1.ListOptions{})
@@ -280,19 +239,11 @@ func getIssues(target TargetInterface, ioStreams IOStreams) {
 			issues.Issues = append(issues.Issues, im)
 		}
 	}
-	if outputFormat == "yaml" {
-		y, err := yaml.Marshal(issues)
-		checkError(err)
-		os.Stdout.Write(y)
-	} else if outputFormat == "json" {
-		j, err := json.MarshalIndent(issues, "", "  ")
-		checkError(err)
-		fmt.Fprint(ioStreams.Out, string(j))
-	}
+	return PrintoutObject(issues, writer, outFormat)
 }
 
-// getSeedsWithShootsForProject
-func getSeedsWithShootsForProject(ioStreams IOStreams) {
+// printSeedsWithShootsForProject
+func printSeedsWithShootsForProject(writer io.Writer, outFormat string) error {
 	var target Target
 	ReadTarget(pathTarget, &target)
 
@@ -334,25 +285,18 @@ func getSeedsWithShootsForProject(ioStreams IOStreams) {
 		fmt.Printf("Project %s is empty\n", target.Target[1].Name)
 		os.Exit(2)
 	}
-	if outputFormat == "yaml" {
-		y, err := yaml.Marshal(seedsFiltered)
-		checkError(err)
-		os.Stdout.Write(y)
-	} else if outputFormat == "json" {
-		j, err := json.MarshalIndent(seedsFiltered, "", "  ")
-		checkError(err)
-		fmt.Fprint(ioStreams.Out, string(j))
-	}
+	return PrintoutObject(seedsFiltered, writer, outFormat)
 }
 
-//getNamespaces get all namespaces based on current kubeconfig
-func getNamespaces(ioStreams IOStreams) {
+//printNamespaces get all namespaces based on current kubeconfig
+func printNamespaces(writer io.Writer) error {
 	currentConfig := getKubeConfigOfCurrentTarget()
 	out, err := ExecCmdReturnOutput("kubectl", "--kubeconfig="+currentConfig, "get", "ns")
 	if err != nil {
-		fmt.Println(err)
+		return err
 	}
-	fmt.Println(string(out))
+	fmt.Fprint(writer, out)
+	return nil
 }
 
 // getProjectForNamespace returns name of project for a shoot
