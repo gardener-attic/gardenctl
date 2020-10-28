@@ -108,7 +108,7 @@ func operate(provider, arguments string) string {
 		checkError(err)
 		err = tmpFile.Close()
 		checkError(err)
-		tmpAccount, err = ExecCmdReturnOutput("bash", "-c", "gcloud config list account --format json")
+		tmpAccount, err = ExecCmdReturnOutput("gcloud", "config", "list", "account", "--format", "json")
 		if err != nil {
 			fmt.Println("Cmd was unsuccessful")
 			os.Exit(2)
