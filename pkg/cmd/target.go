@@ -37,7 +37,7 @@ import (
 )
 
 // ProjectName is they key of a label on namespaces whose value holds the project name.
-const ProjectName = "project.garden.sapcloud.io/name"
+const ProjectName = "project.gardener.cloud/name"
 
 var (
 	pgarden       string
