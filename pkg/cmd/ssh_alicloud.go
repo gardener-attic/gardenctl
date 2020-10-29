@@ -70,9 +70,9 @@ type AliyunInstanceTypeSpec struct {
 }
 
 // sshToAlicloudNode provides cmds to ssh to alicloud via a public ip and clean it up afterwards.
-func sshToAlicloudNode(nodeName, path, user, pathSSKeypair string, sshPublicKey []byte, myPublicIP string) {
+func sshToAlicloudNode(nodeName []string, path, user, pathSSKeypair string, sshPublicKey []byte, myPublicIP string) {
 	// Check if this is a cleanup command
-	if nodeName == "cleanup" {
+	if nodeName[0] == "cleanup" {
 		cleanupAliyunBastionHost()
 		return
 	}
@@ -119,11 +119,16 @@ func sshToAlicloudNode(nodeName, path, user, pathSSKeypair string, sshPublicKey 
 }
 
 // fetchAttributes gets all the needed attributes for creating bastion host and its security group with given <nodeName>.
-func (a *AliyunInstanceAttribute) fetchAttributes(nodeName string) {
+func (a *AliyunInstanceAttribute) fetchAttributes(nodeName []string) {
 	a.ShootName = getFromTargetInfo("shootTechnicalID")
 	var err error
-	a.InstanceID, err = fetchAlicloudInstanceIDByNodeName(nodeName)
-	checkError(err)
+
+	if nodeName[0] == "providerid" && nodeName[1] != "" {
+		a.InstanceID = nodeName[1]
+	} else {
+		a.InstanceID, err = fetchAlicloudInstanceIDByNodeName(nodeName[0])
+		checkError(err)
+	}
 
 	res, err := ExecCmdReturnOutput("bash", "-c", "aliyun ecs DescribeInstanceAttribute --InstanceId="+a.InstanceID)
 	checkError(err)

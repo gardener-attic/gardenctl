@@ -36,13 +36,17 @@ type AzureInstanceAttribute struct {
 }
 
 // sshToAZNode provides cmds to ssh to az via a node name and clean it up afterwards
-func sshToAZNode(nodeName, path, user, pathSSKeypair string, sshPublicKey []byte, myPublicIP string) {
+func sshToAZNode(nodeName []string, path, user, pathSSKeypair string, sshPublicKey []byte, myPublicIP string) {
 	a := &AzureInstanceAttribute{}
 	a.MyPublicIP = myPublicIP
 	fmt.Println("")
 	fmt.Println("(1/4) Fetching data from target shoot cluster")
 
-	a.fetchAzureAttributes(nodeName, path)
+	if nodeName[0] == "providerid" && nodeName[1] != "" {
+		a.fetchAzureAttributes(nodeName[1], path)
+	} else {
+		a.fetchAzureAttributes(nodeName[0], path)
+	}
 
 	fmt.Println("Data fetched from target shoot cluster.")
 	fmt.Println("")
@@ -86,7 +90,7 @@ func sshToAZNode(nodeName, path, user, pathSSKeypair string, sshPublicKey []byte
 }
 
 // fetchAttributes gets all the needed attributes for creating bastion host and its security group with given <nodeName>.
-func (a *AzureInstanceAttribute) fetchAzureAttributes(nodeName, path string) {
+func (a *AzureInstanceAttribute) fetchAzureAttributes(nodeName string, path string) {
 	a.ShootName = getFromTargetInfo("shootTechnicalID")
 	a.NamePublicIP = "sshIP"
 

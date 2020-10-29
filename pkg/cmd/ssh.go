@@ -89,15 +89,15 @@ func NewSSHCmd(reader TargetReader, ioStreams IOStreams) *cobra.Command {
 			infraType := shoot.Spec.Provider.Type
 			switch infraType {
 			case "aws":
-				sshToAWSNode(args[0], path, user, pathSSKeypair, sshPublicKey, myPublicIP)
+				sshToAWSNode(args, path, user, pathSSKeypair, sshPublicKey, myPublicIP)
 			case "gcp":
-				sshToGCPNode(args[0], path, user, pathSSKeypair, sshPublicKey, myPublicIP)
+				sshToGCPNode(args, path, user, pathSSKeypair, sshPublicKey, myPublicIP)
 			case "azure":
-				sshToAZNode(args[0], path, user, pathSSKeypair, sshPublicKey, myPublicIP)
+				sshToAZNode(args, path, user, pathSSKeypair, sshPublicKey, myPublicIP)
 			case "alicloud":
-				sshToAlicloudNode(args[0], path, user, pathSSKeypair, sshPublicKey, myPublicIP)
+				sshToAlicloudNode(args, path, user, pathSSKeypair, sshPublicKey, myPublicIP)
 			case "openstack":
-				sshToOpenstackNode(args[0], path, user, pathSSKeypair, sshPublicKey, myPublicIP)
+				sshToOpenstackNode(args, path, user, pathSSKeypair, sshPublicKey, myPublicIP)
 			default:
 				return fmt.Errorf("infrastructure type %q not found", infraType)
 			}
