@@ -76,6 +76,9 @@ func sshToGCPNode(nodeName, path, user, pathSSKeypair string, sshPublicKey []byt
 		args = append([]string{"-vvv"}, args...)
 	}
 
+	command := os.Args[3:]
+	args = append(args, command...)
+
 	cmd := exec.Command("ssh", args...)
 	cmd.Stdout = os.Stdout
 	cmd.Stdin = os.Stdin
