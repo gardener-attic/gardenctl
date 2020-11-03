@@ -225,14 +225,15 @@ func showLogsFromKubectl(namespace, toMatch, container string) {
 	checkError(err)
 	for _, pod := range pods.Items {
 		if strings.Contains(pod.Name, toMatch) {
-			err := ExecCmd(nil, kubectl.BuildKubectlCommand(KUBECONFIG, namespace, pod.Name, container, flags.tail, flags.sinceSeconds), false)
+			output, err := ExecCmdReturnOutput("kubectl", kubectl.BuildKubectlCommandArgs(KUBECONFIG, namespace, pod.Name, container, flags.tail, flags.sinceSeconds)...)
 			checkError(err)
+			fmt.Println(output)
 		}
 	}
 }
 
 func showLogsFromLoki(namespace, toMatch, container string) {
-	output, err := ExecCmdReturnOutput("bash", "-c", kubectl.BuildLokiCommand(KUBECONFIG, namespace, toMatch, container, flags.tail, flags.sinceSeconds))
+	output, err := ExecCmdReturnOutput("kubectl", kubectl.BuildLokiCommandArgs(KUBECONFIG, namespace, toMatch, container, flags.tail, flags.sinceSeconds)...)
 	checkError(err)
 
 	byteOutput := []byte(output)
@@ -291,7 +292,7 @@ func logPodGardenImproved(podName string) {
 
 	for _, pod := range pods.Items {
 		if strings.Contains(pod.Name, podName) {
-			output, err := ExecCmdReturnOutput("bash", "-c", kubectl.BuildKubectlCommand(KUBECONFIG, "garden", pod.Name, emptyString, flags.tail, flags.sinceSeconds))
+			output, err := ExecCmdReturnOutput("kubectl", kubectl.BuildKubectlCommandArgs(KUBECONFIG, "garden", pod.Name, emptyString, flags.tail, flags.sinceSeconds)...)
 			if err != nil {
 				fmt.Println("Cmd was unsuccessful")
 				os.Exit(2)
