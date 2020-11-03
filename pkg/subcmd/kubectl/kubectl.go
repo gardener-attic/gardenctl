@@ -25,8 +25,8 @@ func BuildKubectlCommand(kubeconfig string, namespace, podName, container string
 	return command.String()
 }
 
-//BuildKubectlCommandArgs build kubectl command to get logs
-func BuildKubectlCommandArgs(kubeconfig string, namespace, podName, container string, tail int64, sinceSeconds time.Duration) []string {
+//BuildLogCommandArgs build kubectl command to get logs
+func BuildLogCommandArgs(kubeconfig string, namespace, podName, container string, tail int64, sinceSeconds time.Duration) []string {
 	args := []string{
 		"logs",
 		"--kubeconfig=" + kubeconfig,

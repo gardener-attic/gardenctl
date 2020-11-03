@@ -15,7 +15,7 @@ var _ = Describe("Build kubectl commands", func() {
 		It("should build kubectl command", func() {
 
 			expected := "logs --kubeconfig=/path/to/configfile myPodmyContainer -n myns --tail=200 --since=3e-07s"
-			command := BuildKubectlCommandArgs("/path/to/configfile", "myns", "myPod", "myContainer", 200, 300)
+			command := BuildLogCommandArgs("/path/to/configfile", "myns", "myPod", "myContainer", 200, 300)
 			join := strings.Join(command, " ")
 			Expect(expected).To(Equal(join))
 		})
@@ -62,7 +62,7 @@ func Test_buildKubectlCommand2(t *testing.T) {
 
 func Test_buildKubectlCommand2Args(t *testing.T) {
 	KUBECONFIG := "/path/to/configfile"
-	command := BuildKubectlCommandArgs(KUBECONFIG, "myns", "myPod", "myContainer", 200, 300)
+	command := BuildLogCommandArgs(KUBECONFIG, "myns", "myPod", "myContainer", 200, 300)
 
 	expected := "logs --kubeconfig=/path/to/configfile myPodmyContainer -n myns --tail=200 --since=3e-07s"
 	join := strings.Join(command, " ")

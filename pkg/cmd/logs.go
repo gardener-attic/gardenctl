@@ -225,7 +225,7 @@ func showLogsFromKubectl(namespace, toMatch, container string) {
 	checkError(err)
 	for _, pod := range pods.Items {
 		if strings.Contains(pod.Name, toMatch) {
-			output, err := ExecCmdReturnOutput("kubectl", kubectl.BuildKubectlCommandArgs(KUBECONFIG, namespace, pod.Name, container, flags.tail, flags.sinceSeconds)...)
+			output, err := ExecCmdReturnOutput("kubectl", kubectl.BuildLogCommandArgs(KUBECONFIG, namespace, pod.Name, container, flags.tail, flags.sinceSeconds)...)
 			checkError(err)
 			fmt.Println(output)
 		}
@@ -292,7 +292,7 @@ func logPodGardenImproved(podName string) {
 
 	for _, pod := range pods.Items {
 		if strings.Contains(pod.Name, podName) {
-			output, err := ExecCmdReturnOutput("kubectl", kubectl.BuildKubectlCommandArgs(KUBECONFIG, "garden", pod.Name, emptyString, flags.tail, flags.sinceSeconds)...)
+			output, err := ExecCmdReturnOutput("kubectl", kubectl.BuildLogCommandArgs(KUBECONFIG, "garden", pod.Name, emptyString, flags.tail, flags.sinceSeconds)...)
 			if err != nil {
 				fmt.Println("Cmd was unsuccessful")
 				os.Exit(2)
