@@ -11,10 +11,6 @@ const (
 	emptyString           = ""
 )
 
-func getNamespaces() string {
-	return "get ns"
-}
-
 //BuildKubectlCommand this function will be removed after review
 func BuildKubectlCommand(kubeconfig string, namespace, podName, container string, tail int64, sinceSeconds time.Duration) string {
 	var command strings.Builder
