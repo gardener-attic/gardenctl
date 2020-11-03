@@ -28,6 +28,25 @@ func BuildKubectlCommand(kubeconfig string, namespace, podName, container string
 	return command.String()
 }
 
+func BuildKubectlCommandArgs(kubeconfig string, namespace, podName, container string, tail int64, sinceSeconds time.Duration) []string {
+	args := []string{
+		"logs",
+		"--kubeconfig=" + kubeconfig,
+		podName + container,
+		"-n",
+		namespace,
+	}
+
+	if tail != -1 {
+		args = append(args, fmt.Sprintf("--tail=%d", tail))
+	}
+	if sinceSeconds != 0 {
+		args = append(args, fmt.Sprintf("--since=%vs", sinceSeconds.Seconds()))
+	}
+
+	return args
+}
+
 func BuildLokiCommand(kubeconfig string, namespace, podName, container string, tail int64, sinceSeconds time.Duration) string {
 	lokiQuery := fmt.Sprintf("{pod_name=~\"%s.*\"}", podName)
 
@@ -50,4 +69,39 @@ func BuildLokiCommand(kubeconfig string, namespace, podName, container string, t
 
 	endCommand := fmt.Sprintf("kubectl --kubeconfig=%s exec loki-0 -n %s -- %s", kubeconfig, namespace, command)
 	return endCommand
+}
+
+func BuildLokiCommandArgs(kubeconfig string, namespace, podName, container string, tail int64, sinceSeconds time.Duration) []string {
+	args := []string{
+		"--kubeconfig=" + kubeconfig,
+		"exec",
+		"loki-0",
+		"-n",
+		namespace,
+		"--",
+		"wget",
+		"'http://localhost:3100/loki/api/v1/query_range'",
+		"-O-",
+	}
+
+	lokiQuery := fmt.Sprintf("{pod_name=~\"%s.*\"}", podName)
+	command := fmt.Sprintf("--post-data='query=%s", lokiQuery)
+
+	if container != emptyString {
+		command += fmt.Sprintf("&&query={container_name=~\"%s.*\"", container)
+	}
+	if tail != 0 {
+		command += fmt.Sprintf("&&limit=%d", tail)
+	}
+	if sinceSeconds == 0 {
+		sinceSeconds = fourteenDaysInSeconds * time.Second
+	}
+	sinceNanoSec := sinceSeconds.Nanoseconds()
+	now := time.Now().UnixNano()
+
+	command += fmt.Sprintf("&&start=%d&&end=%d", now-sinceNanoSec, now)
+	command += "'"
+
+	args = append(args, command)
+	return args
 }
