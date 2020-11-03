@@ -18,6 +18,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/gardener/gardenctl/pkg/subcmd/kubectl"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -32,9 +33,8 @@ import (
 )
 
 const (
-	maxLokiLogs           = 100000
-	fourteenDaysInSeconds = 60 * 60 * 24 * 14
-	emptyString           = ""
+	maxLokiLogs = 100000
+	emptyString = ""
 )
 
 //flags passed to the command
@@ -225,14 +225,14 @@ func showLogsFromKubectl(namespace, toMatch, container string) {
 	checkError(err)
 	for _, pod := range pods.Items {
 		if strings.Contains(pod.Name, toMatch) {
-			err := ExecCmd(nil, BuildKubectlCommand(KUBECONFIG, namespace, pod.Name, container, flags.tail, flags.sinceSeconds), false)
+			err := ExecCmd(nil, kubectl.BuildKubectlCommand(KUBECONFIG, namespace, pod.Name, container, flags.tail, flags.sinceSeconds), false)
 			checkError(err)
 		}
 	}
 }
 
 func showLogsFromLoki(namespace, toMatch, container string) {
-	output, err := ExecCmdReturnOutput("bash", "-c", BuildLokiCommand(namespace, toMatch, container, flags.tail, flags.sinceSeconds))
+	output, err := ExecCmdReturnOutput("bash", "-c", kubectl.BuildLokiCommand(KUBECONFIG, namespace, toMatch, container, flags.tail, flags.sinceSeconds))
 	checkError(err)
 
 	byteOutput := []byte(output)
@@ -241,43 +241,6 @@ func showLogsFromLoki(namespace, toMatch, container string) {
 	checkError(err)
 
 	fmt.Println(response)
-}
-
-func BuildKubectlCommand(kubeconfig string, namespace, podName, container string, tail int64, sinceSeconds time.Duration) string {
-	var command strings.Builder
-	command.WriteString(fmt.Sprintf("kubectl logs --kubeconfig=%s %s%s -n %s ", kubeconfig, podName, container, namespace))
-	if tail != -1 {
-		command.WriteString(fmt.Sprintf("--tail=%d ", tail))
-	}
-	if sinceSeconds != 0 {
-		command.WriteString(fmt.Sprintf("--since=%vs ", sinceSeconds.Seconds()))
-	}
-
-	return command.String()
-}
-
-func BuildLokiCommand(namespace, podName, container string, tail int64, sinceSeconds time.Duration) string {
-	lokiQuery := fmt.Sprintf("{pod_name=~\"%s.*\"}", podName)
-
-	command := fmt.Sprintf("wget 'http://localhost:3100/loki/api/v1/query_range' -O- --post-data='query=%s", lokiQuery)
-
-	if container != emptyString {
-		command += fmt.Sprintf("&&query={container_name=~\"%s.*\"", container)
-	}
-	if tail != 0 {
-		command += fmt.Sprintf("&&limit=%d", tail)
-	}
-	if sinceSeconds == 0 {
-		sinceSeconds = fourteenDaysInSeconds * time.Second
-	}
-	sinceNanoSec := sinceSeconds.Nanoseconds()
-	now := time.Now().UnixNano()
-
-	command += fmt.Sprintf("&&start=%d&&end=%d", now-sinceNanoSec, now)
-	command += "'"
-
-	endCommand := fmt.Sprintf("kubectl --kubeconfig=%s exec loki-0 -n %s -- %s", KUBECONFIG, namespace, command)
-	return endCommand
 }
 
 // logPodGarden print logfiles for garden pods
@@ -328,7 +291,7 @@ func logPodGardenImproved(podName string) {
 
 	for _, pod := range pods.Items {
 		if strings.Contains(pod.Name, podName) {
-			output, err := ExecCmdReturnOutput("bash", "-c", BuildKubectlCommand(KUBECONFIG, "garden", pod.Name, emptyString, flags.tail, flags.sinceSeconds))
+			output, err := ExecCmdReturnOutput("bash", "-c", kubectl.BuildKubectlCommand(KUBECONFIG, "garden", pod.Name, emptyString, flags.tail, flags.sinceSeconds))
 			if err != nil {
 				fmt.Println("Cmd was unsuccessful")
 				os.Exit(2)
