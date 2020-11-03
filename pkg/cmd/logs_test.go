@@ -75,8 +75,8 @@ func normalizeTimestamp(command string) string {
 }
 
 func Test_buildKubectlCommand(t *testing.T) {
-	cmd.KUBECONFIG = "/path/to/configfile"
-	command := cmd.BuildKubectlCommand("myns", "myPod", "myContainer", 200, 0)
+	KUBECONFIG := "/path/to/configfile"
+	command := cmd.BuildKubectlCommand(KUBECONFIG, "myns", "myPod", "myContainer", 200, 0)
 
 	expected := "kubectl logs --kubeconfig=/path/to/configfile myPodmyContainer -n myns --tail=200 "
 

@@ -225,7 +225,7 @@ func showLogsFromKubectl(namespace, toMatch, container string) {
 	checkError(err)
 	for _, pod := range pods.Items {
 		if strings.Contains(pod.Name, toMatch) {
-			err := ExecCmd(nil, BuildKubectlCommand(namespace, pod.Name, container, flags.tail, flags.sinceSeconds), false)
+			err := ExecCmd(nil, BuildKubectlCommand(KUBECONFIG, namespace, pod.Name, container, flags.tail, flags.sinceSeconds), false)
 			checkError(err)
 		}
 	}
@@ -243,9 +243,9 @@ func showLogsFromLoki(namespace, toMatch, container string) {
 	fmt.Println(response)
 }
 
-func BuildKubectlCommand(namespace, podName, container string, tail int64, sinceSeconds time.Duration) string {
+func BuildKubectlCommand(kubeconfig string, namespace, podName, container string, tail int64, sinceSeconds time.Duration) string {
 	var command strings.Builder
-	command.WriteString(fmt.Sprintf("kubectl logs --kubeconfig=%s %s%s -n %s ", KUBECONFIG, podName, container, namespace))
+	command.WriteString(fmt.Sprintf("kubectl logs --kubeconfig=%s %s%s -n %s ", kubeconfig, podName, container, namespace))
 	if tail != -1 {
 		command.WriteString(fmt.Sprintf("--tail=%d ", tail))
 	}
@@ -328,7 +328,7 @@ func logPodGardenImproved(podName string) {
 
 	for _, pod := range pods.Items {
 		if strings.Contains(pod.Name, podName) {
-			output, err := ExecCmdReturnOutput("bash", "-c", BuildKubectlCommand("garden", pod.Name, emptyString, flags.tail, flags.sinceSeconds))
+			output, err := ExecCmdReturnOutput("bash", "-c", BuildKubectlCommand(KUBECONFIG, "garden", pod.Name, emptyString, flags.tail, flags.sinceSeconds))
 			if err != nil {
 				fmt.Println("Cmd was unsuccessful")
 				os.Exit(2)
