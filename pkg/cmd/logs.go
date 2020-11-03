@@ -225,14 +225,14 @@ func showLogsFromKubectl(namespace, toMatch, container string) {
 	checkError(err)
 	for _, pod := range pods.Items {
 		if strings.Contains(pod.Name, toMatch) {
-			err := ExecCmd(nil, BuildKubectlCommand(namespace, pod.Name, container), false)
+			err := ExecCmd(nil, BuildKubectlCommand(namespace, pod.Name, container, flags.tail, flags.sinceSeconds), false)
 			checkError(err)
 		}
 	}
 }
 
 func showLogsFromLoki(namespace, toMatch, container string) {
-	output, err := ExecCmdReturnOutput("bash", "-c", BuildLokiCommand(namespace, toMatch, container))
+	output, err := ExecCmdReturnOutput("bash", "-c", BuildLokiCommand(namespace, toMatch, container, flags.tail, flags.sinceSeconds))
 	checkError(err)
 
 	byteOutput := []byte(output)
@@ -243,20 +243,20 @@ func showLogsFromLoki(namespace, toMatch, container string) {
 	fmt.Println(response)
 }
 
-func BuildKubectlCommand(namespace, podName, container string) string {
+func BuildKubectlCommand(namespace, podName, container string, tail int64, sinceSeconds time.Duration) string {
 	var command strings.Builder
 	command.WriteString(fmt.Sprintf("kubectl logs --kubeconfig=%s %s%s -n %s ", KUBECONFIG, podName, container, namespace))
-	if flags.tail != -1 {
-		command.WriteString(fmt.Sprintf("--tail=%d ", flags.tail))
+	if tail != -1 {
+		command.WriteString(fmt.Sprintf("--tail=%d ", tail))
 	}
-	if flags.sinceSeconds != 0 {
-		command.WriteString(fmt.Sprintf("--since=%vs ", flags.sinceSeconds.Seconds()))
+	if sinceSeconds != 0 {
+		command.WriteString(fmt.Sprintf("--since=%vs ", sinceSeconds.Seconds()))
 	}
 
 	return command.String()
 }
 
-func BuildLokiCommand(namespace, podName, container string) string {
+func BuildLokiCommand(namespace, podName, container string, tail int64, sinceSeconds time.Duration) string {
 	lokiQuery := fmt.Sprintf("{pod_name=~\"%s.*\"}", podName)
 
 	command := fmt.Sprintf("wget 'http://localhost:3100/loki/api/v1/query_range' -O- --post-data='query=%s", lokiQuery)
@@ -264,13 +264,13 @@ func BuildLokiCommand(namespace, podName, container string) string {
 	if container != emptyString {
 		command += fmt.Sprintf("&&query={container_name=~\"%s.*\"", container)
 	}
-	if flags.tail != 0 {
-		command += fmt.Sprintf("&&limit=%d", flags.tail)
+	if tail != 0 {
+		command += fmt.Sprintf("&&limit=%d", tail)
 	}
-	if flags.sinceSeconds == 0 {
-		flags.sinceSeconds = fourteenDaysInSeconds * time.Second
+	if sinceSeconds == 0 {
+		sinceSeconds = fourteenDaysInSeconds * time.Second
 	}
-	sinceNanoSec := flags.sinceSeconds.Nanoseconds()
+	sinceNanoSec := sinceSeconds.Nanoseconds()
 	now := time.Now().UnixNano()
 
 	command += fmt.Sprintf("&&start=%d&&end=%d", now-sinceNanoSec, now)
@@ -328,7 +328,7 @@ func logPodGardenImproved(podName string) {
 
 	for _, pod := range pods.Items {
 		if strings.Contains(pod.Name, podName) {
-			output, err := ExecCmdReturnOutput("bash", "-c", BuildKubectlCommand("garden", pod.Name, emptyString))
+			output, err := ExecCmdReturnOutput("bash", "-c", BuildKubectlCommand("garden", pod.Name, emptyString, flags.tail, flags.sinceSeconds))
 			if err != nil {
 				fmt.Println("Cmd was unsuccessful")
 				os.Exit(2)

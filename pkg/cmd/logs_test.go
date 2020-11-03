@@ -16,13 +16,12 @@ package cmd_test
 
 import (
 	"github.com/gardener/gardenctl/pkg/cmd"
+	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/gomega"
 	"github.com/spf13/cobra"
 	"regexp"
 	"strings"
 	"testing"
-
-	. "github.com/onsi/ginkgo"
-	. "github.com/onsi/gomega"
 )
 
 var _ = Describe("Logs command", func() {
@@ -49,7 +48,7 @@ var _ = Describe("Logs command", func() {
 
 func Test_buildLokiCommand(t *testing.T) {
 	cmd.KUBECONFIG = "/path/to/configfile"
-	command := cmd.BuildLokiCommand("myns", "nginx-pod", "mycontainer")
+	command := cmd.BuildLokiCommand("myns", "nginx-pod", "mycontainer", 200, 0)
 
 	expected := `kubectl --kubeconfig=/path/to/configfile exec loki-0 -n myns -- wget 'http://localhost:3100/loki/api/v1/query_range' -O- --post-data='query={pod_name=~"nginx-pod.*"}&&query={container_name=~"mycontainer.*"&&limit=200&&start=1603184413805314000&&end=1604394013805314000'`
 	expectedNorm := `kubectl --kubeconfig=/path/to/configfile exec loki-0 -n myns -- wget 'http://localhost:3100/loki/api/v1/query_range' -O- --post-data='query={pod_name=~"nginx-pod.*"}&&query={container_name=~"mycontainer.*"&&limit=200&&start=101010&&end=202020'`
@@ -77,7 +76,7 @@ func normalizeTimestamp(command string) string {
 
 func Test_buildKubectlCommand(t *testing.T) {
 	cmd.KUBECONFIG = "/path/to/configfile"
-	command := cmd.BuildKubectlCommand("myns", "myPod", "myContainer")
+	command := cmd.BuildKubectlCommand("myns", "myPod", "myContainer", 200, 0)
 
 	expected := "kubectl logs --kubeconfig=/path/to/configfile myPodmyContainer -n myns --tail=200 "
 
