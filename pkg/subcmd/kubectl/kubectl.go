@@ -15,7 +15,7 @@ func getNamespaces() string {
 	return "get ns"
 }
 
-//this function will be removed after review
+//BuildKubectlCommand this function will be removed after review
 func BuildKubectlCommand(kubeconfig string, namespace, podName, container string, tail int64, sinceSeconds time.Duration) string {
 	var command strings.Builder
 	command.WriteString(fmt.Sprintf("kubectl logs --kubeconfig=%s %s%s -n %s ", kubeconfig, podName, container, namespace))
@@ -29,7 +29,7 @@ func BuildKubectlCommand(kubeconfig string, namespace, podName, container string
 	return command.String()
 }
 
-//build kubectl command to get logs
+//BuildKubectlCommandArgs build kubectl command to get logs
 func BuildKubectlCommandArgs(kubeconfig string, namespace, podName, container string, tail int64, sinceSeconds time.Duration) []string {
 	args := []string{
 		"logs",
@@ -49,7 +49,7 @@ func BuildKubectlCommandArgs(kubeconfig string, namespace, podName, container st
 	return args
 }
 
-//this function will be removed after review
+//BuildLokiCommand will be removed after review
 func BuildLokiCommand(kubeconfig string, namespace, podName, container string, tail int64, sinceSeconds time.Duration) string {
 	lokiQuery := fmt.Sprintf("{pod_name=~\"%s.*\"}", podName)
 
@@ -74,7 +74,7 @@ func BuildLokiCommand(kubeconfig string, namespace, podName, container string, t
 	return endCommand
 }
 
-//build kubect command to get logs from loki
+//BuildLokiCommandArgs build kubect command to get logs from loki
 func BuildLokiCommandArgs(kubeconfig string, namespace, podName, container string, tail int64, sinceSeconds time.Duration) []string {
 	args := []string{
 		"--kubeconfig=" + kubeconfig,
