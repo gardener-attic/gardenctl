@@ -232,7 +232,7 @@ func showLogsFromKubectl(namespace, toMatch, container string) {
 }
 
 func showLogsFromLoki(namespace, toMatch, container string) {
-	output, err := ExecCmdReturnOutput("bash", "-c", buildLokiCommand(namespace, toMatch, container))
+	output, err := ExecCmdReturnOutput("bash", "-c", BuildLokiCommand(namespace, toMatch, container))
 	checkError(err)
 
 	byteOutput := []byte(output)
@@ -256,7 +256,7 @@ func buildKubectlCommand(namespace, podName, container string) string {
 	return command.String()
 }
 
-func buildLokiCommand(namespace, podName, container string) string {
+func BuildLokiCommand(namespace, podName, container string) string {
 	lokiQuery := fmt.Sprintf("{pod_name=~\"%s.*\"}", podName)
 
 	command := fmt.Sprintf("wget 'http://localhost:3100/loki/api/v1/query_range' -O- --post-data='query=%s", lokiQuery)

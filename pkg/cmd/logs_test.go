@@ -17,6 +17,9 @@ package cmd_test
 import (
 	"github.com/gardener/gardenctl/pkg/cmd"
 	"github.com/spf13/cobra"
+	"regexp"
+	"strings"
+	"testing"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -43,3 +46,31 @@ var _ = Describe("Logs command", func() {
 		})
 	})
 })
+
+func Test_buildLokiCommand(t *testing.T) {
+	cmd.KUBECONFIG = "/path/to/configfile"
+	command := cmd.BuildLokiCommand("myns", "nginx-pod", "mycontainer")
+
+	expected := `kubectl --kubeconfig=/path/to/configfile exec loki-0 -n myns -- wget 'http://localhost:3100/loki/api/v1/query_range' -O- --post-data='query={pod_name=~"nginx-pod.*"}&&query={container_name=~"mycontainer.*"&&limit=200&&start=1603184413805314000&&end=1604394013805314000'`
+	expectedNorm := `kubectl --kubeconfig=/path/to/configfile exec loki-0 -n myns -- wget 'http://localhost:3100/loki/api/v1/query_range' -O- --post-data='query={pod_name=~"nginx-pod.*"}&&query={container_name=~"mycontainer.*"&&limit=200&&start=101010&&end=202020'`
+
+	norm := normalizeTimestamp(expected)
+	if expectedNorm != norm {
+		t.Error("wrong timestamps normalizations")
+	}
+
+	normCommand := normalizeTimestamp(command)
+	if expectedNorm != normCommand {
+		t.Error("wrong timestamps normalizations for generated command")
+	}
+}
+
+func normalizeTimestamp(command string) string {
+	var re = regexp.MustCompile(`(?m).*start=(\d+)&&end=(\d+)`)
+
+	timestamps := re.FindAllStringSubmatch(command, -1)[0]
+	command = strings.Replace(command, timestamps[1], "101010", 1)
+	command = strings.Replace(command, timestamps[2], "202020", 1)
+
+	return command
+}
