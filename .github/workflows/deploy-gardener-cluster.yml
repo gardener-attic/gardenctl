@@ -6,7 +6,7 @@ name: Deploy gardener cluster
 # events but only for the master branch
 on:
   push:
-    branches: [ master, git-action ]
+    branches: [ gactl-cluster ]
     paths:
       - '.github/gardener_clusters/gctl-aws.yaml'
       - '.github/gardener_clusters/gctl-az.yaml'
