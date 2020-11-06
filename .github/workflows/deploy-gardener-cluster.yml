@@ -1,0 +1,74 @@
+# This is a basic workflow to help you get started with Actions
+
+name: Deploy gardener cluster
+
+# Controls when the action will run. Triggers the workflow on push or pull request
+# events but only for the master branch
+on:
+  push:
+    branches: [ master, git-action ]
+    paths:
+      - '.github/gardener_clusters/gctl-aws.yaml'
+      - '.github/gardener_clusters/gctl-az.yaml'
+      - '.github/gardener_clusters/gctl-gcp.yaml'
+      - '.github/gardener_clusters/gctl-os.yaml'
+      - '.github/workflows/deploy-gardener-cluster.yml'
+      - '.github/actions/k8s/action.yml'
+jobs:
+  deploy_gactl_on_aws:
+    runs-on: ubuntu-16.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+      - uses: azure/k8s-set-context@v1
+        with:
+          method: kubeconfig
+          kubeconfig: ${{ secrets.GARDENER_KUBECONFIG }}       
+      - name: Execute Playbook Action Step
+        uses: gardener/gardenctl/.github/actions/k8s@master
+        with:
+          path-to-file: ".github/gardener_clusters/gctl-aws.yaml"
+          shoot-name: "gctl-aws"
+  deploy_gactl_on_az:
+    runs-on: ubuntu-16.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+      - uses: azure/k8s-set-context@v1
+        with:
+          method: kubeconfig
+          kubeconfig: ${{ secrets.GARDENER_KUBECONFIG }}       
+      - name: Execute Playbook Action Step
+        uses: gardener/gardenctl/.github/actions/k8s@master
+        with:
+          path-to-file: ".github/gardener_clusters/gctl-az.yaml"
+          shoot-name: "gctl-az"
+  deploy_gactl_on_gcp:
+    runs-on: ubuntu-16.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+      - uses: azure/k8s-set-context@v1
+        with:
+          method: kubeconfig
+          kubeconfig: ${{ secrets.GARDENER_KUBECONFIG }}       
+      - name: Execute Playbook Action Step
+        uses: gardener/gardenctl/.github/actions/k8s@master
+        with:
+          path-to-file: ".github/gardener_clusters/gctl-gcp.yaml"
+          shoot-name: "gctl-gcp"
+  deploy_gactl_on_os:
+    runs-on: ubuntu-16.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+      - uses: azure/k8s-set-context@v1
+        with:
+          method: kubeconfig
+          kubeconfig: ${{ secrets.GARDENER_KUBECONFIG }}       
+      - name: Execute Playbook Action Step
+        uses: gardener/gardenctl/.github/actions/k8s@master
+        with:
+          path-to-file: ".github/gardener_clusters/gctl-os.yaml"
+          shoot-name: "gctl-os"          
+          

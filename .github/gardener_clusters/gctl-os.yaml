@@ -1,0 +1,83 @@
+kind: Shoot
+apiVersion: core.gardener.cloud/v1beta1
+metadata:
+  name: gctl-os
+  namespace: garden-gardenctl
+  labels:
+    shoot.gardener.cloud/status: unhealthy
+  annotations:
+    gardener.cloud/created-by: arkadiusz.szczyrba@sap.com
+  finalizers:
+    - gardener
+spec:
+  addons:
+    kubernetesDashboard:
+      enabled: false
+      authenticationMode: token
+  cloudProfileName: converged-cloud
+  dns:
+    domain: gctl-os.gardenctl.shoot.dev.k8s-hana.ondemand.com
+  hibernation:
+    enabled: false
+    schedules:
+      - start: '00 17 * * 1,2,3,4,5'
+        end: '00 08 * * 1,2,3,4,5'
+        location: Europe/Warsaw
+  kubernetes:
+    allowPrivilegedContainers: true
+    kubeAPIServer:
+      enableBasicAuthentication: false
+    kubeControllerManager:
+      nodeCIDRMaskSize: 24
+    kubeProxy:
+      mode: IPTables
+    kubelet:
+      failSwapOn: true
+      kubeReserved:
+        cpu: 80m
+        memory: 1Gi
+    version: 1.19.1
+  networking:
+    type: calico
+    pods: 100.96.0.0/11
+    nodes: 10.250.0.0/16
+    services: 100.64.0.0/13
+  maintenance:
+    autoUpdate:
+      kubernetesVersion: true
+      machineImageVersion: true
+    timeWindow:
+      begin: 220000+0000
+      end: 230000+0000
+  provider:
+    type: openstack
+    controlPlaneConfig:
+      apiVersion: openstack.provider.extensions.gardener.cloud/v1alpha1
+      kind: ControlPlaneConfig
+      loadBalancerProvider: f5networks
+      zone: eu-nl-1a
+    infrastructureConfig:
+      apiVersion: openstack.provider.extensions.gardener.cloud/v1alpha1
+      kind: InfrastructureConfig
+      networks:
+        workers: 10.250.0.0/16
+      floatingPoolName: FloatingIP-external-monsoon3-01
+    workers:
+      - name: worker-lx07a
+        machine:
+          type: m1.smallhdd
+          image:
+            name: gardenlinux
+            version: 27.1.0
+        maximum: 2
+        minimum: 1
+        maxSurge: 1
+        maxUnavailable: 0
+        zones:
+          - eu-nl-1a
+        systemComponents:
+          allow: true
+  purpose: testing
+  region: eu-nl-1
+  secretBindingName: gardenctl-tests-cluster
+  seedName: ccee-m3
