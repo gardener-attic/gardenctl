@@ -26,8 +26,9 @@ import (
 // NewAzCmd returns a new az command.
 func NewAzCmd(targetReader TargetReader) *cobra.Command {
 	return &cobra.Command{
-		Use:          "az <args>",
-		SilenceUsage: true,
+		Use:                "az <args>",
+		FParseErrWhitelist: cobra.FParseErrWhitelist{UnknownFlags: true},
+		SilenceUsage:       true,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			target := targetReader.ReadTarget(pathTarget)
 			if !CheckShootIsTargeted(target) {
@@ -37,7 +38,8 @@ func NewAzCmd(targetReader TargetReader) *cobra.Command {
 				fmt.Println("Please go to https://docs.microsoft.com/en-us/cli/azure/install-azure-cli?view=azure-cli-latest for how to install az cli")
 				os.Exit(2)
 			}
-			arguments := strings.Join(args[:], " ")
+
+			arguments := strings.Join(os.Args[2:], " ")
 			fmt.Println(operate("az", arguments))
 
 			return nil

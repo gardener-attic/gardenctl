@@ -26,8 +26,9 @@ import (
 // NewAwsCmd returns a new aws command.
 func NewAwsCmd(targetReader TargetReader) *cobra.Command {
 	return &cobra.Command{
-		Use:          "aws <args>",
-		SilenceUsage: true,
+		Use:                "aws <args>",
+		FParseErrWhitelist: cobra.FParseErrWhitelist{UnknownFlags: true},
+		SilenceUsage:       true,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			target := targetReader.ReadTarget(pathTarget)
 			if !CheckShootIsTargeted(target) {
@@ -37,7 +38,8 @@ func NewAwsCmd(targetReader TargetReader) *cobra.Command {
 				fmt.Println("Please go to https://docs.aws.amazon.com/cli/latest/userguide/cli-chap-install.html for how to install aws cli")
 				os.Exit(2)
 			}
-			arguments := strings.Join(args[:], " ")
+
+			arguments := strings.Join(os.Args[2:], " ")
 			fmt.Println(operate("aws", arguments))
 
 			return nil

@@ -26,8 +26,9 @@ import (
 // NewOpenstackCmd returns a new openstack cmd.
 func NewOpenstackCmd(targetReader TargetReader) *cobra.Command {
 	cmd := &cobra.Command{
-		Use:          "openstack <args>",
-		SilenceUsage: true,
+		Use:                "openstack <args>",
+		FParseErrWhitelist: cobra.FParseErrWhitelist{UnknownFlags: true},
+		SilenceUsage:       true,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			target := targetReader.ReadTarget(pathTarget)
 			if !CheckShootIsTargeted(target) {
@@ -37,7 +38,7 @@ func NewOpenstackCmd(targetReader TargetReader) *cobra.Command {
 				fmt.Println("Please go to https://docs.openstack.org/newton/user-guide/common/cli-install-openstack-command-line-clients.html for how to install openstack cli")
 				os.Exit(2)
 			}
-			arguments := strings.Join(args[:], " ")
+			arguments := strings.Join(os.Args[2:], " ")
 			fmt.Println(operate("openstack", arguments))
 
 			return nil

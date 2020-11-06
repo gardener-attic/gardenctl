@@ -26,8 +26,9 @@ import (
 // NewGcloudCmd return a new gcloud command.
 func NewGcloudCmd(targetReader TargetReader) *cobra.Command {
 	return &cobra.Command{
-		Use:          "gcloud <args>",
-		SilenceUsage: true,
+		Use:                "gcloud <args>",
+		FParseErrWhitelist: cobra.FParseErrWhitelist{UnknownFlags: true},
+		SilenceUsage:       true,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			target := targetReader.ReadTarget(pathTarget)
 			if !CheckShootIsTargeted(target) {
@@ -38,7 +39,7 @@ func NewGcloudCmd(targetReader TargetReader) *cobra.Command {
 				os.Exit(2)
 			}
 
-			arguments := strings.Join(args[:], " ")
+			arguments := strings.Join(os.Args[2:], " ")
 			fmt.Println(operate("gcp", arguments))
 
 			return nil

@@ -26,11 +26,12 @@ import (
 // NewKubectlCmd returns a new kubectl command.
 func NewKubectlCmd() *cobra.Command {
 	return &cobra.Command{
-		Use:     "kubectl <args>",
-		Aliases: []string{"k"},
-		Short:   "",
+		Use:                "kubectl <args>",
+		FParseErrWhitelist: cobra.FParseErrWhitelist{UnknownFlags: true},
+		Aliases:            []string{"k"},
+		Short:              "",
 		Run: func(cmd *cobra.Command, args []string) {
-			arguments := "kubectl " + strings.Join(args[:], " ")
+			arguments := "kubectl " + strings.Join(os.Args[2:], " ")
 			kube(arguments)
 		},
 	}
@@ -39,10 +40,11 @@ func NewKubectlCmd() *cobra.Command {
 // NewKaCmd returns a new 'kubectl --all-namespaces' command.
 func NewKaCmd() *cobra.Command {
 	return &cobra.Command{
-		Use:    "ka",
-		Hidden: true,
+		Use:                "ka",
+		FParseErrWhitelist: cobra.FParseErrWhitelist{UnknownFlags: true},
+		Hidden:             true,
 		Run: func(cmd *cobra.Command, args []string) {
-			arguments := "kubectl " + strings.Join(args[:], " ") + " --all-namespaces=true"
+			arguments := "kubectl " + strings.Join(os.Args[2:], " ") + " --all-namespaces=true"
 			kube(arguments)
 		},
 	}
@@ -51,10 +53,11 @@ func NewKaCmd() *cobra.Command {
 // NewKsCmd returns a new 'kubectl --namespace=kube-system' command.
 func NewKsCmd() *cobra.Command {
 	return &cobra.Command{
-		Use:    "ks",
-		Hidden: true,
+		Use:                "ks",
+		FParseErrWhitelist: cobra.FParseErrWhitelist{UnknownFlags: true},
+		Hidden:             true,
 		Run: func(cmd *cobra.Command, args []string) {
-			arguments := "kubectl " + strings.Join(args[:], " ") + " --namespace=kube-system"
+			arguments := "kubectl " + strings.Join(os.Args[2:], " ") + " --namespace=kube-system"
 			kube(arguments)
 		},
 	}
@@ -63,10 +66,11 @@ func NewKsCmd() *cobra.Command {
 // NewKgCmd returns a new 'kubectl --namespace=garden' command.
 func NewKgCmd() *cobra.Command {
 	return &cobra.Command{
-		Use:    "kg",
-		Hidden: true,
+		Use:                "kg",
+		FParseErrWhitelist: cobra.FParseErrWhitelist{UnknownFlags: true},
+		Hidden:             true,
 		Run: func(cmd *cobra.Command, args []string) {
-			arguments := "kubectl " + strings.Join(args[:], " ") + " --namespace=garden"
+			arguments := "kubectl " + strings.Join(os.Args[2:], " ") + " --namespace=garden"
 			kube(arguments)
 		},
 	}
@@ -75,10 +79,11 @@ func NewKgCmd() *cobra.Command {
 // NewKnCmd returns a new 'kubectl --namespace=<arg>' command.
 func NewKnCmd() *cobra.Command {
 	return &cobra.Command{
-		Use:    "kn",
-		Hidden: true,
+		Use:                "kn",
+		FParseErrWhitelist: cobra.FParseErrWhitelist{UnknownFlags: true},
+		Hidden:             true,
 		Run: func(cmd *cobra.Command, args []string) {
-			arguments := "kubectl --namespace=" + strings.Join(args[:], " ")
+			arguments := "kubectl --namespace=" + strings.Join(os.Args[2:], " ")
 			kube(arguments)
 		},
 	}
