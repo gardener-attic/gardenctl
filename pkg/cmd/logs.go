@@ -140,7 +140,11 @@ func runCommand(args []string) {
 	case "addon-manager":
 		logsAddonManager()
 	case "vpn-seed":
-		logsVpnSeed(args[1])
+		if len(args) == 2 {
+			logsVpnSeed(args[1])
+		} else {
+			logsVpnSeed(emptyString)
+		}
 	case "vpn-shoot":
 		logsVpnShoot()
 	case "machine-controller-manager":
@@ -473,7 +477,6 @@ func logPodShoot(toMatch, namespace string, container string) {
 	Client, err = clientToTarget(TargetKindShoot)
 	checkError(err)
 	if container != emptyString {
-		container = " -c " + container
 		showLogsFromKubectl(namespace, toMatch, container)
 	} else {
 		showLogsFromKubectl(namespace, toMatch, emptyString)
@@ -573,9 +576,14 @@ func saveLogsControllerManager() {
 }
 
 // logsVpnSeed prints the logfile of the vpn-seed container
-func logsVpnSeed(shootName string) {
+func logsVpnSeed(shootTechnicalID string) {
 	fmt.Println("-----------------------Kube-Apiserver")
-	logPodSeed("kube-apiserver", shootName, "vpn-seed")
+	if shootTechnicalID == emptyString {
+		shootTechnicalID = getFromTargetInfo("shootTechnicalID")
+		logPodSeed("kube-apiserver", shootTechnicalID, "vpn-seed")
+	} else {
+		logPodSeed("kube-apiserver", shootTechnicalID, "vpn-seed")
+	}
 }
 
 // logsEtcdOpertor prints the logfile of the etcd-operator
