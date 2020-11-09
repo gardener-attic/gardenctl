@@ -35,7 +35,7 @@ spec:
       kubeReserved:
         cpu: 80m
         memory: 1Gi
-    version: 1.19.1
+    version: 1.19.2
   networking:
     type: calico
     pods: 100.96.0.0/11
