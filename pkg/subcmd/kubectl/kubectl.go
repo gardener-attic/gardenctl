@@ -30,10 +30,14 @@ func BuildLogCommandArgs(kubeconfig string, namespace, podName, container string
 	args := []string{
 		"logs",
 		"--kubeconfig=" + kubeconfig,
-		podName + container,
-		"-n",
-		namespace,
+		podName,
 	}
+
+	if container != emptyString {
+		args = append(args, []string{"-c", container}...)
+	}
+
+	args = append(args, []string{"-n", namespace}...)
 
 	if tail != -1 {
 		args = append(args, fmt.Sprintf("--tail=%d", tail))

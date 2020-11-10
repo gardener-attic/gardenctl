@@ -218,9 +218,6 @@ func logPod(toMatch string, toTarget string, container string) {
 }
 
 func showLogsFromKubectl(namespace, toMatch, container string) {
-	if container != emptyString {
-		container = " -c " + container
-	}
 	pods, err := Client.CoreV1().Pods(namespace).List(metav1.ListOptions{})
 	checkError(err)
 	for _, pod := range pods.Items {
