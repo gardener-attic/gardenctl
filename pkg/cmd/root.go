@@ -15,6 +15,7 @@
 package cmd
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -104,9 +105,12 @@ func Execute() {
 	CreateFileIfNotExists(pathTarget, 0644)
 	gardenConfig = os.Getenv("GARDENCONFIG")
 	if gardenConfig != "" {
+		if _, err := os.Stat(gardenConfig); err != nil {
+			fmt.Println("gardenctl configuration set in environment does not exist")
+			os.Exit(1)
+		}
 		pathGardenConfig = gardenConfig
-	}
-	if _, err := os.Stat(pathGardenConfig); err != nil {
+	} else if _, err := os.Stat(pathGardenConfig); err != nil {
 		CreateFileIfNotExists(pathGardenConfig, 0644)
 	}
 	GetGardenClusterKubeConfigFromConfig(pathGardenConfig, pathTarget)
