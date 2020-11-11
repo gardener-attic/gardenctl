@@ -19,6 +19,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -106,6 +107,8 @@ func validateFlags(flags *logFlags) {
 
 func runCommand(args []string) {
 	switch args[0] {
+	case "all":
+		saveLogsAll()
 	case "gardener-apiserver":
 		logsGardenerApiserver()
 	case "gardener-controller-manager":
@@ -177,6 +180,48 @@ func runCommand(args []string) {
 	}
 }
 
+func saveLogsAll() {
+	//flags.sinceSeconds = 600 * time.Second
+	if _, err := os.Stat("./logs/"); !os.IsNotExist(err) {
+		os.RemoveAll("./logs/")
+	}
+	os.MkdirAll("./logs/", os.ModePerm)
+
+	fmt.Println("APIServer/Scheduler/ControllerManager/etcd/AddonManager/VpnShoot/Dashboard/Prometheus/Gardenlet/Autoscaler logs will be downloaded")
+
+	saveLogsAPIServer()
+	saveLogsScheduler()
+	saveLogsControllerManager()
+	saveLogsEtcdMain("etcd")
+	saveLogsEtcdMain("backup-restore")
+	saveLogsEtcdMainBackup()
+	saveLogsEtcdEvents("etcd")
+	saveLogsEtcdEvents("backup-restore")
+	saveLogsAddonManager()
+	saveLogsVpnShoot()
+	saveLogsMachineControllerManager()
+	saveLogsKubernetesDashboard()
+	saveLogsPrometheus()
+	saveLogsGardenlet()
+	saveLogsClusterAutoscaler()
+
+	var target Target
+	ReadTarget(pathTarget, &target)
+	if !(len(target.Target) < 3 || (len(target.Stack()) == 3 && target.Stack()[2].Kind == "namespace")) {
+		shoot, err := getShootObject()
+		checkError(err)
+		saveLogsTerraform(shoot.Name + ".infra.tf")
+		saveLogsTerraform(shoot.Name + ".dns.tf")
+		saveLogsTerraform(shoot.Name + ".ingress.tf")
+
+	}
+
+	path, err := os.Getwd()
+	checkError(err)
+
+	fmt.Println("All logs have been saved in " + path + "/logs/ folder")
+}
+
 // showPod is an abstraction to show pods in seed cluster controlplane or kube-system namespace of shoot
 func logPod(toMatch string, toTarget string, container string) {
 	var target Target
@@ -217,6 +262,75 @@ func logPod(toMatch string, toTarget string, container string) {
 	}
 }
 
+// showPod is an abstraction to show pods in seed cluster controlplane or kube-system namespace of shoot
+func saveLogPod(toMatch string, toTarget string, container string) {
+	var target Target
+	ReadTarget(pathTarget, &target)
+	if len(target.Target) < 3 || (len(target.Stack()) == 3 && target.Stack()[2].Kind == "namespace") {
+		fmt.Println("No shoot targeted")
+		os.Exit(2)
+	}
+	namespace := getSeedNamespaceNameForShoot(target.Target[2].Name)
+	var err error
+	shoot, err := getShootObject()
+	checkError(err)
+
+	gardenerVersion, err := semver.NewVersion(shoot.Status.Gardener.Version)
+	checkError(err)
+	greaterThanLokiRelease, err := semver.NewConstraint(">=1.8.0")
+	checkError(err)
+
+	Client, err = clientToTarget("seed")
+	checkError(err)
+	if toTarget == "shoot" {
+		namespace = "kube-system"
+		Client, err = clientToTarget(TargetKindShoot)
+		checkError(err)
+	}
+
+	if flags.loki {
+		if greaterThanLokiRelease.Check(gardenerVersion) {
+			saveLogsFromLoki(namespace, toMatch, container)
+		} else {
+			fmt.Println("--loki flag is available only for gardener version >= 1.8.0")
+			fmt.Println("Current version: " + gardenerVersion.String())
+			os.Exit(2)
+		}
+
+	} else {
+		saveLogsFromKubectl(namespace, toMatch, container)
+	}
+}
+
+func saveLogsFromLoki(namespace, toMatch, container string) {
+	args := BuildLokiCommandArgs(KUBECONFIG, namespace, toMatch, container, flags.tail, flags.sinceSeconds)
+	cmdResult := "kubectl " + strings.Join(args, " ")
+	output, err := ExecCmdReturnOutput("bash", "-c", cmdResult)
+	checkError(err)
+
+	byteOutput := []byte(output)
+	var response logResponseLoki
+	err = json.Unmarshal(byteOutput, &response)
+	checkError(err)
+	fmt.Println("the response is")
+	fmt.Println(response)
+
+	fileName := "./logs/"
+	fileName += namespace + "_" + toMatch
+	if container != emptyString {
+		fileName = fileName + "_" + container
+	}
+	fileName = fileName + ".log"
+
+	f, err := os.Create(fileName)
+	checkError(err)
+	defer f.Close()
+	_, err = f.WriteString(fmt.Sprintf("%v", response))
+	checkError(err)
+	f.Sync()
+	//fmt.Println(response)
+}
+
 func showLogsFromKubectl(namespace, toMatch, container string) {
 	pods, err := Client.CoreV1().Pods(namespace).List(metav1.ListOptions{})
 	checkError(err)
@@ -225,6 +339,25 @@ func showLogsFromKubectl(namespace, toMatch, container string) {
 			output, err := ExecCmdReturnOutput("kubectl", BuildLogCommandArgs(KUBECONFIG, namespace, pod.Name, container, flags.tail, flags.sinceSeconds)...)
 			checkError(err)
 			fmt.Println(output)
+		}
+	}
+}
+
+func saveLogsFromKubectl(namespace, toMatch, container string) {
+	fileName := "./logs/"
+	fileName += namespace + "_" + toMatch
+	if container != emptyString {
+		fileName = fileName + "_" + container
+	}
+	fileName = fileName + ".log"
+	pods, err := Client.CoreV1().Pods(namespace).List(metav1.ListOptions{})
+	checkError(err)
+	for _, pod := range pods.Items {
+		if strings.Contains(pod.Name, toMatch) {
+			args := BuildLogCommandArgs(KUBECONFIG, namespace, pod.Name, container, flags.tail, flags.sinceSeconds)
+			cmdResult := "kubectl " + strings.Join(args, " ")
+			err := ExecCmdSaveOutputFile(nil, cmdResult, fileName)
+			checkError(err)
 		}
 	}
 }
@@ -321,6 +454,17 @@ func logPodSeed(toMatch, namespace string, container string) {
 	}
 }
 
+func saveLogPodSeed(toMatch, namespace string, container string) {
+	var err error
+	Client, err = clientToTarget(TargetKindSeed)
+	checkError(err)
+	if container != emptyString {
+		saveLogsFromKubectl(namespace, toMatch, container)
+	} else {
+		saveLogsFromKubectl(namespace, toMatch, emptyString)
+	}
+}
+
 // logPodShoot print logfiles for shoot pods
 func logPodShoot(toMatch, namespace string, container string) {
 	var err error
@@ -331,6 +475,18 @@ func logPodShoot(toMatch, namespace string, container string) {
 		showLogsFromKubectl(namespace, toMatch, container)
 	} else {
 		showLogsFromKubectl(namespace, toMatch, emptyString)
+	}
+}
+
+func saveLogPodShoot(toMatch, namespace string, container string) {
+	var err error
+	Client, err = clientToTarget(TargetKindShoot)
+	checkError(err)
+	if container != emptyString {
+		container = " -c " + container
+		saveLogsFromKubectl(namespace, toMatch, container)
+	} else {
+		saveLogsFromKubectl(namespace, toMatch, emptyString)
 	}
 }
 
@@ -392,14 +548,26 @@ func logsAPIServer() {
 	logPod("kube-apiserver", "seed", "kube-apiserver")
 }
 
+func saveLogsAPIServer() {
+	saveLogPod("kube-apiserver", "seed", "kube-apiserver")
+}
+
 // logsScheduler prints the logfile of the scheduler
 func logsScheduler() {
 	logPod("kube-scheduler", "seed", emptyString)
 }
 
+func saveLogsScheduler() {
+	saveLogPod("kube-scheduler", "seed", emptyString)
+}
+
 // logsAPIServer prints the logfile of the controller-manager
 func logsControllerManager() {
 	logPod("kube-controller-manager", "seed", emptyString)
+}
+
+func saveLogsControllerManager() {
+	saveLogPod("kube-controller-manager", "seed", emptyString)
 }
 
 // logsVpnSeed prints the logfile of the vpn-seed container
@@ -418,9 +586,17 @@ func logsEtcdMain(containerName string) {
 	logPod("etcd-main", "seed", containerName)
 }
 
+func saveLogsEtcdMain(containerName string) {
+	saveLogPod("etcd-main", "seed", containerName)
+}
+
 // logsEtcdMainBackup prints logfiles of etcd-main-backup-sidecar pod
 func logsEtcdMainBackup() {
 	logPod("etcd-main-backup-sidecar", "seed", emptyString)
+}
+
+func saveLogsEtcdMainBackup() {
+	saveLogPod("etcd-main-backup-sidecar", "seed", emptyString)
 }
 
 // logsEtcdEvents prints the logfile of etcd-events
@@ -428,9 +604,17 @@ func logsEtcdEvents(containerName string) {
 	logPod("etcd-events-", "seed", containerName)
 }
 
+func saveLogsEtcdEvents(containerName string) {
+	saveLogPod("etcd-events-", "seed", containerName)
+}
+
 // logsAddonManager prints the logfile of addon-manager
 func logsAddonManager() {
 	logPod("addon-manager", "seed", emptyString)
+}
+
+func saveLogsAddonManager() {
+	saveLogPod("addon-manager", "seed", emptyString)
 }
 
 // logsVpnShoot prints the logfile of vpn-shoot
@@ -439,9 +623,18 @@ func logsVpnShoot() {
 	logPodShoot("vpn-shoot", "kube-system", emptyString)
 }
 
+func saveLogsVpnShoot() {
+	fmt.Println("-----------------------vpn-shoot")
+	saveLogPodShoot("vpn-shoot", "kube-system", emptyString)
+}
+
 // logsMachineControllerManager prints the logfile of machine-controller-manager
 func logsMachineControllerManager() {
 	logPod("machine-controller-manager", "seed", emptyString)
+}
+
+func saveLogsMachineControllerManager() {
+	saveLogPod("machine-controller-manager", "seed", emptyString)
 }
 
 // logsKubernetesDashboard prints the logfile of the dashboard
@@ -481,9 +674,52 @@ func logsKubernetesDashboard() {
 	}
 }
 
+func saveLogsKubernetesDashboard() {
+	var target Target
+	ReadTarget(pathTarget, &target)
+	namespace := "kube-system"
+	if len(target.Target) == 3 {
+		var err error
+		Client, err = clientToTarget("shoot")
+		checkError(err)
+	} else if len(target.Target) == 2 && target.Target[1].Kind == "seed" {
+		gardenName := target.Stack()[0].Name
+		KUBECONFIG = filepath.Join(pathGardenHome, "cache", gardenName, "seeds", target.Target[1].Name, "kubeconfig.yaml")
+		config, err := clientcmd.BuildConfigFromFlags(emptyString, KUBECONFIG)
+		checkError(err)
+		Client, err = kubernetes.NewForConfig(config)
+		checkError(err)
+	} else if len(target.Target) == 2 && target.Target[1].Kind == "project" {
+		fmt.Println("Project targeted")
+		os.Exit(2)
+	} else if len(target.Target) == 1 {
+		var err error
+		Client, err = clientToTarget("garden")
+		checkError(err)
+	} else {
+		fmt.Println("No target")
+		os.Exit(2)
+	}
+	pods, err := Client.CoreV1().Pods(namespace).List(metav1.ListOptions{})
+	checkError(err)
+	p, err := os.Getwd()
+	for _, pod := range pods.Items {
+		if strings.Contains(pod.Name, "kubernetes-dashboard") {
+			//err := ExecCmd(nil, "kubectl logs --tail="+strconv.Itoa(int(flags.tail))+" "+pod.Name+" -n "+namespace, false, "KUBECONFIG="+KUBECONFIG)
+			fileName := path.Join(p, "logs", pod.Name)
+			err := ExecCmdSaveOutputFile(nil, "kubectl logs --tail="+strconv.Itoa(int(flags.tail))+" "+pod.Name+" -n "+namespace, fileName, "KUBECONFIG="+KUBECONFIG)
+			checkError(err)
+		}
+	}
+}
+
 // logsPrometheus prints the logfiles of prometheus pod
 func logsPrometheus() {
 	logPod("prometheus", "seed", "prometheus")
+}
+
+func saveLogsPrometheus() {
+	saveLogPod("prometheus", "seed", "prometheus")
 }
 
 // logsGrafana prints the logfiles of grafana pod
@@ -491,13 +727,25 @@ func logsGrafana() {
 	logPod("grafana", "seed", "grafana")
 }
 
+func saveLogsGrafana() {
+	saveLogPod("grafana", "seed", "grafana")
+}
+
 func logsGardenlet() {
 	logPodSeed("gardenlet", "garden", emptyString)
+}
+
+func saveLogsGardenlet() {
+	saveLogPodSeed("gardenlet", "garden", emptyString)
 }
 
 // logsClusterAutoscaler prints the logfiles of cluster-autoscaler
 func logsClusterAutoscaler() {
 	logPod("cluster-autoscaler", "seed", "cluster-autoscaler")
+}
+
+func saveLogsClusterAutoscaler() {
+	saveLogPod("cluster-autoscaler", "seed", "cluster-autoscaler")
 }
 
 // logsTerraform prints the logfiles of tf pod
@@ -527,6 +775,41 @@ func logsTerraform(toMatch string) {
 		for i := 0; i < count; i++ {
 			fmt.Println("gardenctl logs " + podName[i] + " namespace=" + podNamespace[i])
 			err = ExecCmd(nil, "kubectl logs "+podName[i]+" -n "+podNamespace[i], false, "KUBECONFIG="+KUBECONFIG)
+			checkError(err)
+		}
+	}
+}
+
+func saveLogsTerraform(toMatch string) {
+	var latestTime int64
+	var podName [100]string
+	var podNamespace [100]string
+	var err error
+	Client, err = clientToTarget("seed")
+	checkError(err)
+	pods, err := Client.CoreV1().Pods(emptyString).List(metav1.ListOptions{})
+	checkError(err)
+	count := 0
+	for _, pod := range pods.Items {
+		if strings.Contains(pod.Name, toMatch) && pod.Status.Phase == "Running" {
+			if latestTime < pod.ObjectMeta.CreationTimestamp.Unix() {
+				latestTime = pod.ObjectMeta.CreationTimestamp.Unix()
+				podName[count] = pod.Name
+				podNamespace[count] = pod.Namespace
+				count++
+			}
+		}
+	}
+	p, err := os.Getwd()
+	checkError(err)
+	if len(podName) == 0 || len(podNamespace) == 0 {
+		fmt.Println("No running tf " + toMatch)
+	} else {
+		for i := 0; i < count; i++ {
+			//fmt.Println("gardenctl logs " + podName[i] + " namespace=" + podNamespace[i])
+			//err = ExecCmd(nil, "kubectl logs "+podName[i]+" -n "+podNamespace[i], false, "KUBECONFIG="+KUBECONFIG)
+			fileName := path.Join(p, "logs", podName[i])
+			ExecCmdSaveOutputFile(nil, "kubectl logs "+podName[i]+" -n "+podNamespace[i], fileName, "KUBECONFIG="+KUBECONFIG)
 			checkError(err)
 		}
 	}

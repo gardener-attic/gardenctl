@@ -143,6 +143,59 @@ func ExecCmd(input []byte, cmd string, suppressedOutput bool, environment ...str
 	return nil
 }
 
+//ExecCmdSaveOutputFile save command output to file
+func ExecCmdSaveOutputFile(input []byte, cmd string, fileName string, environment ...string) (err error) {
+	var command *exec.Cmd
+	parts := strings.Fields(cmd)
+	head := parts[0]
+	if len(parts) > 1 {
+		parts = parts[1:]
+	} else {
+		parts = nil
+	}
+	command = exec.Command(head, parts...)
+	for index, env := range environment {
+		if index == 0 {
+			command.Env = append(os.Environ(),
+				env,
+			)
+		} else {
+			command.Env = append(command.Env,
+				env,
+			)
+		}
+	}
+	var stdin = os.Stdin
+	if input != nil {
+		r, w, err := os.Pipe()
+		if err != nil {
+			return err
+		}
+		defer r.Close()
+		go func() {
+			_, err = w.Write([]byte(input))
+			checkError(err)
+			w.Close()
+		}()
+		stdin = r
+	}
+	if _, err := os.Stat(fileName); err == nil {
+		e := os.Remove(fileName)
+		checkError(e)
+	}
+	outfile, err := os.Create(fileName)
+	checkError(err)
+	defer outfile.Close()
+	command.Stdout = outfile
+	command.Stderr = os.Stderr
+	command.Stdin = stdin
+	err = command.Run()
+	if err != nil {
+		os.Exit(2)
+	}
+	return nil
+}
+
 // ExecCmdReturnOutput execute cmd and return output
 func ExecCmdReturnOutput(cmd string, args ...string) (output string, err error) {
 	out, err := exec.Command(cmd, args...).Output()
