@@ -185,7 +185,8 @@ func saveLogsAll() {
 	if _, err := os.Stat("./logs/"); !os.IsNotExist(err) {
 		os.RemoveAll("./logs/")
 	}
-	os.MkdirAll("./logs/", os.ModePerm)
+	err := os.MkdirAll("./logs/", os.ModePerm)
+	checkError(err)
 
 	fmt.Println("APIServer/Scheduler/ControllerManager/etcd/AddonManager/VpnShoot/Dashboard/Prometheus/Gardenlet/Autoscaler logs will be downloaded")
 
@@ -204,6 +205,7 @@ func saveLogsAll() {
 	saveLogsPrometheus()
 	saveLogsGardenlet()
 	saveLogsClusterAutoscaler()
+	saveLogsGrafana()
 
 	var target Target
 	ReadTarget(pathTarget, &target)
@@ -703,9 +705,9 @@ func saveLogsKubernetesDashboard() {
 	pods, err := Client.CoreV1().Pods(namespace).List(metav1.ListOptions{})
 	checkError(err)
 	p, err := os.Getwd()
+	checkError(err)
 	for _, pod := range pods.Items {
 		if strings.Contains(pod.Name, "kubernetes-dashboard") {
-			//err := ExecCmd(nil, "kubectl logs --tail="+strconv.Itoa(int(flags.tail))+" "+pod.Name+" -n "+namespace, false, "KUBECONFIG="+KUBECONFIG)
 			fileName := path.Join(p, "logs", pod.Name)
 			err := ExecCmdSaveOutputFile(nil, "kubectl logs --tail="+strconv.Itoa(int(flags.tail))+" "+pod.Name+" -n "+namespace, fileName, "KUBECONFIG="+KUBECONFIG)
 			checkError(err)
@@ -806,10 +808,8 @@ func saveLogsTerraform(toMatch string) {
 		fmt.Println("No running tf " + toMatch)
 	} else {
 		for i := 0; i < count; i++ {
-			//fmt.Println("gardenctl logs " + podName[i] + " namespace=" + podNamespace[i])
-			//err = ExecCmd(nil, "kubectl logs "+podName[i]+" -n "+podNamespace[i], false, "KUBECONFIG="+KUBECONFIG)
 			fileName := path.Join(p, "logs", podName[i])
-			ExecCmdSaveOutputFile(nil, "kubectl logs "+podName[i]+" -n "+podNamespace[i], fileName, "KUBECONFIG="+KUBECONFIG)
+			err := ExecCmdSaveOutputFile(nil, "kubectl logs "+podName[i]+" -n "+podNamespace[i], fileName, "KUBECONFIG="+KUBECONFIG)
 			checkError(err)
 		}
 	}
