@@ -164,7 +164,7 @@ func getGarden(name string, configReader ConfigReader, targetReader TargetReader
 				return err
 			}
 			if outputFormat == "yaml" {
-				fmt.Fprint(ioStreams.Out, fmt.Sprintf("%s\n", kubeconfig))
+				fmt.Fprintf(ioStreams.Out, "%s\n", kubeconfig)
 			} else if outputFormat == "json" {
 				y, err := yaml2.YAMLToJSON(kubeconfig)
 				if err != nil {
@@ -215,7 +215,7 @@ func getSeed(name string, targetReader TargetReader, ioStreams IOStreams) error 
 		return err
 	}
 	if outputFormat == "yaml" {
-		fmt.Fprint(ioStreams.Out, fmt.Sprintf("%s\n", kubeSecret.Data["kubeconfig"]))
+		fmt.Fprintf(ioStreams.Out, "%s\n", kubeSecret.Data["kubeconfig"])
 	} else if outputFormat == "json" {
 		y, err := yaml2.YAMLToJSON(kubeSecret.Data["kubeconfig"])
 		if err != nil {
@@ -315,7 +315,7 @@ func getShoot(name string, targetReader TargetReader, kubeconfigWriter Kubeconfi
 		return err
 	}
 	if outputFormat == "yaml" {
-		fmt.Fprint(ioStreams.Out, fmt.Sprintf("%s\n", kubeSecret.Data["kubeconfig"]))
+		fmt.Fprintf(ioStreams.Out, "%s\n", kubeSecret.Data["kubeconfig"])
 	} else if outputFormat == "json" {
 		y, err := yaml2.YAMLToJSON(kubeSecret.Data["kubeconfig"])
 		if err != nil {
