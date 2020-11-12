@@ -19,9 +19,11 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"github.com/spf13/cobra"
+	"regexp"
+	"strings"
 )
 
-var _ = Describe("Logs command", func() {
+var _ = Describe("Logs and kubecmd command", func() {
 
 	var (
 		command *cobra.Command
@@ -41,4 +43,40 @@ var _ = Describe("Logs command", func() {
 			Expect(err.Error()).To(Equal("Command must be in the format: logs (gardener-apiserver|gardener-controller-manager|gardener-dashboard|api|scheduler|controller-manager|etcd-operator|etcd-main[etcd backup-restore]|etcd-events[etcd backup-restore]|addon-manager|vpn-seed|vpn-shoot|machine-controller-manager|kubernetes-dashboard|prometheus|grafana|gardenlet|tf (infra|dns|ingress)|cluster-autoscaler flags(--loki|--tail|--since|--since-time|--timestamps)"))
 		})
 	})
+
+	Context("kubectl commands", func() {
+
+		It("should build kubectl command", func() {
+
+			expected := "logs --kubeconfig=/path/to/configfile myPod -c myContainer -n myns --tail=200 --since=3e-07s"
+			command := cmd.BuildLogCommandArgs("/path/to/configfile", "myns", "myPod", "myContainer", 200, 300)
+			join := strings.Join(command, " ")
+			Expect(expected).To(Equal(join))
+		})
+
+		It("should build kubectl command", func() {
+
+			//test `normalizeTimestamp` first - replace timestamp with some predefined values
+			expected := `--kubeconfig=/path/to/configfile exec loki-0 -n myns -- wget 'http://localhost:3100/loki/api/v1/query_range' -O- --post-data='query={pod_name=~"nginx-pod.*"}&&query={container_name=~"mycontainer.*"&&limit=200&&start=1603184413805314000&&end=1604394013805314000'`
+			expectedNorm := `--kubeconfig=/path/to/configfile exec loki-0 -n myns -- wget 'http://localhost:3100/loki/api/v1/query_range' -O- --post-data='query={pod_name=~"nginx-pod.*"}&&query={container_name=~"mycontainer.*"&&limit=200&&start=101010&&end=202020'`
+			norm := normalizeTimestamp(expected)
+			Expect(expectedNorm).To(Equal(norm))
+
+			//test real command builder
+			args := cmd.BuildLokiCommandArgs("/path/to/configfile", "myns", "nginx-pod", "mycontainer", 200, 0)
+			command := strings.Join(args, " ")
+			normCommand := normalizeTimestamp(command)
+			Expect(expectedNorm).To(Equal(normCommand))
+		})
+	})
 })
+
+func normalizeTimestamp(command string) string {
+	var re = regexp.MustCompile(`(?m).*start=(\d+)&&end=(\d+)`)
+
+	timestamps := re.FindAllStringSubmatch(command, -1)[0]
+	command = strings.Replace(command, timestamps[1], "101010", 1)
+	command = strings.Replace(command, timestamps[2], "202020", 1)
+
+	return command
+}
