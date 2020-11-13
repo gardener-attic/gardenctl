@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-set -e
+set -xeo pipefail
 
 # For the test step concourse will set the following environment variables:
 # SOURCE_PATH - path to component repository root directory.
@@ -13,14 +13,9 @@ fi
 
 cd "${SOURCE_PATH}"
 
+# Ensure Ginkgo (test framework) is installed
+if ! go list github.com/onsi/ginkgo > /dev/null 2>&1 ; then
+  go install -mod=vendor ./vendor/github.com/onsi/ginkgo/ginkgo
+fi
 
-# Build the Ginkgo (test framework) binary to be able to execute the tests.
-go install -mod=vendor ./vendor/github.com/onsi/ginkgo/ginkgo
-
-###############################################################################
-
-ginkgo -v -progress -cover -r -mod=vendor pkg/...
-
-
-
-
+ginkgo -v -progress -cover -r -mod=vendor pkg/..
