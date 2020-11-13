@@ -2,6 +2,12 @@
 
 set -xeo pipefail
 
+if [ "$#" -ne 1 ]; then
+    echo "Please supply a shoot name as argument"
+    echo "example: ./test_ssh gctl-<gcp|aws|az|os>"
+    exit 1
+fi
+
 gardener_project="gardenctl"
 shoot_namespace="garden-${gardener_project}"
 gardener_url="https://gardener.garden.dev.k8s.ondemand.com"
@@ -32,11 +38,11 @@ gardenctl_ssh() {
   # Target the shoot to ssh
   "${gardenctl_cmd[@]}" target --server "${gardener_url}" --project "${gardener_project}" --shoot "${shoot_name}"
   node_name=$("${gardenctl_cmd[@]}" kubectl get node -o name | awk -F'/' '{print $2}')
+
+  # Using ProviderID (https://github.com/gardener/gardenctl/pull/421)
+  # node_name=$("${gardenctl_cmd[@]}" kubectl get node -o jsonpath='{.items[0].spec.providerID}' | awk -F'/' '{print $NF}')
+
   "${gardenctl_cmd[@]}" ssh "${node_name}" exit
 }
 
-# gardenctl_ssh gctl-gcp
-gardenctl_ssh gctl-aws
-# gardenctl_ssh gctl-az
-# gardenctl_ssh gctl-os
-
+gardenctl_ssh "$1"
