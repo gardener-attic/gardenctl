@@ -218,21 +218,19 @@ func logPod(toMatch string, toTarget string, container string) {
 }
 
 func showLogsFromKubectl(namespace, toMatch, container string) {
-	if container != emptyString {
-		container = " -c " + container
-	}
 	pods, err := Client.CoreV1().Pods(namespace).List(metav1.ListOptions{})
 	checkError(err)
 	for _, pod := range pods.Items {
 		if strings.Contains(pod.Name, toMatch) {
-			err := ExecCmd(nil, buildKubectlCommand(namespace, pod.Name, container), false)
+			output, err := ExecCmdReturnOutput("kubectl", BuildLogCommandArgs(KUBECONFIG, namespace, pod.Name, container, flags.tail, flags.sinceSeconds)...)
 			checkError(err)
+			fmt.Println(output)
 		}
 	}
 }
 
 func showLogsFromLoki(namespace, toMatch, container string) {
-	output, err := ExecCmdReturnOutput("bash", "-c", buildLokiCommand(namespace, toMatch, container))
+	output, err := ExecCmdReturnOutput("kubectl", BuildLokiCommandArgs(KUBECONFIG, namespace, toMatch, container, flags.tail, flags.sinceSeconds)...)
 	checkError(err)
 
 	byteOutput := []byte(output)
@@ -243,41 +241,64 @@ func showLogsFromLoki(namespace, toMatch, container string) {
 	fmt.Println(response)
 }
 
-func buildKubectlCommand(namespace, podName, container string) string {
-	var command strings.Builder
-	command.WriteString(fmt.Sprintf("kubectl logs --kubeconfig=%s %s%s -n %s ", KUBECONFIG, podName, container, namespace))
-	if flags.tail != -1 {
-		command.WriteString(fmt.Sprintf("--tail=%d ", flags.tail))
-	}
-	if flags.sinceSeconds != 0 {
-		command.WriteString(fmt.Sprintf("--since=%vs ", flags.sinceSeconds.Seconds()))
+//BuildLogCommandArgs build kubectl command to get logs
+func BuildLogCommandArgs(kubeconfig string, namespace, podName, container string, tail int64, sinceSeconds time.Duration) []string {
+	args := []string{
+		"logs",
+		"--kubeconfig=" + kubeconfig,
+		podName,
 	}
 
-	return command.String()
+	if container != emptyString {
+		args = append(args, []string{"-c", container}...)
+	}
+
+	args = append(args, []string{"-n", namespace}...)
+
+	if tail != -1 {
+		args = append(args, fmt.Sprintf("--tail=%d", tail))
+	}
+	if sinceSeconds != 0 {
+		args = append(args, fmt.Sprintf("--since=%vs", sinceSeconds.Seconds()))
+	}
+
+	return args
 }
 
-func buildLokiCommand(namespace, podName, container string) string {
-	lokiQuery := fmt.Sprintf("{pod_name=~\"%s.*\"}", podName)
+//BuildLokiCommandArgs build kubect command to get logs from loki
+func BuildLokiCommandArgs(kubeconfig string, namespace, podName, container string, tail int64, sinceSeconds time.Duration) []string {
+	args := []string{
+		"--kubeconfig=" + kubeconfig,
+		"exec",
+		"loki-0",
+		"-n",
+		namespace,
+		"--",
+		"wget",
+		"'http://localhost:3100/loki/api/v1/query_range'",
+		"-O-",
+	}
 
-	command := fmt.Sprintf("wget 'http://localhost:3100/loki/api/v1/query_range' -O- --post-data='query=%s", lokiQuery)
+	lokiQuery := fmt.Sprintf("{pod_name=~\"%s.*\"}", podName)
+	command := fmt.Sprintf("--post-data='query=%s", lokiQuery)
 
 	if container != emptyString {
 		command += fmt.Sprintf("&&query={container_name=~\"%s.*\"", container)
 	}
-	if flags.tail != 0 {
-		command += fmt.Sprintf("&&limit=%d", flags.tail)
+	if tail != 0 {
+		command += fmt.Sprintf("&&limit=%d", tail)
 	}
-	if flags.sinceSeconds == 0 {
-		flags.sinceSeconds = fourteenDaysInSeconds * time.Second
+	if sinceSeconds == 0 {
+		sinceSeconds = fourteenDaysInSeconds * time.Second
 	}
-	sinceNanoSec := flags.sinceSeconds.Nanoseconds()
+	sinceNanoSec := sinceSeconds.Nanoseconds()
 	now := time.Now().UnixNano()
 
 	command += fmt.Sprintf("&&start=%d&&end=%d", now-sinceNanoSec, now)
 	command += "'"
 
-	endCommand := fmt.Sprintf("kubectl --kubeconfig=%s exec loki-0 -n %s -- %s", KUBECONFIG, namespace, command)
-	return endCommand
+	args = append(args, command)
+	return args
 }
 
 // logPodGarden print logfiles for garden pods
@@ -328,7 +349,7 @@ func logPodGardenImproved(podName string) {
 
 	for _, pod := range pods.Items {
 		if strings.Contains(pod.Name, podName) {
-			output, err := ExecCmdReturnOutput("bash", "-c", buildKubectlCommand("garden", pod.Name, emptyString))
+			output, err := ExecCmdReturnOutput("kubectl", BuildLogCommandArgs(KUBECONFIG, "garden", pod.Name, emptyString, flags.tail, flags.sinceSeconds)...)
 			if err != nil {
 				fmt.Println("Cmd was unsuccessful")
 				os.Exit(2)
