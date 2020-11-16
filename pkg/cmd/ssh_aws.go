@@ -150,7 +150,7 @@ func (a *AwsInstanceAttribute) createBastionHostSecurityGroup() {
 }
 
 func (a *AwsInstanceAttribute) createNodeHostSecurityGroup() {
-	// add shh rule to ec2 instance
+	// add ssh rule to ec2 instance
 	arguments := fmt.Sprintf("ec2 authorize-security-group-ingress --group-id %s --protocol tcp --port 22 --cidr %s/32", a.SecurityGroupID, a.BastionPrivIP)
 	operate("aws", arguments)
 	fmt.Println("Opened SSH Port on Node.")
@@ -181,6 +181,10 @@ func (a *AwsInstanceAttribute) createBastionHostInstance() {
 	a.getBastionHostInstance()
 	if a.BastionInstanceID != "" {
 		fmt.Println("Bastion Host exists, skipping creation.")
+		arguments := "ec2 describe-instances --instance-id " + a.BastionInstanceID + " --query Reservations[*].Instances[*].PrivateIpAddress"
+		a.BastionPrivIP = strings.Trim(operate("aws", arguments), "\n")
+		arguments = "ec2 describe-instances --instance-id " + a.BastionInstanceID + " --query Reservations[*].Instances[*].PublicIpAddress"
+		a.BastionIP = strings.Trim(operate("aws", arguments), "\n")
 		return
 	}
 
@@ -242,7 +246,7 @@ func (a *AwsInstanceAttribute) sshPortCheck() {
 		cmd := exec.Command("bash", "-c", ncCmd)
 		output, _ := cmd.CombinedOutput()
 		fmt.Println("=>", string(output))
-		if strings.Contains(string(output), "succeeded") {
+		if strings.Contains(string(output), "open") {
 			fmt.Println("Opened SSH Port on Bastion")
 			return
 		}
