@@ -40,6 +40,7 @@ type OpenstackInstanceAttribute struct {
 
 //sshToOpenstackNode ssh to openstack node
 func sshToOpenstackNode(nodeName, path, user, pathSSKeypair string, sshPublicKey []byte, myPublicIP string) {
+	sshStatus := 0
 	a := &OpenstackInstanceAttribute{}
 	a.InstanceID = nodeName
 	var err error
@@ -68,8 +69,6 @@ func sshToOpenstackNode(nodeName, path, user, pathSSKeypair string, sshPublicKey
 	operate("openstack", "server add floating ip "+a.InstanceID+" "+a.FIP)
 	time.Sleep(5000)
 
-	defer a.cleanUpOpenstack()
-
 	node := user + "@" + a.FIP
 	fmt.Println("(4/5) Establishing SSH connection")
 	fmt.Println("")
@@ -89,11 +88,15 @@ func sshToOpenstackNode(nodeName, path, user, pathSSKeypair string, sshPublicKey
 	cmd.Stderr = os.Stderr
 	if err := cmd.Run(); err != nil {
 		fmt.Println(err)
+		if exitError, ok := err.(*exec.ExitError); ok {
+			sshStatus = exitError.ExitCode()
+		}
 	}
+	defer a.cleanUpOpenstack(sshStatus)
 }
 
 //cleanUpOpenstack clean the resource added to ssh to openstack node
-func (a *OpenstackInstanceAttribute) cleanUpOpenstack() {
+func (a *OpenstackInstanceAttribute) cleanUpOpenstack(exitStatus int) {
 	fmt.Println("")
 	fmt.Println("(5/5) Cleanup")
 
@@ -102,5 +105,5 @@ func (a *OpenstackInstanceAttribute) cleanUpOpenstack() {
 
 	fmt.Println("Delete the floating IP")
 	operate("openstack", "floating ip delete "+a.FIP)
-
+	os.Exit(exitStatus)
 }
