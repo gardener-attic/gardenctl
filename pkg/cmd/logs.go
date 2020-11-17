@@ -415,7 +415,9 @@ func BuildLokiCommandArgs(kubeconfig string, namespace, podName, container strin
 		namespace,
 		"--",
 		"wget",
-		"'http://localhost:3100/loki/api/v1/query_range'",
+		"--header",
+		"'X-Scope-OrgID: operator'",
+		"http://localhost:3100/loki/api/v1/query_range",
 		"-O-",
 	}
 
@@ -438,6 +440,8 @@ func BuildLokiCommandArgs(kubeconfig string, namespace, podName, container strin
 	command += "'"
 
 	args = append(args, command)
+	fmt.Println("")
+	fmt.Println(strings.Join(args, " "))
 	return args
 }
 
