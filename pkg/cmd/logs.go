@@ -329,8 +329,8 @@ func saveLogsFromLoki(namespace, toMatch, container string) {
 	defer f.Close()
 	_, err = f.WriteString(fmt.Sprintf("%v", response))
 	checkError(err)
-	f.Sync()
-	//fmt.Println(response)
+	err = f.Sync()
+	checkError(err)
 }
 
 func showLogsFromKubectl(namespace, toMatch, container string) {
