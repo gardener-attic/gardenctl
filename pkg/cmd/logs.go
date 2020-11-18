@@ -415,6 +415,8 @@ func BuildLogCommandArgs(kubeconfig string, namespace, podName, container string
 }
 
 //BuildLokiCommandArgs build kubect command to get logs from loki
+//https://github.com/gardener/gardener/blob/master/docs/usage/logging.md
+//Loki multi-tenant is enabled so it's required to pass 'X-Scope-OrgID' header
 func BuildLokiCommandArgs(kubeconfig string, namespace, podName, container string, tail int64, sinceSeconds time.Duration) []string {
 	args := []string{
 		"--kubeconfig=" + kubeconfig,
@@ -449,8 +451,6 @@ func BuildLokiCommandArgs(kubeconfig string, namespace, podName, container strin
 	command += fmt.Sprintf("&&start=%d&&end=%d", now-sinceNanoSec, now)
 
 	args = append(args, command)
-	fmt.Println("")
-	fmt.Println(strings.Join(args, " "))
 	return args
 }
 
