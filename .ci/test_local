@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-set -e
+set -xeo pipefail
 
 # For the test step concourse will set the following environment variables:
 # SOURCE_PATH - path to component repository root directory.
@@ -11,8 +11,11 @@ else
     export SOURCE_PATH="$(readlink -f "${SOURCE_PATH}")"
 fi
 
-cd "${SOURCE_PATH}"
-
+gardener_project="gardenctl"
+shoot_namespace="garden-${gardener_project}"
+gardener_url="https://gardener.garden.dev.k8s.ondemand.com"
+gardenctl_cmd=( "go" "run" "cmd/gardenctl/main.go" )
+shoot_name="gctl-aws"
 
 function check() {
     if [ $? -eq 0 ]; then
