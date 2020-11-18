@@ -41,6 +41,10 @@ import (
 // checkError checks if an error during execution occurred
 func checkError(err error) {
 	if err != nil {
+		if exiterr, ok := err.(*exec.ExitError); ok {
+			log.Println(string(exiterr.Stderr))
+		}
+
 		if debugSwitch {
 			_, fn, line, _ := runtime.Caller(1)
 			log.Fatalf("[error] %s:%d \n %v", fn, line, err)
