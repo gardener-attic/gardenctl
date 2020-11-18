@@ -26,13 +26,16 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"time"
 
 	gardencorev1beta1 "github.com/gardener/gardener/pkg/apis/core/v1beta1"
 	gardenerlogger "github.com/gardener/gardener/pkg/logger"
+	kutil "github.com/gardener/gardener/pkg/utils/kubernetes"
 	yaml "gopkg.in/yaml.v2"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 	restclient "k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 	clientcmdapi "k8s.io/client-go/tools/clientcmd/api"
@@ -369,4 +372,65 @@ func CheckIPPortReachable(ip string, port string) error {
 		attemptCount++
 	}
 	return fmt.Errorf("IP %s port %s is not reachable", ip, port)
+}
+
+//setHibernation hibernate a shoot or wake up a shoot
+func setHibernation(shoot *gardencorev1beta1.Shoot, hibernated bool) {
+	if shoot.Spec.Hibernation != nil {
+		shoot.Spec.Hibernation.Enabled = &hibernated
+	}
+	shoot.Spec.Hibernation = &gardencorev1beta1.Hibernation{
+		Enabled: &hibernated,
+	}
+}
+
+//waitShootReconciled wait for the shoot to be reconciled successfully
+func waitShootReconciled(shoot *gardencorev1beta1.Shoot, targetReader TargetReader) error {
+	attemptCnt := 0
+	fmt.Println("Shoot is being reconciled, the progress will be updated 1 min interval")
+	for attemptCnt < 20 {
+		newShoot := &gardencorev1beta1.Shoot{}
+		target := targetReader.ReadTarget(pathTarget)
+		gardenClientset, err := target.GardenerClient()
+		shootList, err := gardenClientset.CoreV1beta1().Shoots("").List(metav1.ListOptions{})
+		checkError(err)
+		for index, s := range shootList.Items {
+			if s.Name == shoot.Name && *s.Spec.SeedName == *shoot.Spec.SeedName {
+				newShoot = &shootList.Items[index]
+				break
+			}
+		}
+		checkError(err)
+		if newShoot.Status.LastOperation.Description == "Shoot cluster state has been successfully reconciled." &&
+			newShoot.Status.LastOperation.State == "Succeeded" &&
+			newShoot.Status.LastOperation.Type == "Reconcile" &&
+			newShoot.Status.LastOperation.Progress == 100 {
+			fmt.Println("Shoot has been successfully reconciled")
+			return nil
+		}
+		fmt.Println("Last operation descirption is " + newShoot.Status.LastOperation.Description)
+		fmt.Println("Last operation state is " + newShoot.Status.LastOperation.State)
+		fmt.Println("Last operation type is " + newShoot.Status.LastOperation.Type)
+		fmt.Println("Last operation progress is " + strconv.Itoa(int(newShoot.Status.LastOperation.Progress)) + "%")
+		time.Sleep(time.Second * 60)
+		attemptCnt++
+	}
+	return fmt.Errorf("Shoot not successfully reconciled within 20 mins")
+
+}
+
+//MergePatchShoot Merge old shoot with new shoot
+func MergePatchShoot(oldShoot, newShoot *gardencorev1beta1.Shoot, targetReader TargetReader) (*gardencorev1beta1.Shoot, error) {
+	patchBytes, err := kutil.CreateTwoWayMergePatch(oldShoot, newShoot)
+	if err != nil {
+		return nil, fmt.Errorf("failed to patch bytes")
+	}
+
+	target := targetReader.ReadTarget(pathTarget)
+	gardenClientset, err := target.GardenerClient()
+	patchedShoot, err := gardenClientset.CoreV1beta1().Shoots(oldShoot.GetNamespace()).Patch(oldShoot.GetName(), types.StrategicMergePatchType, patchBytes)
+	if err == nil {
+		*oldShoot = *patchedShoot
+	}
+	return patchedShoot, err
 }
