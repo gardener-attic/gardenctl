@@ -21,6 +21,7 @@ import (
 	"io"
 	"io/ioutil"
 	"log"
+	"net"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -352,17 +353,15 @@ func PrintoutObject(objectToPrint interface{}, writer io.Writer, outputFormat st
 
 //CheckIPPortReachable check whether IP with port is reachable with 1 min
 func CheckIPPortReachable(ip string, port string) error {
-	attemptCnt := 0
-	for attemptCnt < 6 {
-		ncCmd := fmt.Sprintf("timeout 10 nc -vtnz %s %s", ip, port)
-		cmd := exec.Command("bash", "-c", ncCmd)
-		output, _ := cmd.CombinedOutput()
-		if strings.Contains(string(output), "open") {
-			fmt.Printf("IP %s port %s is reachable\n", ip, port)
-			return nil
-		}
-		time.Sleep(time.Second * 10)
-		attemptCnt++
+	timeout := time.Second * 60
+	conn, err := net.DialTimeout("tcp", net.JoinHostPort(ip, port), timeout)
+	if err != nil {
+		fmt.Println("Connecting error:", err)
+	}
+	if conn != nil {
+		defer conn.Close()
+		fmt.Printf("IP %s port %s is reachable\n", ip, port)
+		return nil
 	}
 	return fmt.Errorf("IP %s port %s is not reachable", ip, port)
 }
