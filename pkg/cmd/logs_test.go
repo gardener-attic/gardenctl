@@ -17,7 +17,6 @@ package cmd_test
 import (
 	"github.com/gardener/gardenctl/pkg/cmd"
 	mockcmd "github.com/gardener/gardenctl/pkg/mock/cmd"
-	"github.com/golang/mock/gomock"
 	"github.com/spf13/cobra"
 
 	"regexp"
@@ -83,6 +82,19 @@ var _ = Describe("Logs and kubecmd command", func() {
 			command := strings.Join(args, " ")
 			normCommand := normalizeTimestamp(command)
 			Expect(expectedNorm).To(Equal(normCommand))
+			Expect(len(args)).To(Equal(13))
+		})
+	})
+
+	Context("versions comparison", func() {
+		It("should be greater than Loki version release", func() {
+			Expect(versionGreaterThanLokiRelease("1.13.0-dev-38d42e28ec51d5b8728fcade4ae5b50f3d3eaca1")).To(BeTrue())
+			Expect(versionGreaterThanLokiRelease("1.13.0")).To(BeTrue())
+		})
+
+		It("should be earlier than Loki version release", func() {
+			Expect(versionGreaterThanLokiRelease("1.8.0-dev-38d42e28ec51d5b8728fcade4ae5b50f3d3eaca1")).To(BeFalse())
+			Expect(versionGreaterThanLokiRelease("1.7.0")).To(BeFalse())
 		})
 	})
 })
