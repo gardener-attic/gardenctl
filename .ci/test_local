@@ -28,13 +28,13 @@ function check() {
 gardenctl_clis(){
     echo "====aws cli===="
     go run cmd/gardenctl/main.go target --server https://gardener.garden.dev.k8s.ondemand.com --project gardenctl --shoot gctl-aws > /dev/null
-    go run cmd/gardenctl/main.go aws -- --version > /dev/null && check
+    go run cmd/gardenctl/main.go aws --version > /dev/null && check
     echo "====az cli===="
     go run cmd/gardenctl/main.go target --server https://gardener.garden.dev.k8s.ondemand.com --project gardenctl --shoot gctl-az > /dev/null
-    go run cmd/gardenctl/main.go az -- -h > /dev/null && check
+    go run cmd/gardenctl/main.go az -h > /dev/null && check
     echo "====gcloud cli===="
     go run cmd/gardenctl/main.go target --server https://gardener.garden.dev.k8s.ondemand.com --project gardenctl --shoot gctl-gcp > /dev/null
-    go run cmd/gardenctl/main.go gcloud -- -v > /dev/null && check
+    go run cmd/gardenctl/main.go gcloud -v > /dev/null && check
 }
 
 
@@ -83,3 +83,8 @@ gardenctl_infra(){
 
 
 gardenctl_clis
+gardenctl_get
+gardenctl_logs
+gardenctl_show
+gardenctl_ssh
+gardenctl_infra
