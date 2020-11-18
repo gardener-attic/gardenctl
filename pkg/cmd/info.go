@@ -77,15 +77,15 @@ func NewInfoCmd(targetReader TargetReader, ioStreams IOStreams) *cobra.Command {
 			fmt.Fprintf(ioStreams.Out, "Garden: %s\n", targetStack[0].Name)
 
 			w := tabwriter.NewWriter(ioStreams.Out, 6, 0, 20, ' ', 0)
-			fmt.Fprintln(w, fmt.Sprintf("%s\t%s\t%s\t%s", "Seed", "Total", "Active", "Hibernated"))
-			fmt.Fprintln(w, fmt.Sprintf("%s\t%s\t%s\t%s", "----", "-----", "------", "----------"))
+			fmt.Fprintf(w, "%s\t%s\t%s\t%s\n", "Seed", "Total", "Active", "Hibernated")
+			fmt.Fprintf(w, "%s\t%s\t%s\t%s\n", "----", "-----", "------", "----------")
 
 			for _, seed := range sortedSeeds {
-				fmt.Fprintln(w, fmt.Sprintf("%s\t%d\t%d\t%d", seed, totalShootsCountPerSeed[seed], totalShootsCountPerSeed[seed]-hibernatedShootsCountPerSeed[seed], hibernatedShootsCountPerSeed[seed]))
+				fmt.Fprintf(w, "%s\t%d\t%d\t%d\n", seed, totalShootsCountPerSeed[seed], totalShootsCountPerSeed[seed]-hibernatedShootsCountPerSeed[seed], hibernatedShootsCountPerSeed[seed])
 			}
-			fmt.Fprintln(w, fmt.Sprintf("%s\t%s\t%s\t%s", "----", "-----", "------", "----------"))
-			fmt.Fprintln(w, fmt.Sprintf("%s\t%d\t%d\t%d", "TOTAL", len(shootList.Items), len(shootList.Items)-hibernatedShootsCount-unscheduled, hibernatedShootsCount))
-			fmt.Fprintln(w, fmt.Sprintf("%s\t%d", "Unscheduled", unscheduled))
+			fmt.Fprintf(w, "%s\t%s\t%s\t%s\n", "----", "-----", "------", "----------")
+			fmt.Fprintf(w, "%s\t%d\t%d\t%d\n", "TOTAL", len(shootList.Items), len(shootList.Items)-hibernatedShootsCount-unscheduled, hibernatedShootsCount)
+			fmt.Fprintf(w, "%s\t%d\n", "Unscheduled", unscheduled)
 
 			fmt.Fprintln(w)
 			w.Flush()

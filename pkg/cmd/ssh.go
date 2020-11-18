@@ -125,7 +125,7 @@ func printNodeNames(shootName string) error {
 
 	fmt.Println("Nodes:")
 	for _, machine := range machineList.Items {
-		fmt.Println(fmt.Sprintf("%s (%s)", machine.Status.Node, string(machine.Status.CurrentStatus.Phase)))
+		fmt.Printf("%s (%s)", machine.Status.Node, string(machine.Status.CurrentStatus.Phase))
 	}
 
 	return nil

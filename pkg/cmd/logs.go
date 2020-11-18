@@ -100,7 +100,7 @@ func validateFlags(flags *logFlags) {
 		fmt.Println("Incorrect value for flag: --tail, value must be greater 0")
 		os.Exit(2)
 	} else if flags.loki && flags.tail > maxLokiLogs {
-		fmt.Println(fmt.Sprintf("Maximum number of logs that can be fetched from loki is %d", maxLokiLogs))
+		fmt.Printf("Maximum number of logs that can be fetched from loki is %d", maxLokiLogs)
 		os.Exit(2)
 	}
 }
