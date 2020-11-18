@@ -71,6 +71,12 @@ func sshToOpenstackNode(nodeName, path, user, pathSSKeypair string, sshPublicKey
 
 	defer a.cleanUpOpenstack(&sshStatus)
 
+	err = CheckIPPortReachable(a.FIP, "22")
+
+	if err != nil {
+		sshStatus = 1
+	}
+
 	node := user + "@" + a.FIP
 	fmt.Println("(4/5) Establishing SSH connection")
 	fmt.Println("")

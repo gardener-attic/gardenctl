@@ -26,6 +26,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"time"
 
 	gardencorev1beta1 "github.com/gardener/gardener/pkg/apis/core/v1beta1"
 	gardenerlogger "github.com/gardener/gardener/pkg/logger"
@@ -347,4 +348,21 @@ func PrintoutObject(objectToPrint interface{}, writer io.Writer, outputFormat st
 		return errors.New("output format not supported: '" + outputFormat + "'")
 	}
 	return nil
+}
+
+//CheckIPPortReachable check whether IP with port is reachable with 1 min
+func CheckIPPortReachable(ip string, port string) error {
+	attemptCnt := 0
+	for attemptCnt < 6 {
+		ncCmd := fmt.Sprintf("timeout 10 nc -vtnz %s %s", ip, port)
+		cmd := exec.Command("bash", "-c", ncCmd)
+		output, _ := cmd.CombinedOutput()
+		if strings.Contains(string(output), "open") {
+			fmt.Printf("IP %s port %s is reachable\n", ip, port)
+			return nil
+		}
+		time.Sleep(time.Second * 10)
+		attemptCnt++
+	}
+	return fmt.Errorf("IP %s port %s is not reachable", ip, port)
 }
