@@ -21,11 +21,13 @@ import (
 	"io"
 	"io/ioutil"
 	"log"
+	"net"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
+	"time"
 
 	gardencorev1beta1 "github.com/gardener/gardener/pkg/apis/core/v1beta1"
 	gardenerlogger "github.com/gardener/gardener/pkg/logger"
@@ -345,4 +347,19 @@ func PrintoutObject(objectToPrint interface{}, writer io.Writer, outputFormat st
 		return errors.New("output format not supported: '" + outputFormat + "'")
 	}
 	return nil
+}
+
+//CheckIPPortReachable check whether IP with port is reachable with 1 min
+func CheckIPPortReachable(ip string, port string) error {
+	timeout := time.Second * 60
+	conn, err := net.DialTimeout("tcp", net.JoinHostPort(ip, port), timeout)
+	if err != nil {
+		fmt.Println("Connecting error:", err)
+	}
+	if conn != nil {
+		defer conn.Close()
+		fmt.Printf("IP %s port %s is reachable\n", ip, port)
+		return nil
+	}
+	return fmt.Errorf("IP %s port %s is not reachable", ip, port)
 }
