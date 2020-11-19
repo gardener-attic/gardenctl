@@ -14,8 +14,6 @@ fi
 cd "${SOURCE_PATH}"
 
 # Ensure Ginkgo (test framework) is installed
-if ! go list github.com/onsi/ginkgo > /dev/null 2>&1 ; then
-  go install -mod=vendor ./vendor/github.com/onsi/ginkgo/ginkgo
-fi
+go install -mod=vendor ./vendor/github.com/onsi/ginkgo/ginkgo
 
 ginkgo -v -progress -cover -r -mod=vendor pkg/..
