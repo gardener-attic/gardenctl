@@ -450,6 +450,10 @@ func targetSeed(targetReader TargetReader, targetWriter TargetWriter, name strin
 		fmt.Println("Seed not found")
 		os.Exit(2)
 	}
+	if seed.Spec.SecretRef == nil {
+		fmt.Println("Spec.SecretRef is missing in this seed, seed not reachable")
+		os.Exit(2)
+	}
 	kubeSecret, err := Client.CoreV1().Secrets(seed.Spec.SecretRef.Namespace).Get(seed.Spec.SecretRef.Name, metav1.GetOptions{})
 	checkError(err)
 	pathSeed := filepath.Join(pathGardenHome, "cache", gardenName, "seeds", name)
