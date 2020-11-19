@@ -18,6 +18,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"os"
 	"path"
 	"path/filepath"
@@ -42,19 +43,19 @@ const (
 var flags *logFlags
 
 // NewLogsCmd returns a new logs command.
-func NewLogsCmd() *cobra.Command {
+func NewLogsCmd(targetReader TargetReader) *cobra.Command {
 	flags = newLogsFlags()
 	cmd := &cobra.Command{
 		Use:          "logs (gardener-apiserver|gardener-controller-manager|gardener-dashboard|api|scheduler|controller-manager|etcd-operator|etcd-main[etcd backup-restore]|etcd-main-backup|etcd-events[etcd backup-restore]|addon-manager|vpn-seed|vpn-shoot|machine-controller-manager|kubernetes-dashboard|prometheus|grafana|gardenlet|tf (infra|dns|ingress)|cluster-autoscaler)",
 		Short:        "Show and optionally follow logs of given component\n",
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			err := validateArgs(args)
+			err := validateArgs(targetReader, args)
 			if err != nil {
 				return err
 			}
 			validateFlags(flags)
-			runCommand(args)
+			runCommand(targetReader, args)
 			return nil
 		},
 		ValidArgs: []string{"gardener-apiserver", "gardener-controller-manager", "gardener-dashboard", "api", "scheduler", "controller-manager", "etcd-operator", "etcd-main", "etcd-events", "addon-manager", "vpn-seed", "vpn-shoot", "auto-node-repair", "kubernetes-dashboard", "prometheus", "grafana", "gardenlet", "tf"},
@@ -68,17 +69,17 @@ func NewLogsCmd() *cobra.Command {
 	return cmd
 }
 
-func validateArgs(args []string) error {
+func validateArgs(targetReader TargetReader, args []string) error {
 	if len(args) < 1 || len(args) > 3 {
 		return errors.New("Command must be in the format: logs (gardener-apiserver|gardener-controller-manager|gardener-dashboard|api|scheduler|controller-manager|etcd-operator|etcd-main[etcd backup-restore]|etcd-events[etcd backup-restore]|addon-manager|vpn-seed|vpn-shoot|machine-controller-manager|kubernetes-dashboard|prometheus|grafana|gardenlet|tf (infra|dns|ingress)|cluster-autoscaler flags(--loki|--tail|--since|--since-time|--timestamps)")
 	}
 	var t Target
 	ReadTarget(pathTarget, &t)
-	if len(t.Target) < 3 && (args[0] != "gardener-apiserver") && (args[0] != "gardener-controller-manager") && (args[0] != "tf") && (args[0] != "kubernetes-dashboard") {
+	if !IsTargeted(targetReader, "shoot") && args[0] != "gardener-apiserver" && args[0] != "gardener-controller-manager" && args[0] != "tf" && args[0] != "kubernetes-dashboard" {
 		return errors.New("No shoot targeted")
-	} else if (len(t.Target) < 2 && (args[0] == "tf")) || len(t.Target) < 3 && (args[0] == "tf") && (t.Target[1].Kind != "seed") {
+	} else if !IsTargeted(targetReader, "project") && args[0] == "tf" || !IsTargeted(targetReader, "shoot") && args[0] == "tf" && !IsTargeted(targetReader, "seed") {
 		return errors.New("No seed or shoot targeted")
-	} else if len(t.Target) == 0 {
+	} else if !IsTargeted(targetReader) {
 		return errors.New("Target stack is empty")
 	}
 	return nil
@@ -105,56 +106,56 @@ func validateFlags(flags *logFlags) {
 	}
 }
 
-func runCommand(args []string) {
+func runCommand(targetReader TargetReader, args []string) {
 	switch args[0] {
 	case "all":
-		saveLogsAll()
+		saveLogsAll(targetReader)
 	case "gardener-apiserver":
 		logsGardenerApiserver()
 	case "gardener-controller-manager":
-		logsGardenerControllerManager()
+		logsGardenerControllerManager(targetReader)
 	case "gardener-dashboard":
 		logsGardenerDashboard()
 	case "api":
-		logsAPIServer()
+		logsAPIServer(targetReader)
 	case "scheduler":
-		logsScheduler()
+		logsScheduler(targetReader)
 	case "controller-manager":
-		logsControllerManager()
+		logsControllerManager(targetReader)
 	case "etcd-operator":
 		logsEtcdOpertor()
 	case "etcd-main":
 		if len(args) == 2 {
-			logsEtcdMain(args[1])
+			logsEtcdMain(targetReader, args[1])
 		} else {
-			logsEtcdMain(emptyString)
+			logsEtcdMain(targetReader, emptyString)
 		}
 	case "etcd-main-backup":
-		logsEtcdMainBackup()
+		logsEtcdMainBackup(targetReader)
 	case "etcd-events":
 		if len(args) == 2 {
-			logsEtcdEvents(args[1])
+			logsEtcdEvents(targetReader, args[1])
 		} else {
-			logsEtcdEvents(emptyString)
+			logsEtcdEvents(targetReader, emptyString)
 		}
 	case "addon-manager":
-		logsAddonManager()
+		logsAddonManager(targetReader)
 	case "vpn-seed":
 		logsVpnSeed(args[1])
 	case "vpn-shoot":
 		logsVpnShoot()
 	case "machine-controller-manager":
-		logsMachineControllerManager()
+		logsMachineControllerManager(targetReader)
 	case "kubernetes-dashboard":
-		logsKubernetesDashboard()
+		logsKubernetesDashboard(targetReader)
 	case "prometheus":
-		logsPrometheus()
+		logsPrometheus(targetReader)
 	case "grafana":
-		logsGrafana()
+		logsGrafana(targetReader)
 	case "gardenlet":
 		logsGardenlet()
 	case "cluster-autoscaler":
-		logsClusterAutoscaler()
+		logsClusterAutoscaler(targetReader)
 	case "tf":
 		if len(args) == 1 || len(args) < 3 {
 			logsTfHelp()
@@ -180,7 +181,7 @@ func runCommand(args []string) {
 	}
 }
 
-func saveLogsAll() {
+func saveLogsAll(targetReader TargetReader) {
 	//flags.sinceSeconds = 600 * time.Second
 	if _, err := os.Stat("./logs/"); !os.IsNotExist(err) {
 		os.RemoveAll("./logs/")
@@ -190,27 +191,27 @@ func saveLogsAll() {
 
 	fmt.Println("APIServer/Scheduler/ControllerManager/etcd/AddonManager/VpnShoot/Dashboard/Prometheus/Gardenlet/Autoscaler logs will be downloaded")
 
-	saveLogsAPIServer()
-	saveLogsScheduler()
-	saveLogsControllerManager()
-	saveLogsEtcdMain("etcd")
-	saveLogsEtcdMain("backup-restore")
-	saveLogsEtcdMainBackup()
-	saveLogsEtcdEvents("etcd")
-	saveLogsEtcdEvents("backup-restore")
-	saveLogsAddonManager()
+	saveLogsAPIServer(targetReader)
+	saveLogsScheduler(targetReader)
+	saveLogsControllerManager(targetReader)
+	saveLogsEtcdMain(targetReader, "etcd")
+	saveLogsEtcdMain(targetReader, "backup-restore")
+	saveLogsEtcdMainBackup(targetReader)
+	saveLogsEtcdEvents(targetReader, "etcd")
+	saveLogsEtcdEvents(targetReader, "backup-restore")
+	saveLogsAddonManager(targetReader)
 	saveLogsVpnShoot()
-	saveLogsMachineControllerManager()
+	saveLogsMachineControllerManager(targetReader)
 	saveLogsKubernetesDashboard()
-	saveLogsPrometheus()
+	saveLogsPrometheus(targetReader)
 	saveLogsGardenlet()
-	saveLogsClusterAutoscaler()
-	saveLogsGrafana()
+	saveLogsClusterAutoscaler(targetReader)
+	saveLogsGrafana(targetReader)
 
 	var target Target
 	ReadTarget(pathTarget, &target)
 	if !(len(target.Target) < 3 || (len(target.Stack()) == 3 && target.Stack()[2].Kind == "namespace")) {
-		shoot, err := getShootObject()
+		shoot, err := GetTargetedShootObject(targetReader)
 		checkError(err)
 		saveLogsTerraform(shoot.Name + ".infra.tf")
 		saveLogsTerraform(shoot.Name + ".dns.tf")
@@ -225,16 +226,16 @@ func saveLogsAll() {
 }
 
 // showPod is an abstraction to show pods in seed cluster controlplane or kube-system namespace of shoot
-func logPod(toMatch string, toTarget string, container string) {
+func logPod(targetReader TargetReader, toMatch string, toTarget string, container string) {
 	var target Target
 	ReadTarget(pathTarget, &target)
-	if len(target.Target) < 3 || (len(target.Stack()) == 3 && target.Stack()[2].Kind == "namespace") {
-		fmt.Println("No shoot targeted")
-		os.Exit(2)
+	if !IsTargeted(targetReader, "shoot") {
+		log.Fatal("No shoot targeted")
 	}
-	namespace := getSeedNamespaceNameForShoot(target.Target[2].Name)
+
+	namespace := GetFromTargetInfo(targetReader, "shootTechnicalID")
 	var err error
-	shoot, err := getShootObject()
+	shoot, err := GetTargetedShootObject(targetReader)
 	checkError(err)
 
 	gardenerVersion, err := semver.NewVersion(shoot.Status.Gardener.Version)
@@ -265,7 +266,7 @@ func logPod(toMatch string, toTarget string, container string) {
 }
 
 // showPod is an abstraction to show pods in seed cluster controlplane or kube-system namespace of shoot
-func saveLogPod(toMatch string, toTarget string, container string) {
+func saveLogPod(targetReader TargetReader, toMatch string, toTarget string, container string) {
 	var target Target
 	ReadTarget(pathTarget, &target)
 	if len(target.Target) < 3 || (len(target.Stack()) == 3 && target.Stack()[2].Kind == "namespace") {
@@ -274,7 +275,7 @@ func saveLogPod(toMatch string, toTarget string, container string) {
 	}
 	namespace := getSeedNamespaceNameForShoot(target.Target[2].Name)
 	var err error
-	shoot, err := getShootObject()
+	shoot, err := GetTargetedShootObject(targetReader)
 	checkError(err)
 
 	gardenerVersion, err := semver.NewVersion(shoot.Status.Gardener.Version)
@@ -493,16 +494,16 @@ func saveLogPodShoot(toMatch, namespace string, container string) {
 }
 
 // logPodGardenImproved print logfiles for garden pods
-func logPodGardenImproved(podName string) {
+func logPodGardenImproved(targetReader TargetReader, podName string) {
 	var target Target
 	ReadTarget(pathTarget, &target)
 	Client, err := clientToTarget("garden")
 	checkError(err)
 	pods, err := Client.CoreV1().Pods("garden").List(metav1.ListOptions{})
 	checkError(err)
-	project, err := getTargetName("project")
+	project, err := GetTargetName(targetReader, "project")
 	checkError(err)
-	shootName, err := getTargetName("shoot")
+	shootName, err := GetTargetName(targetReader, "shoot")
 	checkError(err)
 
 	for _, pod := range pods.Items {
@@ -530,13 +531,13 @@ func logsGardenerApiserver() {
 }
 
 // logsGardenerControllerManager prints the logfile of the gardener-controller-manager
-func logsGardenerControllerManager() {
+func logsGardenerControllerManager(targetReader TargetReader) {
 	var target Target
 	ReadTarget(pathTarget, &target)
 	if len(target.Target) != 3 {
 		logPodGarden("gardener-controller-manager", "garden")
 	} else {
-		logPodGardenImproved("gardener-controller-manager")
+		logPodGardenImproved(targetReader, "gardener-controller-manager")
 	}
 }
 
@@ -546,30 +547,30 @@ func logsGardenerDashboard() {
 }
 
 // logsAPIServer prints the logfile of the api-server
-func logsAPIServer() {
-	logPod("kube-apiserver", "seed", "kube-apiserver")
+func logsAPIServer(targetReader TargetReader) {
+	logPod(targetReader, "kube-apiserver", "seed", "kube-apiserver")
 }
 
-func saveLogsAPIServer() {
-	saveLogPod("kube-apiserver", "seed", "kube-apiserver")
+func saveLogsAPIServer(targetReader TargetReader) {
+	saveLogPod(targetReader, "kube-apiserver", "seed", "kube-apiserver")
 }
 
 // logsScheduler prints the logfile of the scheduler
-func logsScheduler() {
-	logPod("kube-scheduler", "seed", emptyString)
+func logsScheduler(targetReader TargetReader) {
+	logPod(targetReader, "kube-scheduler", "seed", emptyString)
 }
 
-func saveLogsScheduler() {
-	saveLogPod("kube-scheduler", "seed", emptyString)
+func saveLogsScheduler(targetReader TargetReader) {
+	saveLogPod(targetReader, "kube-scheduler", "seed", emptyString)
 }
 
 // logsAPIServer prints the logfile of the controller-manager
-func logsControllerManager() {
-	logPod("kube-controller-manager", "seed", emptyString)
+func logsControllerManager(targetReader TargetReader) {
+	logPod(targetReader, "kube-controller-manager", "seed", emptyString)
 }
 
-func saveLogsControllerManager() {
-	saveLogPod("kube-controller-manager", "seed", emptyString)
+func saveLogsControllerManager(targetReader TargetReader) {
+	saveLogPod(targetReader, "kube-controller-manager", "seed", emptyString)
 }
 
 // logsVpnSeed prints the logfile of the vpn-seed container
@@ -584,39 +585,39 @@ func logsEtcdOpertor() {
 }
 
 // logsEtcdMain prints the logfile of etcd-main
-func logsEtcdMain(containerName string) {
-	logPod("etcd-main", "seed", containerName)
+func logsEtcdMain(targetReader TargetReader, containerName string) {
+	logPod(targetReader, "etcd-main", "seed", containerName)
 }
 
-func saveLogsEtcdMain(containerName string) {
-	saveLogPod("etcd-main", "seed", containerName)
+func saveLogsEtcdMain(targetReader TargetReader, containerName string) {
+	saveLogPod(targetReader, "etcd-main", "seed", containerName)
 }
 
 // logsEtcdMainBackup prints logfiles of etcd-main-backup-sidecar pod
-func logsEtcdMainBackup() {
-	logPod("etcd-main-backup-sidecar", "seed", emptyString)
+func logsEtcdMainBackup(targetReader TargetReader) {
+	logPod(targetReader, "etcd-main-backup-sidecar", "seed", emptyString)
 }
 
-func saveLogsEtcdMainBackup() {
-	saveLogPod("etcd-main-backup-sidecar", "seed", emptyString)
+func saveLogsEtcdMainBackup(targetReader TargetReader) {
+	saveLogPod(targetReader, "etcd-main-backup-sidecar", "seed", emptyString)
 }
 
 // logsEtcdEvents prints the logfile of etcd-events
-func logsEtcdEvents(containerName string) {
-	logPod("etcd-events-", "seed", containerName)
+func logsEtcdEvents(targetReader TargetReader, containerName string) {
+	logPod(targetReader, "etcd-events-", "seed", containerName)
 }
 
-func saveLogsEtcdEvents(containerName string) {
-	saveLogPod("etcd-events-", "seed", containerName)
+func saveLogsEtcdEvents(targetReader TargetReader, containerName string) {
+	saveLogPod(targetReader, "etcd-events-", "seed", containerName)
 }
 
 // logsAddonManager prints the logfile of addon-manager
-func logsAddonManager() {
-	logPod("addon-manager", "seed", emptyString)
+func logsAddonManager(targetReader TargetReader) {
+	logPod(targetReader, "addon-manager", "seed", emptyString)
 }
 
-func saveLogsAddonManager() {
-	saveLogPod("addon-manager", "seed", emptyString)
+func saveLogsAddonManager(targetReader TargetReader) {
+	saveLogPod(targetReader, "addon-manager", "seed", emptyString)
 }
 
 // logsVpnShoot prints the logfile of vpn-shoot
@@ -631,20 +632,20 @@ func saveLogsVpnShoot() {
 }
 
 // logsMachineControllerManager prints the logfile of machine-controller-manager
-func logsMachineControllerManager() {
-	logPod("machine-controller-manager", "seed", emptyString)
+func logsMachineControllerManager(targetReader TargetReader) {
+	logPod(targetReader, "machine-controller-manager", "seed", emptyString)
 }
 
-func saveLogsMachineControllerManager() {
-	saveLogPod("machine-controller-manager", "seed", emptyString)
+func saveLogsMachineControllerManager(targetReader TargetReader) {
+	saveLogPod(targetReader, "machine-controller-manager", "seed", emptyString)
 }
 
 // logsKubernetesDashboard prints the logfile of the dashboard
-func logsKubernetesDashboard() {
+func logsKubernetesDashboard(targetReader TargetReader) {
 	var target Target
 	ReadTarget(pathTarget, &target)
 	namespace := "kube-system"
-	if len(target.Target) == 3 {
+	if IsTargeted(targetReader, "shoot") {
 		var err error
 		Client, err = clientToTarget("shoot")
 		checkError(err)
@@ -716,21 +717,21 @@ func saveLogsKubernetesDashboard() {
 }
 
 // logsPrometheus prints the logfiles of prometheus pod
-func logsPrometheus() {
-	logPod("prometheus", "seed", "prometheus")
+func logsPrometheus(targetReader TargetReader) {
+	logPod(targetReader, "prometheus", "seed", "prometheus")
 }
 
-func saveLogsPrometheus() {
-	saveLogPod("prometheus", "seed", "prometheus")
+func saveLogsPrometheus(targetReader TargetReader) {
+	saveLogPod(targetReader, "prometheus", "seed", "prometheus")
 }
 
 // logsGrafana prints the logfiles of grafana pod
-func logsGrafana() {
-	logPod("grafana", "seed", "grafana")
+func logsGrafana(targetReader TargetReader) {
+	logPod(targetReader, "grafana", "seed", "grafana")
 }
 
-func saveLogsGrafana() {
-	saveLogPod("grafana", "seed", "grafana")
+func saveLogsGrafana(targetReader TargetReader) {
+	saveLogPod(targetReader, "grafana", "seed", "grafana")
 }
 
 func logsGardenlet() {
@@ -742,12 +743,12 @@ func saveLogsGardenlet() {
 }
 
 // logsClusterAutoscaler prints the logfiles of cluster-autoscaler
-func logsClusterAutoscaler() {
-	logPod("cluster-autoscaler", "seed", "cluster-autoscaler")
+func logsClusterAutoscaler(targetReader TargetReader) {
+	logPod(targetReader, "cluster-autoscaler", "seed", "cluster-autoscaler")
 }
 
-func saveLogsClusterAutoscaler() {
-	saveLogPod("cluster-autoscaler", "seed", "cluster-autoscaler")
+func saveLogsClusterAutoscaler(targetReader TargetReader) {
+	saveLogPod(targetReader, "cluster-autoscaler", "seed", "cluster-autoscaler")
 }
 
 // logsTerraform prints the logfiles of tf pod

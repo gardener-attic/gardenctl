@@ -1,0 +1,90 @@
+#!/usr/bin/env bash
+
+set -xeo pipefail
+
+# For the test step concourse will set the following environment variables:
+# SOURCE_PATH - path to component repository root directory.
+
+if [[ -z "${SOURCE_PATH}" ]]; then
+    export SOURCE_PATH="$(readlink -f "$(dirname ${0})/..")"
+else
+    export SOURCE_PATH="$(readlink -f "${SOURCE_PATH}")"
+fi
+
+gardener_project="gardenctl"
+shoot_namespace="garden-${gardener_project}"
+gardener_url="https://gardener.garden.dev.k8s.ondemand.com"
+gardenctl_cmd=( "go" "run" "cmd/gardenctl/main.go" )
+shoot_name="gctl-aws"
+
+function check() {
+    if [ $? -eq 0 ]; then
+        echo "PASS"
+    else
+        echo "FAIL"
+    fi
+}
+
+gardenctl_clis(){
+    echo "====aws cli===="
+    go run cmd/gardenctl/main.go target --server https://gardener.garden.dev.k8s.ondemand.com --project gardenctl --shoot gctl-aws > /dev/null
+    go run cmd/gardenctl/main.go aws --version > /dev/null && check
+    echo "====az cli===="
+    go run cmd/gardenctl/main.go target --server https://gardener.garden.dev.k8s.ondemand.com --project gardenctl --shoot gctl-az > /dev/null
+    go run cmd/gardenctl/main.go az -h > /dev/null && check
+    echo "====gcloud cli===="
+    go run cmd/gardenctl/main.go target --server https://gardener.garden.dev.k8s.ondemand.com --project gardenctl --shoot gctl-gcp > /dev/null
+    go run cmd/gardenctl/main.go gcloud -v > /dev/null && check
+}
+
+
+gardenctl_get(){
+    echo "=====target/seed/shoot====="
+    go run cmd/gardenctl/main.go target --server https://gardener.garden.dev.k8s.ondemand.com --seed aws --shoot gctl-aws > /dev/null && check
+    
+    echo "===get===garden/seed/shoot==="
+    go run cmd/gardenctl/main.go get garden > /dev/null && check
+    go run cmd/gardenctl/main.go get seed > /dev/null && check
+    go run cmd/gardenctl/main.go get shoot > /dev/null && check
+    
+    echo "=====target/project/shoot====="
+    go run cmd/gardenctl/main.go target --server https://gardener.garden.dev.k8s.ondemand.com --project gardenctl --shoot gctl-aws > /dev/null && check
+    echo "===get===project/shoot/seed==="
+    go run cmd/gardenctl/main.go get garden > /dev/null && check
+    go run cmd/gardenctl/main.go get project > /dev/null && check
+    go run cmd/gardenctl/main.go get shoot > /dev/null && check
+    go run cmd/gardenctl/main.go get seed > /dev/null && check
+}
+
+gardenctl_logs(){
+    echo "===logs===logPodGardenImproved/logPod/logsKubernetesDashboard==="
+    go run cmd/gardenctl/main.go logs gardener-controller-manager > /dev/null && check
+    go run cmd/gardenctl/main.go logs api > /dev/null && check
+    go run cmd/gardenctl/main.go logs kubernetes-dashboard > /dev/null && check
+    
+}
+
+gardenctl_show(){
+    echo "===show===showPrometheus/showGrafana==="
+    go run cmd/gardenctl/main.go show prometheus > /dev/null && check
+    go run cmd/gardenctl/main.go show grafana > /dev/null && check
+}
+
+gardenctl_ssh(){
+    echo "===SSH==="
+    go run cmd/gardenctl/main.go ssh > /dev/null && check
+}
+
+gardenctl_infra(){
+    echo "===infra==="
+    go run cmd/gardenctl/main.go infra orphan list > /dev/null && check
+    
+}
+
+
+gardenctl_clis
+gardenctl_get
+gardenctl_logs
+gardenctl_show
+gardenctl_ssh
+gardenctl_infra

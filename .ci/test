@@ -14,35 +14,12 @@ fi
 cd "${SOURCE_PATH}"
 
 
-
-function check() {
-if [ $? -eq 0 ]; then
-  echo "PASS"
-else
-  echo "FAIL"
-fi
-}
-
-if [ $1x == "local"x ]; then
-echo "====aws cli===="
-go run cmd/gardenctl/main.go aws -- --version > /dev/null
-check
-echo "====az cli===="
-go run cmd/gardenctl/main.go az -- -h > /dev/null
-check
-echo "====gcloud cli===="
-go run cmd/gardenctl/main.go gcloud -- -v > /dev/null
-check
-
-else 
 # Build the Ginkgo (test framework) binary to be able to execute the tests.
 go install -mod=vendor ./vendor/github.com/onsi/ginkgo/ginkgo
 
 ###############################################################################
 
 ginkgo -v -progress -cover -r -mod=vendor pkg/...
-fi
-
 
 
 
