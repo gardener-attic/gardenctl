@@ -1,0 +1,48 @@
+#!/usr/bin/env bash
+
+set -eo pipefail
+
+if [ "$#" -ne 1 ]; then
+    echo "Please supply a shoot name as argument"
+    echo "example: ./test_ssh gctl-<gcp|aws|az|os>"
+    exit 1
+fi
+
+gardener_landscape="dev"
+gardener_project="gardenctl"
+shoot_namespace="garden-${gardener_project}"
+gardener_url="https://gardener.garden.dev.k8s.ondemand.com"
+gardenctl_cmd=( "go" "run" "cmd/gardenctl/main.go" )
+
+
+# SOURCE_PATH - path to component repository root directory.
+if [[ -z "${SOURCE_PATH}" ]]; then
+  export SOURCE_PATH="$(readlink -f "$(dirname ${0})/..")"
+else
+  export SOURCE_PATH="$(readlink -f "${SOURCE_PATH}")"
+fi
+
+gardenctl_ssh() {
+  shoot_name="${1}"
+  cd "${SOURCE_PATH}"
+
+  echo "Target the ${gardener_landscape} garden to wake ${shoot_name}"
+  "${gardenctl_cmd[@]}" target garden "${gardener_landscape}"
+  "${gardenctl_cmd[@]}" kubectl patch shoot "${shoot_name}" -n "${shoot_namespace}" -p '{"spec":{"hibernation":{"enabled":false}}}'
+
+  while [[ $("${gardenctl_cmd[@]}" kubectl get shoot "${shoot_name}" -n "${shoot_namespace}" | awk -v i=2 -v j=6 'FNR == i {print $j}') != "Awake" ]]; do
+    echo 'Waiting for the cluster to wake up...'
+    sleep 5
+  done
+
+  echo "Targeting ${shoot_name} to start the ssh session"
+  "${gardenctl_cmd[@]}" target --server "${gardener_url}" --project "${gardener_project}" --shoot "${shoot_name}"
+  node_name=$("${gardenctl_cmd[@]}" kubectl get node -o name | awk -F'/' '{print $2}')
+
+  # Using ProviderID (https://github.com/gardener/gardenctl/pull/421)
+  # node_name=$("${gardenctl_cmd[@]}" kubectl get node -o jsonpath='{.items[0].spec.providerID}' | awk -F'/' '{print $NF}')
+
+  "${gardenctl_cmd[@]}" ssh "${node_name}" exit
+}
+
+gardenctl_ssh "$1"

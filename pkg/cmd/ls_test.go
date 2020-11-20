@@ -59,7 +59,7 @@ var _ = Describe("Ls command", func() {
 		})
 
 		Context("list shoots", func() {
-			It("shout return error for empty target", func() {
+			It("should return error for empty target", func() {
 				targetReader.EXPECT().ReadTarget(gomock.Any()).Return(target)
 				target.EXPECT().Stack().Return([]cmd.TargetMeta{})
 

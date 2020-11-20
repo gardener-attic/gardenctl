@@ -68,8 +68,8 @@ var _ = Describe("Get command", func() {
 		})
 
 		Context("missing target", func() {
-			It("shout return error for missing shoot in the target", func() {
-				targetReader.EXPECT().ReadTarget(gomock.Any()).Return(target).AnyTimes()
+			It("should return error for missing shoot in the target", func() {
+				targetReader.EXPECT().ReadTarget(gomock.Any()).Return(target)
 				target.EXPECT().Stack().Return([]cmd.TargetMeta{})
 
 				ioStreams, _, _, _ := cmd.NewTestIOStreams()
@@ -81,8 +81,8 @@ var _ = Describe("Get command", func() {
 				Expect(err.Error()).To(Equal("no shoot targeted"))
 			})
 
-			It("shout return error for missing target object", func() {
-				targetReader.EXPECT().ReadTarget(gomock.Any()).Return(target).AnyTimes()
+			It("should return error for missing target object", func() {
+				targetReader.EXPECT().ReadTarget(gomock.Any()).Return(target)
 				target.EXPECT().Stack().Return([]cmd.TargetMeta{})
 
 				ioStreams, _, _, _ := cmd.NewTestIOStreams()
