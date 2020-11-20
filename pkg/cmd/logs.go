@@ -142,9 +142,9 @@ func runCommand(targetReader TargetReader, args []string) {
 		logsAddonManager(targetReader)
 	case "vpn-seed":
 		if len(args) == 2 {
-			logsVpnSeed(args[1])
+			logsVpnSeed(targetReader, args[1])
 		} else {
-			logsVpnSeed(emptyString)
+			logsVpnSeed(targetReader, emptyString)
 		}
 	case "vpn-shoot":
 		logsVpnShoot()
@@ -577,10 +577,10 @@ func saveLogsControllerManager(targetReader TargetReader) {
 }
 
 // logsVpnSeed prints the logfile of the vpn-seed container
-func logsVpnSeed(shootTechnicalID string) {
+func logsVpnSeed(targetReader TargetReader, shootTechnicalID string) {
 	fmt.Println("-----------------------Kube-Apiserver")
 	if shootTechnicalID == emptyString {
-		shootTechnicalID = getFromTargetInfo("shootTechnicalID")
+		shootTechnicalID = GetFromTargetInfo(targetReader, "shootTechnicalID")
 		logPodSeed("kube-apiserver", shootTechnicalID, "vpn-seed")
 	} else {
 		logPodSeed("kube-apiserver", shootTechnicalID, "vpn-seed")
