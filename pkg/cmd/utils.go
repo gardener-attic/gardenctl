@@ -354,10 +354,7 @@ func CheckIPPortReachable(ip string, port string) error {
 	attemptCnt := 0
 	for attemptCnt < 6 {
 		timeout := time.Second * 10
-		conn, err := net.DialTimeout("tcp", net.JoinHostPort(ip, port), timeout)
-		if err != nil {
-			fmt.Println("Connecting error:", err)
-		}
+		conn, _ := net.DialTimeout("tcp", net.JoinHostPort(ip, port), timeout)
 		if conn != nil {
 			defer conn.Close()
 			fmt.Printf("IP %s port %s is reachable\n", ip, port)
