@@ -349,17 +349,22 @@ func PrintoutObject(objectToPrint interface{}, writer io.Writer, outputFormat st
 	return nil
 }
 
-//CheckIPPortReachable check whether IP with port is reachable with 1 min
+//CheckIPPortReachable check whether IP with port is reachable with 2 min
 func CheckIPPortReachable(ip string, port string) error {
-	timeout := time.Second * 60
-	conn, err := net.DialTimeout("tcp", net.JoinHostPort(ip, port), timeout)
-	if err != nil {
-		fmt.Println("Connecting error:", err)
-	}
-	if conn != nil {
-		defer conn.Close()
-		fmt.Printf("IP %s port %s is reachable\n", ip, port)
-		return nil
+	attemptCnt := 0
+	for attemptCnt < 6 {
+		timeout := time.Second * 10
+		conn, err := net.DialTimeout("tcp", net.JoinHostPort(ip, port), timeout)
+		if err != nil {
+			fmt.Println("Connecting error:", err)
+		}
+		if conn != nil {
+			defer conn.Close()
+			fmt.Printf("IP %s port %s is reachable\n", ip, port)
+			return nil
+		}
+		time.Sleep(time.Second * 10)
+		attemptCnt++
 	}
 	return fmt.Errorf("IP %s port %s is not reachable", ip, port)
 }
