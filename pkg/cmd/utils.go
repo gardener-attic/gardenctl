@@ -349,7 +349,7 @@ func PrintoutObject(objectToPrint interface{}, writer io.Writer, outputFormat st
 	return nil
 }
 
-//CheckIPPortReachable check whether IP with port is reachable within 1 min
+//CheckIPPortReachable check whether IP with port is reachable within 1 min,retrigger the test
 func CheckIPPortReachable(ip string, port string) error {
 	attemptCnt := 0
 	for attemptCnt < 6 {
