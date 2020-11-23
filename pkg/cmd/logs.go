@@ -229,6 +229,7 @@ func saveLogsAll(targetReader TargetReader) {
 	fmt.Println("All logs have been saved in " + path + "/logs/ folder")
 }
 
+//VersionGreaterThanLokiRelease checks if provided version supports Loki
 func VersionGreaterThanLokiRelease(version string) bool {
 	lokiRelease, _ := semver.NewVersion("1.8.0")
 
