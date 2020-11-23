@@ -72,8 +72,8 @@ var _ = Describe("Logs and kubecmd command", func() {
 		It("should build kubectl command", func() {
 
 			//test `normalizeTimestamp` first - replace timestamp with some predefined values
-			expected := `--kubeconfig=/path/to/configfile exec loki-0 -n myns -- wget 'http://localhost:3100/loki/api/v1/query_range' -O- --post-data='query={pod_name=~"nginx-pod.*"}&&query={container_name=~"mycontainer.*"&&limit=200&&start=1603184413805314000&&end=1604394013805314000'`
-			expectedNorm := `--kubeconfig=/path/to/configfile exec loki-0 -n myns -- wget 'http://localhost:3100/loki/api/v1/query_range' -O- --post-data='query={pod_name=~"nginx-pod.*"}&&query={container_name=~"mycontainer.*"&&limit=200&&start=101010&&end=202020'`
+			expected := `--kubeconfig=/path/to/configfile exec loki-0 -n myns -- wget --header X-Scope-OrgID: operator http://localhost:3100/loki/api/v1/query_range -O- --post-data query={pod_name=~"nginx-pod.*"}&&query={container_name=~"mycontainer.*"&&limit=200&&start=1603184413805314000&&end=1604394013805314000`
+			expectedNorm := `--kubeconfig=/path/to/configfile exec loki-0 -n myns -- wget --header X-Scope-OrgID: operator http://localhost:3100/loki/api/v1/query_range -O- --post-data query={pod_name=~"nginx-pod.*"}&&query={container_name=~"mycontainer.*"&&limit=200&&start=101010&&end=202020`
 			norm := normalizeTimestamp(expected)
 			Expect(expectedNorm).To(Equal(norm))
 
@@ -88,13 +88,13 @@ var _ = Describe("Logs and kubecmd command", func() {
 
 	Context("versions comparison", func() {
 		It("should be greater than Loki version release", func() {
-			Expect(versionGreaterThanLokiRelease("1.13.0-dev-38d42e28ec51d5b8728fcade4ae5b50f3d3eaca1")).To(BeTrue())
-			Expect(versionGreaterThanLokiRelease("1.13.0")).To(BeTrue())
+			Expect(cmd.VersionGreaterThanLokiRelease("1.13.0-dev-38d42e28ec51d5b8728fcade4ae5b50f3d3eaca1")).To(BeTrue())
+			Expect(cmd.VersionGreaterThanLokiRelease("1.13.0")).To(BeTrue())
 		})
 
 		It("should be earlier than Loki version release", func() {
-			Expect(versionGreaterThanLokiRelease("1.8.0-dev-38d42e28ec51d5b8728fcade4ae5b50f3d3eaca1")).To(BeFalse())
-			Expect(versionGreaterThanLokiRelease("1.7.0")).To(BeFalse())
+			Expect(cmd.VersionGreaterThanLokiRelease("1.8.0-dev-38d42e28ec51d5b8728fcade4ae5b50f3d3eaca1")).To(BeFalse())
+			Expect(cmd.VersionGreaterThanLokiRelease("1.7.0")).To(BeFalse())
 		})
 	})
 })

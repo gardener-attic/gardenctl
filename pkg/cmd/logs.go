@@ -229,7 +229,7 @@ func saveLogsAll(targetReader TargetReader) {
 	fmt.Println("All logs have been saved in " + path + "/logs/ folder")
 }
 
-func versionGreaterThanLokiRelease(version string) bool {
+func VersionGreaterThanLokiRelease(version string) bool {
 	lokiRelease, _ := semver.NewVersion("1.8.0")
 
 	ver, err := semver.NewVersion(version)
@@ -265,7 +265,7 @@ func logPod(targetReader TargetReader, toMatch string, toTarget string, containe
 	}
 
 	if flags.loki {
-		if versionGreaterThanLokiRelease(shoot.Status.Gardener.Version) {
+		if VersionGreaterThanLokiRelease(shoot.Status.Gardener.Version) {
 			showLogsFromLoki(namespace, toMatch, container)
 		} else {
 			fmt.Println("--loki flag is available only for gardener version >= 1.8.0")
