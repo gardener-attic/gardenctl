@@ -229,6 +229,21 @@ func saveLogsAll(targetReader TargetReader) {
 	fmt.Println("All logs have been saved in " + path + "/logs/ folder")
 }
 
+//VersionGreaterThanLokiRelease checks if provided version supports Loki
+func VersionGreaterThanLokiRelease(version string) bool {
+	lokiRelease, _ := semver.NewVersion("1.8.0")
+
+	ver, err := semver.NewVersion(version)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	if ver.Compare(lokiRelease) > 0 {
+		return true
+	}
+	return false
+}
+
 // showPod is an abstraction to show pods in seed cluster controlplane or kube-system namespace of shoot
 func logPod(targetReader TargetReader, toMatch string, toTarget string, container string) {
 	var target Target
@@ -242,11 +257,6 @@ func logPod(targetReader TargetReader, toMatch string, toTarget string, containe
 	shoot, err := GetTargetedShootObject(targetReader)
 	checkError(err)
 
-	gardenerVersion, err := semver.NewVersion(shoot.Status.Gardener.Version)
-	checkError(err)
-	greaterThanLokiRelease, err := semver.NewConstraint(">=1.8.0")
-	checkError(err)
-
 	Client, err = clientToTarget("seed")
 	checkError(err)
 	if toTarget == "shoot" {
@@ -256,11 +266,11 @@ func logPod(targetReader TargetReader, toMatch string, toTarget string, containe
 	}
 
 	if flags.loki {
-		if greaterThanLokiRelease.Check(gardenerVersion) {
+		if VersionGreaterThanLokiRelease(shoot.Status.Gardener.Version) {
 			showLogsFromLoki(namespace, toMatch, container)
 		} else {
 			fmt.Println("--loki flag is available only for gardener version >= 1.8.0")
-			fmt.Println("Current version: " + gardenerVersion.String())
+			fmt.Println("Current version: " + shoot.Status.Gardener.Version)
 			os.Exit(2)
 		}
 
@@ -406,6 +416,8 @@ func BuildLogCommandArgs(kubeconfig string, namespace, podName, container string
 }
 
 //BuildLokiCommandArgs build kubect command to get logs from loki
+//https://github.com/gardener/gardener/blob/master/docs/usage/logging.md
+//Loki multi-tenant is enabled so it's required to pass 'X-Scope-OrgID' header
 func BuildLokiCommandArgs(kubeconfig string, namespace, podName, container string, tail int64, sinceSeconds time.Duration) []string {
 	args := []string{
 		"--kubeconfig=" + kubeconfig,
@@ -415,12 +427,15 @@ func BuildLokiCommandArgs(kubeconfig string, namespace, podName, container strin
 		namespace,
 		"--",
 		"wget",
-		"'http://localhost:3100/loki/api/v1/query_range'",
+		"--header",
+		"X-Scope-OrgID: operator",
+		"http://localhost:3100/loki/api/v1/query_range",
 		"-O-",
+		"--post-data",
 	}
 
 	lokiQuery := fmt.Sprintf("{pod_name=~\"%s.*\"}", podName)
-	command := fmt.Sprintf("--post-data='query=%s", lokiQuery)
+	command := fmt.Sprintf("query=%s", lokiQuery)
 
 	if container != emptyString {
 		command += fmt.Sprintf("&&query={container_name=~\"%s.*\"", container)
@@ -435,7 +450,6 @@ func BuildLokiCommandArgs(kubeconfig string, namespace, podName, container strin
 	now := time.Now().UnixNano()
 
 	command += fmt.Sprintf("&&start=%d&&end=%d", now-sinceNanoSec, now)
-	command += "'"
 
 	args = append(args, command)
 	return args
