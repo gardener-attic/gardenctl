@@ -17,6 +17,7 @@ package cmd_test
 import (
 	"github.com/gardener/gardenctl/pkg/cmd"
 	mockcmd "github.com/gardener/gardenctl/pkg/mock/cmd"
+	"github.com/golang/mock/gomock"
 	"github.com/spf13/cobra"
 
 	"regexp"
