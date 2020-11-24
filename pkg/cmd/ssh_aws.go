@@ -22,7 +22,6 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
-	"time"
 )
 
 // AwsInstanceAttribute stores all the critical information for creating an instance on AWS.
@@ -73,7 +72,8 @@ func sshToAWSNode(targetReader TargetReader, nodeName, path, user, pathSSKeypair
 
 	a.createNodeHostSecurityGroup()
 
-	a.sshPortCheck()
+	err := CheckIPPortReachable(a.BastionIP, "22")
+	checkError(err)
 
 	bastionNode := user + "@" + a.BastionIP
 	node := user + "@" + nodeName
@@ -150,7 +150,7 @@ func (a *AwsInstanceAttribute) createBastionHostSecurityGroup() {
 }
 
 func (a *AwsInstanceAttribute) createNodeHostSecurityGroup() {
-	// add shh rule to ec2 instance
+	// add ssh rule to ec2 instance
 	arguments := fmt.Sprintf("ec2 authorize-security-group-ingress --group-id %s --protocol tcp --port 22 --cidr %s/32", a.SecurityGroupID, a.BastionPrivIP)
 	operate("aws", arguments)
 	fmt.Println("Opened SSH Port on Node.")
@@ -181,6 +181,10 @@ func (a *AwsInstanceAttribute) createBastionHostInstance() {
 	a.getBastionHostInstance()
 	if a.BastionInstanceID != "" {
 		fmt.Println("Bastion Host exists, skipping creation.")
+		arguments := "ec2 describe-instances --instance-id " + a.BastionInstanceID + " --query Reservations[*].Instances[*].PrivateIpAddress"
+		a.BastionPrivIP = strings.Trim(operate("aws", arguments), "\n")
+		arguments = "ec2 describe-instances --instance-id " + a.BastionInstanceID + " --query Reservations[*].Instances[*].PublicIpAddress"
+		a.BastionIP = strings.Trim(operate("aws", arguments), "\n")
 		return
 	}
 
@@ -230,28 +234,6 @@ func (a *AwsInstanceAttribute) createBastionHostInstance() {
 	// get bastion private IP
 	arguments = "ec2 describe-instances --instance-id " + a.BastionInstanceID + " --query Reservations[*].Instances[*].PrivateIpAddress"
 	a.BastionPrivIP = strings.Trim(operate("aws", arguments), "\n")
-}
-
-// Bastion SSH port check
-func (a *AwsInstanceAttribute) sshPortCheck() {
-	// waiting 60 seconds for SSH port open
-	fmt.Println("Waiting 60 seconds for Bastion SSH port open")
-	attemptCnt := 0
-	for attemptCnt < 6 {
-		ncCmd := fmt.Sprintf("timeout 10 nc -vtnz %s 22", a.BastionIP)
-		cmd := exec.Command("bash", "-c", ncCmd)
-		output, _ := cmd.CombinedOutput()
-		fmt.Println("=>", string(output))
-		if strings.Contains(string(output), "succeeded") {
-			fmt.Println("Opened SSH Port on Bastion")
-			return
-		}
-		time.Sleep(time.Second * 10)
-		attemptCnt++
-	}
-	fmt.Println("SSH Port Open on Bastion TimeOut")
-	a.cleanupAwsBastionHost()
-	os.Exit(0)
 }
 
 // cleanupAwsBastionHost cleans up the bastion host for the targeted cluster.
