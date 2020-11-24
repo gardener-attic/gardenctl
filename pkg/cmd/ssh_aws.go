@@ -43,13 +43,15 @@ type AwsInstanceAttribute struct {
 	UserData                 []byte
 	SSHPublicKey             []byte
 	MyPublicIP               string
+	FlagProviderID           string
 }
 
 // sshToAWSNode provides cmds to ssh to aws via a bastions host and clean it up afterwards
-func sshToAWSNode(targetReader TargetReader, nodeName, path, user, pathSSKeypair string, sshPublicKey []byte, myPublicIP string) {
+func sshToAWSNode(targetReader TargetReader, nodeName, path, user, pathSSKeypair string, sshPublicKey []byte, myPublicIP string, flagProviderID string) {
 	a := &AwsInstanceAttribute{}
 	a.SSHPublicKey = sshPublicKey
 	a.MyPublicIP = myPublicIP
+	a.FlagProviderID = flagProviderID
 
 	fmt.Println("")
 
@@ -76,7 +78,12 @@ func sshToAWSNode(targetReader TargetReader, nodeName, path, user, pathSSKeypair
 	checkError(err)
 
 	bastionNode := user + "@" + a.BastionIP
-	node := user + "@" + nodeName
+	node := ""
+	if a.FlagProviderID != "" {
+		node = user + "@localhost"
+	} else {
+		node = user + "@" + nodeName
+	}
 
 	fmt.Print("SSH " + bastionNode + " => " + node + "\n")
 	key := filepath.Join(pathSSKeypair, "key")
@@ -90,7 +97,12 @@ func sshToAWSNode(targetReader TargetReader, nodeName, path, user, pathSSKeypair
 		args = append([]string{"-vvv"}, args...)
 	}
 
-	command := os.Args[3:]
+	command := make([]string, 0)
+	if a.FlagProviderID != "" {
+		command = os.Args[4:]
+	} else {
+		command = os.Args[3:]
+	}
 	args = append(args, command...)
 
 	cmd := exec.Command("ssh", args...)
@@ -109,7 +121,11 @@ func (a *AwsInstanceAttribute) fetchAwsAttributes(targetReader TargetReader, nod
 	arguments := fmt.Sprintf("ec2 describe-subnets --filters Name=tag:Name,Values=" + publicUtility + " --query Subnets[*].SubnetId")
 	a.SubnetID = strings.Trim(operate("aws", arguments), "\n")
 
-	arguments = fmt.Sprintf("ec2 describe-instances --filters Name=network-interface.private-dns-name,Values=" + nodeName + " --query Reservations[*].Instances[*].{VpcId:VpcId}")
+	if a.FlagProviderID != "" {
+		arguments = fmt.Sprintf("ec2 describe-instances --filters Name=instance-id,Values=" + a.FlagProviderID + " --query Reservations[*].Instances[*].{VpcId:VpcId}")
+	} else {
+		arguments = fmt.Sprintf("ec2 describe-instances --filters Name=network-interface.private-dns-name,Values=" + nodeName + " --query Reservations[*].Instances[*].{VpcId:VpcId}")
+	}
 	a.VpcID = strings.Trim(operate("aws", arguments), "\n")
 
 	a.SecurityGroupName = a.ShootName + "-nodes"
@@ -117,7 +133,11 @@ func (a *AwsInstanceAttribute) fetchAwsAttributes(targetReader TargetReader, nod
 	a.BastionInstanceName = a.ShootName + "-bastions"
 	a.BastionSecurityGroupName = a.ShootName + "-bsg"
 
-	arguments = fmt.Sprintf("ec2 describe-instances --filters Name=network-interface.private-dns-name,Values=" + nodeName + " --query Reservations[*].Instances[*].{ImageId:ImageId}")
+	if a.FlagProviderID != "" {
+		arguments = fmt.Sprintf("ec2 describe-instances --filters Name=instance-id,Values=" + a.FlagProviderID + " --query Reservations[*].Instances[*].{ImageId:ImageId}")
+	} else {
+		arguments = fmt.Sprintf("ec2 describe-instances --filters Name=network-interface.private-dns-name,Values=" + nodeName + " --query Reservations[*].Instances[*].{ImageId:ImageId}")
+	}
 	a.ImageID = strings.Trim(operate("aws", arguments), "\n")
 
 	a.KeyName = a.ShootName + "-ssh-publickey"
