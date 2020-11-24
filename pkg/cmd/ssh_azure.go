@@ -36,13 +36,18 @@ type AzureInstanceAttribute struct {
 }
 
 // sshToAZNode provides cmds to ssh to az via a node name and clean it up afterwards
-func sshToAZNode(targetReader TargetReader, nodeName, path, user, pathSSKeypair string, sshPublicKey []byte, myPublicIP string) {
+func sshToAZNode(targetReader TargetReader, nodeName, path, user, pathSSKeypair string, sshPublicKey []byte, myPublicIP string, flagProviderID string) {
 	a := &AzureInstanceAttribute{}
 	a.MyPublicIP = myPublicIP
+
 	fmt.Println("")
 	fmt.Println("(1/4) Fetching data from target shoot cluster")
 
-	a.fetchAzureAttributes(targetReader, nodeName, path)
+	if flagProviderID != "" {
+		a.fetchAzureAttributes(targetReader, flagProviderID, path)
+	} else {
+		a.fetchAzureAttributes(targetReader, nodeName, path)
+	}
 
 	fmt.Println("Data fetched from target shoot cluster.")
 	fmt.Println("")
@@ -76,7 +81,12 @@ func sshToAZNode(targetReader TargetReader, nodeName, path, user, pathSSKeypair 
 		args = append([]string{"-vvv"}, args...)
 	}
 
-	command := os.Args[3:]
+	command := make([]string, 4)
+	if (flagProviderID != "") {
+		command = os.Args[4:]
+	} else {
+		command = os.Args[3:]
+	}
 	args = append(args, command...)
 
 	cmd := exec.Command("ssh", args...)

@@ -30,6 +30,10 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 )
 
+var (
+	flagproviderid string
+)
+
 const (
 	// warningColor prints user warnings in red
 	warningColor = "\033[1;31m%s\033[0m"
@@ -52,7 +56,7 @@ func NewSSHCmd(targetReader TargetReader, ioStreams IOStreams) *cobra.Command {
 			shoot, err := FetchShootFromTarget(target)
 			checkError(err)
 
-			if len(args) == 0 {
+			if len(args) == 0 && flagproviderid == "" {
 				return printNodeNames(targetReader, shoot.Name)
 			}
 
@@ -89,15 +93,35 @@ func NewSSHCmd(targetReader TargetReader, ioStreams IOStreams) *cobra.Command {
 			infraType := shoot.Spec.Provider.Type
 			switch infraType {
 			case "aws":
-				sshToAWSNode(targetReader, args[0], path, user, pathSSKeypair, sshPublicKey, myPublicIP)
+				if (flagproviderid != "") {
+					sshToAWSNode(targetReader, "", path, user, pathSSKeypair, sshPublicKey, myPublicIP, flagproviderid)
+				} else {
+					sshToAWSNode(targetReader, args[0], path, user, pathSSKeypair, sshPublicKey, myPublicIP, flagproviderid)
+				}
 			case "gcp":
-				sshToGCPNode(targetReader, args[0], path, user, pathSSKeypair, sshPublicKey, myPublicIP)
+				if (flagproviderid != "") {
+					sshToGCPNode(targetReader, "", path, user, pathSSKeypair, sshPublicKey, myPublicIP, flagproviderid)
+				} else {
+					sshToGCPNode(targetReader, args[0], path, user, pathSSKeypair, sshPublicKey, myPublicIP, flagproviderid)
+				}
 			case "azure":
-				sshToAZNode(targetReader, args[0], path, user, pathSSKeypair, sshPublicKey, myPublicIP)
+				if (flagproviderid != "") {
+					sshToAZNode(targetReader, "", path, user, pathSSKeypair, sshPublicKey, myPublicIP, flagproviderid)
+				} else {
+					sshToAZNode(targetReader, args[0], path, user, pathSSKeypair, sshPublicKey, myPublicIP, flagproviderid)
+				}
 			case "alicloud":
-				sshToAlicloudNode(targetReader, args[0], path, user, pathSSKeypair, sshPublicKey, myPublicIP)
+				if (flagproviderid != "") {
+					sshToAlicloudNode(targetReader, "", path, user, pathSSKeypair, sshPublicKey, myPublicIP, flagproviderid)
+				} else {
+					sshToAlicloudNode(targetReader, args[0], path, user, pathSSKeypair, sshPublicKey, myPublicIP, flagproviderid)
+				}
 			case "openstack":
-				sshToOpenstackNode(args[0], path, user, pathSSKeypair, sshPublicKey, myPublicIP)
+				if (flagproviderid != "") {
+					sshToOpenstackNode("", path, user, pathSSKeypair, sshPublicKey, myPublicIP, flagproviderid)
+				} else {
+					sshToOpenstackNode(args[0], path, user, pathSSKeypair, sshPublicKey, myPublicIP, flagproviderid)
+				}
 			default:
 				return fmt.Errorf("infrastructure type %q not found", infraType)
 			}
@@ -105,6 +129,8 @@ func NewSSHCmd(targetReader TargetReader, ioStreams IOStreams) *cobra.Command {
 			return nil
 		},
 	}
+
+	cmd.PersistentFlags().StringVarP(&flagproviderid, "providerid", "p", "", "machine provider id")
 
 	return cmd
 }

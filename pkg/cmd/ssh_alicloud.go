@@ -53,6 +53,7 @@ type AliyunInstanceAttribute struct {
 	BastionIP                string
 	BastionSSHUser           string
 	MyPublicIP               string
+	FlagProviderID           string
 }
 
 // AliyunInstanceTypeSpec stores all the critical information for choosing a instance type on Alicloud.
@@ -70,7 +71,7 @@ type AliyunInstanceTypeSpec struct {
 }
 
 // sshToAlicloudNode provides cmds to ssh to alicloud via a public ip and clean it up afterwards.
-func sshToAlicloudNode(targetReader TargetReader, nodeName, path, user, pathSSKeypair string, sshPublicKey []byte, myPublicIP string) {
+func sshToAlicloudNode(targetReader TargetReader, nodeName, path, user, pathSSKeypair string, sshPublicKey []byte, myPublicIP string, flagProviderID string) {
 	// Check if this is a cleanup command
 	if nodeName == "cleanup" {
 		cleanupAliyunBastionHost(targetReader)
@@ -85,6 +86,7 @@ func sshToAlicloudNode(targetReader TargetReader, nodeName, path, user, pathSSKe
 
 	a := &AliyunInstanceAttribute{}
 	a.MyPublicIP = myPublicIP + "/32"
+	a.FlagProviderID = flagProviderID
 	fmt.Println("")
 	fmt.Println("(2/5) Fetching data from target shoot cluster")
 	a.fetchAttributes(targetReader, nodeName)
@@ -122,8 +124,12 @@ func sshToAlicloudNode(targetReader TargetReader, nodeName, path, user, pathSSKe
 func (a *AliyunInstanceAttribute) fetchAttributes(targetReader TargetReader, nodeName string) {
 	a.ShootName = GetFromTargetInfo(targetReader, "shootTechnicalID")
 	var err error
-	a.InstanceID, err = fetchAlicloudInstanceIDByNodeName(nodeName)
-	checkError(err)
+	if (a.FlagProviderID != "") {
+		a.InstanceID = a.FlagProviderID
+	} else {
+		a.InstanceID, err = fetchAlicloudInstanceIDByNodeName(nodeName)
+		checkError(err)
+	}
 
 	res, err := ExecCmdReturnOutput("bash", "-c", "aliyun ecs DescribeInstanceAttribute --InstanceId="+a.InstanceID)
 	checkError(err)

@@ -39,10 +39,16 @@ type OpenstackInstanceAttribute struct {
 }
 
 //sshToOpenstackNode ssh to openstack node
-func sshToOpenstackNode(nodeName, path, user, pathSSKeypair string, sshPublicKey []byte, myPublicIP string) {
+func sshToOpenstackNode(nodeName, path, user, pathSSKeypair string, sshPublicKey []byte, myPublicIP string, flagProviderID string) {
 	sshStatus := 0
 	a := &OpenstackInstanceAttribute{}
-	a.InstanceID = nodeName
+
+	if flagProviderID != "" {
+		a.InstanceID = flagProviderID
+	} else {
+		a.InstanceID = nodeName
+	}
+
 	var err error
 
 	fmt.Println("(1/5) Getting the external network for creating FIP")
@@ -87,7 +93,12 @@ func sshToOpenstackNode(nodeName, path, user, pathSSKeypair string, sshPublicKey
 		args = append([]string{"-vvv"}, args...)
 	}
 
-	command := os.Args[3:]
+	command := make([]string, 4)
+	if (flagProviderID != "") {
+		command = os.Args[4:]
+	} else {
+		command = os.Args[3:]
+	}
 	args = append(args, command...)
 
 	cmd := exec.Command("ssh", args...)
