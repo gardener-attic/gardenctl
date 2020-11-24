@@ -1,6 +1,6 @@
 module github.com/gardener/gardenctl
 
-go 1.14
+go 1.15
 
 require (
 	github.com/Masterminds/semver v1.5.0
@@ -8,7 +8,6 @@ require (
 	github.com/gardener/gardener v1.5.0
 	github.com/gardener/gardener-extension-provider-openstack v1.3.1-0.20200327120628-280d268ce96f
 	github.com/gardener/machine-controller-manager v0.27.0
-	github.com/ghodss/yaml v1.0.0
 	github.com/golang/mock v1.4.3
 	github.com/jmoiron/jsonq v0.0.0-20150511023944-e874b168d07e
 	github.com/olekukonko/tablewriter v0.0.4

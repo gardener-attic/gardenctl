@@ -50,9 +50,6 @@ github.com/gardener/machine-controller-manager/pkg/apis/machine/v1alpha1
 github.com/gardener/machine-controller-manager/pkg/client/clientset/versioned
 github.com/gardener/machine-controller-manager/pkg/client/clientset/versioned/scheme
 github.com/gardener/machine-controller-manager/pkg/client/clientset/versioned/typed/machine/v1alpha1
-# github.com/ghodss/yaml v1.0.0
-## explicit
-github.com/ghodss/yaml
 # github.com/gogo/protobuf v1.3.1
 github.com/gogo/protobuf/proto
 github.com/gogo/protobuf/sortkeys
