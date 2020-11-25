@@ -124,7 +124,7 @@ func (a *AwsInstanceAttribute) fetchAwsAttributes(targetReader TargetReader, nod
 	if a.FlagProviderID != "" {
 		arguments = fmt.Sprintf("ec2 describe-instances --filters Name=instance-id,Values=" + a.FlagProviderID + " --query Reservations[*].Instances[*].{VpcId:VpcId}")
 	} else {
-		arguments = fmt.Sprintf("ec2 describe-instances --filters Name=network-interface.private-dns-name,Values=" + nodeName + " --query Reservations[*].Instances[*].{VpcId:VpcId}")
+		arguments = fmt.Sprintf("ec2 describe-subnets --filters Name=subnet-id,Values=" + a.SubnetID + " --query Subnets[*].{VpcId:VpcId}")
 	}
 	a.VpcID = strings.Trim(operate("aws", arguments), "\n")
 
@@ -135,10 +135,16 @@ func (a *AwsInstanceAttribute) fetchAwsAttributes(targetReader TargetReader, nod
 
 	if a.FlagProviderID != "" {
 		arguments = fmt.Sprintf("ec2 describe-instances --filters Name=instance-id,Values=" + a.FlagProviderID + " --query Reservations[*].Instances[*].{ImageId:ImageId}")
+		a.ImageID = strings.Trim(operate("aws", arguments), "\n")
 	} else {
 		arguments = fmt.Sprintf("ec2 describe-instances --filters Name=network-interface.private-dns-name,Values=" + nodeName + " --query Reservations[*].Instances[*].{ImageId:ImageId}")
+		imageIDList := strings.Split(strings.TrimSuffix(strings.Trim(operate("aws", arguments), "\n"), "\n"), "\n")
+		if len(imageIDList) < 1 {
+			fmt.Println("there's no Image in this instance")
+			os.Exit(1)
+		}
+		a.ImageID = imageIDList[0]
 	}
-	a.ImageID = strings.Trim(operate("aws", arguments), "\n")
 
 	a.KeyName = a.ShootName + "-ssh-publickey"
 	a.UserData = getBastionUserData(a.SSHPublicKey)
