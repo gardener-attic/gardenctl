@@ -93,7 +93,7 @@ func sshToOpenstackNode(nodeName, path, user, pathSSKeypair string, sshPublicKey
 		args = append([]string{"-vvv"}, args...)
 	}
 
-	command := make([]string, 0)
+	var command []string
 	if flagProviderID != "" {
 		command = os.Args[4:]
 	} else {

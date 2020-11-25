@@ -97,7 +97,7 @@ func sshToAWSNode(targetReader TargetReader, nodeName, path, user, pathSSKeypair
 		args = append([]string{"-vvv"}, args...)
 	}
 
-	command := make([]string, 0)
+	var command []string
 	if a.FlagProviderID != "" {
 		command = os.Args[4:]
 	} else {
