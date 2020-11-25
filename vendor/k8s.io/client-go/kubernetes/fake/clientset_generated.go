@@ -19,8 +19,6 @@ limitations under the License.
 package fake
 
 import (
-	gardenerv1beta1 "github.com/gardener/gardener/pkg/client/core/clientset/versioned/typed/core/v1beta1"
-	fakegardenerv1beta1 "github.com/gardener/gardener/pkg/client/core/clientset/versioned/typed/core/v1beta1/fake"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/discovery"
@@ -340,9 +338,4 @@ func (c *Clientset) StorageV1() storagev1.StorageV1Interface {
 // StorageV1alpha1 retrieves the StorageV1alpha1Client
 func (c *Clientset) StorageV1alpha1() storagev1alpha1.StorageV1alpha1Interface {
 	return &fakestoragev1alpha1.FakeStorageV1alpha1{Fake: &c.Fake}
-}
-
-// GardenerV1beta1 retrieves the GardenerV1beta1Client
-func (c *Clientset) GardenerV1beta1() gardenerv1beta1.CoreV1beta1Interface {
-	return &fakegardenerv1beta1.FakeCoreV1beta1{Fake: &c.Fake}
 }
