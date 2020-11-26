@@ -392,6 +392,7 @@ func waitShootReconciled(shoot *gardencorev1beta1.Shoot, targetReader TargetRead
 		newShoot := &gardencorev1beta1.Shoot{}
 		target := targetReader.ReadTarget(pathTarget)
 		gardenClientset, err := target.GardenerClient()
+		checkError(err)
 		shootList, err := gardenClientset.CoreV1beta1().Shoots("").List(metav1.ListOptions{})
 		checkError(err)
 		for index, s := range shootList.Items {
@@ -428,6 +429,7 @@ func MergePatchShoot(oldShoot, newShoot *gardencorev1beta1.Shoot, targetReader T
 
 	target := targetReader.ReadTarget(pathTarget)
 	gardenClientset, err := target.GardenerClient()
+	checkError(err)
 	patchedShoot, err := gardenClientset.CoreV1beta1().Shoots(oldShoot.GetNamespace()).Patch(oldShoot.GetName(), types.StrategicMergePatchType, patchBytes)
 	if err == nil {
 		*oldShoot = *patchedShoot
