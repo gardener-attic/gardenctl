@@ -24,6 +24,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"strings"
 
 	authorizationv1 "k8s.io/api/authorization/v1"
 
@@ -329,6 +330,21 @@ func IsTargeted(targetReader TargetReader, args ...string) bool {
 		}
 	}
 
+	return true
+}
+
+//IsControlPlaneTargeted returns whether current targeting a control plane for a shoot
+func IsControlPlaneTargeted(targetReader TargetReader) bool {
+	target := targetReader.ReadTarget(pathTarget)
+	if !IsTargeted(targetReader, "garden", "seed", "namespace") {
+		return false
+	}
+	if len(target.Stack()) != 3 {
+		return false
+	}
+	if !strings.HasPrefix(target.Stack()[2].Name, "shoot") {
+		return false
+	}
 	return true
 }
 
