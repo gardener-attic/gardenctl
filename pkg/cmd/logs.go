@@ -572,6 +572,7 @@ func logPodWhileControlPlaneTargeted(targetReader TargetReader, toMatch string, 
 	}
 	namespace := target.Stack()[2].Name
 	seed, err := GetSeedObject(targetReader, target.Stack()[1].Name)
+	checkError(err)
 	greaterThanLokiRelease, err := semver.NewConstraint(">=1.8.0")
 	checkError(err)
 	gardenerVersion, err := semver.NewVersion(seed.Status.Gardener.Version)
