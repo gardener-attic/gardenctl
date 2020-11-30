@@ -40,14 +40,19 @@ type GCPInstanceAttribute struct {
 }
 
 // sshToGCPNode provides cmds to ssh to gcp via a public ip and clean it up afterwards
-func sshToGCPNode(targetReader TargetReader, nodeName, path, user, pathSSKeypair string, sshPublicKey []byte, myPublicIP string) {
+func sshToGCPNode(targetReader TargetReader, nodeName, path, user, pathSSKeypair string, sshPublicKey []byte, myPublicIP string, flagProviderID string) {
 	g := &GCPInstanceAttribute{}
 	g.SSHPublicKey = sshPublicKey
 	g.MyPublicIP = myPublicIP
 	fmt.Println("")
 
 	fmt.Println("(1/4) Fetching data from target shoot cluster")
-	g.fetchGCPAttributes(targetReader, nodeName, path)
+
+	if flagProviderID != "" {
+		g.fetchGCPAttributes(targetReader, flagProviderID, path)
+	} else {
+		g.fetchGCPAttributes(targetReader, nodeName, path)
+	}
 
 	fmt.Println("Data fetched from target shoot cluster.")
 	fmt.Println("")
@@ -61,7 +66,12 @@ func sshToGCPNode(targetReader TargetReader, nodeName, path, user, pathSSKeypair
 	g.createBastionHostInstance()
 
 	bastionNode := user + "@" + g.BastionIP
-	node := user + "@" + nodeName
+	node := ""
+	if flagProviderID != "" {
+		node = user + "@localhost"
+	} else {
+		node = user + "@" + nodeName
+	}
 	fmt.Println("Waiting 45 seconds until ports are open.")
 	time.Sleep(45 * time.Second)
 
@@ -76,7 +86,12 @@ func sshToGCPNode(targetReader TargetReader, nodeName, path, user, pathSSKeypair
 		args = append([]string{"-vvv"}, args...)
 	}
 
-	command := os.Args[3:]
+	var command []string
+	if flagProviderID != "" {
+		command = os.Args[4:]
+	} else {
+		command = os.Args[3:]
+	}
 	args = append(args, command...)
 
 	cmd := exec.Command("ssh", args...)
