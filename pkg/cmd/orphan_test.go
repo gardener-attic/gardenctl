@@ -20,7 +20,7 @@ import (
 	. "github.com/onsi/gomega"
 )
 
-var _ = Describe("Infra", func() {
+var _ = Describe("Orphan", func() {
 	var rs = []string{"vpc-03cb057da4ded427f"}
 	terraformstate := `
 },

@@ -28,60 +28,47 @@ import (
 )
 
 // NewInfraCmd returns a new infra command
-func NewInfraCmd(targetReader TargetReader) *cobra.Command {
+func NewOrphanCmd(targetReader TargetReader) *cobra.Command {
 	return &cobra.Command{
-		Use:          "infra [(orphan)] [(list)]",
-		Short:        "Manage shoot infra resources\n",
+		Use:          "orphan",
+		Short:        "List shoot resources that do not exist in the Gardener terraform state\n",
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			target := targetReader.ReadTarget(pathTarget)
 			if !CheckShootIsTargeted(target) {
 				return errors.New("no shoot targeted")
 			}
-			if len(args) < 2 || len(args) > 2 {
-				return errors.New("command must be in the format: infra [orphan] [list]")
+			var rs []string
+			pathTerraformState := filepath.Join(downloadTerraformFiles("infra", targetReader), "terraform.tfstate")
+			buf, err := ioutil.ReadFile(pathTerraformState)
+			if err != nil || len(buf) < 64 {
+				fmt.Println("Could not read terraform.tfstate: " + pathTerraformState)
+				os.Exit(2)
 			}
-			switch args[0] {
-			case "orphan":
-				switch args[1] {
-				case "list":
-					var rs []string
-					pathTerraformState := filepath.Join(downloadTerraformFiles("infra", targetReader), "terraform.tfstate")
-					buf, err := ioutil.ReadFile(pathTerraformState)
-					if err != nil || len(buf) < 64 {
-						fmt.Println("Could not read terraform.tfstate: " + pathTerraformState)
-						os.Exit(2)
-					}
-					terraformstate := string(buf)
+			terraformstate := string(buf)
 
-					shoot, err := FetchShootFromTarget(target)
-					checkError(err)
-					infraType := shoot.Spec.Provider.Type
+			shoot, err := FetchShootFromTarget(target)
+			checkError(err)
+			infraType := shoot.Spec.Provider.Type
 
-					switch infraType {
-					case "aws":
-						rs = getAWSInfraResources(targetReader)
-					case "azure":
-						rs = getAzureInfraResources(targetReader)
-					case "gcp":
-						rs = getGCPInfraResources(targetReader)
-					case "openstack":
-						rs = getOstackInfraResources(targetReader)
-					case "alicloud":
-						rs = getAliCloudInfraResources(targetReader)
-					default:
-						return errors.New("infra type not found")
-					}
-
-					err = GetOrphanInfraResources(rs, terraformstate)
-					checkError(err)
-					fmt.Printf("\n\nsearched %s\n", pathTerraformState)
-				default:
-					fmt.Println("command must be in the format: infra [orphan] [list]")
-				}
+			switch infraType {
+			case "aws":
+				rs = getAWSInfraResources(targetReader)
+			case "azure":
+				rs = getAzureInfraResources(targetReader)
+			case "gcp":
+				rs = getGCPInfraResources(targetReader)
+			case "openstack":
+				rs = getOstackInfraResources(targetReader)
+			case "alicloud":
+				rs = getAliCloudInfraResources(targetReader)
 			default:
-				fmt.Println("command must be in the format: infra [orphan] [list]")
+				return errors.New("infra type not found")
 			}
+
+			err = GetOrphanInfraResources(rs, terraformstate)
+			checkError(err)
+			fmt.Printf("\n\nsearched %s\n", pathTerraformState)
 
 			return nil
 		},
