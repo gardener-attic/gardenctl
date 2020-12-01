@@ -27,7 +27,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// NewInfraCmd returns a new infra command
+// NewOrphanCmd returns a new orphan command
 func NewOrphanCmd(targetReader TargetReader) *cobra.Command {
 	return &cobra.Command{
 		Use:          "orphan",
