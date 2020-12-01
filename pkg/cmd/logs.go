@@ -77,7 +77,7 @@ func validateArgs(targetReader TargetReader, args []string) error {
 	ReadTarget(pathTarget, &t)
 	if !IsTargeted(targetReader, "shoot") && args[0] != "all" && args[0] != "api" && args[0] != "scheduler" && args[0] != "controller-manager" && args[0] != "etcd-main" && args[0] != "etcd-events" && args[0] != "machine-controller-manager" && args[0] != "prometheus" && args[0] != "cluster-autoscaler" && args[0] != "vpn-seed" && args[0] != "gardenlet" && args[0] != "gardener-apiserver" && args[0] != "gardener-controller-manager" && args[0] != "tf" && args[0] != "kubernetes-dashboard" {
 		return errors.New("No shoot targeted")
-	} else if !IsTargeted(targetReader, "project") && args[0] == "tf" || !IsTargeted(targetReader, "shoot") && args[0] == "tf" && !IsTargeted(targetReader, "seed") {
+	} else if !(IsTargeted(targetReader, "project") || IsTargeted(targetReader, "shoot") || IsTargeted(targetReader, "seed") || IsTargeted(targetReader, "namespace")) && args[0] == "tf" {
 		return errors.New("No seed or shoot targeted")
 	} else if !IsTargeted(targetReader) {
 		return errors.New("Target stack is empty")
