@@ -393,7 +393,7 @@ func waitShootReconciled(shoot *gardencorev1beta1.Shoot, targetReader TargetRead
 		target := targetReader.ReadTarget(pathTarget)
 		gardenClientset, err := target.GardenerClient()
 		checkError(err)
-		shootList, err := gardenClientset.CoreV1beta1().Shoots("").List(metav1.ListOptions{})
+		shootList, err := gardenClientset.CoreV1beta1().Shoots(shoot.GetNamespace()).List(metav1.ListOptions{})
 		checkError(err)
 		for index, s := range shootList.Items {
 			if s.Name == shoot.Name && *s.Spec.SeedName == *shoot.Spec.SeedName {
@@ -402,14 +402,12 @@ func waitShootReconciled(shoot *gardencorev1beta1.Shoot, targetReader TargetRead
 			}
 		}
 		checkError(err)
-		if newShoot.Status.LastOperation.Description == "Shoot cluster state has been successfully reconciled." &&
-			newShoot.Status.LastOperation.State == "Succeeded" &&
+		if newShoot.Status.LastOperation.State == "Succeeded" &&
 			newShoot.Status.LastOperation.Type == "Reconcile" &&
 			newShoot.Status.LastOperation.Progress == 100 {
 			fmt.Println("Shoot has been successfully reconciled")
 			return nil
 		}
-		fmt.Println("Last operation descirption is " + newShoot.Status.LastOperation.Description)
 		fmt.Println("Last operation state is " + newShoot.Status.LastOperation.State)
 		fmt.Println("Last operation type is " + newShoot.Status.LastOperation.Type)
 		fmt.Println("Last operation progress is " + strconv.Itoa(int(newShoot.Status.LastOperation.Progress)) + "%")
