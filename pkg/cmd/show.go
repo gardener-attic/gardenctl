@@ -316,15 +316,16 @@ func showKubernetesDashboard(targetReader TargetReader) {
 func showGrafana(targetReader TargetReader) {
 	username, password = getMonitoringCredentials()
 	showPod("grafana", "seed", targetReader)
-	output, err := ExecCmdReturnOutput("kubectl", "--kubeconfig="+KUBECONFIG, "get", "ingress", "grafana", "-n", GetFromTargetInfo(targetReader, "shootTechnicalID"))
+	output, err := ExecCmdReturnOutput("kubectl", "--kubeconfig="+KUBECONFIG, "get", "ingress", "grafana-operators", "-n", GetFromTargetInfo(targetReader, "shootTechnicalID"))
 	if err != nil {
 		log.Fatalf("Cmd was unsuccessful")
 	}
 	list := strings.Split(output, " ")
 	url := "-"
 	for _, val := range list {
-		if strings.HasPrefix(val, "g.") {
-			url = val
+		if strings.HasPrefix(val, "go.") {
+			formattedURL := strings.Split(val, ",")
+			url = formattedURL[0]
 		}
 	}
 	url = "https://" + username + ":" + password + "@" + url
