@@ -393,14 +393,7 @@ func waitShootReconciled(shoot *gardencorev1beta1.Shoot, targetReader TargetRead
 		target := targetReader.ReadTarget(pathTarget)
 		gardenClientset, err := target.GardenerClient()
 		checkError(err)
-		shootList, err := gardenClientset.CoreV1beta1().Shoots(shoot.GetNamespace()).List(metav1.ListOptions{})
-		checkError(err)
-		for index, s := range shootList.Items {
-			if s.Name == shoot.Name && *s.Spec.SeedName == *shoot.Spec.SeedName {
-				newShoot = &shootList.Items[index]
-				break
-			}
-		}
+		newShoot, err = gardenClientset.CoreV1beta1().Shoots(shoot.GetNamespace()).Get(shoot.Name, metav1.GetOptions{})
 		checkError(err)
 		if newShoot.Status.LastOperation.State == "Succeeded" &&
 			newShoot.Status.LastOperation.Type == "Reconcile" &&
