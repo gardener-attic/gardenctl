@@ -389,11 +389,10 @@ func waitShootReconciled(shoot *gardencorev1beta1.Shoot, targetReader TargetRead
 	attemptCnt := 0
 	fmt.Println("Shoot is being reconciled, the progress will be updated 1 min interval")
 	for attemptCnt < 20 {
-		newShoot := &gardencorev1beta1.Shoot{}
 		target := targetReader.ReadTarget(pathTarget)
 		gardenClientset, err := target.GardenerClient()
 		checkError(err)
-		newShoot, err = gardenClientset.CoreV1beta1().Shoots(shoot.GetNamespace()).Get(shoot.Name, metav1.GetOptions{})
+		newShoot, err := gardenClientset.CoreV1beta1().Shoots(shoot.GetNamespace()).Get(shoot.Name, metav1.GetOptions{})
 		checkError(err)
 		if newShoot.Status.LastOperation.State == "Succeeded" &&
 			newShoot.Status.LastOperation.Type == "Reconcile" &&
