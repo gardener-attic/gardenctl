@@ -28,7 +28,7 @@ import (
 func NewUpdateCheckCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "update-check",
-		Short: "Check whether new gardenctl version is available",
+		Short: "Check whether new gardenctl version is available, e.g. \"gardenctl update-check\"",
 		RunE: func(cmd *cobra.Command, args []string) error {
 
 			isAvailable, latestVersion, err := newVersionAvailable(version)

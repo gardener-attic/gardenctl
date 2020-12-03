@@ -27,6 +27,7 @@ import (
 func NewOpenstackCmd(targetReader TargetReader) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:                "openstack <args>",
+		Short:              "e.g. \"gardenctl openstack floating ip delete ip_address\"",
 		FParseErrWhitelist: cobra.FParseErrWhitelist{UnknownFlags: true},
 		SilenceUsage:       true,
 		RunE: func(cmd *cobra.Command, args []string) error {

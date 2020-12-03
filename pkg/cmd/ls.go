@@ -30,7 +30,7 @@ import (
 func NewLsCmd(targetReader TargetReader, configReader ConfigReader, ioStreams IOStreams) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:          "ls [gardens|projects|seeds|shoots|issues|namespaces]",
-		Short:        "List all resource instances, e.g. list of shoots|issues",
+		Short:        "List all resource instances, e.g. \"gardenctl ls shoots\" to list shoots, \"gardenctl ls issues\" to list issues",
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) (err error) {
 			if len(args) < 1 || len(args) > 2 {

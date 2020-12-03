@@ -45,7 +45,7 @@ const (
 func NewSSHCmd(targetReader TargetReader, ioStreams IOStreams) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:          "ssh",
-		Short:        "SSH to a node",
+		Short:        "SSH to a node, .e.g. \"gardenctl ssh node_name\"",
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			target := targetReader.ReadTarget(pathTarget)

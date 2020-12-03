@@ -29,7 +29,7 @@ var buildDate string
 func NewVersionCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "version",
-		Short: "Show the gardenctl version information",
+		Short: "Show the gardenctl version information, e.g. \"gardenctl version\"",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			fmt.Printf(`gardenctl:
 		version     : %s

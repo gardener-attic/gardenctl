@@ -52,7 +52,7 @@ var registerAll bool
 func NewRegisterCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:          "register (e-mail)",
-		Short:        "Register as cluster admin for the operator shift",
+		Short:        "Register as cluster admin for the operator shift, e.g. \"gardenctl register john.doe@example.com\"",
 		Example:      registerExample,
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {

@@ -29,6 +29,7 @@ import (
 func NewTerraformCmd(targetReader TargetReader) *cobra.Command {
 	return &cobra.Command{
 		Use:          "terraform <args>",
+		Short:        "e.g. \"gardenctl terraform init\"",
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			target := targetReader.ReadTarget(pathTarget)

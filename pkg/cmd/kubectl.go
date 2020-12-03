@@ -27,9 +27,9 @@ import (
 func NewKubectlCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:                "kubectl <args>",
+		Short:              "e.g. \"gardenctl kubectl get pods -n kube-system\"",
 		FParseErrWhitelist: cobra.FParseErrWhitelist{UnknownFlags: true},
 		Aliases:            []string{"k"},
-		Short:              "",
 		Run: func(cmd *cobra.Command, args []string) {
 			arguments := "kubectl " + strings.Join(os.Args[2:], " ")
 			kube(arguments)

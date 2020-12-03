@@ -31,7 +31,7 @@ import (
 func NewOrphanCmd(targetReader TargetReader) *cobra.Command {
 	return &cobra.Command{
 		Use:          "orphan",
-		Short:        "List shoot resources that do not exist in the Gardener terraform state\n",
+		Short:        "List shoot resources that do not exist in the Gardener terraform state, e.g. \"gardenctl orphan\"",
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			target := targetReader.ReadTarget(pathTarget)

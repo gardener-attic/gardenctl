@@ -46,7 +46,7 @@ var unregisterAll bool
 func NewUnregisterCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:          "unregister",
-		Short:        "Unregister as cluster admin at the end of the operator shift",
+		Short:        "Unregister as cluster admin at the end of the operator shift, e.g. \"gardenctl unregister john.doe@example.com\"",
 		Example:      unregisterExample,
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {

@@ -25,6 +25,7 @@ import (
 func NewAliyunCmd(targetReader TargetReader) *cobra.Command {
 	return &cobra.Command{
 		Use:          "aliyun <args>",
+		Short:        "e.g. \"gardenctl aliyun ecs DescribeRegions\"",
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			target := targetReader.ReadTarget(pathTarget)

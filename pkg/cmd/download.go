@@ -34,7 +34,7 @@ import (
 func NewDownloadCmd(targetReader TargetReader) *cobra.Command {
 	return &cobra.Command{
 		Use:          "download tf + (infra|internal-dns|external-dns|ingress|backup)\n  gardenctl download logs vpn\n ",
-		Short:        "Download terraform configuration/state for local execution for the targeted shoot or log files",
+		Short:        "Download terraform configuration/state for local execution for the targeted shoot or log files, e.g. \"gardenctl download logs vpn\" to download vpn logs",
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if len(args) != 2 || !(args[1] == "infra" || args[1] == "internal-dns" || args[1] == "external-dns" || args[1] == "ingress" || args[1] == "backup" || args[1] == "vpn") {

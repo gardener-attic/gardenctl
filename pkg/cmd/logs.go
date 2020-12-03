@@ -47,7 +47,7 @@ func NewLogsCmd(targetReader TargetReader) *cobra.Command {
 	flags = newLogsFlags()
 	cmd := &cobra.Command{
 		Use:          "logs (gardener-apiserver|gardener-controller-manager|gardener-dashboard|api|scheduler|controller-manager|etcd-operator|etcd-main[etcd backup-restore]|etcd-main-backup|etcd-events[etcd backup-restore]|addon-manager|vpn-seed|vpn-shoot|machine-controller-manager|kubernetes-dashboard|prometheus|grafana|gardenlet|tf (infra|dns|ingress)|cluster-autoscaler)",
-		Short:        "Show and optionally follow logs of given component\n",
+		Short:        "Show and optionally follow logs of given component, e.g. \"gardenctl logs api\" show api server log, \"gardenctl logs all\" download all available logs to current dir logs folder",
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			err := validateArgs(targetReader, args)

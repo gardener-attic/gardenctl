@@ -24,7 +24,7 @@ import (
 func NewCompletionCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "completion <bash|zsh>",
-		Short: "Generate bash or zsh completion script",
+		Short: "Generate bash or zsh completion script, e.g. \"gardenctl completion zsh\" generates completion for zsh",
 	}
 
 	cmd.AddCommand(NewBashCompletionCmd(), NewZshCompletionCmd())
