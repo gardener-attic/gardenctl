@@ -14,8 +14,12 @@ require (
 	github.com/onsi/ginkgo v1.10.1
 	github.com/onsi/gomega v1.7.0
 	github.com/pkg/browser v0.0.0-20180916011732-0a3d74bf9ce4
+	github.com/schollz/progressbar/v3 v3.7.2
 	github.com/spf13/cobra v0.0.6
+	golang.org/x/crypto v0.0.0-20201203163018-be400aefbc4c // indirect
 	golang.org/x/lint v0.0.0-20191125180803-fdd1cda4f05f
+	golang.org/x/sys v0.0.0-20201202213521-69691e467435 // indirect
+	golang.org/x/term v0.0.0-20201126162022-7de9c90e9dd1 // indirect
 	gopkg.in/yaml.v2 v2.2.8
 	k8s.io/api v0.17.0
 	k8s.io/apimachinery v0.17.0
