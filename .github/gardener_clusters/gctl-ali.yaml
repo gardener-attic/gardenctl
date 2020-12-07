@@ -1,0 +1,91 @@
+kind: Shoot
+apiVersion: core.gardener.cloud/v1beta1
+metadata:
+  name: gctl-ali
+  namespace: garden-gardenctl
+  finalizers:
+    - gardener
+spec:
+  addons:
+    kubernetesDashboard:
+      enabled: false
+      authenticationMode: token
+    nginxIngress:
+      enabled: false
+      externalTrafficPolicy: Cluster
+  cloudProfileName: alicloud
+  dns:
+    domain: gctl-ali.gardenctl.shoot.dev.k8s-hana.ondemand.com
+  hibernation:
+    schedules:
+      - start: '00 17 * * 1,2,3,4,5'
+        end: '00 08 * * 1,2,3,4,5'
+        location: Europe/Berlin
+  kubernetes:
+    allowPrivilegedContainers: true
+    kubeAPIServer:
+      enableBasicAuthentication: false
+      requests:
+        maxNonMutatingInflight: 400
+        maxMutatingInflight: 200
+    kubeControllerManager:
+      nodeCIDRMaskSize: 24
+      podEvictionTimeout: 2m0s
+    kubeProxy:
+      mode: IPTables
+    kubelet:
+      failSwapOn: true
+      kubeReserved:
+        cpu: 80m
+        memory: 1Gi
+        pid: 20k
+    version: 1.19.3
+  networking:
+    type: calico
+    pods: 172.16.0.0/13
+    nodes: 10.250.0.0/16
+    services: 172.24.0.0/13
+  maintenance:
+    autoUpdate:
+      kubernetesVersion: true
+      machineImageVersion: true
+    timeWindow:
+      begin: 010000+0000
+      end: 020000+0000
+  provider:
+    type: alicloud
+    controlPlaneConfig:
+      apiVersion: alicloud.provider.extensions.gardener.cloud/v1alpha1
+      kind: ControlPlaneConfig
+      zone: eu-central-1b
+    infrastructureConfig:
+      apiVersion: alicloud.provider.extensions.gardener.cloud/v1alpha1
+      kind: InfrastructureConfig
+      networks:
+        vpc:
+          cidr: 10.250.0.0/16
+        zones:
+          - name: eu-central-1b
+            workers: 10.250.0.0/17
+    workers:
+      - name: worker-oi5un
+        machine:
+          type: ecs.t5-c1m2.large
+          image:
+            name: gardenlinux
+            version: 184.0.0
+        maximum: 2
+        minimum: 1
+        maxSurge: 1
+        maxUnavailable: 0
+        volume:
+          type: cloud_efficiency
+          size: 50Gi
+        zones:
+          - eu-central-1b
+        systemComponents:
+          allow: true
+  purpose: development
+  region: eu-central-1
+  secretBindingName: gardenctl-cli-dev-aliclo
+  seedName: alicloud
