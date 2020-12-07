@@ -34,7 +34,7 @@ import (
 func NewShowCmd(targetReader TargetReader) *cobra.Command {
 	return &cobra.Command{
 		Use:   "show (operator|gardener-dashboard|api|scheduler|controller-manager|etcd-operator|etcd-main|etcd-events|addon-manager|vpn-seed|vpn-shoot|machine-controller-manager|kubernetes-dashboard|prometheus|grafana|tf (infra|dns|ingress)|cluster-autoscaler)",
-		Short: `Show details about endpoint/service and open in default browser if applicable`,
+		Short: "Show details about endpoint/service and open in default browser if applicable, e.g. \"gardenctl show scheduler\" show scheduler pod of current shoot",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if len(args) < 1 || len(args) > 2 {
 				return errors.New("Command must be in the format: show (operator|gardener-dashboard|api|scheduler|controller-manager|etcd-operator|etcd-main|etcd-events|addon-manager|vpn-seed|vpn-shoot|machine-controller-manager|kubernetes-dashboard|prometheus|grafana|tf (infra|dns|ingress)|cluster-autoscaler)")

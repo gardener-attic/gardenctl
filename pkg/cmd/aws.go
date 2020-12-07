@@ -27,6 +27,7 @@ import (
 func NewAwsCmd(targetReader TargetReader) *cobra.Command {
 	return &cobra.Command{
 		Use:                "aws <args>",
+		Short:              "e.g. \"gardenctl aws ec2 describe-security-groups\"",
 		FParseErrWhitelist: cobra.FParseErrWhitelist{UnknownFlags: true},
 		SilenceUsage:       true,
 		RunE: func(cmd *cobra.Command, args []string) error {

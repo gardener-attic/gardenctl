@@ -36,7 +36,7 @@ import (
 func NewDiagCmd(reader TargetReader, ioStreams IOStreams) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:          "diag",
-		Short:        "Print shoot diagnostic information",
+		Short:        "Print shoot diagnostic information, e.g. \"gardenctl diag\"",
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			target := reader.ReadTarget(pathTarget)

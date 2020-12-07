@@ -35,7 +35,7 @@ var imageFlag string
 func NewShellCmd(reader TargetReader, ioStreams IOStreams) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:          "shell (node|pod)",
-		Short:        "Shell to a node",
+		Short:        "Shell to a node, e.g. \"gardenctl shell node_name\"",
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if len(args) >= 2 {

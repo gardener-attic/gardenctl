@@ -26,7 +26,7 @@ import (
 func NewDropCmd(targetReader TargetReader, targetWriter TargetWriter, ioStreams IOStreams) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:          "drop [(project|seed)]",
-		Short:        "Drop scope for next operations (default: last target)",
+		Short:        "Drop scope for next operations (default: last target), e.g. \"gardenctl drop\" drops last target, \"gardenctl drop project\" drops project in current stack",
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if len(args) > 1 {

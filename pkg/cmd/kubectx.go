@@ -28,7 +28,7 @@ func NewKubectxCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:     "kubectx <args>",
 		Aliases: []string{"kx"},
-		Short:   "",
+		Short:   "e.g. \"gardenctl kubectx context_name\"",
 		Run: func(cmd *cobra.Command, args []string) {
 			arguments := "kubectx " + strings.Join(args[:], " ")
 			kubectx(arguments)

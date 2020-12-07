@@ -53,7 +53,7 @@ var (
 func NewTargetCmd(targetReader TargetReader, targetWriter TargetWriter, configReader ConfigReader, ioStreams IOStreams, kubeconfigReader KubeconfigReader) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:          "target <project|garden|seed|shoot|namespace|server|dashboardUrl> NAME",
-		Short:        "Set scope for next operations",
+		Short:        "Set scope for next operations, e.g. \"gardenctl target garden garden_name\" to target garden with name of garden_name",
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if pgarden != "" || pproject != "" || pseed != "" || pshoot != "" || pnamespace != "" || pserver != "" || pdashboardurl != "" {

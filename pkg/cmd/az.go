@@ -27,6 +27,7 @@ import (
 func NewAzCmd(targetReader TargetReader) *cobra.Command {
 	return &cobra.Command{
 		Use:                "az <args>",
+		Short:              "\"gardenctl az network vnet show\"",
 		FParseErrWhitelist: cobra.FParseErrWhitelist{UnknownFlags: true},
 		SilenceUsage:       true,
 		RunE: func(cmd *cobra.Command, args []string) error {

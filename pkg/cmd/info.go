@@ -29,7 +29,7 @@ import (
 func NewInfoCmd(targetReader TargetReader, ioStreams IOStreams) *cobra.Command {
 	return &cobra.Command{
 		Use:          "info",
-		Short:        "Get landscape informations and shows the number of shoots per seed",
+		Short:        "Get landscape informations and shows the number of shoots per seed, e.g. \"gardenctl info\"",
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			target := targetReader.ReadTarget(pathTarget)

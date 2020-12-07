@@ -30,7 +30,7 @@ func NewGetCmd(targetReader TargetReader, configReader ConfigReader,
 	kubeconfigReader KubeconfigReader, kubeconfigWriter KubeconfigWriter, ioStreams IOStreams) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:          "get [(garden|project|seed|shoot|target) <name>]",
-		Short:        "Get single resource instance or target stack, e.g. CRD of a shoot (default: current target)\n",
+		Short:        "Get single resource instance or target stack, e.g. CRD of a shoot (default: current target). \"gardenctl get target\" returns current stack, \"gardenctl get shoot\" returns current shoot",
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) (err error) {
 			if len(args) < 1 || len(args) > 2 {

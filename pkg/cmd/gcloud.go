@@ -27,6 +27,7 @@ import (
 func NewGcloudCmd(targetReader TargetReader) *cobra.Command {
 	return &cobra.Command{
 		Use:                "gcloud <args>",
+		Short:              "e.g. \"gardenctl gcloud compute networks subnets delete net_name\"",
 		FParseErrWhitelist: cobra.FParseErrWhitelist{UnknownFlags: true},
 		SilenceUsage:       true,
 		RunE: func(cmd *cobra.Command, args []string) error {
