@@ -22,10 +22,9 @@ import (
 
 // Write writes kubeconfig to given path
 func (w *GardenctlKubeconfigWriter) Write(kubeconfigPath string, kubeconfig []byte) error {
-	dir, file := path.Split(kubeconfigPath)
-	if err := os.MkdirAll(dir, os.ModePerm); err != nil {
+	if err := os.MkdirAll(path.Dir(kubeconfigPath), os.ModePerm); err != nil {
 		return err
 	}
 
-	return ioutil.WriteFile(file, kubeconfig, 0644)
+	return ioutil.WriteFile(kubeconfigPath, kubeconfig, 0644)
 }
