@@ -75,9 +75,9 @@ func validateArgs(targetReader TargetReader, args []string) error {
 	}
 	var t Target
 	ReadTarget(pathTarget, &t)
-	if !IsTargeted(targetReader, "shoot") && args[0] != "gardener-apiserver" && args[0] != "gardener-controller-manager" && args[0] != "tf" && args[0] != "kubernetes-dashboard" {
+	if !IsTargeted(targetReader, "shoot") && args[0] != "all" && args[0] != "api" && args[0] != "scheduler" && args[0] != "controller-manager" && args[0] != "etcd-main" && args[0] != "etcd-events" && args[0] != "machine-controller-manager" && args[0] != "prometheus" && args[0] != "cluster-autoscaler" && args[0] != "vpn-seed" && args[0] != "gardenlet" && args[0] != "gardener-apiserver" && args[0] != "gardener-controller-manager" && args[0] != "tf" && args[0] != "kubernetes-dashboard" {
 		return errors.New("No shoot targeted")
-	} else if !IsTargeted(targetReader, "project") && args[0] == "tf" || !IsTargeted(targetReader, "shoot") && args[0] == "tf" && !IsTargeted(targetReader, "seed") {
+	} else if !(IsTargeted(targetReader, "project") || IsTargeted(targetReader, "shoot") || IsTargeted(targetReader, "seed") || IsTargeted(targetReader, "namespace")) && args[0] == "tf" {
 		return errors.New("No seed or shoot targeted")
 	} else if !IsTargeted(targetReader) {
 		return errors.New("Target stack is empty")
@@ -563,9 +563,43 @@ func logsGardenerDashboard() {
 	logPodGarden("gardener", "garden")
 }
 
+//logPodWhileControlPlaneTargeted get log pod in shoot namespace while control plane targeted
+func logPodWhileControlPlaneTargeted(targetReader TargetReader, toMatch string, toTarget string, container string) {
+	target := targetReader.ReadTarget(pathTarget)
+	if len(target.Stack()) != 3 {
+		fmt.Println("Control Plane not targeted")
+		os.Exit(2)
+	}
+	namespace := target.Stack()[2].Name
+	seed, err := GetSeedObject(targetReader, target.Stack()[1].Name)
+	checkError(err)
+	greaterThanLokiRelease, err := semver.NewConstraint(">=1.8.0")
+	checkError(err)
+	gardenerVersion, err := semver.NewVersion(seed.Status.Gardener.Version)
+	checkError(err)
+	Client, err = clientToTarget("seed")
+	checkError(err)
+	if flags.loki {
+		if greaterThanLokiRelease.Check(gardenerVersion) {
+			showLogsFromLoki(namespace, toMatch, container)
+		} else {
+			fmt.Println("--loki flag is available only for gardener version >= 1.8.0")
+			fmt.Println("Current version: " + gardenerVersion.String())
+			os.Exit(2)
+		}
+
+	} else {
+		showLogsFromKubectl(namespace, toMatch, container)
+	}
+}
+
 // logsAPIServer prints the logfile of the api-server
 func logsAPIServer(targetReader TargetReader) {
-	logPod(targetReader, "kube-apiserver", "seed", "kube-apiserver")
+	if IsControlPlaneTargeted(targetReader) {
+		logPodWhileControlPlaneTargeted(targetReader, "kube-apiserver", "seed", "kube-apiserver")
+	} else {
+		logPod(targetReader, "kube-apiserver", "seed", "kube-apiserver")
+	}
 }
 
 func saveLogsAPIServer(targetReader TargetReader) {
@@ -574,7 +608,11 @@ func saveLogsAPIServer(targetReader TargetReader) {
 
 // logsScheduler prints the logfile of the scheduler
 func logsScheduler(targetReader TargetReader) {
-	logPod(targetReader, "kube-scheduler", "seed", emptyString)
+	if IsControlPlaneTargeted(targetReader) {
+		logPodWhileControlPlaneTargeted(targetReader, "kube-scheduler", "seed", emptyString)
+	} else {
+		logPod(targetReader, "kube-scheduler", "seed", emptyString)
+	}
 }
 
 func saveLogsScheduler(targetReader TargetReader) {
@@ -583,7 +621,11 @@ func saveLogsScheduler(targetReader TargetReader) {
 
 // logsAPIServer prints the logfile of the controller-manager
 func logsControllerManager(targetReader TargetReader) {
-	logPod(targetReader, "kube-controller-manager", "seed", emptyString)
+	if IsControlPlaneTargeted(targetReader) {
+		logPodWhileControlPlaneTargeted(targetReader, "kube-controller-manager", "seed", emptyString)
+	} else {
+		logPod(targetReader, "kube-controller-manager", "seed", emptyString)
+	}
 }
 
 func saveLogsControllerManager(targetReader TargetReader) {
@@ -593,11 +635,18 @@ func saveLogsControllerManager(targetReader TargetReader) {
 // logsVpnSeed prints the logfile of the vpn-seed container
 func logsVpnSeed(targetReader TargetReader, shootTechnicalID string) {
 	fmt.Println("-----------------------Kube-Apiserver")
-	if shootTechnicalID == emptyString {
-		shootTechnicalID = GetFromTargetInfo(targetReader, "shootTechnicalID")
-		logPodSeed("kube-apiserver", shootTechnicalID, "vpn-seed")
+	if IsControlPlaneTargeted(targetReader) {
+		target := targetReader.ReadTarget(pathTarget)
+		shootTechID := target.Stack()[2].Name
+		fmt.Println("in logsVpnSeed the namespace is" + shootTechID)
+		logPodSeed("kube-apiserver", shootTechID, "vpn-seed")
 	} else {
-		logPodSeed("kube-apiserver", shootTechnicalID, "vpn-seed")
+		if shootTechnicalID == emptyString {
+			shootTechnicalID = GetFromTargetInfo(targetReader, "shootTechnicalID")
+			logPodSeed("kube-apiserver", shootTechnicalID, "vpn-seed")
+		} else {
+			logPodSeed("kube-apiserver", shootTechnicalID, "vpn-seed")
+		}
 	}
 }
 
@@ -608,7 +657,11 @@ func logsEtcdOpertor() {
 
 // logsEtcdMain prints the logfile of etcd-main
 func logsEtcdMain(targetReader TargetReader, containerName string) {
-	logPod(targetReader, "etcd-main", "seed", containerName)
+	if IsControlPlaneTargeted(targetReader) {
+		logPodWhileControlPlaneTargeted(targetReader, "etcd-main", "seed", containerName)
+	} else {
+		logPod(targetReader, "etcd-main", "seed", containerName)
+	}
 }
 
 func saveLogsEtcdMain(targetReader TargetReader, containerName string) {
@@ -626,7 +679,11 @@ func saveLogsEtcdMainBackup(targetReader TargetReader) {
 
 // logsEtcdEvents prints the logfile of etcd-events
 func logsEtcdEvents(targetReader TargetReader, containerName string) {
-	logPod(targetReader, "etcd-events-", "seed", containerName)
+	if IsControlPlaneTargeted(targetReader) {
+		logPodWhileControlPlaneTargeted(targetReader, "etcd-events-", "seed", containerName)
+	} else {
+		logPod(targetReader, "etcd-events-", "seed", containerName)
+	}
 }
 
 func saveLogsEtcdEvents(targetReader TargetReader, containerName string) {
@@ -655,7 +712,11 @@ func saveLogsVpnShoot() {
 
 // logsMachineControllerManager prints the logfile of machine-controller-manager
 func logsMachineControllerManager(targetReader TargetReader) {
-	logPod(targetReader, "machine-controller-manager", "seed", emptyString)
+	if IsControlPlaneTargeted(targetReader) {
+		logPodWhileControlPlaneTargeted(targetReader, "machine-controller-manager", "seed", emptyString)
+	} else {
+		logPod(targetReader, "machine-controller-manager", "seed", emptyString)
+	}
 }
 
 func saveLogsMachineControllerManager(targetReader TargetReader) {
@@ -740,7 +801,11 @@ func saveLogsKubernetesDashboard() {
 
 // logsPrometheus prints the logfiles of prometheus pod
 func logsPrometheus(targetReader TargetReader) {
-	logPod(targetReader, "prometheus", "seed", "prometheus")
+	if IsControlPlaneTargeted(targetReader) {
+		logPodWhileControlPlaneTargeted(targetReader, "prometheus", "seed", "prometheus")
+	} else {
+		logPod(targetReader, "prometheus", "seed", "prometheus")
+	}
 }
 
 func saveLogsPrometheus(targetReader TargetReader) {
@@ -766,7 +831,11 @@ func saveLogsGardenlet() {
 
 // logsClusterAutoscaler prints the logfiles of cluster-autoscaler
 func logsClusterAutoscaler(targetReader TargetReader) {
-	logPod(targetReader, "cluster-autoscaler", "seed", "cluster-autoscaler")
+	if IsControlPlaneTargeted(targetReader) {
+		logPodWhileControlPlaneTargeted(targetReader, "cluster-autoscaler", "seed", "cluster-autoscaler")
+	} else {
+		logPod(targetReader, "cluster-autoscaler", "seed", "cluster-autoscaler")
+	}
 }
 
 func saveLogsClusterAutoscaler(targetReader TargetReader) {
