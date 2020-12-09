@@ -133,10 +133,16 @@ type GardenClusters struct {
 
 // GardenClusterMeta contains name and path to kubeconfig of gardencluster
 type GardenClusterMeta struct {
-	Name               string              `yaml:"name,omitempty" json:"name,omitempty"`
-	KubeConfig         string              `yaml:"kubeConfig,omitempty" json:"kubeConfig,omitempty"`
-	DashboardURL       string              `yaml:"dashboardUrl,omitempty" json:"dashboardUrl,omitempty"`
-	AccessRestrictions []AccessRestriction `yaml:"accessRestrictions,omitempty" json:"accessRestrictions,omitempty"`
+	Name                 string              `yaml:"name,omitempty" json:"name,omitempty"`
+	KubeConfig           string              `yaml:"kubeConfig,omitempty" json:"kubeConfig,omitempty"`
+	DashboardURL         string              `yaml:"dashboardUrl,omitempty" json:"dashboardUrl,omitempty"`
+	AccessRestrictions   []AccessRestriction `yaml:"accessRestrictions,omitempty" json:"accessRestrictions,omitempty"`
+	TrustedKubeConfigMd5 string              `yaml:"TrustedKubeConfigMd5,omitempty" json:"kubeConfigTrusteds,omitempty"`
+}
+
+// TrustedKubeConfigMd5 contains key
+type TrustedKubeConfigMd5 struct {
+	Key string `yaml:"key,omitempty" json:"key,omitempty"`
 }
 
 // AccessRestrictionsOption contains key / notifyIf / msg

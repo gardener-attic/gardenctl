@@ -15,6 +15,7 @@ require (
 	github.com/onsi/gomega v1.7.0
 	github.com/pkg/browser v0.0.0-20180916011732-0a3d74bf9ce4
 	github.com/spf13/cobra v0.0.6
+	github.com/srfrog/slices v1.0.1
 	golang.org/x/lint v0.0.0-20191125180803-fdd1cda4f05f
 	gopkg.in/yaml.v2 v2.2.8
 	k8s.io/api v0.17.0

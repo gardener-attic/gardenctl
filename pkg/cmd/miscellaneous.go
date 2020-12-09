@@ -108,11 +108,9 @@ func clientToTarget(target TargetKind) (*k8s.Clientset, error) {
 	checkError(err)
 	clientConfig, err := clientcmd.NewClientConfigFromBytes(kubeconfig)
 	checkError(err)
-	rawConfig, err := clientConfig.RawConfig()
-	checkError(err)
-	if err := ValidateClientConfig(rawConfig); err != nil {
-		return nil, err
-	}
+
+	gardenKubeConfigHashCheck()
+
 	config, err := clientConfig.ClientConfig()
 	checkError(err)
 	clientset, err := k8s.NewForConfig(config)
