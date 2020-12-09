@@ -1,5 +1,15 @@
 # ignore everything
 /*
+*._Store
+.DS_Store
+.vscode
+*.coverprofile
+config
+kubeconfig
+main.tf
+terraform.tfstate
+terraform.tfvars
+variables.tf
 
 # except those directories and files:
 !/.ci
