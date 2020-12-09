@@ -1,15 +1,10 @@
 # ignore everything
-/*
-
+*
 # except those directories and files:
-!/.ci
-!/.github
+!*.go
 !/.gitignore
-!/cmd/gardenctl/main.go
-!/hack/tools.go
-!/logo
-!/pkg
 !/vendor
+!/hack/tools.go
 !/CODEOWNERS
 !/CONTRIBUTING.md
 !/Dockerfile
