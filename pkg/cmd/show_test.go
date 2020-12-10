@@ -51,7 +51,7 @@ var _ = Describe("Show command", func() {
 			err := command.Execute()
 
 			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(Equal("Command must be in the format: show (operator|gardener-dashboard|api|scheduler|controller-manager|etcd-operator|etcd-main|etcd-events|addon-manager|vpn-seed|vpn-shoot|machine-controller-manager|kubernetes-dashboard|prometheus|grafana|tf (infra|dns|ingress)|cluster-autoscaler)"))
+			Expect(err.Error()).To(Equal("Command must be in the format: show (infra|operator|gardener-dashboard|api|scheduler|controller-manager|etcd-operator|etcd-main|etcd-events|addon-manager|vpn-seed|vpn-shoot|machine-controller-manager|kubernetes-dashboard|prometheus|grafana|tf (infra|dns|ingress)|cluster-autoscaler)"))
 		})
 	})
 })

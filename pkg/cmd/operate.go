@@ -204,9 +204,13 @@ func operate(provider, arguments string) string {
 		if err != nil {
 			os.Exit(2)
 		}
-		err = ExecCmd(nil, arguments, false)
+
+		args := strings.Fields(arguments)
+		cmd := exec.Command("aliyun", args...)
+		out, err = cmd.CombinedOutput()
 		if err != nil {
-			os.Exit(2)
+			fmt.Println(err)
+			log.Fatalf("Aliyun CLI failed with %s\n%s\n", out, err)
 		}
 	}
 	return (strings.TrimSpace(string(out[:])))
