@@ -480,11 +480,17 @@ func fetchAlicloudInstanceIDByNodeName(nodeName string) (string, error) {
 	checkError(err)
 	for _, node := range nodes.Items {
 		if nodeName == node.Name {
-			return strings.Split(node.Spec.ProviderID, ".")[1], nil
+			if node.Spec.ProviderID != "" {
+				return strings.Split(node.Spec.ProviderID, ".")[1], nil
+			}
 		}
 	}
 
-	return "", fmt.Errorf("Cannot find InstanceID for node %q", nodeName)
+	//Fallback: Normally, node id is izbp1c11iq8wz8p58ve2mhz, instance id looks like: i-bp1c11iq8wz8p58ve2mh
+	instanceID := strings.TrimRight(nodeName, "z")
+	instanceID = strings.Replace(instanceID, "z", "-", 1)
+
+	return instanceID, nil
 }
 
 // checkIsThereGardenerUser checks if the bastion contains gardener user
