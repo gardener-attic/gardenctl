@@ -54,7 +54,7 @@ spec:
     controlPlaneConfig:
       apiVersion: openstack.provider.extensions.gardener.cloud/v1alpha1
       kind: ControlPlaneConfig
-      loadBalancerProvider: f5networks
+      loadBalancerProvider: f5
       zone: eu-nl-1a
     infrastructureConfig:
       apiVersion: openstack.provider.extensions.gardener.cloud/v1alpha1

@@ -64,7 +64,7 @@ spec:
     workers:
       - name: gctl-az
         machine:
-          type: Standard_A1_v2
+          type: Standard_A2_v2
           image:
             name: gardenlinux
             version: 27.1.0
