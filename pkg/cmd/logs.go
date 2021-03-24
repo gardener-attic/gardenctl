@@ -20,8 +20,10 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"os/exec"
 	"path"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -61,7 +63,7 @@ func NewLogsCmd(targetReader TargetReader) *cobra.Command {
 		ValidArgs: []string{"gardener-apiserver", "gardener-controller-manager", "gardener-dashboard", "api", "scheduler", "controller-manager", "etcd-operator", "etcd-main", "etcd-events", "addon-manager", "vpn-seed", "vpn-shoot", "auto-node-repair", "kubernetes-dashboard", "prometheus", "grafana", "gardenlet", "tf"},
 		Aliases:   []string{"log"},
 	}
-	cmd.Flags().Int64Var(&flags.tail, "tail", 200, "Lines of recent log file to display. Defaults to 200 with no selector, if a selector is provided takes the number of specified lines (max 100 000 for loki).")
+	cmd.Flags().Int64Var(&flags.tail, "tail", 1000, "Lines of recent log file to display. Defaults to 1000 with no selector, if a selector is provided takes the number of specified lines (max 100 000 for loki).")
 	cmd.Flags().DurationVar(&flags.sinceSeconds, "since", flags.sinceSeconds, "Only return logs newer than a relative duration like 5s, 2m, or 3h. Defaults to all logs. Only one of since-time / since may be used.")
 	cmd.Flags().StringVar(&flags.sinceTime, "since-time", flags.sinceTime, "Only return logs after a specific date (RFC3339). Defaults to all logs. Only one of since-time / since may be used.")
 	cmd.Flags().BoolVar(&flags.loki, "loki", flags.loki, "If the flag is set the logs are retrieved and shown from Loki, otherwise from the kubelet.")
@@ -389,6 +391,8 @@ func showLogsFromLoki(namespace, toMatch, container string) {
 	checkError(err)
 
 	fmt.Println(response)
+	fmt.Println("COMMAND: ", "kubectl", BuildLokiCommandArgs(KUBECONFIG, namespace, toMatch, container, flags.tail, flags.sinceSeconds))
+	fmt.Println("KRIS LENGTH: ", len(response.Data.Result))
 }
 
 //BuildLogCommandArgs build kubectl command to get logs
@@ -943,6 +947,11 @@ func newLogsFlags() *logFlags {
 type logResponseLoki struct {
 	Data struct {
 		Result []struct {
+			Stream struct {
+				ContainerName string `json:"container_name"`
+				DockerID      string `json:"docker_id"`
+				PodName       string `json:"pod_name"`
+			} `json:"stream"`
 			Values [][]string `json:"values"`
 		} `json:"result"`
 	} `json:"data"`
@@ -953,6 +962,21 @@ type logMessage struct {
 	Severity string `json:"severity"`
 	Process  string `json:"pid"`
 	Source   string `json:"source"`
+}
+
+type pair struct {
+	podName       string
+	containerName string
+}
+
+type dockerIds struct {
+	name string
+	logs []logField
+}
+
+type logField struct {
+	log  string
+	time time.Time
 }
 
 func (msg logMessage) String() string {
@@ -974,31 +998,55 @@ func (msg logMessage) String() string {
 func (response logResponseLoki) String() string {
 	results := response.Data.Result
 	var allLogs strings.Builder
-	valuesDelimeter := "------------------------------------------------------------------------------------------\n"
+	pairs := make(map[pair][]dockerIds)
+	valuesDelimeter := strings.Repeat("=", getTerminalWidth()) + "\n"
 
 	for resultIndex := len(results) - 1; resultIndex >= 0; resultIndex-- {
+		currContainer := results[resultIndex].Stream.ContainerName
+		currDockerID := results[resultIndex].Stream.DockerID
+		currPod := results[resultIndex].Stream.PodName
+		currPair := pair{podName: currPod, containerName: currContainer}
+
 		values := results[resultIndex].Values
-		isThereLogs := false
 		for valueIndex := len(values) - 1; valueIndex >= 0; valueIndex-- {
 			time := parseTimeInRFC(values[valueIndex][0])
 			log := parseLogMessage(values[valueIndex][1])
-			allLogs.WriteString(time + log.String())
-			isThereLogs = true
-		}
+			dockerIDIndex := findDockerIDIndex(pairs[currPair], currDockerID)
+			if dockerIDIndex == -1 {
+				pairs[currPair] = append(pairs[currPair], dockerIds{name: currDockerID, logs: make([]logField, 0)})
+				dockerIDIndex = len(pairs[currPair]) - 1
+			}
 
-		if isThereLogs {
-			allLogs.WriteString(valuesDelimeter)
+			pairs[currPair][dockerIDIndex].logs = append(
+				pairs[currPair][dockerIDIndex].logs, logField{time: time, log: log.String()})
+		}
+	}
+
+	for pair, container := range pairs {
+		//Sort dockerIds by comparing the times of the first logs of each dockerId
+		sort.Slice(container, func(i, j int) bool {
+			return container[i].logs[0].time.Before(container[j].logs[0].time)
+		})
+		for _, dockerID := range container {
+			allLogs.WriteString(fmt.Sprintf("%sPod Name: %s, Container Name: %s, DockerID: %s\n%s", valuesDelimeter, pair.podName, pair.containerName, dockerID.name, valuesDelimeter))
+			//Sort logs in the stream
+			sort.Slice(dockerID.logs, func(i, j int) bool {
+				return dockerID.logs[i].time.Before(dockerID.logs[j].time)
+			})
+			for _, log := range dockerID.logs {
+				allLogs.WriteString(log.time.String() + log.log)
+			}
 		}
 	}
 
 	return allLogs.String()
 }
 
-func parseTimeInRFC(unixTime string) string {
+func parseTimeInRFC(unixTime string) time.Time {
 	intTime, err := strconv.ParseInt(unixTime, 10, 64)
 	checkError(err)
 
-	return time.Unix(0, intTime).String()
+	return time.Unix(0, intTime)
 }
 
 func parseLogMessage(logMsg string) logMessage {
@@ -1008,4 +1056,30 @@ func parseLogMessage(logMsg string) logMessage {
 	checkError(err)
 
 	return log
+}
+
+func getTerminalWidth() int {
+	cmd := exec.Command("stty", "size")
+	cmd.Stdin = os.Stdin
+	out, err := cmd.Output()
+	if err != nil {
+		return 20
+	}
+
+	size, err := strconv.Atoi(strings.Fields(string(out))[1])
+	if err != nil {
+		return 20
+	}
+
+	return size
+}
+
+func findDockerIDIndex(dockerIds []dockerIds, id string) int {
+	for idx, dockerID := range dockerIds {
+		if dockerID.name == id {
+			return idx
+		}
+	}
+
+	return -1
 }
