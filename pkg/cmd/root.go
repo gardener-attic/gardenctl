@@ -103,6 +103,8 @@ func Execute() {
 	CreateDir(pathSessionID, 0751)
 	pathTarget = filepath.Join(pathSessionID, "target")
 	CreateFileIfNotExists(pathTarget, 0644)
+	pathHistory = filepath.Join(pathSessionID, "history")
+	CreateFileIfNotExists(pathHistory, 0644)
 	gardenConfig = os.Getenv("GARDENCONFIG")
 	if gardenConfig != "" {
 		if _, err := os.Stat(gardenConfig); err != nil {
@@ -126,6 +128,7 @@ func init() {
 		targetWriter     = &GardenctlTargetWriter{}
 		kubeconfigReader = &GardenctlKubeconfigReader{}
 		kubeconfigWriter = &GardenctlKubeconfigWriter{}
+		historyWriter    = &GardenctlHistoryWriter{}
 		ioStreams        = IOStreams{
 			In:     os.Stdin,
 			Out:    os.Stdout,
@@ -143,7 +146,7 @@ func init() {
 	// Commands
 	RootCmd.AddCommand(
 		NewLsCmd(targetReader, configReader, ioStreams),
-		NewTargetCmd(targetReader, targetWriter, configReader, ioStreams, kubeconfigReader),
+		NewTargetCmd(targetReader, targetWriter, configReader, ioStreams, kubeconfigReader, historyWriter),
 		NewDropCmd(targetReader, targetWriter, ioStreams),
 		NewGetCmd(targetReader, configReader, kubeconfigReader, kubeconfigWriter, ioStreams))
 	RootCmd.AddCommand(NewDownloadCmd(targetReader), NewShowCmd(targetReader), NewLogsCmd(targetReader))
@@ -159,6 +162,7 @@ func init() {
 	RootCmd.AddCommand(NewInfoCmd(targetReader, ioStreams))
 	RootCmd.AddCommand(NewVersionCmd(), NewUpdateCheckCmd())
 	RootCmd.AddCommand(NewDiagCmd(targetReader, ioStreams))
+	RootCmd.AddCommand(NewHistoryCmd(targetWriter, historyWriter))
 
 	RootCmd.SuggestionsMinimumDistance = suggestionsMinimumDistance
 	RootCmd.BashCompletionFunction = bashCompletionFunc

@@ -39,6 +39,11 @@ type KubeconfigWriter interface {
 	Write(path string, kubeconfig []byte) error
 }
 
+// HistoryWriter writes history to given path.
+type HistoryWriter interface {
+	WriteStringln(path string, history interface{}) error
+}
+
 // GardenctlTargetReader implements TargetReader.
 type GardenctlTargetReader struct{}
 
@@ -50,6 +55,9 @@ type GardenctlKubeconfigReader struct{}
 
 // GardenctlKubeconfigWriter implements KubeconfigWriter.
 type GardenctlKubeconfigWriter struct{}
+
+// GardenctlHistoryWriter implements HistoryWriter.
+type GardenctlHistoryWriter struct{}
 
 // TargetInterface defines target operations.
 type TargetInterface interface {

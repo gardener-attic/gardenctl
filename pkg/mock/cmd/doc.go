@@ -18,5 +18,6 @@
 //go:generate mockgen -package cmd -destination=kubeconfig_reader.go github.com/gardener/gardenctl/pkg/cmd KubeconfigReader
 //go:generate mockgen -package cmd -destination=kubeconfig_writer.go github.com/gardener/gardenctl/pkg/cmd KubeconfigWriter
 //go:generate mockgen -package cmd -destination=config_reader.go github.com/gardener/gardenctl/pkg/cmd ConfigReader
+//go:generate mockgen -package cmd -destination=history_writer.go github.com/gardener/gardenctl/pkg/cmd HistoryWriter
 
 package cmd

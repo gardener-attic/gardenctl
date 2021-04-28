@@ -44,6 +44,7 @@ var (
 	// file pathes
 	pathGardenConfig   string
 	pathTarget         string
+	pathHistory        string
 	pathDefault        = filepath.Join(HomeDir(), ".garden")
 	pathDefaultSession = filepath.Join(HomeDir(), ".garden", "sessions")
 )

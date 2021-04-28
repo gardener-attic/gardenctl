@@ -10,6 +10,7 @@ require (
 	github.com/gardener/machine-controller-manager v0.27.0
 	github.com/golang/mock v1.4.3
 	github.com/jmoiron/jsonq v0.0.0-20150511023944-e874b168d07e
+	github.com/manifoldco/promptui v0.8.0
 	github.com/olekukonko/tablewriter v0.0.4
 	github.com/onsi/ginkgo v1.10.1
 	github.com/onsi/gomega v1.7.0
