@@ -176,10 +176,26 @@ func (a *AwsInstanceAttribute) createBastionHostSecurityGroup() {
 }
 
 func (a *AwsInstanceAttribute) createNodeHostSecurityGroup() {
-	// add ssh rule to ec2 instance
-	arguments := fmt.Sprintf("ec2 authorize-security-group-ingress --group-id %s --protocol tcp --port 22 --cidr %s/32", a.SecurityGroupID, a.BastionPrivIP)
-	operate("aws", arguments)
-	fmt.Println("Opened SSH Port on Node.")
+	//check whether the SG rules exist before adding it
+	ingressRuleExist := false
+	arguments := fmt.Sprintf("ec2 describe-security-groups --group-ids %s --query SecurityGroups[].IpPermissions[][].{IP:IpRanges,Port:FromPort}", a.SecurityGroupID)
+	ingressRulesList := strings.Split(strings.TrimSuffix(strings.Trim(operate("aws", arguments), "\n"), "\n"), "\n")
+	if len(ingressRulesList) > 0 {
+		for i := 0; i < len(ingressRulesList)-1; i++ {
+			if ingressRulesList[i] == "22" && strings.Contains(ingressRulesList[i+1], a.BastionPrivIP+"/32") {
+				ingressRuleExist = true
+				break
+			}
+		}
+	}
+	//add ingress rule when not found existing ingress rule
+	if !ingressRuleExist {
+		arguments = fmt.Sprintf("ec2 authorize-security-group-ingress --group-id %s --protocol tcp --port 22 --cidr %s/32", a.SecurityGroupID, a.BastionPrivIP)
+		operate("aws", arguments)
+		fmt.Println("Opened SSH Port on Node.")
+	} else {
+		fmt.Println("SSH Port already opened on Node")
+	}
 }
 
 // getSecurityGroupID extracts security group id of ec2 instance
