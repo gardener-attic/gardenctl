@@ -719,12 +719,12 @@ func logsMachineControllerManager(targetReader TargetReader) {
 	if IsControlPlaneTargeted(targetReader) {
 		logPodWhileControlPlaneTargeted(targetReader, "machine-controller-manager", "seed", emptyString)
 	} else {
-		logPod(targetReader, "machine-controller-manager", "seed", emptyString)
+		logPod(targetReader, "machine-controller-manager", "seed", "machine-controller-manager")
 	}
 }
 
 func saveLogsMachineControllerManager(targetReader TargetReader) {
-	saveLogPod(targetReader, "machine-controller-manager", "seed", emptyString)
+	saveLogPod(targetReader, "machine-controller-manager", "seed", "machine-controller-manager")
 }
 
 // logsKubernetesDashboard prints the logfile of the dashboard
