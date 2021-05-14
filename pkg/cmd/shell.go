@@ -17,6 +17,7 @@ package cmd
 import (
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	gardencorev1beta1 "github.com/gardener/gardener/pkg/apis/core/v1beta1"
@@ -138,7 +139,7 @@ func shellToNode(client kubernetes.Interface, targetKind TargetKind, nodeName st
 	if err != nil {
 		return err
 	}
-	podName = fmt.Sprintf("rootpod-%s-%s", podName, internalIP)
+	podName = fmt.Sprintf("rootpod-%s-%s", strings.ToLower(podName), internalIP)
 	if targetKind == TargetKindShoot {
 		namespace = metav1.NamespaceSystem
 	}
