@@ -39,7 +39,7 @@ spec:
         cpu: 80m
         memory: 1Gi
         pid: 20k
-    version: 1.19.3
+    version: 1.19.6
   networking:
     type: calico
     pods: 172.16.0.0/13

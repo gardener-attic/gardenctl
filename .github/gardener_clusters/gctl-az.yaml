@@ -35,7 +35,7 @@ spec:
       kubeReserved:
         cpu: 80m
         memory: 1Gi
-    version: 1.19.2
+    version: 1.19.6
   networking:
     type: calico
     pods: 100.96.0.0/11
@@ -64,10 +64,10 @@ spec:
     workers:
       - name: gctl-az
         machine:
-          type: Standard_A1_v2
+          type: Standard_A2_v2
           image:
             name: gardenlinux
-            version: 27.1.0
+            version: 184.0.0
         maximum: 2
         minimum: 1
         maxSurge: 1
