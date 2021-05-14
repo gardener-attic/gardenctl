@@ -177,7 +177,6 @@ func (a *AwsInstanceAttribute) createBastionHostSecurityGroup() {
 
 func (a *AwsInstanceAttribute) createNodeHostSecurityGroup() {
 	//check whether the SG rules exist before adding it
-	//regrigger the test
 	ingressRuleExist := false
 	arguments := fmt.Sprintf("ec2 describe-security-groups --group-ids %s --query SecurityGroups[].IpPermissions[][].{IP:IpRanges,Port:FromPort}", a.SecurityGroupID)
 	ingressRulesList := strings.Split(strings.TrimSuffix(strings.Trim(operate("aws", arguments), "\n"), "\n"), "\n")
@@ -190,7 +189,7 @@ func (a *AwsInstanceAttribute) createNodeHostSecurityGroup() {
 		}
 	}
 	//add ingress rule when not found existing ingress rule
-	if ingressRuleExist == false {
+	if !ingressRuleExist {
 		arguments = fmt.Sprintf("ec2 authorize-security-group-ingress --group-id %s --protocol tcp --port 22 --cidr %s/32", a.SecurityGroupID, a.BastionPrivIP)
 		operate("aws", arguments)
 		fmt.Println("Opened SSH Port on Node.")
