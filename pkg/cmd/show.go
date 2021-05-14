@@ -30,14 +30,18 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 )
 
+var (
+	flagoutput string
+)
+
 // NewShowCmd returns a new show command.
 func NewShowCmd(targetReader TargetReader) *cobra.Command {
-	return &cobra.Command{
-		Use:   "show (operator|gardener-dashboard|api|scheduler|controller-manager|etcd-operator|etcd-main|etcd-events|addon-manager|vpn-seed|vpn-shoot|machine-controller-manager|kubernetes-dashboard|prometheus|grafana|tf (infra|dns|ingress)|cluster-autoscaler)",
-		Short: "Show details about endpoint/service and open in default browser if applicable, e.g. \"gardenctl show scheduler\" show scheduler pod of current shoot",
+	cmd := &cobra.Command{
+		Use:   "show (infra|operator|gardener-dashboard|api|scheduler|controller-manager|etcd-operator|etcd-main|etcd-events|addon-manager|vpn-seed|vpn-shoot|machine-controller-manager|kubernetes-dashboard|prometheus|grafana|tf (infra|dns|ingress)|cluster-autoscaler)",
+		Short: `Show details about endpoint/service and open in default browser if applicable`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if len(args) < 1 || len(args) > 2 {
-				return errors.New("Command must be in the format: show (operator|gardener-dashboard|api|scheduler|controller-manager|etcd-operator|etcd-main|etcd-events|addon-manager|vpn-seed|vpn-shoot|machine-controller-manager|kubernetes-dashboard|prometheus|grafana|tf (infra|dns|ingress)|cluster-autoscaler)")
+				return errors.New("Command must be in the format: show (infra|operator|gardener-dashboard|api|scheduler|controller-manager|etcd-operator|etcd-main|etcd-events|addon-manager|vpn-seed|vpn-shoot|machine-controller-manager|kubernetes-dashboard|prometheus|grafana|tf (infra|dns|ingress)|cluster-autoscaler)")
 			}
 			t := targetReader.ReadTarget(pathTarget)
 			if (len(t.Stack()) < 3 || (len(t.Stack()) == 3 && t.Stack()[2].Kind == "namespace")) && (args[0] != "operator") && (args[0] != "tf") && (args[0] != "kubernetes-dashboard") && (args[0] != "etcd-operator") {
@@ -54,6 +58,11 @@ func NewShowCmd(targetReader TargetReader) *cobra.Command {
 			// Set up global map variable targetInfo and key validation check
 
 			switch args[0] {
+			case "infra":
+				if flagoutput == "" {
+					flagoutput = "json"
+				}
+				showCloudInfra(targetReader, flagoutput)
 			case "operator":
 				showOperator()
 			case "gardener-dashboard":
@@ -97,17 +106,20 @@ func NewShowCmd(targetReader TargetReader) *cobra.Command {
 				case "ingress":
 					showIngress()
 				default:
-					fmt.Println("Command must be in the format: show (operator|gardener-dashboard|api|scheduler|controller-manager|etcd-operator|etcd-main|etcd-events|addon-manager|vpn-seed|vpn-shoot|machine-controller-manager|kubernetes-dashboard|prometheus|grafana|tf (infra|dns|ingress)|cluster-autoscaler)")
+					fmt.Println("Command must be in the format: show (infra|operator|gardener-dashboard|api|scheduler|controller-manager|etcd-operator|etcd-main|etcd-events|addon-manager|vpn-seed|vpn-shoot|machine-controller-manager|kubernetes-dashboard|prometheus|grafana|tf (infra|dns|ingress)|cluster-autoscaler)")
 				}
 			case "cluster-autoscaler":
 				showClusterAutoscaler(targetReader)
 			default:
-				fmt.Println("Command must be in the format: show (operator|gardener-dashboard|api|scheduler|controller-manager|etcd-operator|etcd-main|etcd-events|addon-manager|vpn-seed|vpn-shoot|machine-controller-manager|kubernetes-dashboard|prometheus|grafana|tf (infra|dns|ingress)|cluster-autoscaler)")
+				fmt.Println("Command must be in the format: show (infra|operator|gardener-dashboard|api|scheduler|controller-manager|etcd-operator|etcd-main|etcd-events|addon-manager|vpn-seed|vpn-shoot|machine-controller-manager|kubernetes-dashboard|prometheus|grafana|tf (infra|dns|ingress)|cluster-autoscaler)")
 			}
 			return nil
 		},
 		ValidArgs: []string{"operator", "gardener-dashboard", "api", "scheduler", "controller-manager", "etcd-operator", "etcd-main", "etcd-events", "addon-manager", "vpn-seed", "vpn-shoot", "machine-controller-manager", "kubernetes-dashboard", "prometheus", "grafana", "tf", "cluster-autoscaler"},
 	}
+
+	cmd.PersistentFlags().StringVarP(&flagoutput, "format", "f", "", "output format (default: json)")
+	return cmd
 }
 
 // showPodGarden
@@ -195,6 +207,187 @@ func showPod(toMatch string, toTarget TargetKind, targetReader TargetReader) {
 			checkError(err)
 		}
 	}
+}
+
+// showCloudInfra shows the infra resources for the targeted shoot cluster
+func showCloudInfra(targetReader TargetReader, output string) {
+	target := targetReader.ReadTarget(pathTarget)
+	shoot, err := FetchShootFromTarget(target)
+	checkError(err)
+	infraType := shoot.Spec.Provider.Type
+
+	switch infraType {
+	case "aws":
+		showCloudInfraTypeAWS(targetReader, output)
+	case "azure":
+		showCloudInfraTypeAzure(targetReader, output)
+	case "gcp":
+		showCloudInfraTypeGCP(targetReader, output)
+	case "openstack":
+		showCloudInfraTypeOpenstack(targetReader, output)
+	case "alicloud":
+		showCloudInfraTypeAlicloud(targetReader)
+	default:
+		fmt.Println("infra type not found")
+	}
+}
+
+// showCloudInfraTypeAWS shows the AWS infra resources for the targeted shoot cluster
+func showCloudInfraTypeAWS(targetReader TargetReader, output string) {
+
+	shoottag := GetFromTargetInfo(targetReader, "shootTechnicalID")
+
+	capturedOutput := execInfraOperator("aws", "ec2 describe-instances --filter Name=tag:kubernetes.io/cluster/"+shoottag+",Values=1 --output "+output)
+	fmt.Println(capturedOutput)
+
+	capturedOutput = execInfraOperator("aws", "ec2 describe-volumes --filter Name=tag:kubernetes.io/cluster/"+shoottag+",Values=1 --output "+output)
+	fmt.Println(capturedOutput)
+
+	capturedOutput = execInfraOperator("aws", "ec2 describe-vpcs --filter Name=tag:kubernetes.io/cluster/"+shoottag+",Values=1 --output "+output)
+	fmt.Println(capturedOutput)
+
+	capturedOutput = execInfraOperator("aws", "ec2 describe-subnets --filter Name=tag:kubernetes.io/cluster/"+shoottag+",Values=1 --output "+output)
+	fmt.Println(capturedOutput)
+
+	capturedOutput = execInfraOperator("aws", "ec2 describe-route-tables --filter Name=tag:kubernetes.io/cluster/"+shoottag+",Values=1 --output "+output)
+	fmt.Println(capturedOutput)
+
+	capturedOutput = execInfraOperator("aws", "ec2 describe-security-groups --filter Name=tag:kubernetes.io/cluster/"+shoottag+",Values=1 --output "+output)
+	fmt.Println(capturedOutput)
+
+	capturedOutput = execInfraOperator("aws", "ec2 describe-internet-gateways --filter Name=tag:kubernetes.io/cluster/"+shoottag+",Values=1 --output "+output)
+	fmt.Println(capturedOutput)
+
+	capturedOutput = execInfraOperator("aws", "ec2 describe-nat-gateways --filter Name=tag:kubernetes.io/cluster/"+shoottag+",Values=1 --output "+output)
+	fmt.Println(capturedOutput)
+
+	capturedOutput = execInfraOperator("aws", "ec2 describe-addresses --filter Name=tag:kubernetes.io/cluster/"+shoottag+",Values=1 --output "+output)
+	fmt.Println(capturedOutput)
+}
+
+// showCloudInfraTypeAzure shows the Azure infra resources for the targeted shoot cluster
+func showCloudInfraTypeAzure(targetReader TargetReader, output string) {
+
+	shoottag := GetFromTargetInfo(targetReader, "shootTechnicalID")
+
+	capturedOutput := execInfraOperator("az", "vm list -d -g "+shoottag+" --output "+output)
+	fmt.Println(capturedOutput)
+
+	capturedOutput = execInfraOperator("az", "disk list -g "+shoottag+" --output "+output)
+	fmt.Println(capturedOutput)
+
+	capturedOutput = execInfraOperator("az", "network vnet list -g "+shoottag+" --output "+output)
+	fmt.Println(capturedOutput)
+
+	vnets := make([]string, 0)
+	vnets = findInfraResourcesMatch(`\"id\".*(virtualNetworks\/[a-z0-9-]*)\"`, capturedOutput, vnets)
+	if len(vnets) > 0 {
+		for _, vnet := range vnets {
+			s := strings.Split(vnet, "/")
+			vnetName := s[1]
+			capturedOutput = execInfraOperator("az", "network vnet subnet list -g "+shoottag+" --vnet-name "+vnetName+" --output "+output)
+			fmt.Println(capturedOutput)
+		}
+	}
+
+	capturedOutput = execInfraOperator("az", "network route-table list -g "+shoottag+" --output "+output)
+	fmt.Println(capturedOutput)
+
+	capturedOutput = execInfraOperator("az", "network nsg list -g "+shoottag+" --output "+output)
+	fmt.Println(capturedOutput)
+
+	capturedOutput = execInfraOperator("az", "network lb list -g "+shoottag+" --output "+output)
+	fmt.Println(capturedOutput)
+
+	capturedOutput = execInfraOperator("az", "network nic list -g "+shoottag+" --output "+output)
+	fmt.Println(capturedOutput)
+
+	capturedOutput = execInfraOperator("az", "network public-ip list -g "+shoottag+" --output "+output)
+	fmt.Println(capturedOutput)
+}
+
+// showCloudInfraTypeGCP shows the GCP infra resources for the targeted shoot cluster
+func showCloudInfraTypeGCP(targetReader TargetReader, output string) {
+
+	shoottag := GetFromTargetInfo(targetReader, "shootTechnicalID")
+
+	capturedOutput := execInfraOperator("gcp", "compute instances list --filter=name~"+shoottag+" --format "+output)
+	fmt.Println(capturedOutput)
+
+	capturedOutput = execInfraOperator("gcp", "compute disks list --filter=name~"+shoottag+" --format "+output)
+	fmt.Println(capturedOutput)
+
+	capturedOutput = execInfraOperator("gcp", "compute networks list --filter=name="+shoottag+" --format "+output)
+	fmt.Println(capturedOutput)
+
+	capturedOutput = execInfraOperator("gcp", "compute networks subnets list --filter=name~"+shoottag+" --format "+output)
+	fmt.Println(capturedOutput)
+
+	capturedOutput = execInfraOperator("gcp", "compute routers list --filter=name~"+shoottag+" --format "+output)
+	fmt.Println(capturedOutput)
+
+	capturedOutput = execInfraOperator("gcp", "compute routes list --filter=network="+shoottag+" --format "+output)
+	fmt.Println(capturedOutput)
+
+	capturedOutput = execInfraOperator("gcp", "compute firewall-rules list --filter=network="+shoottag+" --format "+output)
+	fmt.Println(capturedOutput)
+}
+
+// showCloudInfraTypeOpenstack shows the Openstack infra resources for the targeted shoot cluster
+func showCloudInfraTypeOpenstack(targetReader TargetReader, output string) {
+
+	shoottag := GetFromTargetInfo(targetReader, "shootTechnicalID")
+
+	capturedOutput := execInfraOperator("openstack", "server list --name "+shoottag+".* --format "+output)
+	fmt.Println(capturedOutput)
+
+	capturedOutput = execInfraOperator("openstack", "volume list --format "+output)
+	fmt.Println(capturedOutput)
+
+	capturedOutput = execInfraOperator("openstack", "network list --name "+shoottag+" --format "+output)
+	fmt.Println(capturedOutput)
+
+	capturedOutput = execInfraOperator("openstack", "subnet list --name "+shoottag+" --format "+output)
+	fmt.Println(capturedOutput)
+
+	capturedOutput = execInfraOperator("openstack", "router list --name "+shoottag+" --format "+output)
+	fmt.Println(capturedOutput)
+
+	capturedOutput = execInfraOperator("openstack", "floating ip list --format "+output)
+	fmt.Println(capturedOutput)
+
+	capturedOutput = execInfraOperator("openstack", "security group list --format "+output)
+	fmt.Println(capturedOutput)
+}
+
+// showCloudInfraTypeAlicloud shows the Alicloud infra resources for the targeted shoot cluster
+func showCloudInfraTypeAlicloud(targetReader TargetReader) {
+
+	shoottag := GetFromTargetInfo(targetReader, "shootTechnicalID")
+
+	capturedOutput := execInfraOperator("aliyun", "ecs DescribeInstances --InstanceName "+shoottag+"*")
+	fmt.Println(capturedOutput)
+
+	capturedOutput = execInfraOperator("aliyun", "ecs DescribeDisks")
+	fmt.Println(capturedOutput)
+
+	capturedOutput = execInfraOperator("aliyun", "vpc DescribeVpcs --VpcName "+shoottag+"-vpc")
+	fmt.Println(capturedOutput)
+
+	capturedOutput = execInfraOperator("aliyun", "ecs DescribeVSwitches")
+	fmt.Println(capturedOutput)
+
+	capturedOutput = execInfraOperator("aliyun", "ecs DescribeVRouters")
+	fmt.Println(capturedOutput)
+
+	capturedOutput = execInfraOperator("aliyun", "ecs DescribeRouteTables")
+	fmt.Println(capturedOutput)
+
+	capturedOutput = execInfraOperator("aliyun", "ecs DescribeEipAddresses")
+	fmt.Println(capturedOutput)
+
+	capturedOutput = execInfraOperator("aliyun", "ecs DescribeSecurityGroups --SecurityGroupName "+shoottag+"-sg")
+	fmt.Println(capturedOutput)
 }
 
 // showAPIServer shows the pod for the api-server running in the targeted seed cluster
