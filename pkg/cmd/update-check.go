@@ -17,11 +17,20 @@ package cmd
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"io/ioutil"
+	"log"
 	"net/http"
+	"os"
+	"os/exec"
 
 	"github.com/Masterminds/semver"
+	"github.com/schollz/progressbar/v3"
 	"github.com/spf13/cobra"
+)
+
+const (
+	green = "\033[1;32m%s\033[0m"
 )
 
 // NewUpdateCheckCmd checks whether a newer version of gardenctl is available
@@ -30,18 +39,23 @@ func NewUpdateCheckCmd() *cobra.Command {
 		Use:   "update-check",
 		Short: "Check whether new gardenctl version is available, e.g. \"gardenctl update-check\"",
 		RunE: func(cmd *cobra.Command, args []string) error {
-
 			isAvailable, latestVersion, err := newVersionAvailable(version)
 			if err != nil {
 				return err
 			}
 			if isAvailable {
-				fmt.Printf("New version %q of Gardenctl is available at https://github.com/gardener/gardenctl/releases/latest \n", *latestVersion)
-				fmt.Println("Please get latest version from above URL and see https://github.com/gardener/gardenctl#installation for how to upgrade")
+				latestVersion := *latestVersion
+				fmt.Printf("New version %s of Gardenctl is available at https://github.com/gardener/gardenctl/releases/latest \n", latestVersion)
+				if askForConfirmation(green, "Do you want to install this version of Gardenctl (Y/N): ") {
+					out, err := exec.LookPath("gardenctl")
+					if err != nil {
+						log.Fatal(err)
+					}
+					download(out, "https://github.com/gardener/gardenctl/releases/download/"+latestVersion+"/gardenctl-darwin-amd64")
+				}
 			} else {
 				fmt.Println("You are using the latest available version")
 			}
-
 			return nil
 		},
 	}
@@ -80,4 +94,31 @@ func newVersionAvailable(currentVersion string) (bool, *string, error) {
 	}
 
 	return c.Check(latest), &latestVersion, nil
+}
+
+func download(file string, url string) {
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		log.Fatal(err)
+	}
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer resp.Body.Close()
+
+	f, err := os.OpenFile(file, os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer f.Close()
+
+	bar := progressbar.DefaultBytes(
+		resp.ContentLength,
+		"downloading",
+	)
+	_, err = io.Copy(io.MultiWriter(f, bar), resp.Body)
+	if err != nil {
+		log.Fatal(err)
+	}
 }

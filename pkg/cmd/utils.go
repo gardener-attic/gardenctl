@@ -15,6 +15,7 @@
 package cmd
 
 import (
+	"bufio"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -369,4 +370,23 @@ func CheckIPPortReachable(ip string, port string) error {
 		attemptCount++
 	}
 	return fmt.Errorf("IP %s port %s is not reachable", ip, port)
+}
+
+//askForConfirmation
+func askForConfirmation(color string, text string) bool {
+	fmt.Printf(color, text)
+	reader := bufio.NewReader(os.Stdin)
+	text, err := reader.ReadString('\n')
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	text = strings.ToLower(strings.TrimSpace(text))[0:1]
+	if !(text == "y" || text == "n") {
+		fmt.Println("Please Yes or No only")
+		os.Exit(0)
+	} else if text == "y" {
+		return true
+	}
+	return false
 }
