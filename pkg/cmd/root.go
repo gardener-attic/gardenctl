@@ -159,6 +159,8 @@ func init() {
 	RootCmd.AddCommand(NewInfoCmd(targetReader, ioStreams))
 	RootCmd.AddCommand(NewVersionCmd(), NewUpdateCheckCmd())
 	RootCmd.AddCommand(NewDiagCmd(targetReader, ioStreams))
+	RootCmd.AddCommand(NewWakeupCmd(targetReader, ioStreams))
+	RootCmd.AddCommand(NewHibernateCmd(targetReader, ioStreams))
 
 	RootCmd.SuggestionsMinimumDistance = suggestionsMinimumDistance
 	RootCmd.BashCompletionFunction = bashCompletionFunc

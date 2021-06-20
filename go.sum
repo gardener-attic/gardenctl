@@ -145,6 +145,7 @@ github.com/gardener/controller-manager-library v0.1.1-0.20191212112146-917449ad7
 github.com/gardener/controller-manager-library v0.1.1-0.20200204110458-c263b9bb97ad/go.mod h1:v6cbldxmpL2fYBEB2lSnq3LSEPwIHus9En6iIhwNE1k=
 github.com/gardener/etcd-druid v0.1.3/go.mod h1:/A8kSp7DSo7oOhsOhD9Se/xF6BOD9TQJMawf6k7AOsU=
 github.com/gardener/etcd-druid v0.1.12/go.mod h1:yZrUQY9clD8/ZXK+MmEq8OS1TaKJeipV0u4kHHrwWeY=
+github.com/gardener/etcd-druid v0.3.0 h1:rqOR8UPKT9tywPYowEaVAhSfYgz165whJORsijz9Tps=
 github.com/gardener/etcd-druid v0.3.0/go.mod h1:uxZjZ57gIgpX554vGp495g2i8DByoS3OkVtiqsxtbwk=
 github.com/gardener/external-dns-management v0.7.3/go.mod h1:Y3om11E865x4aQ7cmcHjknb8RMgCO153huRb/SvP+9o=
 github.com/gardener/external-dns-management v0.7.7/go.mod h1:egCe/FPOsUbXA4WV0ne3h7nAD/nLT09hNt/FQQXK+ec=
@@ -882,6 +883,7 @@ k8s.io/client-go v0.0.0-20190918160344-1fbdaa4c8d90 h1:mLmhKUm1X+pXu0zXMEzNsOF5E
 k8s.io/client-go v0.0.0-20190918160344-1fbdaa4c8d90/go.mod h1:J69/JveO6XESwVgG53q3Uz5OSfgsv4uxpScmmyYOOlk=
 k8s.io/cluster-bootstrap v0.0.0-20190918163108-da9fdfce26bb/go.mod h1:mQVbtFRxlw/BzBqBaQwIMzjDTST1KrGtzWaR4CGlsTU=
 k8s.io/cluster-bootstrap v0.0.0-20191016114958-5aa5f2bc1590/go.mod h1:pmma5hMCCYfQ8Z5OyKzqHR7fKND/Pd4Z5gNGkK0AIbc=
+k8s.io/cluster-bootstrap v0.16.8 h1:94hV4G7aSIkNCX2G1Jk8URz8zLermBbrrwNre2Y8S9w=
 k8s.io/cluster-bootstrap v0.16.8/go.mod h1:fT1U/qWmXNmIColCsCBg4G881nWFaEqONL0xmP48rkI=
 k8s.io/code-generator v0.0.0-20180823001027-3dcf91f64f63/go.mod h1:MYiN+ZJZ9HkETbgVZdWw2AsuAi9PZ4V80cwfuf2axe8=
 k8s.io/code-generator v0.0.0-20190912054826-cd179ad6a269/go.mod h1:V5BD6M4CyaN5m+VthcclXWsVcT1Hu+glwa1bi3MIsyE=
