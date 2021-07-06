@@ -33,13 +33,14 @@ import (
 var _ = Describe("Target command", func() {
 
 	var (
-		ctrl         *gomock.Controller
-		configReader *mockcmd.MockConfigReader
-		targetReader *mockcmd.MockTargetReader
-		targetWriter *mockcmd.MockTargetWriter
-		target       *mockcmd.MockTargetInterface
-		kcReader     *mockcmd.MockKubeconfigReader
-		command      *cobra.Command
+		ctrl          *gomock.Controller
+		configReader  *mockcmd.MockConfigReader
+		targetReader  *mockcmd.MockTargetReader
+		targetWriter  *mockcmd.MockTargetWriter
+		historyWriter *mockcmd.MockHistoryWriter
+		target        *mockcmd.MockTargetInterface
+		kcReader      *mockcmd.MockKubeconfigReader
+		command       *cobra.Command
 
 		execute = func(command *cobra.Command, args []string) error {
 			command.SetArgs(args)
@@ -52,6 +53,7 @@ var _ = Describe("Target command", func() {
 		configReader = mockcmd.NewMockConfigReader(ctrl)
 		targetReader = mockcmd.NewMockTargetReader(ctrl)
 		targetWriter = mockcmd.NewMockTargetWriter(ctrl)
+		historyWriter = mockcmd.NewMockHistoryWriter(ctrl)
 		target = mockcmd.NewMockTargetInterface(ctrl)
 	})
 
@@ -65,7 +67,7 @@ var _ = Describe("Target command", func() {
 			target.EXPECT().Stack().Return([]cmd.TargetMeta{})
 
 			ioStreams, _, _, _ := cmd.NewTestIOStreams()
-			command = cmd.NewTargetCmd(targetReader, targetWriter, configReader, ioStreams, kcReader)
+			command = cmd.NewTargetCmd(targetReader, targetWriter, configReader, ioStreams, kcReader, historyWriter)
 			err := execute(command, []string{"project", "bar"})
 
 			Expect(err).To(HaveOccurred())
@@ -83,7 +85,7 @@ var _ = Describe("Target command", func() {
 			configReader.EXPECT().ReadConfig(gomock.Any()).Return(gardenConfig)
 
 			ioStreams, _, _, _ := cmd.NewTestIOStreams()
-			command = cmd.NewTargetCmd(targetReader, targetWriter, configReader, ioStreams, kcReader)
+			command = cmd.NewTargetCmd(targetReader, targetWriter, configReader, ioStreams, kcReader, historyWriter)
 			err := execute(command, []string{"garden", "foo"})
 
 			Expect(err).To(HaveOccurred())
@@ -105,7 +107,7 @@ var _ = Describe("Target command", func() {
 			target.EXPECT().GardenerClient().Return(clientSet, nil)
 
 			ioStreams, _, _, _ := cmd.NewTestIOStreams()
-			command = cmd.NewTargetCmd(targetReader, targetWriter, configReader, ioStreams, kcReader)
+			command = cmd.NewTargetCmd(targetReader, targetWriter, configReader, ioStreams, kcReader, historyWriter)
 			err := execute(command, []string{"project", "foo"})
 
 			Expect(err).To(HaveOccurred())
@@ -114,12 +116,13 @@ var _ = Describe("Target command", func() {
 
 		It("targeting project with correct name", func() {
 			targetReader.EXPECT().ReadTarget(gomock.Any()).Return(target).Times(2)
+			historyWriter.EXPECT().WriteStringln(gomock.Any(), gomock.Any()).Return(nil)
 			target.EXPECT().Stack().Return([]cmd.TargetMeta{
 				{
 					Kind: cmd.TargetKindGarden,
 					Name: "prod",
 				},
-			}).Times(2)
+			}).Times(3)
 
 			clientSet := gardencorefake.NewSimpleClientset(&gardencorev1beta1.Project{
 				ObjectMeta: metav1.ObjectMeta{
@@ -138,10 +141,11 @@ var _ = Describe("Target command", func() {
 					Name: "myproject",
 				},
 			})
+
 			targetWriter.EXPECT().WriteTarget(gomock.Any(), target)
 
 			ioStreams, _, _, _ := cmd.NewTestIOStreams()
-			command = cmd.NewTargetCmd(targetReader, targetWriter, configReader, ioStreams, kcReader)
+			command = cmd.NewTargetCmd(targetReader, targetWriter, configReader, ioStreams, kcReader, historyWriter)
 			err := execute(command, []string{"project", "myproject"})
 
 			Expect(err).NotTo(HaveOccurred())
@@ -159,7 +163,7 @@ var _ = Describe("Target command", func() {
 			target.EXPECT().GardenerClient().Return(clientSet, nil)
 
 			ioStreams, _, _, _ := cmd.NewTestIOStreams()
-			command = cmd.NewTargetCmd(targetReader, targetWriter, configReader, ioStreams, kcReader)
+			command = cmd.NewTargetCmd(targetReader, targetWriter, configReader, ioStreams, kcReader, historyWriter)
 			err := execute(command, []string{"shoot", "foo"})
 
 			Expect(err).To(HaveOccurred())
@@ -168,6 +172,7 @@ var _ = Describe("Target command", func() {
 
 		It("targeting shoot name with multiple matches across projects", func() {
 			targetReader.EXPECT().ReadTarget(gomock.Any()).Return(target)
+			historyWriter.EXPECT().WriteStringln(gomock.Any(), gomock.Any()).Return(nil)
 			target.EXPECT().Stack().Return([]cmd.TargetMeta{
 				{
 					Kind: cmd.TargetKindGarden,
@@ -209,7 +214,7 @@ var _ = Describe("Target command", func() {
 			target.EXPECT().K8SClientToKind(cmd.TargetKindGarden).Return(k8sClientToGarden, nil)
 
 			ioStreams, _, out, _ := cmd.NewTestIOStreams()
-			command = cmd.NewTargetCmd(targetReader, targetWriter, configReader, ioStreams, kcReader)
+			command = cmd.NewTargetCmd(targetReader, targetWriter, configReader, ioStreams, kcReader, historyWriter)
 			err := execute(command, []string{"shoot", "foo"})
 
 			Expect(err).NotTo(HaveOccurred())
@@ -226,7 +231,7 @@ var _ = Describe("Target command", func() {
 	DescribeTable("validation",
 		func(c targetCase) {
 			ioStreams, _, _, _ := cmd.NewTestIOStreams()
-			command := cmd.NewTargetCmd(targetReader, targetWriter, configReader, ioStreams, kcReader)
+			command := cmd.NewTargetCmd(targetReader, targetWriter, configReader, ioStreams, kcReader, historyWriter)
 
 			err := execute(command, c.args)
 

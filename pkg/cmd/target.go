@@ -50,7 +50,7 @@ var (
 )
 
 // NewTargetCmd returns a new target command.
-func NewTargetCmd(targetReader TargetReader, targetWriter TargetWriter, configReader ConfigReader, ioStreams IOStreams, kubeconfigReader KubeconfigReader) *cobra.Command {
+func NewTargetCmd(targetReader TargetReader, targetWriter TargetWriter, configReader ConfigReader, ioStreams IOStreams, kubeconfigReader KubeconfigReader, historyWriter HistoryWriter) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:          "target <project|garden|seed|shoot|namespace|server|dashboardUrl> NAME",
 		Short:        "Set scope for next operations, e.g. \"gardenctl target garden garden_name\" to target garden with name of garden_name",
@@ -103,6 +103,12 @@ func NewTargetCmd(targetReader TargetReader, targetWriter TargetWriter, configRe
 					err := urlWrapper(targetReader, targetWriter, configReader, ioStreams, pdashboardurl)
 					checkError(err)
 				}
+
+				err := historyWriter.WriteStringln(pathHistory, targetInfo)
+				if err != nil {
+					return err
+				}
+
 				return nil
 			}
 			if len(args) < 1 && pgarden == "" && pproject == "" && pseed == "" && pshoot == "" && pnamespace == "" && pserver == "" && pdashboardurl == "" || len(args) > 5 {
@@ -267,8 +273,13 @@ func NewTargetCmd(targetReader TargetReader, targetWriter TargetWriter, configRe
 						checkError(err)
 					}
 				}
-
 			}
+
+			err := historyWriter.WriteStringln(pathHistory, targetInfo)
+			if err != nil {
+				return err
+			}
+
 			return nil
 		},
 		ValidArgs: []string{"project", "garden", "seed", "shoot", "namespace", "server", "dashboardUrl"},
@@ -336,6 +347,7 @@ func targetProject(targetReader TargetReader, targetWriter TargetWriter, name st
 	target.SetStack(new)
 	err := targetWriter.WriteTarget(pathTarget, target)
 	checkError(err)
+	toTargetInfo(target)
 }
 
 // resolveNameGarden resolves name to garden
@@ -398,6 +410,7 @@ func targetGarden(targetWriter TargetWriter, name string) {
 	checkError(err)
 	fmt.Println("Garden:")
 	fmt.Println("KUBECONFIG=" + getKubeConfigOfCurrentTarget())
+	toTargetInfo(target)
 }
 
 // resolveNameSeed resolves name to seed
@@ -476,8 +489,16 @@ func targetSeed(targetReader TargetReader, targetWriter TargetWriter, name strin
 
 	err = targetWriter.WriteTarget(pathTarget, target)
 	checkError(err)
+	toTargetInfo(target)
 	fmt.Println("Seed:")
 	fmt.Println("KUBECONFIG=" + getKubeConfigOfCurrentTarget())
+}
+
+func toTargetInfo(target TargetInterface) {
+	targetInfo["Cmd"] = strings.Join(os.Args[0:], " ")
+	for _, k := range target.Stack() {
+		targetInfo[string(k.Kind)] = k.Name
+	}
 }
 
 // resolveNameShoot resolves name to shoot
@@ -650,6 +671,7 @@ func targetShoot(targetReader TargetReader, targetWriter TargetWriter, shoot gar
 	// Write target
 	err = targetWriter.WriteTarget(pathTarget, &target)
 	checkError(err)
+	toTargetInfo(&target)
 
 	// Cache shoot kubeconfig
 	var shootCacheDir string
@@ -866,7 +888,6 @@ func serverWrapper(reader ConfigReader, serverName string, kubeconfigReader Kube
 		fmt.Println("a garden could not be matched for the provided server address:", serverName)
 		os.Exit(2)
 	}
-
 }
 
 func isServerEquals(server1 string, server2 string) (bool, error) {
@@ -1222,5 +1243,6 @@ func targetNamespace(targetWriter TargetWriter, ns string) error {
 	if err != nil {
 		return err
 	}
+	toTargetInfo(&target)
 	return nil
 }
