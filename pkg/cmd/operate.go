@@ -212,7 +212,18 @@ func operate(provider, arguments string) string {
 			fmt.Println(err)
 			log.Fatalf("Aliyun CLI failed with %s\n%s\n", out, err)
 		}
+	case "hcloud":
+		token := []byte(secret.Data["hcloudToken"])
+		args := strings.Fields(arguments)
+		cmd := exec.Command("hcloud", args...)
+		newEnv := append(os.Environ(), "HCLOUD_TOKEN="+string(token[:]))
+		cmd.Env = newEnv
+		out, err = cmd.CombinedOutput()
+		if err != nil {
+			log.Fatalf("hcloud CLI failed with %s\n%s\n", out, err)
+		}
 	}
+
 	return (strings.TrimSpace(string(out[:])))
 }
 
