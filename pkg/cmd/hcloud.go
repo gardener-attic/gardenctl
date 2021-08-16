@@ -41,7 +41,6 @@ func NewHcloudCmd(targetReader TargetReader) *cobra.Command {
 			}
 
 			arguments := strings.Join(os.Args[2:], " ")
-			fmt.Print(arguments)
 			fmt.Println(operate("hcloud", arguments))
 
 			return nil
