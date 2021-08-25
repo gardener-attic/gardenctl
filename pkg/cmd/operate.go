@@ -198,13 +198,16 @@ func operate(provider, arguments string) string {
 		}
 
 	case "aliyun":
-		accessKeyID := []byte(secret.Data["accessKeyID"])
-		accessKeySecret := []byte(secret.Data["accessKeySecret"])
+		accessKeyID := secret.Data["accessKeyID"]
+		accessKeySecret := secret.Data["accessKeySecret"]
 		err = ExecCmd(nil, "aliyun configure set --access-key-id="+string(accessKeyID[:])+" --access-key-secret="+string(accessKeySecret[:])+" --region="+region, true)
 		if err != nil {
 			os.Exit(2)
 		}
 
+		if arguments == ""{
+			return ""
+		}
 		args := strings.Fields(arguments)
 		cmd := exec.Command("aliyun", args...)
 		out, err = cmd.CombinedOutput()

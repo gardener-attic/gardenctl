@@ -252,7 +252,7 @@ func (a *AliyunInstanceAttribute) createBastionHostInstance(sshPublicKey []byte)
 		userData := getBastionUserData(sshPublicKey)
 		encodedUserData := base64.StdEncoding.EncodeToString(userData)
 
-		arguments := "aliyun ecs CreateInstance --ImageId=" + a.ImageID + " --InstanceType=" + a.InstanceType + " --RegionId=" + a.RegionID + " --ZoneId=" + a.ZoneID + " --VSwitchId=" + a.VSwitchID + " --InstanceChargeType=" + a.InstanceChargeType + " --InternetChargeType=" + a.InternetChargeType + " --InternetMaxBandwidthIn=" + a.InternetMaxBandwidthIn + " --InternetMaxBandwidthOut=" + a.InternetMaxBandwidthOut + " --IoOptimized=" + a.IoOptimized + " --KeyPairName=" + a.KeyPairName + " --InstanceName=" + a.BastionInstanceName + " --SecurityGroupId=" + a.BastionSecurityGroupID + " --UserData=" + encodedUserData
+		arguments := "aliyun ecs CreateInstance --ImageId=" + a.ImageID + " --InstanceType=" + a.InstanceType + " --RegionId=" + a.RegionID + " --ZoneId=" + a.ZoneID + " --VSwitchId=" + a.VSwitchID + " --InstanceChargeType=" + a.InstanceChargeType + " --InternetChargeType=" + a.InternetChargeType + " --InternetMaxBandwidthIn=" + a.InternetMaxBandwidthIn + " --InternetMaxBandwidthOut=" + a.InternetMaxBandwidthOut + " --IoOptimized=" + a.IoOptimized + " --InstanceName=" + a.BastionInstanceName + " --SecurityGroupId=" + a.BastionSecurityGroupID + " --UserData=" + encodedUserData
 		res, err = ExecCmdReturnOutput("bash", "-c", arguments)
 		checkError(err)
 		decodedQuery = decodeAndQueryFromJSONString(res)
@@ -457,7 +457,8 @@ func (a *AliyunInstanceAttribute) deleteBastionHostSecurityGroup() {
 
 // configureAliyunCLI sets up user credential configurations for aliyuncli.
 func configureAliyunCLI() {
-	operate("aliyun", "echo Configuring aliyun cli...")
+	fmt.Println("Configuring aliyun cli...")
+	operate("aliyun", "")
 }
 
 // decodeAndQueryFromJSONString returns the decoded JsonQuery with the given json string.
