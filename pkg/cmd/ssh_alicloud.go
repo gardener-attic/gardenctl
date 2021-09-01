@@ -48,7 +48,6 @@ type AliyunInstanceAttribute struct {
 	InternetMaxBandwidthIn   string
 	InternetMaxBandwidthOut  string
 	IoOptimized              string
-	KeyPairName              string
 	PrivateIP                string
 	BastionIP                string
 	BastionSSHUser           string
@@ -156,7 +155,6 @@ func (a *AliyunInstanceAttribute) fetchAttributes(targetReader TargetReader, nod
 	a.InternetMaxBandwidthIn = "10"
 	a.InternetMaxBandwidthOut = "100"
 	a.IoOptimized = "optimized"
-	a.KeyPairName = a.ShootName + "-ssh-publickey"
 	a.InstanceType = a.getMinimumInstanceSpec()
 }
 
