@@ -177,6 +177,10 @@ func shellToNode(client kubernetes.Interface, targetKind TargetKind, nodeName st
 	}
 
 	err = client.CoreV1().Pods(namespace).Delete(podName, &metav1.DeleteOptions{})
+	if err != nil {
+		fmt.Println("there are some errors while cleaning up the ops-pod, please manually clean it")
+		return err
+	}
 	return
 }
 
