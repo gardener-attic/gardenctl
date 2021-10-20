@@ -30,6 +30,7 @@ import (
 
 	"github.com/Masterminds/semver"
 	"github.com/spf13/cobra"
+	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/clientcmd"
@@ -849,33 +850,30 @@ func saveLogsClusterAutoscaler(targetReader TargetReader) {
 // logsTerraform prints the logfiles of tf pod
 func logsTerraform(toMatch string) {
 	var latestTime int64
-	var podName [100]string
-	var podNamespace [100]string
+	matchedPods := make([]v1.Pod, 0, 100)
 	var err error
 	Client, err = clientToTarget("seed")
 	checkError(err)
 	pods, err := Client.CoreV1().Pods(emptyString).List(metav1.ListOptions{})
 	checkError(err)
-	count := 0
 	for _, pod := range pods.Items {
 		if strings.Contains(pod.Name, toMatch) && pod.Status.Phase == "Running" {
 			if latestTime < pod.ObjectMeta.CreationTimestamp.Unix() {
 				latestTime = pod.ObjectMeta.CreationTimestamp.Unix()
-				podName[count] = pod.Name
-				podNamespace[count] = pod.Namespace
-				count++
+				matchedPods = append(matchedPods, pod)
 			}
 		}
 	}
-	if len(podName) == 0 || len(podNamespace) == 0 {
+	if len(matchedPods) == 0 {
 		fmt.Println("No running tf " + toMatch)
-	} else {
-		for i := 0; i < count; i++ {
-			fmt.Println("gardenctl logs " + podName[i] + " namespace=" + podNamespace[i])
-			err = ExecCmd(nil, "kubectl logs "+podName[i]+" -n "+podNamespace[i], false, "KUBECONFIG="+KUBECONFIG)
-			checkError(err)
-		}
+		return
 	}
+	for _, pod := range matchedPods {
+		fmt.Println("gardenctl logs " + pod.Name + " namespace=" + pod.Namespace)
+		err = ExecCmd(nil, "kubectl logs "+pod.Name+" -n "+pod.Namespace, false, "KUBECONFIG="+KUBECONFIG)
+		checkError(err)
+	}
+
 }
 
 func saveLogsTerraform(toMatch string) {
