@@ -1,0 +1,9 @@
+{{- $vers := Split .versions "," -}}
+{{ $mainBranch := (index $vers 0) }}
+structure:
+- name: _index.md
+  source: https://github.com/gardener/gardenctl/blob/{{$mainBranch}}/README.md
+links:
+  downloads:
+    scope:
+      "gardener/gardenctl/(blob|raw)/(.*)/docs": ~

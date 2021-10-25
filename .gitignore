@@ -3,6 +3,8 @@
 # except those directories and files:
 !*.go
 !/.gitignore
+!/.docforge
+!/.docforge/manifest.yaml
 !/vendor
 !/hack/tools.go
 !/CODEOWNERS
