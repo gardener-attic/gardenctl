@@ -90,7 +90,7 @@ func Execute() {
 	pathGardenHome = os.Getenv("GARDENCTL_HOME")
 	if pathGardenHome == "" {
 		pathGardenHome = pathDefault
-	} else if strings.Contains(pathGardenHome, "~") {
+	} else {
 		pathGardenHome = strings.Replace(pathGardenHome, "~", HomeDir(), 1)
 	}
 	pathGardenConfig = filepath.Join(pathGardenHome, "config")
