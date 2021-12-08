@@ -205,7 +205,7 @@ func operate(provider, arguments string) string {
 			os.Exit(2)
 		}
 
-		if arguments == ""{
+		if arguments == "" {
 			return ""
 		}
 		args := strings.Fields(arguments)

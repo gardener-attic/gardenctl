@@ -46,3 +46,6 @@ fi
 
 echo "Running golangci-lint..."
 golangci-lint run ./...
+
+# Running check-docforge script
+${SOURCE_PATH}/hack/check-docforge.sh

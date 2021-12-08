@@ -17,12 +17,13 @@ package cmd_test
 import (
 	"bytes"
 	"fmt"
+	"os"
+	"strings"
+
 	. "github.com/gardener/gardenctl/pkg/cmd"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	yaml "gopkg.in/yaml.v2"
-	"os"
-	"strings"
 )
 
 var _ = Describe("Utils", func() {
@@ -44,6 +45,10 @@ var _ = Describe("Utils", func() {
 	target.Target = append(target.Target, tm)
 
 	file, err := os.OpenFile(pathTarget, os.O_WRONLY|os.O_CREATE, 0644)
+	if err != nil {
+		panic(err)
+	}
+
 	content, err := yaml.Marshal(target)
 	if err != nil {
 		panic(err)
