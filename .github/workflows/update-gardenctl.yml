@@ -8,7 +8,7 @@ jobs:
   update_gardenctl_in_homebrew_tap:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@5a4ac9002d0be2fb38bd78e4b4dbde5606d7042f # pin@v2
       - name: Build the binary-files
         id: build_binary_files
         run: |
@@ -17,7 +17,7 @@ jobs:
           make build
           echo ::set-output name=latest_release_filtered_tag::${GITHUB_REF##*/}
       - name: Upload binaries to release
-        uses: AButler/upload-release-assets@v2.0
+        uses: AButler/upload-release-assets@ec6d3263266dc57eb6645b5f75e827987f7c217d # pin@v2.0
         with:
           files: 'bin/darwin-amd64/gardenctl-darwin-amd64;bin/linux-amd64/gardenctl-linux-amd64'
           repo-token: ${{ secrets.GITHUB_TOKEN }}
