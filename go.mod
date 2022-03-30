@@ -24,6 +24,8 @@ require (
 	k8s.io/metrics v0.16.8
 )
 
+require golang.org/x/sys v0.0.0-20220330033206-e17cdc41300f // indirect
+
 replace (
 	k8s.io/api => k8s.io/api v0.0.0-20190918155943-95b840bb6a1f // kubernetes-1.16.0
 	k8s.io/apimachinery => k8s.io/apimachinery v0.0.0-20190913080033-27d36303b655 // kubernetes-1.16.0
