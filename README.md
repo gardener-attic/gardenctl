@@ -1,3 +1,7 @@
+## :warning: DEPRECATED :warning:
+This repository is deprecated. You can find the successor here https://github.com/gardener/gardenctl-v2.
+
+
 # Gardenctl
 
 ![](logo/logo_gardener_cli_large.png)
