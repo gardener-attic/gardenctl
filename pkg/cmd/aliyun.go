@@ -33,7 +33,7 @@ func NewAliyunCmd(targetReader TargetReader) *cobra.Command {
 				return errors.New("no shoot targeted")
 			}
 
-			arguments := "aliyun " + strings.Join(args[:], " ")
+			arguments := strings.Join(args[:], " ")
 			operate("aliyun", arguments)
 
 			return nil
