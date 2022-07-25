@@ -15,6 +15,9 @@
 package cmd
 
 import (
+	"bufio"
+	"crypto/md5"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -31,11 +34,17 @@ import (
 
 	gardencorev1beta1 "github.com/gardener/gardener/pkg/apis/core/v1beta1"
 	gardenerlogger "github.com/gardener/gardener/pkg/logger"
+	slices "github.com/srfrog/slices"
 	yaml "gopkg.in/yaml.v2"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	restclient "k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 	clientcmdapi "k8s.io/client-go/tools/clientcmd/api"
+)
+
+const (
+	red   = "\033[1;31m%s\033[0m"
+	green = "\033[1;32m%s\033[0m"
 )
 
 // checkError checks if an error during execution occurred
@@ -245,17 +254,101 @@ func ValidateClientConfig(config clientcmdapi.Config) error {
 		case authInfo.Impersonate != "" || len(authInfo.ImpersonateGroups) > 0:
 			return fmt.Errorf("impersonation is not supported, these are the valid fields: %+v", validFields)
 		case authInfo.AuthProvider != nil && len(authInfo.AuthProvider.Config) > 0:
-			fmt.Printf("Kubeconfig under path %s contains auth provider configurations that could contain malicious code. Please only continue if you have verified it to be uncritical\n", pathOfKubeconfig)
+			fmt.Printf(green, "Kubeconfig under path "+pathOfKubeconfig+" contains auth provider configurations that could contain malicious code. Please only continue if you have verified it to be uncritical\n")
 			return nil
 			// 	return fmt.Errorf("auth provider configurations are not supported (user %q), these are the valid fields: %+v", user, validFields)
 		case authInfo.Exec != nil:
-			fmt.Printf("Kubeconfig under path %s contains exec configurations that could contain malicious code. Please only continue if you have verified it to be uncritical\n", pathOfKubeconfig)
+			fmt.Printf(green, "Kubeconfig under path "+pathOfKubeconfig+" contains exec configurations that could contain malicious code. Please only continue if you have verified it to be uncritical\n")
 			return nil
 			// 	return fmt.Errorf("exec configurations are not supported (user %q), these are the valid fields: %+v", user, validFields)
 		}
 	}
 
 	return nil
+}
+
+func md5sum(path string) string {
+	md5 := md5.New()
+	data, err := ioutil.ReadFile(path)
+	checkError(err)
+	_, err = md5.Write([]byte(data))
+	checkError(err)
+	return hex.EncodeToString(md5.Sum(nil))
+}
+
+func kubeConfigMd5sumInit(input bool, gardenConfig *GardenConfig) {
+	if input {
+		rewriteGardenKubeConfig()
+	} else {
+		os.Exit(0)
+	}
+}
+
+func hashCheck(value string, gardenConfig *GardenConfig) bool {
+	for _, items := range gardenConfig.GardenClusters {
+		if items.TrustedKubeConfigMd5 == value {
+			return true
+		}
+	}
+	return false
+}
+
+//gardenKubeConfigHashCheck hash check
+func gardenKubeConfigHashCheck() bool {
+	var gardenConfig *GardenConfig
+	pathOfKubeconfig := getKubeConfigOfClusterType("garden")
+	md5sum := md5sum(pathOfKubeconfig)
+
+	tempFile, err := ioutil.ReadFile(pathGardenConfig)
+	checkError(err)
+	err = yaml.Unmarshal(tempFile, &gardenConfig)
+	checkError(err)
+
+	switch gardenConfig.GardenClusters[0].TrustedKubeConfigMd5 {
+	case "":
+		for _, items := range gardenConfig.GardenClusters {
+			data, err := ioutil.ReadFile(items.KubeConfig)
+			checkError(err)
+			clientConfig, err := clientcmd.NewClientConfigFromBytes(data)
+			checkError(err)
+			rawConfig, err := clientConfig.RawConfig()
+			checkError(err)
+			if err := ValidateClientConfig(rawConfig); err != nil {
+				checkError(err)
+			}
+		}
+
+		text := askForConfirmation()
+		kubeConfigMd5sumInit(text, gardenConfig)
+		return true
+
+	default:
+		if hashCheck(md5sum, gardenConfig) {
+			return true
+		}
+	}
+	fmt.Printf(red, "The Kubeconfig under path "+pathOfKubeconfig+" is difference compare with last time, Please check !!! \n")
+	text := askForConfirmation()
+	kubeConfigMd5sumInit(text, gardenConfig)
+	return false
+}
+
+func askForConfirmation() bool {
+	fmt.Printf(red, "Do you wants to trust this kubeconfig Y/N: ")
+	reader := bufio.NewReader(os.Stdin)
+	text, err := reader.ReadString('\n')
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	text = strings.ToLower(strings.TrimSpace(text))[0:1]
+	if !(text == "y" || text == "n") {
+		fmt.Println("Please Yes or No only")
+		os.Exit(0)
+	} else if text == "y" {
+		return true
+	}
+	return false
 }
 
 // FetchShootFromTarget fetches shoot object from given target
@@ -369,4 +462,65 @@ func CheckIPPortReachable(ip string, port string) error {
 		attemptCount++
 	}
 	return fmt.Errorf("IP %s port %s is not reachable", ip, port)
+}
+
+//rewriteGardenKubeConfig with md5sum and comments
+func rewriteGardenKubeConfig() {
+	backupfile := pathGardenConfig + ".bak"
+	backup(pathGardenConfig, backupfile)
+
+	readerfile, err := os.OpenFile(backupfile, os.O_RDONLY, 0644)
+	if err != nil {
+		log.Fatal("Error: ", err)
+	}
+	defer readerfile.Close()
+
+	writefile, err := os.OpenFile(pathGardenConfig, os.O_RDWR|os.O_TRUNC, 0644)
+	if err != nil {
+		log.Fatal("Error: ", err)
+	}
+	defer writefile.Close()
+	reader := bufio.NewReader(readerfile)
+	writer := bufio.NewWriter(writefile)
+
+	for {
+		line, _, err := reader.ReadLine()
+		if err == io.EOF {
+			break
+		}
+		_, err = writer.WriteString(string(line) + "\n")
+		if err != nil {
+			log.Fatal("Error: ", err)
+		}
+
+		slc := strings.Split(string(line), " ")
+		var tempLine string
+		if slices.ContainsPrefix(slc, "kubeConfig:") {
+			if slices.ContainsPrefix(slc, "#") {
+				tempLine = "#  TrustedKubeConfigMd5: " + md5sum(slc[3])
+			} else {
+				tempLine = "  TrustedKubeConfigMd5: " + md5sum(slc[3])
+			}
+
+			_, err = writer.WriteString(tempLine + "\n")
+			if err != nil {
+				log.Fatal("Error: ", err)
+			}
+		}
+	}
+	writer.Flush()
+}
+
+//back up file
+func backup(source string, destination string) {
+	input, err := ioutil.ReadFile(source)
+	if err != nil {
+		fmt.Println("Error loading", source)
+		log.Fatal(err)
+	}
+
+	err = ioutil.WriteFile(destination, input, 0644)
+	if err != nil {
+		log.Fatal(err)
+	}
 }

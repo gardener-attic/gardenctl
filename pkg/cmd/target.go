@@ -993,13 +993,9 @@ func getServerValueFromKubeconfig(kubeconfigPath string, kubeconfigReader Kubeco
 	if err != nil {
 		return "", err
 	}
-	rawConfig, err := clientConfig.RawConfig()
-	if err != nil {
-		return "", err
-	}
-	if err := ValidateClientConfig(rawConfig); err != nil {
-		return "", err
-	}
+
+	gardenKubeConfigHashCheck()
+
 	config, err := clientConfig.ClientConfig()
 	if err != nil {
 		return "", err
