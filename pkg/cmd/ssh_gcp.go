@@ -122,7 +122,7 @@ func (g *GCPInstanceAttribute) fetchGCPAttributes(targetReader TargetReader, nod
 func (g *GCPInstanceAttribute) createBastionHostFirewallRule() {
 	fmt.Println("Add ssh rule")
 	if net.ParseIP(g.MyPublicIP).To4() != nil {
-		arguments := fmt.Sprintf("compute firewall-rules create %s --network %s --allow tcp:22 --source-ranges=%s/32", g.FirewallRuleName, g.ShootName, g.MyPublicIP)
+		arguments := fmt.Sprintf("compute firewall-rules create %s --network %s --allow tcp:22 --source-ranges=%s/32", g.FirewallRuleName, g.VpcName, g.MyPublicIP)
 		fmt.Println(operate("gcp", arguments))
 	} else {
 		fmt.Println("IPv6 is currently not fully supported by gardenctl: " + g.MyPublicIP)
